@@ -1,0 +1,4 @@
+<Directory />
+   AllowOverride All
+   Require all denied
+</Directory>

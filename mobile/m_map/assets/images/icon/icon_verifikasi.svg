@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="a" data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 113.4 113.4">
+  <defs>
+    <linearGradient id="b" x1="367" y1="597.7" x2="374.4" y2="583.1" gradientTransform="translate(679.7 454.8) rotate(153.1)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ff9e4f"/>
+      <stop offset=".3" stop-color="#fe9b4c"/>
+      <stop offset=".5" stop-color="#fd9244"/>
+      <stop offset=".7" stop-color="#fa8337"/>
+      <stop offset=".8" stop-color="#f76d24"/>
+      <stop offset="1" stop-color="#f2520c"/>
+      <stop offset="1" stop-color="#f24f09"/>
+    </linearGradient>
+    <linearGradient id="c" x1="373.1" y1="606" x2="380.5" y2="591.4" gradientTransform="translate(678.7 461) rotate(153.1)" xlink:href="#b"/>
+    <linearGradient id="d" x1="377.6" y1="616.7" x2="385" y2="602.1" gradientTransform="translate(676 467.5) rotate(153.1)" xlink:href="#b"/>
+    <linearGradient id="e" x1="533.3" y1="516.5" x2="540.6" y2="501.9" gradientTransform="translate(759.2 304.9) rotate(153.1)" xlink:href="#b"/>
+    <linearGradient id="f" x1="540.3" y1="525" x2="547.7" y2="510.4" gradientTransform="translate(758.5 307) rotate(153.1)" xlink:href="#b"/>
+    <linearGradient id="g" x1="641.9" y1="348.7" x2="649.3" y2="334.1" gradientTransform="translate(17.8 813.7) rotate(-116.9)" xlink:href="#b"/>
+    <linearGradient id="h" x1="647.7" y1="357.7" x2="655.1" y2="343.1" gradientTransform="translate(5.1 815.1) rotate(-116.9)" xlink:href="#b"/>
+    <linearGradient id="i" x1="652.6" y1="367.5" x2="659.9" y2="352.9" gradientTransform="translate(-8.1 815.2) rotate(-116.9)" xlink:href="#b"/>
+    <linearGradient id="j" x1="620.6" y1="66.4" x2="628" y2="51.8" gradientTransform="translate(241.7 640.4) rotate(-116.9)" xlink:href="#b"/>
+    <linearGradient id="k" x1="625.4" y1="75.8" x2="632.8" y2="61.3" gradientTransform="translate(236 638.3) rotate(-116.9)" xlink:href="#b"/>
+    <linearGradient id="l" x1="629.3" y1="84.7" x2="636.7" y2="70.1" gradientTransform="translate(230.9 636.2) rotate(-116.9)" xlink:href="#b"/>
+    <linearGradient id="m" x1="653.7" y1="443.7" x2="661.1" y2="429.1" gradientTransform="translate(-72 813) rotate(-116.9)" xlink:href="#b"/>
+    <linearGradient id="n" x1="474.5" y1="672.8" x2="481.9" y2="658.3" gradientTransform="translate(754.9 403.9) rotate(153.1)" xlink:href="#b"/>
+    <linearGradient id="o" x1="357.6" y1="596.2" x2="365" y2="581.6" gradientTransform="translate(676.4 450.1) rotate(153.1)" xlink:href="#b"/>
+    <linearGradient id="p" x1="346.5" y1="599.3" x2="353.9" y2="584.8" gradientTransform="translate(670.3 446.6) rotate(153.1)" xlink:href="#b"/>
+    <linearGradient id="q" x1="336.6" y1="603.9" x2="344" y2="589.3" gradientTransform="translate(664.1 444.3) rotate(153.1)" xlink:href="#b"/>
+    <linearGradient id="r" x1="325.6" y1="610.4" x2="333" y2="595.9" gradientTransform="translate(656.6 442.3) rotate(153.1)" xlink:href="#b"/>
+    <linearGradient id="s" x1="160.2" y1="660.4" x2="167.6" y2="645.9" gradientTransform="translate(527.6 551.3) rotate(153.1)" xlink:href="#b"/>
+    <linearGradient id="t" x1="175" y1="667.7" x2="182.3" y2="653.2" gradientTransform="translate(540.1 540.4) rotate(153.1)" xlink:href="#b"/>
+    <linearGradient id="u" x1="-175.7" y1="579.4" x2="-168.4" y2="564.8" gradientTransform="translate(662.4 -80.7) rotate(63.1)" xlink:href="#b"/>
+    <linearGradient id="v" x1="-254.5" y1="471.2" x2="-247.1" y2="456.7" gradientTransform="translate(595.8 30.9) rotate(63.1)" xlink:href="#b"/>
+    <linearGradient id="w" x1="-310.3" y1="387.1" x2="-302.9" y2="372.5" gradientTransform="translate(535.1 115.3) rotate(63.1)" xlink:href="#b"/>
+    <linearGradient id="x" x1="-321.1" y1="388.5" x2="-313.8" y2="373.9" gradientTransform="translate(530.7 121.4) rotate(63.1)" xlink:href="#b"/>
+    <linearGradient id="y" x1="-326.2" y1="394.8" x2="-318.9" y2="380.3" gradientTransform="translate(531.5 127) rotate(63.1)" xlink:href="#b"/>
+    <linearGradient id="z" x1="11.5" y1="692.9" x2="18.8" y2="678.3" gradientTransform="translate(356.6 624.9) rotate(153.1)" xlink:href="#b"/>
+    <linearGradient id="aa" x1="491.4" y1="598.7" x2="498.7" y2="584.1" gradientTransform="translate(785.1 388.6) rotate(153.1)" xlink:href="#b"/>
+    <linearGradient id="ab" x1="498.1" y1="604.4" x2="505.5" y2="589.9" gradientTransform="translate(785 392.5) rotate(153.1)" xlink:href="#b"/>
+    <linearGradient id="ac" x1="504.5" y1="614.6" x2="511.8" y2="600.1" gradientTransform="translate(783.3 397.6) rotate(153.1)" xlink:href="#b"/>
+    <linearGradient id="ad" x1="657.3" y1="460" x2="664.7" y2="445.5" gradientTransform="translate(-59.5 876.1) rotate(-116.9)" xlink:href="#b"/>
+    <linearGradient id="ae" x1="702.2" y1="361.5" x2="709.6" y2="346.9" gradientTransform="translate(40.7 866.6) rotate(-116.9)" xlink:href="#b"/>
+    <linearGradient id="af" x1="717.2" y1="256.8" x2="724.6" y2="242.2" gradientTransform="translate(134.1 826.5) rotate(-116.9)" xlink:href="#b"/>
+    <linearGradient id="ag" x1="693.3" y1="109.2" x2="700.6" y2="94.6" gradientTransform="translate(247.8 730.5) rotate(-116.9)" xlink:href="#b"/>
+    <linearGradient id="ah" x1="664.8" y1="59.5" x2="672.2" y2="44.9" gradientTransform="translate(278.5 673) rotate(-116.9)" xlink:href="#b"/>
+    <linearGradient id="ai" x1="524.2" y1="-83.5" x2="531.5" y2="-98" gradientTransform="translate(341.2 472) rotate(-116.9)" xlink:href="#b"/>
+    <linearGradient id="aj" x1="714.9" y1="449.8" x2="722.3" y2="435.2" gradientTransform="translate(-40.4 875.3) rotate(-116.9)" xlink:href="#b"/>
+    <linearGradient id="ak" x1="337.6" y1="663.7" x2="345" y2="649.2" gradientTransform="translate(681.9 508.4) rotate(153.1)" xlink:href="#b"/>
+    <linearGradient id="al" x1="329.3" y1="666.3" x2="336.6" y2="651.8" gradientTransform="translate(675.7 505.8) rotate(153.1)" xlink:href="#b"/>
+    <linearGradient id="am" x1="320.2" y1="668.8" x2="327.6" y2="654.2" gradientTransform="translate(669.2 502.7) rotate(153.1)" xlink:href="#b"/>
+    <linearGradient id="an" x1="135.5" y1="686.7" x2="142.9" y2="672.2" gradientTransform="translate(508.7 591.6) rotate(153.1)" xlink:href="#b"/>
+    <linearGradient id="ao" x1="-127" y1="570.6" x2="-119.6" y2="556.1" gradientTransform="translate(633.5 -106.1) rotate(63.1)" xlink:href="#b"/>
+    <linearGradient id="ap" x1="-242" y1="429.8" x2="-234.6" y2="415.3" gradientTransform="translate(552.4 53.7) rotate(63.1)" xlink:href="#b"/>
+    <linearGradient id="aq" x1="-279.1" y1="352" x2="-271.8" y2="337.4" gradientTransform="translate(492.7 114.3) rotate(63.1)" xlink:href="#b"/>
+    <linearGradient id="ar" x1="-289.3" y1="352.9" x2="-281.9" y2="338.3" gradientTransform="translate(488.2 120.7) rotate(63.1)" xlink:href="#b"/>
+    <linearGradient id="as" x1="-224.1" y1="506.2" x2="-216.8" y2="491.6" gradientTransform="translate(586.4 -7.9) rotate(63.1)" xlink:href="#b"/>
+    <linearGradient id="at" x1="78.7" y1="692.8" x2="86.1" y2="678.3" gradientTransform="translate(421.9 603.7) rotate(153.1)" xlink:href="#b"/>
+    <linearGradient id="au" x1="415.2" y1="649.5" x2="422.6" y2="635" gradientTransform="translate(734 459) rotate(153.1)" xlink:href="#b"/>
+    <linearGradient id="av" x1="420.6" y1="659" x2="427.9" y2="644.5" gradientTransform="translate(732.2 465.5) rotate(153.1)" xlink:href="#b"/>
+    <linearGradient id="aw" x1="570.5" y1="566.6" x2="577.8" y2="552.1" gradientTransform="translate(813.5 312.9) rotate(153.1)" xlink:href="#b"/>
+    <linearGradient id="ax" x1="646.4" y1="474.2" x2="653.8" y2="459.6" gradientTransform="translate(-83.2 857.1) rotate(-116.9)" xlink:href="#b"/>
+    <linearGradient id="ay" x1="682.4" y1="403.3" x2="689.7" y2="388.7" gradientTransform="translate(-11.1 848.5) rotate(-116.9)" xlink:href="#b"/>
+    <linearGradient id="az" x1="475.5" y1="680.1" x2="482.8" y2="665.5" gradientTransform="translate(764.5 429.6) rotate(153.1)" xlink:href="#b"/>
+    <linearGradient id="ba" x1="405.1" y1="654.2" x2="412.5" y2="639.7" gradientTransform="translate(727.5 456.6) rotate(153.1)" xlink:href="#b"/>
+    <linearGradient id="bb" x1="154.8" y1="695.5" x2="162.2" y2="680.9" gradientTransform="translate(521.2 595.3) rotate(153.1)" xlink:href="#b"/>
+    <linearGradient id="bc" x1="70.4" y1="684.6" x2="77.8" y2="670" gradientTransform="translate(436.2 614.7) rotate(153.1)" xlink:href="#b"/>
+    <linearGradient id="bd" x1="11.8" y1="672.4" x2="19.2" y2="657.8" gradientTransform="translate(371.5 621.8) rotate(153.1)" xlink:href="#b"/>
+    <linearGradient id="be" x1="263.9" y1="704.4" x2="271.3" y2="689.8" gradientTransform="translate(603.2 532.5) rotate(153.1)" xlink:href="#b"/>
+    <linearGradient id="bf" x1="352.4" y1="688.2" x2="359.8" y2="673.7" gradientTransform="translate(666.2 484) rotate(153.1)" xlink:href="#b"/>
+    <linearGradient id="bg" x1="410.4" y1="662.6" x2="417.8" y2="648" gradientTransform="translate(726.2 462.6) rotate(153.1)" xlink:href="#b"/>
+    <linearGradient id="bh" x1="414.7" y1="673" x2="422.1" y2="658.5" gradientTransform="translate(723.4 469) rotate(153.1)" xlink:href="#b"/>
+    <linearGradient id="bi" x1="530.3" y1="604.7" x2="537.7" y2="590.1" gradientTransform="translate(788.2 344.8) rotate(153.1)" xlink:href="#b"/>
+    <linearGradient id="bj" x1="400.5" y1="668.2" x2="407.9" y2="653.7" gradientTransform="translate(719.4 460.7) rotate(153.1)" xlink:href="#b"/>
+    <linearGradient id="bk" x1="276.9" y1="714.2" x2="284.2" y2="699.6" gradientTransform="translate(622.4 547.7) rotate(153.1)" xlink:href="#b"/>
+    <linearGradient id="bl" x1="438.8" y1="668.9" x2="446.2" y2="654.4" gradientTransform="translate(738.5 436) rotate(153.1)" xlink:href="#b"/>
+    <linearGradient id="bm" x1="443.3" y1="657.1" x2="450.7" y2="642.5" gradientTransform="translate(744.7 433.5) rotate(153.1)" xlink:href="#b"/>
+  </defs>
+  <path d="m33.1,19.4l-7.8,5.5-15.5-12.5s0-5,5.6-8.9C20.6-.2,25.8,1.1,25.8,1.1l7.3,18.3Z" fill="#512002"/>
+  <path d="m65.8,101.5l.8,10.5c0,.6-.8.7-.9.2l-3.1-9.1,3.2-1.6Z" fill="#512002"/>
+  <path d="m95.4,77l9,6.5c.3.2.1,1-.2.9l-9.4-3.4c-.1,0-.2-.3-.2-.6l.4-3.1c0-.3.2-.5.4-.3Z" fill="#512002"/>
+  <path d="m87.4,97.4l6.1,10.7c.3.5-.4,1-.8.6l-8-8.8c-.2-.2-.2-.5,0-.7l1.9-1.9c.2-.2.6-.2.8,0Z" fill="#512002"/>
+  <path d="m48.6,95.5l-1.6,13.7c0,.4-.8.6-.9.3l-2-12.4c0-.2.1-.4.4-.4l3.6-1.3c.3,0,.5,0,.5.2Z" fill="#512002"/>
+  <path d="m94.8,59.7l13.2,7.7c.5.3.2,1.1-.4.9l-14.2-5.1c-.3,0-.4-.4-.3-.7l1-2.7c.1-.3.5-.4.7-.3Z" fill="#512002"/>
+  <ellipse cx="82.3" cy="95.6" rx="6.4" ry="8.2" transform="translate(-40.2 65.3) rotate(-35.4)" fill="url(#b)"/>
+  <ellipse cx="72.1" cy="97.1" rx="6.4" ry="8.2" transform="translate(-42.9 59.7) rotate(-35.4)" fill="url(#c)"/>
+  <ellipse cx="60.5" cy="96.1" rx="6.4" ry="8.2" transform="translate(-44.5 52.8) rotate(-35.4)" fill="url(#d)"/>
+  <ellipse cx="50.1" cy="93.2" rx="6.4" ry="8.2" transform="translate(-17.4 11.7) rotate(-11.4)" fill="url(#e)"/>
+  <ellipse cx="39.3" cy="90.9" rx="6.4" ry="8.2" transform="translate(-17.2 9.5) rotate(-11.4)" fill="url(#f)"/>
+  <ellipse cx="30.7" cy="83.4" rx="8.2" ry="6.4" transform="translate(-57.9 90) rotate(-74.1)" fill="url(#g)"/>
+  <ellipse cx="23.3" cy="75.7" rx="8.2" ry="6.4" transform="translate(-55.9 77.4) rotate(-74.1)" fill="url(#h)"/>
+  <ellipse cx="16.7" cy="67" rx="8.2" ry="6.4" transform="translate(-52.3 64.7) rotate(-74.1)" fill="url(#i)"/>
+  <ellipse cx="12.4" cy="56.7" rx="8.2" ry="6.4" transform="translate(-29 16) rotate(-33.1)" fill="url(#j)"/>
+  <ellipse cx="12.9" cy="46.1" rx="8.2" ry="6.4" transform="translate(-23.1 14.6) rotate(-33.1)" fill="url(#k)"/>
+  <ellipse cx="14" cy="36.5" rx="8.2" ry="6.4" transform="translate(-17.7 13.6) rotate(-33.1)" fill="url(#l)"/>
+  <ellipse cx="20.3" cy="29.4" rx="8.2" ry="6.4" transform="translate(-12.4 43.6) rotate(-78.9)" fill="url(#m)"/>
+  <ellipse cx="27.7" cy="26.2" rx="6.4" ry="8.2" transform="translate(-8.6 14.6) rotate(-25.7)" fill="url(#n)"/>
+  <ellipse cx="88" cy="88" rx="6.4" ry="8.2" transform="translate(-34.7 67.2) rotate(-35.4)" fill="url(#o)"/>
+  <ellipse cx="90.4" cy="76.7" rx="6.4" ry="8.2" transform="translate(-27.7 66.5) rotate(-35.4)" fill="url(#p)"/>
+  <ellipse cx="90.9" cy="65.8" rx="6.4" ry="8.2" transform="translate(-21.3 64.8) rotate(-35.4)" fill="url(#q)"/>
+  <ellipse cx="90.3" cy="53" rx="6.4" ry="8.2" transform="translate(-14 62) rotate(-35.4)" fill="url(#r)"/>
+  <ellipse cx="86.3" cy="42.7" rx="6.4" ry="8.2" transform="translate(2.5 90.1) rotate(-55.8)" fill="url(#s)"/>
+  <ellipse cx="82.3" cy="31.9" rx="6.4" ry="8.2" transform="translate(7.4 78.6) rotate(-53.1)" fill="url(#t)"/>
+  <ellipse cx="74.3" cy="24.3" rx="8.2" ry="6.4" transform="translate(-3.2 14.4) rotate(-10.8)" fill="url(#u)"/>
+  <ellipse cx="68.6" cy="16.7" rx="8.2" ry="6.4" transform="translate(.1 34) rotate(-27.9)" fill="url(#v)"/>
+  <ellipse cx="57.8" cy="13.4" rx="8.2" ry="6.4" transform="translate(5 40.5) rotate(-40.3)" fill="url(#w)"/>
+  <ellipse cx="47.2" cy="10.5" rx="8.2" ry="6.4" transform="translate(4.4 33) rotate(-40.3)" fill="url(#x)"/>
+  <ellipse cx="40.1" cy="14.3" rx="8.2" ry="6.4" transform="translate(.2 29.3) rotate(-40.3)" fill="url(#y)"/>
+  <ellipse cx="33.3" cy="20.1" rx="6.4" ry="8.2" transform="translate(3.5 45.1) rotate(-71.2)" fill="url(#z)"/>
+  <ellipse cx="76.2" cy="84.7" rx="6.4" ry="8.2" transform="translate(-29.2 41.4) rotate(-25.7)" fill="url(#aa)"/>
+  <ellipse cx="67.6" cy="86.6" rx="6.4" ry="8.2" transform="translate(-30.8 37.8) rotate(-25.7)" fill="url(#ab)"/>
+  <ellipse cx="55.6" cy="85.4" rx="6.4" ry="8.2" transform="translate(-31.5 32.5) rotate(-25.7)" fill="url(#ac)"/>
+  <ellipse cx="45.7" cy="81.9" rx="8.2" ry="6.4" transform="translate(-38.3 123.6) rotate(-87.2)" fill="url(#ad)"/>
+  <ellipse cx="37.7" cy="76.8" rx="8.2" ry="6.4" transform="translate(-46.8 90.2) rotate(-72.8)" fill="url(#ae)"/>
+  <ellipse cx="31" cy="70.7" rx="8.2" ry="6.4" transform="translate(-45.4 60) rotate(-58.3)" fill="url(#af)"/>
+  <ellipse cx="23.8" cy="62.7" rx="8.2" ry="6.4" transform="translate(-33.7 28.1) rotate(-38.2)" fill="url(#ag)"/>
+  <ellipse cx="23" cy="53" rx="8.2" ry="6.4" transform="translate(-23.2 18.3) rotate(-29.6)" fill="url(#ah)"/>
+  <ellipse cx="21.8" cy="42.1" rx="8.2" ry="6.4" transform="translate(-1.7 .9) rotate(-2.4)" fill="url(#ai)"/>
+  <ellipse cx="29.6" cy="34.3" rx="8.2" ry="6.4" transform="translate(-9.8 56.6) rotate(-78.7)" fill="url(#aj)"/>
+  <ellipse cx="80.9" cy="77" rx="6.4" ry="8.2" transform="translate(-30.7 80.8) rotate(-45.5)" fill="url(#ak)"/>
+  <ellipse cx="80.9" cy="68.3" rx="6.4" ry="8.2" transform="translate(-24.5 78.2) rotate(-45.5)" fill="url(#al)"/>
+  <ellipse cx="81.3" cy="58.9" rx="6.4" ry="8.2" transform="translate(-17.7 75.7) rotate(-45.5)" fill="url(#am)"/>
+  <ellipse cx="77.5" cy="48.3" rx="6.4" ry="8.2" transform="translate(3.4 101.6) rotate(-67.7)" fill="url(#an)"/>
+  <ellipse cx="75.2" cy="38.4" rx="8.2" ry="6.4" transform="translate(-6.8 18.2) rotate(-13.2)" fill="url(#ao)"/>
+  <ellipse cx="67.8" cy="32" rx="8.2" ry="6.4" transform="translate(-6 45.4) rotate(-35.5)" fill="url(#ap)"/>
+  <ellipse cx="60.8" cy="24.4" rx="8.2" ry="6.4" transform="translate(.8 50.6) rotate(-45.5)" fill="url(#aq)"/>
+  <ellipse cx="50.8" cy="22.1" rx="8.2" ry="6.4" transform="translate(-.6 42.9) rotate(-45.5)" fill="url(#ar)"/>
+  <ellipse cx="41.7" cy="20.9" rx="8.2" ry="6.4" transform="translate(-4.9 18.8) rotate(-24)" fill="url(#as)"/>
+  <ellipse cx="38.7" cy="29.4" rx="6.4" ry="8.2" transform="translate(-2.7 54.7) rotate(-68.6)" fill="url(#at)"/>
+  <ellipse cx="70.1" cy="75.3" rx="6.4" ry="8.2" transform="translate(-30.9 55.7) rotate(-36.1)" fill="url(#au)"/>
+  <ellipse cx="59.2" cy="75.7" rx="6.4" ry="8.2" transform="translate(-33.2 49.4) rotate(-36.1)" fill="url(#av)"/>
+  <ellipse cx="48.6" cy="73.3" rx="6.4" ry="8.2" transform="translate(-15.5 13.1) rotate(-13.3)" fill="url(#aw)"/>
+  <ellipse cx="39.6" cy="66.2" rx="8.2" ry="6.4" transform="translate(-28.5 102.4) rotate(-87.1)" fill="url(#ax)"/>
+  <ellipse cx="32.2" cy="57.5" rx="8.2" ry="6.4" transform="translate(-31.4 74.8) rotate(-75.9)" fill="url(#ay)"/>
+  <ellipse cx="33.1" cy="45.9" rx="6.4" ry="8.2" transform="translate(-18.3 22.2) rotate(-29.4)" fill="url(#az)"/>
+  <ellipse cx="70.5" cy="64.2" rx="6.4" ry="8.2" transform="translate(-24.3 53.8) rotate(-36.1)" fill="url(#ba)"/>
+  <ellipse cx="68.8" cy="53" rx="6.4" ry="8.2" transform="translate(-6.9 95.4) rotate(-66.8)" fill="url(#bb)"/>
+  <ellipse cx="64.1" cy="43.9" rx="6.4" ry="8.2" transform="translate(6.3 95.9) rotate(-76.5)" fill="url(#bc)"/>
+  <ellipse cx="57.2" cy="35.5" rx="6.4" ry="8.2" transform="translate(15 87.9) rotate(-83)" fill="url(#bd)"/>
+  <ellipse cx="49.5" cy="31.6" rx="6.4" ry="8.2" transform="translate(-6.6 49) rotate(-49.7)" fill="url(#be)"/>
+  <ellipse cx="40.9" cy="37.4" rx="6.4" ry="8.2" transform="translate(-14.4 34.2) rotate(-39.1)" fill="url(#bf)"/>
+  <ellipse cx="60.7" cy="65" rx="6.4" ry="8.2" transform="translate(-26.7 48.2) rotate(-36.1)" fill="url(#bg)"/>
+  <ellipse cx="49.4" cy="64.1" rx="6.4" ry="8.2" transform="translate(-28.3 41.4) rotate(-36.1)" fill="url(#bh)"/>
+  <ellipse cx="41.9" cy="53.1" rx="6.4" ry="8.2" transform="translate(-14.1 15.1) rotate(-17.5)" fill="url(#bi)"/>
+  <ellipse cx="60.1" cy="53.7" rx="6.4" ry="8.2" transform="translate(-20.1 45.7) rotate(-36.1)" fill="url(#bj)"/>
+  <ellipse cx="52.7" cy="43.9" rx="6.4" ry="8.2" transform="translate(-14.4 58) rotate(-51.7)" fill="url(#bk)"/>
+  <ellipse cx="44.8" cy="45.6" rx="6.4" ry="8.2" transform="translate(-17 29.3) rotate(-30.8)" fill="url(#bl)"/>
+  <ellipse cx="52.3" cy="55.8" rx="6.4" ry="8.2" transform="translate(-21.2 34.6) rotate(-30.8)" fill="url(#bm)"/>
+  <path d="m46.7,74.6c-.4,0-.8,0-1.2-.3s-.7-.5-1-.8l-12.2-14.2c-.6-.7-.9-1.6-.9-2.7s.3-1.9.9-2.7c.6-.7,1.4-1.1,2.3-1.1s1.6.4,2.3,1.1l9.8,11.4,23.6-27.4c.6-.7,1.4-1.1,2.3-1.1s1.6.4,2.3,1.1c.6.7.9,1.6.9,2.7s-.3,1.9-.9,2.7l-25.8,30.1c-.3.4-.7.6-1,.8s-.8.3-1.2.3Z" fill="#ffe4d3"/>
+</svg>

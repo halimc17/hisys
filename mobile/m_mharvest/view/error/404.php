@@ -1,0 +1,1 @@
+<img class="erro_page" src="<? echo $this->base_url(); ?>assets/images/navigasi/404.png" style="position:absolute;inset:0px;width:40%;">

@@ -1,0 +1,55 @@
+<?php
+$sysconf = array(
+    '80'=>array(
+        'system_path'=>'system',
+        'application_folder'=>'mharvest',
+        'application_name'=>'mHarvest',
+        'application_model'=>'mharvest',
+        'url_path'=>'index.php/',
+        'base_path'=>'mharvest',
+        'template'=>'primary',
+        'timezone'=>'Asia/Bangkok',
+        'PRODUCT_KEY'=>'V000021',
+        'VERSION'=>'1.0.0.32',
+        'DEV_DATE'=>strtotime("2023-01-31"),
+        'QA_DATE'=>strtotime("2023-01-31"),
+        'LIVE_DATE'=>strtotime("2023-01-31"),
+        'EXPIRED_DATE'=>strtotime("2023-12-31"),
+    )
+    ,'81'=>array(
+        'system_path'=>'system',
+        'application_folder'=>'map',
+        'application_name'=>'owlMap',
+        'application_model'=>'map',
+        'url_path'=>'map.php/',
+        'base_path'=>'map',
+        'template'=>'primary',
+        'timezone'=>'Asia/Bangkok',
+        'PRODUCT_KEY'=>'V000021',
+        'VERSION'=>'1.0.0.32',
+        'DEV_DATE'=>strtotime("2023-01-31"),
+        'QA_DATE'=>strtotime("2023-01-31"),
+        'LIVE_DATE'=>strtotime("2023-01-31"),
+        'EXPIRED_DATE'=>strtotime("2023-12-31"),
+    )
+    ,'82'=>array(
+        'system_path'=>'system',
+        'application_folder'=>'publish',
+        'application_name'=>'publish',
+        'application_model'=>'publish',
+        'url_path'=>'publish.php/',
+        'base_path'=>'publish',
+        'template'=>'primary',
+        'timezone'=>'Asia/Bangkok',
+        'PRODUCT_KEY'=>'V000021',
+        'VERSION'=>'1.0.0.32',
+        'DEV_DATE'=>strtotime("2023-01-31"),
+        'QA_DATE'=>strtotime("2023-01-31"),
+        'LIVE_DATE'=>strtotime("2023-01-31"),
+        'EXPIRED_DATE'=>strtotime("2023-12-31"),
+    )
+);
+$sysConfig = array();
+if(isset($_SERVER['SERVER_PORT'])){
+    $sysConfig = @$sysconf[$_SERVER['SERVER_PORT']];
+}?>

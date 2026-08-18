@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="a" data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 113.4 113.4">
+  <defs>
+    <linearGradient id="b" x1="95.2" y1="4.8" x2="95.2" y2="106.4" gradientTransform="translate(-2.9 153.9) rotate(-90)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f24e08"/>
+      <stop offset="0" stop-color="#f56018"/>
+      <stop offset=".2" stop-color="#f8772c"/>
+      <stop offset=".3" stop-color="#fb883b"/>
+      <stop offset=".4" stop-color="#fd9446"/>
+      <stop offset=".6" stop-color="#fe9b4d"/>
+      <stop offset="1" stop-color="#ff9e4f"/>
+    </linearGradient>
+  </defs>
+  <path d="m77.2,15.9s-.7.5-2.5-.2-2-1.6-2-1.6c0,0,2.2-1.3,3.7-5.2s.9-6.4.9-6.4c0,0,1.1,0,2.5.4s2.1,1.4,2.1,1.4c0,0,1.1,1.1-1.3,6.8-1.9,4.4-3.2,4.8-3.2,4.8Z" fill="#512002"/>
+  <path d="m77,14c23.1,9.6,33.1,42.2,20.4,67.3-12.7,25.1-45.4,36.6-66.4,23.6S48.1,2.1,77,14Z" fill="#f24f09"/>
+  <ellipse cx="52.7" cy="58.7" rx="50.8" ry="39.8" transform="translate(-23.5 79.2) rotate(-63.1)" fill="url(#b)"/>
+  <circle cx="52.7" cy="58.7" r="15.2" fill="#ffe4d3"/>
+  <path d="m87.6,20.7s.7-5-9-10.1-14.2-.6-14.2-.6c0,0,.4,5.2,9.7,9.7,9.9,4.8,13.5,1,13.5,1Z" fill="#512002"/>
+</svg>
