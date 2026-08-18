@@ -652,28 +652,31 @@ $stream.="<td colspan=4 align=center><img src=images/pdf.jpg  style='cursor:poin
 		if($param['kodecustomersch']!=''){
 			$where.=" and koderekanan='".$param['kodecustomersch']."'";
 		}
+
+
 	
-		$limit = 10;
+		$limit = 20;
 		$page = 0;
 		if (isset($_POST['page'])) {
 			$page = $_POST['page'];
 			if ($page < 0)
 				$page = 0;
 		}
+
 		$maxdisplay=($page*$limit);
 		$colspan=16;
 	
 		$offset = $page * $limit;
-		$str = "select count(*) as jumrow from ".$dbname.".".$table." where ".$where." and kodebarang='40000003'";
+		$str = "select count(*) as jumrow from ".$dbname.".".$table." where ".$where." and kodebarang='40000003' and kodept in (" . getOrgDetail(4) . ")";
         $res = $owlPDO->query($str) or die(print " Gagal: " . PDOException::getMessage());
         $res->setFetchMode(PDO::FETCH_ASSOC);
         while($bar = $res->fetch()){
             $jlhbrs = $bar['jumrow'];
 		}
+
 		$no = 0;
 		$no=$maxdisplay;
-		$str = "select * from ".$dbname.".".$table."  where ".$where." and kodebarang='40000003' order by tanggalkontrak desc limit " . $offset . "," . $limit . " ";
-		
+		$str = "select * from ".$dbname.".".$table."  where ".$where." and kodebarang='40000003' and kodept in (" . getOrgDetail(4) . ") order by tanggalkontrak desc limit " . $offset . "," . $limit . " ";
 		$res=fetchdata($str);
 		foreach($res as $bar){
 			$no++;

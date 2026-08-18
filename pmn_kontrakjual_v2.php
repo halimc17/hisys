@@ -20,13 +20,37 @@ include('master_mainMenu.php');
 $optCust = $optBrg = $opttipe = $optppn = $optKurs = $optmillcode = $optsatbrg = $optPosisiCtr = "<option value=''>" . $_SESSION['lang']['pilihdata'] . "</option>";
 $optPt = $optunit = $optNoref = $optTtdjual = $opttppembayaran = $optkodebarang = "<option value=''>" . $_SESSION['lang']['pilihdata'] . "</option>";
 
-$sOrg = "select kodeorganisasi,namaorganisasi from " . $dbname . ".organisasi where tipe='PT'"; //echo $sOrg;
-//$qOrg=mysql_query($sOrg) or die(mysql_error());
-//while($rOrg=mysql_fetch_assoc($qOrg))
-$qOrg = $owlPDO->query($sOrg) or die(print " Gagal: " . PDOException::getMessage());
-$qOrg->setFetchMode(PDO::FETCH_ASSOC);
-while ($rOrg = $qOrg->fetch()) {
-	$optPt .= "<option value=" . $rOrg['kodeorganisasi'] . ">" . $rOrg['namaorganisasi'] . "</option>";
+// $sOrg = "select kodeorganisasi,namaorganisasi from " . $dbname . ".organisasi where tipe='PT'"; //echo $sOrg;
+// //$qOrg=mysql_query($sOrg) or die(mysql_error());
+// //while($rOrg=mysql_fetch_assoc($qOrg))
+// $qOrg = $owlPDO->query($sOrg) or die(print " Gagal: " . PDOException::getMessage());
+// $qOrg->setFetchMode(PDO::FETCH_ASSOC);
+// while ($rOrg = $qOrg->fetch()) {
+// 	$optPt .= "<option value=" . $rOrg['kodeorganisasi'] . ">" . $rOrg['namaorganisasi'] . "</option>";
+// }
+
+
+## GET PT
+$optUnit='';
+$unit='';
+$arrUnit = getOrgDetail(3);
+foreach($arrUnit as $key=>$val){
+	$induk = makeOption($dbname, 'organisasi', 'kodeorganisasi,induk',"kodeorganisasi='".$key."'");
+	$d=$induk[$key];
+	if($d!=$n){			
+		$optPt.="<optgroup label='".$d." - ".getNamaOrg($d)."'>";
+	}
+	
+	if($key==$_SESSION['empl']['lokasitugas']){
+		$optPt.="<option value='".$key."' selected>".$key." - ".$val."</option>";	
+		$unit=$key;
+	}else{
+		$optPt.="<option value='".$key."'>".$key." - ".$val."</option>";			
+	}
+	$n=$d;
+	if($d!=$n){			
+		$optPt.="</optgroup>";
+	}
 }
 
 
@@ -39,19 +63,19 @@ while ($rCust = $qCust->fetch()) {
 	$optCust .= "<option value=" . $rCust['kodecustomer'] . ">" . $rCust['namacustomer'] . "</option>";
 }
 
-$str = "select * from " . $dbname . ".organisasi where length(kodeorganisasi)='4'";
-// echo $str;
-$res = $owlPDO->query($str) or die(print " Gagal: " . PDOException::getMessage());
-$res->setFetchMode(PDO::FETCH_ASSOC);
-while ($bar = $res->fetch()) {
-	$optunit .= "<option value='" . $bar['kodeorganisasi'] . "'>" . $bar['kodeorganisasi'] . " " . $bar['namaorganisasi'] . "</option>";
-}
-
+// $str = "select * from " . $dbname . ".organisasi where length(kodeorganisasi)='4'";
+// // echo $str;
+// $res = $owlPDO->query($str) or die(print " Gagal: " . PDOException::getMessage());
+// $res->setFetchMode(PDO::FETCH_ASSOC);
+// while ($bar = $res->fetch()) {
+// 	$optunit .= "<option value='" . $bar['kodeorganisasi'] . "'>" . $bar['kodeorganisasi'] . " " . $bar['namaorganisasi'] . "</option>";
+// }
 
 // $arrKurs=array("IDR","USD");
 // foreach($arrKurs as $dt){
 // $optKurs.="<option value=".$dt.">".$dt."</option>";
 // }
+
 $str = "select * from " . $dbname . ".setup_matauang";
 $res = $owlPDO->query($str) or die(print " Gagal: " . PDOException::getMessage());
 $res->setFetchMode(PDO::FETCH_ASSOC);
@@ -59,34 +83,31 @@ while ($bar = $res->fetch()) {
 	$optKurs .= "<option value='" . $bar['kode'] . "'>" . $bar['matauang'] . "</option>";
 }
 
-
 #ambil franco
 $optByrke = $optTermin = $optFranco = "<option value=''>" . $_SESSION['lang']['pilihdata'] . "</option>";
 $sFranco = "select distinct id_franco,franco_name from " . $dbname . ".pmn_5franco order by franco_name asc";
-//$qFranco=mysql_query($sFranco) or die(mysql_error($conn));
-//while($rFranco=mysql_fetch_assoc($qFranco))
+
 $qFranco = $owlPDO->query($sFranco) or die(print " Gagal: " . PDOException::getMessage());
 $qFranco->setFetchMode(PDO::FETCH_ASSOC);
 while ($rFranco = $qFranco->fetch()) {
 	$optFranco .= "<option value='" . $rFranco['id_franco'] . "'>" . $rFranco['franco_name'] . "</option>";
 }
+
 #termin pembayaran
 $sFranco2 = "select distinct kode from " . $dbname . ".pmn_5terminbayar order by kode asc";
-//$qFranco2=mysql_query($sFranco2) or die(mysql_error($conn));
-//while($rFranco2=mysql_fetch_assoc($qFranco2))
 $qFranco2 = $owlPDO->query($sFranco2) or die(print " Gagal: " . PDOException::getMessage());
 $qFranco2->setFetchMode(PDO::FETCH_ASSOC);
 while ($rFranco2 = $qFranco2->fetch()) {
 	$optTermin .= "<option value='" . $rFranco2['kode'] . "'>" . $rFranco2['kode'] . "</option>";
 }
+
 $arrStatPPn = array("0" => "Exclude", "1" => "Include");
 $optSat = "<option value=''>" . $_SESSION['lang']['pilihdata'] . "</option>";
 foreach ($arrStatPPn as $row => $lstNm) {
 	$optSat .= "<option value='" . $row . "'>" . $lstNm . "</option>";
 }
+
 $sByr = "select * from " . $dbname . ".keu_5akunbank order by namabank";
-//$qbyr=mysql_query($sByr) or die(mysql_error($conn));
-//while($rByr=mysql_fetch_assoc($qbyr))
 $qbyr = $owlPDO->query($sByr) or die(print " Gagal: " . PDOException::getMessage());
 $qbyr->setFetchMode(PDO::FETCH_ASSOC);
 while ($rByr = $qbyr->fetch()) {
@@ -97,8 +118,6 @@ while ($rByr = $qbyr->fetch()) {
 $optKarid = makeOption($dbname, 'datakaryawan', 'karyawanid,namakaryawan');
 
 $iTtd = "select * from " . $dbname . ".pmn_5ttd";
-//$nTtd=mysql_query($iTtd) or die(mysql_error($conn));
-//while($dTtd=mysql_fetch_assoc($nTtd))
 $nTtd = $owlPDO->query($iTtd) or die(print " Gagal: " . PDOException::getMessage());
 $nTtd->setFetchMode(PDO::FETCH_ASSOC);
 while ($dTtd = $nTtd->fetch()) {
@@ -119,6 +138,7 @@ $res = fetchData($str);
 foreach ($res as $key => $val) {
 	$optDaerahCtr .= "<option value='" . $val['id'] . "'>" . $val['lokasi'] . "</option>";
 }
+
 // get enum pmn_kontrakjual
 // $optjns=array("PM"=>"Pengiriman","PK"=>"Pemenuhan Kontrak","UM"=>"Uang Muka","BA"=>"Berita Acara Serah Terima"); 
 // $arrtermbyr=getEnum($dbname,'pmn_kontrakjual','termbayar');
