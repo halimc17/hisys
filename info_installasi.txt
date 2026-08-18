@@ -1,0 +1,17 @@
+1. update wb_getIndicatorvalue.php, ganti echo  echo "100"; menjadi echo $text;
+2. install hyperterminal (jika xp sudah ada bawaan, jika win7 extract ke folder windows)
+3. pastikan program lama tidak diaktifkan
+4. Hidupkan hiper terminal
+5. buat shortcutnya di desktop
+6. jalankan hyper terminal dari desktop (khusus untuk win 7 seting shortcut agar run as asministrator)
+7. jika sudah dapat response, matikan hyper terminal maka program siap dijalankan
+8 Sebelum memulai program setiap hari, maka harus menjalankan hyperterminal terlebih dahulu, jika sudah ada response, maka matikan hyperterminal dan siap menjalankan program
+#parity dan databit 
+untuk parity diatur pada wb_getIndicatorvalue.php line 16
+
+# jika angka pada display berbeda dengan indicator karena salah pemotongan character
+maka edit wb_getIndicatorvalue.php line 21
+
+# untuk mengubah kecepatan menangkap string indicator ada pada 	trx.js line 2298
+untuk win xp antara 4000 sampai 5000
+untuk win7 antara 2000 sampai 4000

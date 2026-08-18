@@ -1,0 +1,58 @@
+<?
+require_once('master_validation.php');
+require_once('config/connection.php');
+require_once('lib/nangkoelib.php');
+?>
+    <script language=JavaScript1.2 src=js/log_slaveChatRFQ.js?ver=1.8></script>
+	<link rel=stylesheet type=text/css href=style/generic.css>
+
+<?
+
+$nomor		=checkPostGet('nomor','');
+ 
+echo "<fieldset><div id=container  style=min-height:145px>
+       <table class=sortable cellspacing=1 border=0 width=100%>
+        <tr>
+		  <td>From</td>
+		  <td>Time</td>
+		  <td>Messages</td>
+		</tr>
+	   ";
+	
+	$str="select a.*,b.namauser from ".$dbname.".log_rfq_chat a left join ".$dbname.".user b
+         on a.karyawanid=b.karyawanid
+         where 1=1 and a.nomor='".$nomor."' order by a.nomor asc, tanggal asc";
+	$res=$owlPDO->query($str) or die(print " Gagal: ".PDOException::getMessage());
+	$res->setFetchMode(PDO::FETCH_OBJ);
+	
+	$no=0;
+	while($bar=$res->fetch())
+	{
+		$no+=1;
+		if($no%2==0)
+		{
+			$ct="style='background-color:#FFFFFF'";
+		}
+		else
+		{
+			$ct="style='background-color:#E8F2FE'";
+		}
+		echo"<tr>
+	        <td ".$ct.">".$bar->namauser."</td>
+			<td ".$ct.">".$bar->tanggal."</td>
+			<td ".$ct.">".$bar->pesan."</td>
+	      </tr>";
+	}
+	
+echo"</table></div></fieldset>";
+echo"<br><fieldset>Messages:<br>";
+echo"
+       <input type=hidden id=nomor value='".$nomor."'>
+       <textarea id=pesan cols=60 rows=2 onkeypress=\"return tanpa_kutip(event);\"></textarea>
+       <br><button class=mybutton onclick=\"saveRFQChat('".$nomor."');\">".$_SESSION['lang']['chat']."</button>
+	   </fieldset>"; 	
+echo"<div id='progress' style='display:none;border:orange solid 1px;width:150px;position:fixed;right:20px;top:65px;color:#ff0000;font-family:Tahoma;font-size:13px;font-weight:bolder;text-align:center;background-color:#FFFFFF;z-index:10000;'>
+Please wait.....!
+<img src='images/progress.gif'>
+</div>";	
+?>

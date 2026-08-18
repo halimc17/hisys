@@ -1,0 +1,617 @@
+<?php
+	include('../config/connection.php');
+	include('../lib/nangkoelib.php');
+	include('master_validation.php');
+	include('lib/zLib.php');
+	include('../jpgraph/jpgraph.php');
+	include('../jpgraph/jpgraph_pie.php');
+	include('../jpgraph/jpgraph_pie3d.php');
+
+	$kebun = checkPostGet('kebun', '');
+	$periodeawal = checkPostGet('periodeawal', '');
+	$periodeakhir = checkPostGet('periodeakhir', '');
+	$detaillaporan = checkPostGet('detaillaporan', '');
+	$detaillaporan3 = checkPostGet('detaillaporan3', '');
+	$noakun = checkPostGet('noakun', '');
+	$type = checkPostGet('type', '');
+	$idsvg = checkPostGet('idsvg', '');
+	$kegiatan = checkPostGet('kegiatan', '');
+
+	$kbnarr = strToArray($kebun, '##');
+
+	switch ($type) {
+		case 'preview':
+			if (str_replace('-', '', $periodeawal) > str_replace('-', '', $periodeakhir)) {
+				exit("error : Periode awal harus lebih kecil dari periode akhir.");
+			}
+
+			//Get array warna
+			$str = "select * from ".$dbname.".bi_5siklusdt where idsiklus = '".$detaillaporan."'";
+			try {
+				$res = $owlPDO->query($str);
+			} catch (PDOException $e) {
+				echo "Gagal: ".$e->getMessage();
+			}
+			$res->setFetchMode(PDO::FETCH_ASSOC);
+			$arrWarna = array();
+			while ($bar = $res->fetch()) {
+				$arrWarna[$bar['warna']]['opawal'] = $bar['opawal'];
+				$arrWarna[$bar['warna']]['awal'] = $bar['nilaiawal'];
+				$arrWarna[$bar['warna']]['opakhir'] = $bar['opakhir'];
+				$arrWarna[$bar['warna']]['akhir'] = $bar['nilaiakhir'];
+				$arrWarna[$bar['warna']]['keterangan'] = $bar['keterangan'];
+			}
+
+			###################################################
+			$tglakhir = tglakhir($periodeakhir.'-01');
+			$jumbul = intval(substr($periodeakhir, 5, 2)) - intval(substr($periodeawal, 5, 2));
+			$jumbul = $jumbul + 1;
+			$arrper = month_inbetween($periodeawal, $periodeakhir);
+			$joinArrPer = implode("','", str_replace('-', '', $arrper));
+			$tahun = substr($periodeakhir, 0, 4);
+
+			$datalist = array();
+			###REALISASI
+			//Get array kegiatan
+			//Get list Blok
+			$bloklist = array();
+			$datablok = array();
+			$str = "select indukblok as kodeorg,sum(luasareaproduktif) as luasareaproduktif from ".$dbname.".setup_blok 
+					where 1=1 ".forKebunAll($kbnarr, 'left(kodeorg,4)', 'in')." group by indukblok";
+			try {
+				$res = $owlPDO->query($str);
+			} catch (PDOException $e) {
+				echo "Gagal: ".$e->getMessage();
+			}
+			$res->setFetchMode(PDO::FETCH_ASSOC);
+			while ($bar = $res->fetch()) {
+				$bloklist[$bar['kodeorg']] = $bar['kodeorg'];
+				@$datablok[$bar['kodeorg']]['luasareaproduktif'] += $bar['luasareaproduktif'];
+			}
+
+			if ($kegiatan == '') {
+				$kgtn = " and kodekegiatan in (select kegiatan from bi_5siklusht where noakun= '".$noakun."')";
+			} else {
+				$kgtn = " and kodekegiatan = '".$kegiatan."'";
+			}
+			$str = "select sum(hasilkerja) as hasilkerja, kodeorg from ".$dbname.".kebun_prestasi WHERE left(notransaksi,6) in ('".$joinArrPer."') ".$kgtn." ".forKebunAll($kbnarr, 'kodeorg', 'like')." group by kodeorg";
+			try {
+				$res = $owlPDO->query($str);
+			} catch (PDOException $e) {
+				echo "Gagal: ".$e->getMessage();
+			}
+			$res->setFetchMode(PDO::FETCH_ASSOC);
+			while ($bar = $res->fetch()) {
+				$data[$bar['kodeorg']] = $bar['hasilkerja'];
+			}
+
+			$str = "select sum(hasilkerjarealisasi) as hasilkerja, kodeblok as kodeorg from ".$dbname.".log_baspk WHERE tanggal between '".$periodeawal."-01' and '".$tglakhir."' ".$kgtn." ".forKebunAll($kbnarr, 'kodeblok', 'like')." group by kodeblok";
+			try {
+				$res = $owlPDO->query($str);
+			} catch (PDOException $e) {
+				echo "Gagal: ".$e->getMessage();
+			}
+			$res->setFetchMode(PDO::FETCH_ASSOC);
+			while ($bar = $res->fetch()) {
+				$data2[$bar['kodeorg']] = $bar['hasilkerja'];
+			}
+
+			###################################################
+
+			$arrList = array();
+			$countlist = -1;
+			if (count($bloklist) > 0) {
+				foreach ($bloklist as $listblok) {
+					$optLuasArea = makeOption($dbname, 'setup_blok', 'indukblok,luasareaproduktif', "indukblok='".$listblok."'");
+					$optLuas = (float)@$datablok[$listblok]['luasareaproduktif'];
+					if ($optLuas <= 0) {
+						$optLuas = 1;
+					}
+					$rotasi = @round(($data[$listblok] + $data2[$listblok]) / $optLuas);
+					// echo $listblok.": ".$rotasi."<br>";
+					#merah KSPE05089A
+					#hijau KSPE05074B
+					#putih KSPE01088D
+					// if ($listblok=='KSPE05092A') {
+					// 	echo $rotasi;
+					// 	exit('error');
+					// }
+					if (isset($arrWarna)) {
+						foreach ($arrWarna as $key => $row) {
+							$queryX[] = $rotasi;
+							if (my_operator($rotasi, $row['awal'], $row['opawal']) && my_operator($rotasi, $row['akhir'], $row['opakhir'])) {
+								$countlist++;
+								$str2 = "select idsvg from ".$dbname.".bi_map_pt where keterangan like '".$listblok."%' and tipepeta='".$firstPT."'";
+								try {
+									$res2 = $owlPDO->query($str2);
+								} catch (PDOException $e) {
+									echo "Gagal: ".$e->getMessage();
+								}
+								$res2->setFetchMode(PDO::FETCH_ASSOC);
+								$queryX[] = $str2;
+								$bar2 = $res2->fetch();
+								if ($bar2['idsvg'] != '') {
+									$arrList[$countlist]['idsvg'] = $bar2['idsvg'];
+									$arrList[$countlist]['warna'] = $key;
+								}
+							}
+						}
+					}
+				}
+			}
+
+			echo json_encode($arrList)."####".showLegend($detaillaporan, 1)."####".$firstPT;
+			break;
+
+		case 'detail':
+			//Get Kode Blok
+			$str = "select keterangan from ".$dbname.".bi_map_pt where idsvg = '".$idsvg."'";
+			try {
+				$res = $owlPDO->query($str);
+			} catch (PDOException $e) {
+				echo "Gagal: ".$e->getMessage();
+			}
+			$res->setFetchMode(PDO::FETCH_ASSOC);
+			$bar = $res->fetch();
+			$expKtr = explode('##', $bar['keterangan']);
+			$blok = $expKtr[0];
+			$bloklist = array();
+			$str = "select GROUP_CONCAT(kodeorg) as kodeorg,SUM(luasareaproduktif) as luasareaproduktif from ".$dbname.".setup_blok where indukblok = '".$blok."' limit 1";
+			try {
+				$res = $owlPDO->query($str);
+			} catch (PDOException $e) {
+				echo "Gagal: ".$e->getMessage();
+			}
+			$res->setFetchMode(PDO::FETCH_ASSOC);
+			$bar = $res->fetch();
+			$luasblok = $bar['luasareaproduktif'];
+			$bloklist = explode(",", $bar['kodeorg']);
+
+			$tglakhir = tglakhir($periodeakhir.'-01');
+			$jumbul = intval(substr($periodeakhir, 5, 2)) - intval(substr($periodeawal, 5, 2));
+			$jumbul = $jumbul + 1;
+			$arrper = month_inbetween($periodeawal, $periodeakhir);
+			$joinArrPer = implode("','", str_replace('-', '', $arrper));
+			$tahun = substr($periodeakhir, 0, 4);
+
+			###################################################
+			//Get PRESTASI - REALISASI
+			$datalist = $datalist2 = array();
+			if ($kegiatan == '') {
+				$kgtn = " and kodekegiatan in (select kegiatan from bi_5siklusht where noakun= '".$noakun."')";
+				$kgtn2 = " and kegiatan in (select kegiatan from bi_5siklusht where noakun= '".$noakun."')";
+			} else {
+				$kgtn = " and kodekegiatan = '".$kegiatan."'";
+				$kgtn2 = " and kegiatan = '".$kegiatan."'";
+			}
+			$str = "select left(notransaksi,6) as periode,sum(hasilkerja) as hasilkerja, sum(jumlahhk) as jumlahhk, kodeorg from ".$dbname.".kebun_prestasi WHERE left(notransaksi,6) in ('".$joinArrPer."') ".$kgtn." and kodeorg like '".$blok."%' group by kodeorg,left(notransaksi,6)";
+			try {
+				$res = $owlPDO->query($str);
+			} catch (PDOException $e) {
+				echo "Gagal: ".$e->getMessage();
+			}
+			$res->setFetchMode(PDO::FETCH_ASSOC);
+			while ($bar = $res->fetch()) {
+				$thn = substr($bar['periode'], 0, 4);
+				$bln = substr($bar['periode'], 4, 2);
+				$datalist[$thn."-".$bln]['real'] = $bar['hasilkerja'];
+				$datalist[$thn."-".$bln]['hkreal'] = $bar['jumlahhk'];
+			}
+
+			$str = "select LEFT(tanggal, 7) as periode,sum(hasilkerjarealisasi) as hasilkerja, sum(hkrealisasi) as jumlahhk, kodeblok as kodeorg from ".$dbname.".log_baspk WHERE tanggal between '".$periodeawal."-01' and '".$tglakhir."' ".$kgtn." and kodeblok like '".$blok."%' group by kodeblok,left(tanggal,7)";
+			try {
+				$res = $owlPDO->query($str);
+			} catch (PDOException $e) {
+				echo "Gagal: ".$e->getMessage();
+			}
+			$res->setFetchMode(PDO::FETCH_ASSOC);
+			while ($bar = $res->fetch()) {
+				// $period = substr($bar['periode'], 0, 7);
+				$datalist2[$bar['periode']]['real'] = $bar['hasilkerja'];
+				$datalist2[$bar['periode']]['hkreal'] = $bar['jumlahhk'];
+			}
+
+			#### BEGIN ANGGARAN ####
+			$bgtawal = substr($periodeawal, 5, 2);
+			$bgtakhir = substr($periodeakhir, 5, 2);
+
+			for ($i = 1; $i <= 12; $i++) {
+				if ($i < 10) {
+					$isi = "sum(fis0".$i.") as fis0".$i;
+				} else {
+					$isi = "sum(fis".$i.") as fis".$i;
+				}
+				if ($i < 12) {
+					$addstrfisik .= $isi.",";
+				} else {
+					$addstrfisik .= $isi;
+				}
+			}
+
+			if (count($bloklist) > 0) {
+				// $str = "select ".$addstrfisik." , kodeorg, sum(jumlah) as jumlah from ".$dbname.".bgt_budget_detail where tahunbudget='".$tahun."' and kodebudget IN ('SDM-KHT','SDM-PHL','SDM-KBL') ".$kgtn2." and kodeorg in ('".implode("','", $bloklist)."')";
+				$str = "
+					SELECT ".$addstrfisik.", LEFT(kodeorg, 9) AS kodeorg, SUM(jumlah) AS jumlah, tahunbudget
+					FROM ".$dbname.".bgt_budget_detail
+					WHERE tahunbudget IN ('".substr($periodeawal, 0, 4)."','".substr($periodeakhir, 0, 4)."') AND kodebudget IN ('SDM-KHT','SDM-PHL','SDM-KBL') ".$kgtn2." AND kodeorg IN ('".implode("','", $bloklist)."')
+					GROUP BY LEFT(kodeorg, 9), tahunbudget
+				";
+				try {
+					$res = $owlPDO->query($str);
+				} catch (PDOException $e) {
+					echo "Gagal: ".$e->getMessage();
+				}
+				$res->setFetchMode(PDO::FETCH_ASSOC);
+				while ($bar = $res->fetch()) {
+					// for ($i = 1; $i <= 12; $i++) {
+					// 	if ($i < 10) {
+					// 		$totalBgt += $bar['fis0'.$i];
+					// 		$datalist3[$tahun.'-0'.$i]['anggaran'] = $bar['fis0'.$i];
+					// 	} else {
+					// 		$totalBgt += $bar['fis'.$i];
+					// 		$datalist3[$tahun.'-'.$i]['anggaran'] = $bar['fis'.$i];
+					// 	}
+					// }
+					foreach ($arrper as $per) {
+						$tahun = substr($per, 0, 4);
+						$bulan = substr($per, 5, 2);
+						if ($tahun == $bar['tahunbudget']) {
+							$totalBgt += $bar['fis'.$bulan];
+							$datalist3[$per]['anggaran'] = $bar['fis'.$bulan];
+						} else {
+							$datalist3[$per]['anggaran'] = 0;
+						}
+					}
+
+					$jmlhAgrn += $bar['jumlah'];
+				}
+			}
+
+			// $str = "select sum(volume) as volume from ".$dbname.".bgt_budget_detail WHERE tahunbudget = '".$tahun."' AND kodeorg = '".$blok."' AND kegiatan = '".$kegiatan."' AND kodebudget IN ('SDM-KHT','SDM-PHL','SDM-KBL')";
+			// $res=$owlPDO->query($str) or die(print " Gagal: ".PDOException::getMessage());
+			// $res->setFetchMode(PDO::FETCH_ASSOC);
+			// while($bar=$res->fetch()){
+			// $setahun = $bar['volume'];
+			// }
+
+			##### END ANGGARAN #####
+
+			// $str = "select sum(volume) as volume from ".$dbname.".bgt_budget_detail WHERE tahunbudget = '".$tahun."' AND kodeorg = '".$blok."' AND kegiatan = '".$kegiatan."' AND kodebudget IN ('SDM-KHT','SDM-PHL','SDM-KBL')";
+			// $res=$owlPDO->query($str) or die(print " Gagal: ".PDOException::getMessage());
+			// $res->setFetchMode(PDO::FETCH_ASSOC);
+			// while($bar=$res->fetch()){
+			// $setahun = $bar['volume'];
+			// }
+
+			// $bulanbudget = explode('-',$periodeakhir);
+			// $bulanbudget = intval($bulanbudget[1]);
+
+			// for($i=1;$i<=$bulanbudget;$i++){
+			// $key = addZero($i,2);
+			// $str = "select sum(fis".$key.") as volume from ".$dbname.".bgt_budget_detail WHERE tahunbudget = '".$tahun."' AND kodeorg = '".$blok."' AND kegiatan = '".$kegiatan."' AND kodebudget IN ('SDM-KHT','SDM-PHL','SDM-KBL')";
+			// $res=$owlPDO->query($str) or die(print " Gagal: ".PDOException::getMessage());
+			// $res->setFetchMode(PDO::FETCH_ASSOC);
+			// while($bar=$res->fetch()){
+			// if($key==$bulanbudget){
+			// $bi += $bar['volume'];
+			// }
+			// $sdbi += $bar['volume'];
+			// }
+			// }
+
+			// ###REALISASI
+			// for($i=1;$i<=$bulanbudget;$i++){
+			// $key = addZero($i,2);
+			// $str = "select sum(hasilkerja) as hasilkerja from ".$dbname.".kebun_perawatan_dan_spk_vw WHERE notransaksi like '".$tahun."".$key."%' AND kodeorg = '".$blok."' AND kodekegiatan = '".$kegiatan."'";
+			// $res=$owlPDO->query($str) or die(print " Gagal: ".PDOException::getMessage());
+			// $res->setFetchMode(PDO::FETCH_ASSOC);
+			// while($bar=$res->fetch()){
+			// if($key==$bulanbudget){
+			// $realbi += $bar['hasilkerja'];
+			// }
+			// $realsdbi += $bar['hasilkerja'];
+			// }
+			// }
+
+			###################################################
+
+			$result = "
+				<hr>
+				<table cellpading=1 cellspacing=1 border=0 class=sortable width=100%>
+					<thead>
+						<tr align=center>
+							<td rowspan=2>".$_SESSION['lang']['periode']."</td>
+							<td colspan=2>".$_SESSION['lang']['prestasi']."</td>
+							<td colspan=2>HK</td>
+							<td rowspan=2>".$_SESSION['lang']['rotasi']."</td>
+							<td colspan=2>".$_SESSION['lang']['pencapaian']." (%)</td>
+						</tr>
+						<tr>
+							<td align=center>".$_SESSION['lang']['realisasi']."</td>
+							<td align=center>".$_SESSION['lang']['budget']."</td>
+							<td align=center>".$_SESSION['lang']['realisasi']."</td>
+							<td align=center>".$_SESSION['lang']['budget']."</td>
+							<td align=center>".$_SESSION['lang']['prestasi']."</td>
+							<td align=center>HK</td>
+						</tr>
+					</thead>
+					<tbody>
+			";
+
+			$totPresReal = $totHkReal = $totPresRotasi = 0;
+			foreach ($arrper as $per) {
+				$presReal = ($datalist[$per]['real'] + $datalist2[$per]['real']);
+				$presAnggaran = $datalist3[$per]['anggaran'];
+				$hkReal = ($datalist[$per]['hkreal'] + $datalist2[$per]['hkreal']);
+				$hkAnggaran = @(fixnan($datalist3[$per]['anggaran'] / $totalBgt) * $jmlhAgrn);
+				$presRotasi = @round($presReal / $luasblok);
+				$presPercent = @(fixnan($presReal / $presAnggaran) * 100);
+				$hkPercent = @(fixnan($hkReal / $hkAnggaran) * 100);
+
+				$result .= "
+					<tr class=rowcontent>
+						<td align=center>".$per."</td>
+						<td align=right>".(!$presReal ? '0' : number_format($presReal, 2))."</td>
+						<td align=right>".(!$presAnggaran ? '0' : number_format($presAnggaran, 2))."</td>
+						<td align=right>".(!$hkReal ? '0' : number_format($hkReal, 2))."</td>
+						<td align=right>".(!$hkAnggaran ? '0' : number_format($hkAnggaran, 2))."</td>
+						<td align=center>".number_format($presRotasi)."</td>
+						<td align=right>".(!$presPercent ? '0' : number_format($presPercent, 2))."</td>
+						<td align=right>".(!$hkPercent ? '0' : number_format($hkPercent, 2))."</td>
+					</tr>
+				";
+
+				$totPresReal += $presReal;
+				$totPresAnggaran += $presAnggaran;
+				$totHkReal += $hkReal;
+				$totHkAnggaran += $hkAnggaran;
+				$totPresRotasi += $presRotasi;
+			}
+
+			$resultRotasi = @round($totPresReal / $luasblok);
+			$totPresPercent = @(fixnan($totPresReal / $totPresAnggaran) * 100);
+			$totHkPercent = @(fixnan($totHkReal / $totHkAnggaran) * 100);
+
+			//warna
+			$str = "select * from ".$dbname.".bi_5siklusdt where idsiklus = '".$detaillaporan."'";
+			try {
+				$res = $owlPDO->query($str);
+			} catch (PDOException $e) {
+				echo "Gagal: ".$e->getMessage();
+			}
+			$res->setFetchMode(PDO::FETCH_ASSOC);
+			$arrWarna = array();
+			while ($bar = $res->fetch()) {
+				$arrWarna[$bar['warna']]['opawal'] = $bar['opawal'];
+				$arrWarna[$bar['warna']]['awal'] = $bar['nilaiawal'];
+				$arrWarna[$bar['warna']]['opakhir'] = $bar['opakhir'];
+				$arrWarna[$bar['warna']]['akhir'] = $bar['nilaiakhir'];
+			}
+			foreach ($arrWarna as $key => $row) {
+				if (my_operator($resultRotasi, $row['awal'], $row['opawal']) && my_operator($resultRotasi, $row['akhir'], $row['opakhir'])) {
+					$bgcol = $key;
+				}
+			}
+			$warna = $bgcol;
+
+			$result .= "
+						<tr class=rowcontent align=center style='font-weight:bold;'>
+							<td>".$_SESSION['lang']['total']."</td>
+							<td align=right>".(!$totPresReal ? '0' : number_format($totPresReal, 2))."</td>
+							<td align=right>".(!$totPresAnggaran ? '0' : number_format($totPresAnggaran, 2))."</td>
+							<td align=right>".(!$totHkReal ? '0' : number_format($totHkReal, 2))."</td>
+							<td align=right>".(!$totHkAnggaran ? '0' : number_format($totHkAnggaran, 2))."</td>
+							<td style=background-color:".$warna.">".number_format($resultRotasi)."</td>
+							<td align=right>".(!$totPresPercent ? '0' : number_format($totPresPercent, 2))."</td>
+							<td align=right>".(!$totHkPercent ? '0' : number_format($totHkPercent, 2))."</td>
+						</tr>
+					</tbody>
+				</table>
+			";
+
+			echo $result;
+			break;
+
+		case 'globalreport':
+			if ($periodeawal == $periodeakhir) {
+				$periode = $periodeawal;
+			} else {
+				$periode = $periodeawal." ".$_SESSION['lang']['sd']." ".$periodeakhir;
+			}
+			$bloklist = array();
+			$str = "select * from ".$dbname.".bi_5siklusht where idsiklus='".$detaillaporan."'";
+			try {
+				$res = $owlPDO->query($str);
+			} catch (PDOException $e) {
+				echo "Gagal: ".$e->getMessage();
+			}
+			$res->setFetchMode(PDO::FETCH_ASSOC);
+			$bar = $res->fetch();
+			$optNamaKegiatan = makeOption($dbname, 'setup_kegiatan', 'kodekegiatan,namakegiatan', "kodekegiatan='".$bar['kegiatan']."'");
+			$namalaporan = $_SESSION['lang']['kegiatan']."".$optNamaKegiatan[$bar['kegiatan']];
+
+			$str = "select * from ".$dbname.".bi_5siklusdt where idsiklus = '".$detaillaporan."'";
+			try {
+				$res = $owlPDO->query($str);
+			} catch (PDOException $e) {
+				echo "Gagal: ".$e->getMessage();
+			}
+			$res->setFetchMode(PDO::FETCH_ASSOC);
+			$arrWarna = array();
+			while ($bar = $res->fetch()) {
+				$arrWarna[$bar['warna']]['opawal'] = $bar['opawal'];
+				$arrWarna[$bar['warna']]['awal'] = $bar['nilaiawal'];
+				$arrWarna[$bar['warna']]['opakhir'] = $bar['opakhir'];
+				$arrWarna[$bar['warna']]['akhir'] = $bar['nilaiakhir'];
+				$arrWarna[$bar['warna']]['keterangan'] = $bar['keterangan'];
+			}
+
+			###################################################
+			$tglakhir = tglakhir($periodeakhir.'-01');
+			$jumbul = intval(substr($periodeakhir, 5, 2)) - intval(substr($periodeawal, 5, 2));
+			$jumbul = $jumbul + 1;
+			$arrper = month_inbetween($periodeawal, $periodeakhir);
+			$joinArrPer = implode("','", str_replace('-', '', $arrper));
+			$tahun = substr($periodeakhir, 0, 4);
+
+			//Get list Blok
+			$datalist = array();
+			###REALISASI
+			//Get array kegiatan
+			if ($kegiatan == '') {
+				$kgtn = " and kodekegiatan in (select kegiatan from bi_5siklusht where noakun= '".$noakun."')";
+			} else {
+				$kgtn = " and kodekegiatan = '".$kegiatan."'";
+			}
+
+			$str = "select sum(hasilkerja) as hasilkerja, kodeorg from ".$dbname.".kebun_prestasi WHERE left(notransaksi,6) in ('".$joinArrPer."') ".$kgtn." ".forKebunAll($kbnarr, 'kodeorg', 'like')." group by kodeorg";
+			try {
+				$res = $owlPDO->query($str);
+			} catch (PDOException $e) {
+				echo "Gagal: ".$e->getMessage();
+			}
+			$res->setFetchMode(PDO::FETCH_ASSOC);
+			while ($bar = $res->fetch()) {
+				$bloklist[$bar['kodeorg']] = $bar['kodeorg'];
+				$data[$bar['kodeorg']] = $bar['hasilkerja'];
+			}
+
+			$str = "select sum(hasilkerjarealisasi) as hasilkerja, kodeblok as kodeorg from ".$dbname.".log_baspk WHERE tanggal between '".$periodeawal."-01' and '".$tglakhir."' ".$kgtn."  ".forKebunAll($kbnarr, 'kodeblok', 'like')." group by kodeblok";
+
+			try {
+				$res = $owlPDO->query($str);
+			} catch (PDOException $e) {
+				echo "Gagal: ".$e->getMessage();
+			}
+			$res->setFetchMode(PDO::FETCH_ASSOC);
+			while ($bar = $res->fetch()) {
+				$bloklist[$bar['kodeorg']] = $bar['kodeorg'];
+				$data2[$bar['kodeorg']] = $bar['hasilkerja'];
+			}
+
+			###################################################
+
+			$datas = array();
+			$totalfill = 0;
+			if (count($bloklist) > 0) {
+				$str = "select indukblok,GROUP_CONCAT(kodeorg) as kodeorg,SUM(luasareaproduktif) as luasareaproduktif from ".$dbname.".setup_blok where indukblok in ('".implode("','", array_keys($bloklist))."') group by indukblok";
+				try {
+					$res = $owlPDO->query($str);
+				} catch (PDOException $e) {
+					echo "Gagal: ".$e->getMessage();
+				}
+				$res->setFetchMode(PDO::FETCH_ASSOC);
+				while ($bar = $res->fetch()) {
+					$rotasi = @round(($data[$bar['indukblok']] + $data2[$bar['indukblok']]) / $bar['luasareaproduktif']);
+					if (isset($arrWarna)) {
+						foreach ($arrWarna as $key => $row) {
+							if (my_operator($rotasi, $row['awal'], $row['opawal']) && my_operator($rotasi, $row['akhir'], $row['opakhir'])) {
+								$datas[$key]['keterangan'] = $row['keterangan'];
+								$datas[$key]['count'] += 1;
+								$totalfill++;
+							}
+						}
+					}
+				}
+			}
+			// foreach($bloklist as $listblok){
+			// 	$optLuasArea = makeOption($dbname,'setup_blok','kodeorg,luasareaproduktif',"kodeorg='".$listblok."'");
+			// 	$rotasi = @round(($data[$listblok] + $data2[$listblok]) / $optLuasArea[$listblok]);
+			// 	if(isset($arrWarna)){
+			// 		foreach($arrWarna as $key=>$row){
+			// 			if(my_operator($rotasi,$row['awal'],$row['opawal']) && my_operator($rotasi,$row['akhir'],$row['opakhir'])){
+			// 				$datas[$key]['keterangan'] = $row['keterangan'];
+			// 				$datas[$key]['count'] += 1;
+			// 				$totalfill++;
+			// 			}
+			// 		}
+			// 	}
+			// }
+
+			$str = "select fill from ".$dbname.".bi_5warna where tipe='".$firstPT."'";
+			try {
+				$res = $owlPDO->query($str);
+			} catch (PDOException $e) {
+				echo "Gagal: ".$e->getMessage();
+			}
+			$res->setFetchMode(PDO::FETCH_ASSOC);
+			$bar = $res->fetch();
+			$firstColor = $bar['fill'];
+
+			$str = "select count(idsvg) as countsvg from ".$dbname.".bi_map_pt where tipepeta='".$firstPT."' ".forKebunAll($kbnarr, 'unit', 'in')." ";
+			try {
+				$res = $owlPDO->query($str);
+			} catch (PDOException $e) {
+				echo "Gagal: ".$e->getMessage();
+			}
+			$res->setFetchMode(PDO::FETCH_ASSOC);
+			$bar = $res->fetch();
+			$totalnofill = $bar['countsvg'];
+
+			$data = array();
+			$label = array();
+			$ket = array();
+			$arrColor = array();
+			$no = 2;
+			$data[1] = $totalnofill - $totalfill;
+			$label[1] = $totalnofill - $totalfill." ".$_SESSION['lang']['blok']."\n(%.1f%%)";
+			$ket[1] = "none";
+			$arrColor[1] = $firstColor;
+			foreach ($datas as $key => $row) {
+				$data[$no] = $row['count'];
+				$label[$no] = $row['count']." ".$_SESSION['lang']['blok']."\n(%.1f%%)";
+				$ket[$no] = str_replace('%', ' percent', $row['keterangan']);
+				$arrColor[$no] = $key;
+				$no++;
+			}
+
+			$graph = new PieGraph(670, 330);
+			$graph->ClearTheme();
+			$graph->SetShadow();
+
+			$graph->title->Set($namalaporan);
+			// $graph->title->SetFont(FF_VERDANA,FS_BOLD,12); 
+			$graph->title->SetColor("darkblue");
+			$graph->subtitle->Set("".$_SESSION['lang']['periode']." : ".$periode);
+
+			$graph->legend->SetShadow('gray@0.4', 5);
+			$graph->legend->SetPos(0.1, 0.2, 'right', 'top');
+			$graph->legend->SetColumns(1);
+
+			$p1 = new PiePlot($data);
+			$p1->SetSize(0.35);
+			$p1->SetCenter(0.35);
+
+			$p1->SetLabels($label);
+			$p1->SetLabelPos(1);
+
+			$p1->SetLegends($ket);
+
+			$p1->SetLabelType(PIE_VALUE_PER);
+			$p1->value->Show();
+			// $p1->value->SetFont(FF_ARIAL,FS_NORMAL,9);    
+			$p1->value->SetFormat('%2.1f%%');
+
+			$p1->SetSliceColors($arrColor);
+
+			$graph->Add($p1);
+
+			$graph->StrokeCSIM();
+
+			break;
+	}
+
+	function my_operator($a, $b, $char) {
+		switch ($char) {
+			case '=':
+				return $a == $b;
+			case '<=':
+				return $a <= $b;
+			case '>=':
+				return $a >= $b;
+			case '<':
+				return $a < $b;
+			case '>':
+				return $a > $b;
+		}
+	}

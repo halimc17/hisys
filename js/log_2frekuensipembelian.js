@@ -1,0 +1,97 @@
+/**
+ * @author repindra.ginting
+ */
+ function changefilter()
+{
+  filter=document.getElementById('filter').value;
+  param='filter='+filter;
+  tujuan='log_2slave_frekuensipembelian.php?proses=changefilter'
+  post_response_text(tujuan, param, respon);
+  function respon()
+  {
+          if(con.readyState==4)
+          {
+              if (con.status == 200) {
+            busy_off();
+              if (!isSaveResponse(con.responseText)) {
+                alert(con.responseText);
+              }
+              else {
+                console.log(con.responseText);
+                document.getElementById('periode').innerHTML=con.responseText;
+              }
+            }
+            else {
+              busy_off();
+              error_catch(con.status);
+            }
+          } 
+   }
+}
+function detailData(ev,tujuan,tglawal,tglakhir,pur,jenis)
+{
+  
+        unit=document.getElementById('kdUnit').options[document.getElementById('kdUnit').selectedIndex].value;
+        prd=document.getElementById('periode').options[document.getElementById('periode').selectedIndex].value;
+  param='tglAwal='+tglawal+'&tglAkhir='+tglakhir+'&purchasing='+pur;
+        param+='&proses=getDetail'+'&kdUnit='+unit+'&periode='+prd+'&jenis='+jenis;
+  judul="Detail ";
+  // alert(param);
+  printFile(param,tujuan,judul,ev)
+}
+function detailData(ev,tujuan,tglawal,tglakhir,pur,jenis)
+{
+	
+        unit=document.getElementById('kdUnit').options[document.getElementById('kdUnit').selectedIndex].value;
+        prd=document.getElementById('periode').options[document.getElementById('periode').selectedIndex].value;
+	param='tglAwal='+tglawal+'&tglAkhir='+tglakhir+'&purchasing='+pur;
+        param+='&proses=getDetail'+'&kdUnit='+unit+'&periode='+prd+'&jenis='+jenis;;
+	judul="Detail ";
+	// alert(param);
+	printFile(param,tujuan,judul,ev)
+}
+function printFile(param,tujuan,title,ev)
+{
+   tujuan=tujuan+"?"+param;  
+   width='900';
+   height='400';
+   content="<iframe frameborder=0 width=100% height=100% src='"+tujuan+"'></iframe>"
+   showDialog1(title,content,width,height,ev); 	
+}
+function detailPP(ev,tujuan,pur,stat)
+{
+        unit=document.getElementById('kdUnit').options[document.getElementById('kdUnit').selectedIndex].value;
+        prd=document.getElementById('periode').options[document.getElementById('periode').selectedIndex].value;
+	param='purchasing='+pur+'&statSql='+stat;
+        param+='&proses=getPP'+'&kdUnit='+unit+'&periode='+prd;
+	judul="Detail PP";
+	// alert(param);
+	printFile(param,tujuan,judul,ev)
+}
+function fisikKeExcel2(ev,tujuan,tglawal,tglakhir,pur)
+{
+	unit=document.getElementById('kdUnit').value;
+        prd=document.getElementById('periode').value;
+	param='tglAwal='+tglawal+'&tglAkhir='+tglakhir+'&purchasing='+pur;
+        param+='&proses=excelDetail'+'&kdUnit='+unit+'&periode='+prd;
+	judul='Report Ms.Excel';	
+	printFile2(param,tujuan,judul,ev)	
+}
+function dataPPexcel(ev,tujuan,pur,stat)
+{
+	unit=document.getElementById('kdUnit').value;
+        prd=document.getElementById('periode').value;
+	param='purchasing='+pur+'&statSql='+stat;
+        param+='&proses=getPPExcel'+'&kdUnit='+unit+'&periode='+prd;
+	judul='Report Ms.Excel';	
+	printFile2(param,tujuan,judul,ev)	
+}
+
+function printFile2(param,tujuan,title,ev)
+{
+   tujuan=tujuan+"?"+param;  
+   width='450';
+   height='350';
+   content="<iframe frameborder=0 width=100% height=100% src='"+tujuan+"'></iframe>"
+   showDialog2(title,content,width,height,ev); 	
+}

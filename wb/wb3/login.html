@@ -1,0 +1,78 @@
+<?
+session_start();//to make sure all session is destroyed
+	        //turn on Addtype application/x-php	.html on your apache config
+session_destroy();
+require_once('config/connection.php');
+?>
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd"><html><head><meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1"><title>Weighbridges</title></head>
+<link rel=stylesheet type='text/css' href='style/generic.css'>
+<style>
+	body{
+		margin:30px 15px 5px 15px;
+		background-color:#E8F4F4;
+	}
+	#smallOwl {
+		position:absolute;
+		top:-80px;
+		right:-80px;
+		z-index:1;
+	}
+.rounded5{
+    border-style: solid;
+    border-width: 2px;
+    border-color:#0EA10E;
+	border-radius: 15px;
+    background: #AAEECC;
+    padding: 5px;
+	opacity: 0.7;
+	cursor:pointer;
+}	
+</style>
+<script language=JavaScript1.2 src='js/generic.js'></script>
+<script language=JavaScript1.2 src='js/drag.js'></script>
+<script language=JavaScript1.2 src='js/login.js'></script>
+
+<body background='images/bgg.jpg'>
+    
+<script type="text/javascript">
+var myVar=setInterval(function(){myTimer()},300000); // update tiap 5 menit
+function myTimer()
+{
+    var d = new Date();
+}
+window.onload=myTimer() 
+</script>
+
+<!--<img src="images/OWL_OV.png" style="position:fixed;right:0;bottom:0;z-index:-999;">-->
+
+<div class=drag style='width:280px;text-align:center;margin:15% 0 0 40%;'>
+
+		<marquee style='width:120px;height:17px;color:#AAEECC' title='Drag to move' scrolldelay='500'>Weighbridges</marquee>	
+		<br>
+		<div style="background-image:url('./images/key_64.png');background-repeat:no-repeat;">
+		<br>
+		<div  class='rounded5'>
+		<b style='font-size:14px;color:#E45B2F;'>L O G I N</b>	
+
+		<table align="center" style='font-weight:bold;'>
+		<tr><td>Username</td><td>:</td><td align="left"><input autofocus type=text  class=myinputtext size=18 id=name onkeypress="return enter(event);" title='Case-sensitif' style='width:160px;height:30px;font-size:14px;'></td></tr>
+		<tr><td>Password</td><td>:</td><td align="left"><input  type=password   class=myinputtext   size=18  id=pwd onkeypress="return enter(event);" title='Case-sensitif' style='width:160px;height:30px;font-size:14px;'></td></tr>
+		<tr><td colspan=2></td><td style='text-align:left'>
+		<input type=button class=mybutton value='Login' onclick=login() style='width:100px;height:35px;'></td></tr>
+	</table>
+	<br>
+	</div>
+	</div>
+	<div id=msg></div>
+	<span class=power>Powered By : <a href=http://owl-plantation.com/ target=new>OWL-Plantation System</a></span> 
+</div>
+
+<?
+//echo CLOSE_THEME();
+?>		
+
+<div id='progress' style='display:none;width:150px;position:absolute;right:20px;top:65px;color:#ff0000;font-family:Tahoma;font-size:13px;font-weight:bolder;text-align:center;z-index:10000;'>
+Please wait.....! <br>
+<img src='images/progress.gif'>
+</div>
+</body></html>

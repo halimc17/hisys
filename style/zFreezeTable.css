@@ -1,0 +1,37 @@
+/*
+ * zFreezeTable.css
+ * Style pendamping untuk zFreezeTable.js.
+ */
+
+.z-freeze-header {
+  position: relative;
+}
+
+.z-freeze-header .z-freeze-header-cell {
+  position: -webkit-sticky;
+  position: sticky;
+  background-clip: padding-box;
+}
+
+.z-freeze-table {
+  position: -webkit-sticky;
+  position: sticky;
+  background-clip: padding-box;
+}
+
+/*
+ * Parent dari tabel harus menjadi area scroll.
+ * Class ini opsional jika halaman sudah memiliki style overflow sendiri.
+ */
+.z-freeze-scroll {
+  position: relative;
+  overflow: auto;
+}
+
+@media print {
+  .z-freeze-header .z-freeze-header-cell,
+  .z-freeze-table {
+    position: static !important;
+    top: auto !important;
+  }
+}

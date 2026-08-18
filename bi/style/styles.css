@@ -1,0 +1,231 @@
+* {
+  padding: 0;
+  margin: 0;
+}
+
+html,body{
+	width:100%;
+	height:100%;
+	margin-top:0px;
+	margin-right:0px;
+	margin-bottom:0px;
+	margin-left:0px;
+	font-family: "Arial",sans-serif,"Myriad Pro","Myriad Web","Tahoma";  
+	font-size:12px;
+}
+
+.menu {
+	background: url(../images/trans_green-70.png);
+	/* display: block;
+	position:fixed; */
+	width: 200px;
+	height: 100%;
+	z-index: 10;  
+	position: absolute;  
+	right: 0;  
+	top: 0;
+}
+
+#menumap{
+	background-color:#FFFFFF;
+	width: 300px;
+	height: 100%;
+	z-index: 10;  
+	position: absolute;  
+	left: 0;  
+	top: 0;
+	overflow-y:scroll;
+}
+#menumap #header{
+	position: sticky !important;
+    top: 0 !important;
+    background: #fff !important;
+}
+.menu.hide {
+  display: none;
+}
+
+#main-nav {
+  width:100%;
+}
+
+#main-nav ul {
+  font-family: 'Droid Sans', sans-serif;
+  font-size: .9em;
+  font-weight: bold;
+  list-style: none;
+}
+
+#main-nav ul li{
+  background: url(images/trans_green-70.png);
+  display: block;
+  font-size: .9em;
+  font-weight: normal;
+  padding: 10px;
+  position: absolute;
+}
+
+#main-nav ul li:hover {
+  background: #7dad16;
+}
+
+#main-nav ul li{
+  float: none;
+  display: block;
+  border-left: none;
+  position: relative;
+}
+
+#main-nav ul li a {
+	width:100%;
+  padding: 15px 10px;
+  border-top: dotted 1px #7dad16;
+  color: #fff;
+  cursor:pointer;
+}
+
+#menu_map{
+	z-index:1;
+	width:50px;
+	text-align:center;
+	padding-top:8px;
+	padding-bottom:6px;
+	cursor:pointer;
+	margin-top:10px;
+	margin-left:15px;
+	display: block;
+	position:fixed;
+	background-color:white;
+}
+
+.pane {
+	position: absolute;
+	width: 250px;
+	height: 75px;
+	top: 4%;
+	right: 2%;
+	
+	
+	margin: 0;
+	padding: 0;
+	z-index: 99;
+	border: 2px solid #79b8d2;
+	background-color: rgba(0, 45, 84, 0.2);
+}
+
+#title {
+	font-family: monospace;
+	background: #79b8d2;
+	color: white;
+	font-size: 24px;
+	height: 30px;
+	text-align: center;
+}
+
+/* BEGIN RIGHT MENU */
+#rmbox{
+    width: 140px;
+    font-size: 12px;
+    line-height: 20px;
+    right: -120px;
+    top: 0%; /* change this value to place the menu higher or lower */
+    position: fixed;
+    z-index: 100;
+}
+
+#rmtab{
+    float: left;
+    list-style: none outside none;
+    margin: 0;
+    padding: 0;
+    position: relative;
+    z-index: 99;
+}
+
+#rmtab li span{
+    display: block;
+    padding: 0 5px;
+    position: relative;
+}
+
+#links{
+    width: 80px;
+    padding: 10px;
+    float: left;
+    border-left: 1px solid #B4B8BB;
+}
+
+.show, .hide{
+    transition: margin-right .4s ease-in;
+    -webkit-transition: margin-right .4s ease-in;
+}
+
+.hide{
+    margin-right:0px;
+}
+
+.show{
+    margin-right:120px;
+}
+
+#arrow, .bt{
+    cursor: pointer;
+}
+
+.bt{
+    width: 100px;
+    height: 40px;
+    margin: -1px;
+    text-align:left;
+    border:1px solid #858fa6;
+    font: bold 13px Helvetica,Arial,sans-serif;
+    text-shadow:0px 0px 5px rgba(0, 0, 0, 0.75);
+    background:#014464;
+	background-image: -o-linear-gradient(left, #1F82AF, #002F44);
+	background-image: -ms-linear-gradient(left, #1F82AF, #002F44);
+	background-image: -moz-linear-gradient(left, #1F82AF, #002F44);
+    background-image: -webkit-linear-gradient(left, #1F82AF, #002F44);
+    background-image: -webkit-gradient(linear, left top, right top, from(#1F82AF), to(#002F44));
+}
+
+.bt a{
+    line-height: 40px;
+    color: #fff;
+    display: block;
+}
+
+.bt:hover{
+    transition: background .3s linear;
+    background: #32A3D3;
+	-o-transition: background .3s linear;
+	-moz-transition: background .3s linear;
+    -webkit-transition: background .3s linear;
+}
+
+#deco{
+    width: 100px;
+    float: left;
+	box-shadow:0px 0px 5px #000;
+	-moz-box-shadow:0px 0px 5px #000;
+    -webkit-box-shadow:0px 0px 5px #000;
+}
+/* END RIGHT MENU */
+
+.pathhover:hover{
+	opacity:0.5;
+}
+
+
+.disable-selection {
+	-moz-user-select: none; /* Firefox */
+	-ms-user-select: none; /* Internet Explorer */
+	-khtml-user-select: none; /* KHTML browsers (e.g. Konqueror) */
+	-webkit-user-select: none; /* Chrome, Safari, and Opera */
+	-webkit-touch-callout: none; /* Disable Android and iOS callouts*/
+}
+
+.iconmenukiri {
+	width:25px;
+	height:25px;
+	cursor:pointer;
+}

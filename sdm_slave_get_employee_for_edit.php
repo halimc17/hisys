@@ -1,0 +1,122 @@
+<?
+ini_set('display_errors',0);
+error_reporting(0);
+require_once('master_validation.php');
+require_once('config/connection.php');
+require_once('lib/nangkoelib.php');
+require_once('lib/zLib.php');
+
+$karyawanid=$_POST['karyawanid'];
+if(empty($karyawanid)){
+	$karyawanid=$_GET['karyawanid'];
+}
+$str="select * from ".$dbname.".datakaryawan where karyawanid='".$karyawanid ."' limit 1";
+$res=$owlPDO->query($str) or die(print " Gagal: ".PDOException::getMessage());
+$res->setFetchMode(PDO::FETCH_OBJ);
+while($bar=$res->fetch()){
+    if ($bar->tipekaryawan == 3) {
+        $tipekaryawan = 3;
+    } else {
+        $tipekaryawan = $bar->tipekaryawan;
+    }
+	
+	$namaprov=makeOption($dbname,'provinsi','id,provinsi',"id='".$bar->provinsi."'");
+	$namakab=makeOption($dbname,'kabupaten','id,kabupaten',"id='".$bar->kabupaten."'");
+	$namakec=makeOption($dbname,'kecamatan','idkec,kecamatan',"idkec='".$bar->kecamatan."'");
+	$namades=makeOption($dbname,'desa','iddes,desa',"iddes='".$bar->desa."'");
+	
+	#di lepas kan sesuai permintaan pak alfin
+	// if($bar->tanggalkeluar!='0000-00-00' and  date('Y-m-d')>$bar->tanggalkeluar){
+	// 	$enableedittglmasuk='1';
+	// }
+	// /*else if($bar->tanggalkeluar!='0000-00-00' and date('Y-m-d') < $bar->tanggalkeluar){
+	// 	$enableedittglmasuk='0';
+	// }else if($bar->tanggalkeluar=='0000-00-00'){
+	// 	$enableedittglmasuk='0';
+	// }*/else{
+	// 	$enableedittglmasuk='0';
+	// }
+	
+	
+	//return XML format
+	//The receiver(js) will error when content is blank
+	// so check it first and if it blank replace with *
+    header('Content-type: text/xml');  
+	echo "<?xml version=\"1.0\" encoding=\"utf-8\"?>
+            <karyawan>
+				<karyawanid>".($bar->karyawanid!=''?$bar->karyawanid:"*")."</karyawanid>
+				<displayphoto>".($bar->photo!=''?$bar->photo:"*")."</displayphoto>
+				<nik>".($bar->nik!=""?$bar->nik:"*")."</nik>
+				<namakaryawan>".($bar->namakaryawan!=""?$bar->namakaryawan:"*")."</namakaryawan>
+				<tempatlahir>".($bar->tempatlahir!=""?$bar->tempatlahir:"*")."</tempatlahir>
+				<tanggallahir>".tanggalnormal($bar->tanggallahir)."</tanggallahir>
+				<warganegara>".($bar->warganegara!=""?$bar->warganegara:"*")."</warganegara>
+				<jeniskelamin>".($bar->jeniskelamin!=""?$bar->jeniskelamin:"*")."</jeniskelamin>
+				<statusperkawinan>".($bar->statusperkawinan!=""?$bar->statusperkawinan:"*")."</statusperkawinan>
+				<tanggalmenikah>".tanggalnormal($bar->tanggalmenikah)."</tanggalmenikah>
+				<agama>".($bar->agama!=""?$bar->agama:"*")."</agama>
+				<golongandarah>".($bar->golongandarah!=""?$bar->golongandarah:"*")."</golongandarah>
+				<levelpendidikan>".($bar->levelpendidikan!=""?$bar->levelpendidikan:"*")."</levelpendidikan>
+				<alamataktif>".($bar->alamataktif!=""?$bar->alamataktif:"*")."</alamataktif>
+				<provinsi>".($bar->provinsi!=""?$bar->provinsi:"*")."</provinsi>
+				<kota>".($bar->kota!=""?$bar->kota:"*")."</kota>
+				<kodepos>".($bar->kodepos!=""?$bar->kodepos:"*")."</kodepos>
+				<noteleponrumah>".($bar->noteleponrumah!=""?$bar->noteleponrumah:"*")."</noteleponrumah>
+				<nohp>".($bar->nohp!=""?$bar->nohp:"*")."</nohp>
+				<nohp2>".($bar->nohp2!=""?$bar->nohp2:"*")."</nohp2>
+				<norekeningbank>".($bar->norekeningbank!=""?$bar->norekeningbank:"*")."</norekeningbank>
+				<namabank>".($bar->namabank!=""?$bar->namabank:"*")."</namabank>
+				<cabangbank>".($bar->cabangbank!=""?$bar->cabangbank:"*")."</cabangbank>
+				<pemilikrekening>".($bar->pemilikrekening!=""?$bar->pemilikrekening:"*")."</pemilikrekening>
+				<sistemgaji>".($bar->sistemgaji!=""?$bar->sistemgaji:"*")."</sistemgaji>
+				<nopaspor>".($bar->no_keluarga!=""?$bar->no_keluarga:"*")."</nopaspor>
+				<noktp>".($bar->noktp!=""?$bar->noktp:"*")."</noktp>
+				<notelepondarurat>".($bar->notelepondarurat!=""?$bar->notelepondarurat:"*")."</notelepondarurat>
+				<tanggalmasuk>".tanggalnormal($bar->tanggalmasuk)."</tanggalmasuk>
+				<tanggalpengangkatan>".tanggalnormal($bar->tanggalpengangkatan)."</tanggalpengangkatan>
+				<tanggalkeluar>".tanggalnormal($bar->tanggalkeluar)."</tanggalkeluar>
+				<tipekaryawan>".($tipekaryawan!=""?$tipekaryawan:"*")."</tipekaryawan>
+				<jumlahanak>".($bar->jumlahanak!=""?$bar->jumlahanak:"*")."</jumlahanak>	
+				<jumlahtanggungan>".($bar->jumlahtanggungan!=""?$bar->jumlahtanggungan:"*")."</jumlahtanggungan>			 
+				<statuspajak>".($bar->statuspajak!=""?$bar->statuspajak:"*")."</statuspajak>
+				<npwp>".($bar->npwp!=""?$bar->npwp:"*")."</npwp>
+				<kppnpwp>".($bar->kppnpwp!=""?$bar->kppnpwp:"*")."</kppnpwp>
+				<bpjs>".($bar->bpjs!=""?$bar->bpjs:"*")."</bpjs>
+				<pensiun>".($bar->pensiun!=""?$bar->pensiun:"*")."</pensiun>
+				<lokasipenerimaan>".($bar->lokasipenerimaan!=""?$bar->lokasipenerimaan:"*")."</lokasipenerimaan>
+				<kodeorganisasi>".($bar->kodeorganisasi!=""?$bar->kodeorganisasi:"*")."</kodeorganisasi>
+				<bagian>".($bar->bagian!=""?$bar->bagian:"*")."</bagian>
+				<subdept>".($bar->subdept!=""?$bar->subdept:"*")."</subdept>
+				<kodejabatan>".($bar->kodejabatan!=""?$bar->kodejabatan:"*")."</kodejabatan>
+				<kodegolongan>".($bar->kodegolongan!=""?$bar->kodegolongan:"*")."</kodegolongan>
+				<lokasitugas>".($bar->lokasitugas!=""?$bar->lokasitugas:"*")."</lokasitugas>
+				<photo>".($bar->photo!=""?$bar->photo:"*")."</photo>
+				<email>".($bar->email!=""?$bar->email:"*")."</email> 
+				<emailkantor>".($bar->emailkantor!=""?$bar->emailkantor:"*")."</emailkantor> 
+				<alokasi>".($bar->alokasi!=""?$bar->alokasi:"*")."</alokasi>
+				<subbagian>".($bar->subbagian!=""?$bar->subbagian:"*")."</subbagian>
+				<jms>".($bar->jms!=""?$bar->jms:"*")."</jms>
+				<catu>".($bar->kodecatu!=""?$bar->kodecatu:"0")."</catu>    
+				<dptPremi>".($bar->statpremi)."</dptPremi>
+				<suku>".($bar->suku)."</suku>
+				<statuskaryawan>".($bar->statuskaryawan!=""?$bar->statuskaryawan:"*")."</statuskaryawan>
+				<sim>".($bar->sim!=""?$bar->sim:"*")."</sim> 
+				<supbpjs>".($bar->supbpjs!=""?$bar->supbpjs:"*")."</supbpjs> 
+				<statusakad>".($bar->statusakad)."</statusakad>
+				<insstatuspajak>".($bar->insstatuspajak!=""?$bar->insstatuspajak:"*")."</insstatuspajak>
+				<periodeakhirgaji>".($bar->periodeakhirgaji!=""?$bar->periodeakhirgaji:"*")."</periodeakhirgaji>
+				<kabupaten>".($bar->kabupaten!=""?$bar->kabupaten:"*")."</kabupaten>
+				<kecamatan>".($bar->kecamatan!=""?$bar->kecamatan:"*")."</kecamatan>
+				<desa>".($bar->desa!=""?$bar->desa:"*")."</desa>
+				<namaprovinsi>".($namaprov[$bar->provinsi]!=""?$namaprov[$bar->provinsi]:"*")."</namaprovinsi>
+				<namakabupaten>".($namakab[$bar->kabupaten]!=""?$namakab[$bar->kabupaten]:"*")."</namakabupaten>
+				<namakecamatan>".($namakec[$bar->kecamatan]!=""?$namakec[$bar->kecamatan]:"*")."</namakecamatan>
+				<namadesa>".($namades[$bar->desa]!=""?$namades[$bar->desa]:"*")."</namadesa>
+				<bulandaftarbpjs>".tanggalnormal($bar->tmkjamsostek)."</bulandaftarbpjs>
+				<levelkaryawan>".($bar->levelkaryawan!=""?$bar->levelkaryawan:"*")."</levelkaryawan>
+				<enableedittglmasuk>".$enableedittglmasuk."</enableedittglmasuk>
+				<tanggalpengangkatannonstaff>".tanggalnormal($bar->tanggalpengangkatannonstaff)."</tanggalpengangkatannonstaff>
+			</karyawan>";	
+}
+
+?>

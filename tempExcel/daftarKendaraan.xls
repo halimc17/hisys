@@ -1,0 +1,1087 @@
+
+			<table>
+			<tr><td colspan=13 align=center>DATA MESIN KENDARAAN DAN ALAT BERAT</td></tr>
+			<tr><td colspan=3>Unit Kerja</td><td>TPRE</td></tr>
+			<tr><td colspan=3></td><td></td></tr>
+			</table>
+			<table border=1>
+			<tr>
+				<td bgcolor=#DEDEDE align=center valign=top>No.</td>
+				<td bgcolor=#DEDEDE align=center valign=top>Kode Organisasi</td>
+				<td bgcolor=#DEDEDE align=center valign=top>Kode Kelompok</td>
+				<td bgcolor=#DEDEDE align=center valign=top>Tipe<br>Mesin,Kend<br>&<br>Alat<br>Berat</td>
+				<td bgcolor=#DEDEDE align=center valign=top>Kode Alat/No.Pol</td>	
+				<td bgcolor=#DEDEDE align=center valign=top>Nama Barang</td>	
+				<td bgcolor=#DEDEDE align=center valign=top>Tahun Perolehan</td>	
+				<td bgcolor=#DEDEDE align=center valign=top>Nomor Akun</td>		
+				<td bgcolor=#DEDEDE align=center valign=top>Berat Kosong</td>		
+				<td bgcolor=#DEDEDE align=center valign=top>Nomor Rangka</td>		
+				<td bgcolor=#DEDEDE align=center valign=top>Nomor Mesin</td>	
+				<td bgcolor=#DEDEDE align=center valign=top>Rincian</td>
+				<td bgcolor=#DEDEDE align=center valign=top>Kepemilikan</td>	
+			</tr><tr class=rowcontent>
+				 <td>1</td>
+				 <td>TPRE</td>
+				 <td>Alat Berat</td>				 
+				 <td>BH</td>			 		
+				 <td>TPREBH0001</td>
+				 <td></td>
+				 <td>2005</td>
+				 <td></td>
+				 <td>0</td>		
+				 <td>N4C305072</td>	
+				 <td>00117414</td> 
+				 <td>Backhoe</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>2</td>
+				 <td>TPRE</td>
+				 <td>Alat Berat</td>				 
+				 <td>BL</td>			 		
+				 <td>TPREBL0001</td>
+				 <td></td>
+				 <td>0</td>
+				 <td></td>
+				 <td>0</td>		
+				 <td>45 V 93561</td>	
+				 <td>3204</td> 
+				 <td>Buldozer</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>3</td>
+				 <td>TPRE</td>
+				 <td>Kendaraan</td>				 
+				 <td>DT</td>			 		
+				 <td>TPREDT0001</td>
+				 <td></td>
+				 <td>2008</td>
+				 <td></td>
+				 <td>3000</td>		
+				 <td>MHMFE74P48K018873</td>	
+				 <td>4D34T-D72178</td> 
+				 <td>Dump Truck</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>4</td>
+				 <td>TPRE</td>
+				 <td>Kendaraan</td>				 
+				 <td>DT</td>			 		
+				 <td>TPREDT0002</td>
+				 <td></td>
+				 <td>2009</td>
+				 <td></td>
+				 <td>3000</td>		
+				 <td>MHMFE74P49K029347</td>	
+				 <td>4D34T-E74865</td> 
+				 <td>Dump Truck</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>5</td>
+				 <td>TPRE</td>
+				 <td>Kendaraan</td>				 
+				 <td>DT</td>			 		
+				 <td>TPREDT0003</td>
+				 <td></td>
+				 <td>2012</td>
+				 <td></td>
+				 <td>3100</td>		
+				 <td>MHMFE74P5CK066143</td>	
+				 <td>4D34T-H29232</td> 
+				 <td>Dump Truck</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>6</td>
+				 <td>TPRE</td>
+				 <td>Kendaraan</td>				 
+				 <td>DT</td>			 		
+				 <td>TPREDT0004</td>
+				 <td></td>
+				 <td>2012</td>
+				 <td></td>
+				 <td>3100</td>		
+				 <td>MHMFE74P5CK066370</td>	
+				 <td>4D34T-H22409</td> 
+				 <td>Dump Truck</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>7</td>
+				 <td>TPRE</td>
+				 <td>Kendaraan</td>				 
+				 <td>DT</td>			 		
+				 <td>TPREDT0005</td>
+				 <td></td>
+				 <td>2012</td>
+				 <td></td>
+				 <td>0</td>		
+				 <td>MHMFE74P5CK066404</td>	
+				 <td>4D34T-H23065</td> 
+				 <td>Dump Truck</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>8</td>
+				 <td>TPRE</td>
+				 <td>Kendaraan</td>				 
+				 <td>DT</td>			 		
+				 <td>TPREDT0006</td>
+				 <td></td>
+				 <td>2012</td>
+				 <td></td>
+				 <td>3100</td>		
+				 <td>MHMFE74P5CK066144</td>	
+				 <td>4D34T-H29235</td> 
+				 <td>Dump Truck</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>9</td>
+				 <td>TPRE</td>
+				 <td>Kendaraan</td>				 
+				 <td>DT</td>			 		
+				 <td>TPREDT0007</td>
+				 <td></td>
+				 <td>2002</td>
+				 <td></td>
+				 <td>0</td>		
+				 <td>MHMFE349E2R029756</td>	
+				 <td>4D34-229758</td> 
+				 <td>Dump Truck</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>10</td>
+				 <td>TPRE</td>
+				 <td>Kendaraan</td>				 
+				 <td>DT</td>			 		
+				 <td>TPREDT0008</td>
+				 <td></td>
+				 <td>2002</td>
+				 <td></td>
+				 <td>3200</td>		
+				 <td>MHMFE349E2R036897</td>	
+				 <td>4D34-266900</td> 
+				 <td>Dump Truck</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>11</td>
+				 <td>TPRE</td>
+				 <td>Kendaraan</td>				 
+				 <td>DT</td>			 		
+				 <td>TPREDT0009</td>
+				 <td></td>
+				 <td>2003</td>
+				 <td></td>
+				 <td>3300</td>		
+				 <td>MHMFE349E3R049579</td>	
+				 <td>4D34-349582</td> 
+				 <td>Dump Truck</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>12</td>
+				 <td>TPRE</td>
+				 <td>Kendaraan</td>				 
+				 <td>DT</td>			 		
+				 <td>TPREDT0010</td>
+				 <td></td>
+				 <td>2003</td>
+				 <td></td>
+				 <td>3400</td>		
+				 <td>MHMFE349E3R056809</td>	
+				 <td>4D34-306635</td> 
+				 <td>Dump Truck</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>13</td>
+				 <td>TPRE</td>
+				 <td>Kendaraan</td>				 
+				 <td>DT</td>			 		
+				 <td>TPREDT0011</td>
+				 <td></td>
+				 <td>2004</td>
+				 <td></td>
+				 <td>0</td>		
+				 <td>MHMFE349E4R063756</td>	
+				 <td>4D34-443719</td> 
+				 <td>Dump Truck</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>14</td>
+				 <td>TPRE</td>
+				 <td>Kendaraan</td>				 
+				 <td>DT</td>			 		
+				 <td>TPREDT0012</td>
+				 <td></td>
+				 <td>2006</td>
+				 <td></td>
+				 <td>3500</td>		
+				 <td>MHMFE349H6R020160</td>	
+				 <td>4D34D-B79857</td> 
+				 <td>Dump Truck</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>15</td>
+				 <td>TPRE</td>
+				 <td>Kendaraan</td>				 
+				 <td>DT</td>			 		
+				 <td>TPREDT0013</td>
+				 <td></td>
+				 <td>2007</td>
+				 <td></td>
+				 <td>3700</td>		
+				 <td>MHMFE74P47K 001429</td>	
+				 <td>4D34T-C44021</td> 
+				 <td>Dump Truck</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>16</td>
+				 <td>TPRE</td>
+				 <td>Kendaraan</td>				 
+				 <td>DT</td>			 		
+				 <td>TPREDT0014</td>
+				 <td></td>
+				 <td>2007</td>
+				 <td></td>
+				 <td>3400</td>		
+				 <td>MHMFE74P47K006756</td>	
+				 <td>4D34T-C98661</td> 
+				 <td>Dump Truck</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>17</td>
+				 <td>TPRE</td>
+				 <td>Kendaraan</td>				 
+				 <td>DT</td>			 		
+				 <td>TPREDT0015</td>
+				 <td></td>
+				 <td>2007</td>
+				 <td></td>
+				 <td>3400</td>		
+				 <td>MHMFE74P47K006754</td>	
+				 <td>4D34T-C98658</td> 
+				 <td>Dump Truck</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>18</td>
+				 <td>TPRE</td>
+				 <td>Kendaraan</td>				 
+				 <td>DT</td>			 		
+				 <td>TPREDT0016</td>
+				 <td></td>
+				 <td>2008</td>
+				 <td></td>
+				 <td>3000</td>		
+				 <td>MHMFE74P48K020964</td>	
+				 <td>4D34TD99650</td> 
+				 <td>Dump Truck</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>19</td>
+				 <td>TPRE</td>
+				 <td>Kendaraan</td>				 
+				 <td>DT</td>			 		
+				 <td>TPREDT0017</td>
+				 <td></td>
+				 <td>2009</td>
+				 <td></td>
+				 <td>3000</td>		
+				 <td>MHMFE74P49K024640</td>	
+				 <td>4D34T-E10396</td> 
+				 <td>Dump Truck</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>20</td>
+				 <td>TPRE</td>
+				 <td>Kendaraan</td>				 
+				 <td>DT</td>			 		
+				 <td>TPREDT0018</td>
+				 <td></td>
+				 <td>2009</td>
+				 <td></td>
+				 <td>3000</td>		
+				 <td>MHMFE74P49K025201</td>	
+				 <td>4D34T-E22316</td> 
+				 <td>Dump Truck</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>21</td>
+				 <td>TPRE</td>
+				 <td>Mesin</td>				 
+				 <td>GZ</td>			 		
+				 <td>TPREGZ0001</td>
+				 <td></td>
+				 <td>2003</td>
+				 <td></td>
+				 <td>0</td>		
+				 <td></td>	
+				 <td>4D33-A220772</td> 
+				 <td>Generator Set GENSET PS 100 B. CAMP</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>22</td>
+				 <td>TPRE</td>
+				 <td>Mesin</td>				 
+				 <td>GZ</td>			 		
+				 <td>TPREGZ0002</td>
+				 <td></td>
+				 <td>2003</td>
+				 <td></td>
+				 <td>0</td>		
+				 <td></td>	
+				 <td>6D15-318924</td> 
+				 <td>Generator Set GENSET PS 190 B. CAMP</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>23</td>
+				 <td>TPRE</td>
+				 <td>Mesin</td>				 
+				 <td>GZ</td>			 		
+				 <td>TPREGZ0003</td>
+				 <td></td>
+				 <td>2002</td>
+				 <td></td>
+				 <td>0</td>		
+				 <td></td>	
+				 <td>4D32-789896</td> 
+				 <td>Generator Set GENSET PS 100 DIV. I</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>24</td>
+				 <td>TPRE</td>
+				 <td>Mesin</td>				 
+				 <td>GZ</td>			 		
+				 <td>TPREGZ0004</td>
+				 <td></td>
+				 <td>2009</td>
+				 <td></td>
+				 <td>0</td>		
+				 <td></td>	
+				 <td>4D32-546416</td> 
+				 <td>Generator Set GENSET PS 100 DIV. II</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>25</td>
+				 <td>TPRE</td>
+				 <td>Mesin</td>				 
+				 <td>GZ</td>			 		
+				 <td>TPREGZ0005</td>
+				 <td></td>
+				 <td>2007</td>
+				 <td></td>
+				 <td>0</td>		
+				 <td></td>	
+				 <td>6D15-325059</td> 
+				 <td>Generator Set GENSET PS 190 DIV. II</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>26</td>
+				 <td>TPRE</td>
+				 <td>Mesin</td>				 
+				 <td>GZ</td>			 		
+				 <td>TPREGZ0006</td>
+				 <td></td>
+				 <td>2002</td>
+				 <td></td>
+				 <td>0</td>		
+				 <td></td>	
+				 <td>4D31-318598</td> 
+				 <td>Generator Set GENSET PS 100 DIV. III</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>27</td>
+				 <td>TPRE</td>
+				 <td>Mesin</td>				 
+				 <td>GZ</td>			 		
+				 <td>TPREGZ0007</td>
+				 <td></td>
+				 <td>2007</td>
+				 <td></td>
+				 <td>0</td>		
+				 <td></td>	
+				 <td>6D15-247798</td> 
+				 <td>Generator Set GENSET PS 190 DIV. IV/VIII</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>28</td>
+				 <td>TPRE</td>
+				 <td>Mesin</td>				 
+				 <td>GZ</td>			 		
+				 <td>TPREGZ0008</td>
+				 <td></td>
+				 <td>2003</td>
+				 <td></td>
+				 <td>0</td>		
+				 <td></td>	
+				 <td>4D32-869676</td> 
+				 <td>Generator Set GENSET PS 100 DIV. V</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>29</td>
+				 <td>TPRE</td>
+				 <td>Mesin</td>				 
+				 <td>GZ</td>			 		
+				 <td>TPREGZ0009</td>
+				 <td></td>
+				 <td>2006</td>
+				 <td></td>
+				 <td>0</td>		
+				 <td></td>	
+				 <td>4D32-664590</td> 
+				 <td>Generator Set GENSET PS 100 DIV. VI</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>30</td>
+				 <td>TPRE</td>
+				 <td>Mesin</td>				 
+				 <td>GZ</td>			 		
+				 <td>TPREGZ0010</td>
+				 <td></td>
+				 <td>2002</td>
+				 <td></td>
+				 <td>0</td>		
+				 <td></td>	
+				 <td>4D32-53498</td> 
+				 <td>Generator Set GENSET PS 100 DIV. IX</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>31</td>
+				 <td>TPRE</td>
+				 <td>Mesin</td>				 
+				 <td>GZ</td>			 		
+				 <td>TPREGZ0011</td>
+				 <td></td>
+				 <td>2010</td>
+				 <td></td>
+				 <td>0</td>		
+				 <td></td>	
+				 <td>4D32-616071</td> 
+				 <td>Generator Set GENSET PS 100 DIV. X</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>32</td>
+				 <td>TPRE</td>
+				 <td>Mesin</td>				 
+				 <td>GZ</td>			 		
+				 <td>TPREGZ0012</td>
+				 <td></td>
+				 <td>2016</td>
+				 <td></td>
+				 <td>0</td>		
+				 <td></td>	
+				 <td>ZS 1115</td> 
+				 <td>Generator Set JIANG DONG DIV. VII</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>33</td>
+				 <td>TPRE</td>
+				 <td>Mesin</td>				 
+				 <td>GZ</td>			 		
+				 <td>TPREGZ0013</td>
+				 <td></td>
+				 <td>2012</td>
+				 <td></td>
+				 <td>0</td>		
+				 <td></td>	
+				 <td>ZH 1115</td> 
+				 <td>Generator Set JIANG DONG DIV. XI</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>34</td>
+				 <td>TPRE</td>
+				 <td>Mesin</td>				 
+				 <td>GZ</td>			 		
+				 <td>TPREGZ0014</td>
+				 <td></td>
+				 <td>2012</td>
+				 <td></td>
+				 <td>0</td>		
+				 <td></td>	
+				 <td>ZS 1115</td> 
+				 <td>Generator Set JIANG DONG BATU GAJAH</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>35</td>
+				 <td>TPRE</td>
+				 <td>Mesin</td>				 
+				 <td>GZ</td>			 		
+				 <td>TPREGZ0015</td>
+				 <td></td>
+				 <td>0</td>
+				 <td></td>
+				 <td>0</td>		
+				 <td></td>	
+				 <td></td> 
+				 <td>GENSET PINJAM PAKAI DR PKS</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>36</td>
+				 <td>TPRE</td>
+				 <td>Kendaraan</td>				 
+				 <td>JP</td>			 		
+				 <td>TPREJP0001</td>
+				 <td></td>
+				 <td>1992</td>
+				 <td></td>
+				 <td>0</td>		
+				 <td>10522</td>	
+				 <td>946850</td> 
+				 <td>Minibus</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>37</td>
+				 <td>TPRE</td>
+				 <td>Mesin</td>				 
+				 <td>MA</td>			 		
+				 <td>TPREMA0001</td>
+				 <td></td>
+				 <td>2017</td>
+				 <td></td>
+				 <td>0</td>		
+				 <td></td>	
+				 <td>JD Basic 5</td> 
+				 <td>Mesin Air MPA DIV. I NO 1</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>38</td>
+				 <td>TPRE</td>
+				 <td>Mesin</td>				 
+				 <td>MA</td>			 		
+				 <td>TPREMA0002</td>
+				 <td></td>
+				 <td>0</td>
+				 <td></td>
+				 <td>0</td>		
+				 <td></td>	
+				 <td>JD Basic 5</td> 
+				 <td>Mesin Air MPA DIV. I NO 2</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>39</td>
+				 <td>TPRE</td>
+				 <td>Mesin</td>				 
+				 <td>MA</td>			 		
+				 <td>TPREMA0003</td>
+				 <td></td>
+				 <td>0</td>
+				 <td></td>
+				 <td>0</td>		
+				 <td></td>	
+				 <td>JD Basic 5</td> 
+				 <td>Mesin Air MPA DIV. II</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>40</td>
+				 <td>TPRE</td>
+				 <td>Mesin</td>				 
+				 <td>MA</td>			 		
+				 <td>TPREMA0004</td>
+				 <td></td>
+				 <td>2017</td>
+				 <td></td>
+				 <td>0</td>		
+				 <td></td>	
+				 <td>JD Basic 5</td> 
+				 <td>Mesin Air MPA DIV. III</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>41</td>
+				 <td>TPRE</td>
+				 <td>Mesin</td>				 
+				 <td>MA</td>			 		
+				 <td>TPREMA0005</td>
+				 <td></td>
+				 <td>0</td>
+				 <td></td>
+				 <td>0</td>		
+				 <td></td>	
+				 <td>JD Basic 5</td> 
+				 <td>Mesin Air MPA DIV. IV</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>42</td>
+				 <td>TPRE</td>
+				 <td>Mesin</td>				 
+				 <td>MA</td>			 		
+				 <td>TPREMA0006</td>
+				 <td></td>
+				 <td>0</td>
+				 <td></td>
+				 <td>0</td>		
+				 <td></td>	
+				 <td>PEW.GF.18 JDF 5 JDF E 96528338 Grounfos</td> 
+				 <td>Mesin Air MPA DIV. VIII</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>43</td>
+				 <td>TPRE</td>
+				 <td>Mesin</td>				 
+				 <td>MA</td>			 		
+				 <td>TPREMA0007</td>
+				 <td></td>
+				 <td>0</td>
+				 <td></td>
+				 <td>0</td>		
+				 <td></td>	
+				 <td>JD Basic 5</td> 
+				 <td>Mesin Air MPA DIV. VII</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>44</td>
+				 <td>TPRE</td>
+				 <td>Mesin</td>				 
+				 <td>MA</td>			 		
+				 <td>TPREMA0008</td>
+				 <td></td>
+				 <td>0</td>
+				 <td></td>
+				 <td>0</td>		
+				 <td></td>	
+				 <td>JD Basic 5</td> 
+				 <td>Mesin Air MPA DIV. V NO. 1</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>45</td>
+				 <td>TPRE</td>
+				 <td>Mesin</td>				 
+				 <td>MA</td>			 		
+				 <td>TPREMA0009</td>
+				 <td></td>
+				 <td>0</td>
+				 <td></td>
+				 <td>0</td>		
+				 <td></td>	
+				 <td>JD Basic 5</td> 
+				 <td>Mesin Air MPA DIV. V NO. 2</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>46</td>
+				 <td>TPRE</td>
+				 <td>Mesin</td>				 
+				 <td>MA</td>			 		
+				 <td>TPREMA0010</td>
+				 <td></td>
+				 <td>0</td>
+				 <td></td>
+				 <td>0</td>		
+				 <td></td>	
+				 <td>JD Basic 5</td> 
+				 <td>Mesin Air MPA DIV. VI</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>47</td>
+				 <td>TPRE</td>
+				 <td>Mesin</td>				 
+				 <td>MA</td>			 		
+				 <td>TPREMA0011</td>
+				 <td></td>
+				 <td>0</td>
+				 <td></td>
+				 <td>0</td>		
+				 <td></td>	
+				 <td>JD Basic 5</td> 
+				 <td>Mesin Air MPA DIV. IX</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>48</td>
+				 <td>TPRE</td>
+				 <td>Mesin</td>				 
+				 <td>MA</td>			 		
+				 <td>TPREMA0012</td>
+				 <td></td>
+				 <td>0</td>
+				 <td></td>
+				 <td>0</td>		
+				 <td></td>	
+				 <td>JD Basic 5</td> 
+				 <td>Mesin Air MPA DIV. X</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>49</td>
+				 <td>TPRE</td>
+				 <td>Mesin</td>				 
+				 <td>MA</td>			 		
+				 <td>TPREMA0013</td>
+				 <td></td>
+				 <td>0</td>
+				 <td></td>
+				 <td>0</td>		
+				 <td></td>	
+				 <td>JD Basic 5</td> 
+				 <td>Mesin Air MPA DIV. G2-STAFF</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>50</td>
+				 <td>TPRE</td>
+				 <td>Mesin</td>				 
+				 <td>MA</td>			 		
+				 <td>TPREMA0014</td>
+				 <td></td>
+				 <td>2017</td>
+				 <td></td>
+				 <td>0</td>		
+				 <td></td>	
+				 <td>JD Basic 5</td> 
+				 <td>Mesin Air MPA DIV. MESS DIREKSI</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>51</td>
+				 <td>TPRE</td>
+				 <td>Mesin</td>				 
+				 <td>MA</td>			 		
+				 <td>TPREMA0015</td>
+				 <td></td>
+				 <td>2016</td>
+				 <td></td>
+				 <td>0</td>		
+				 <td></td>	
+				 <td>JD Basic 5</td> 
+				 <td>Mesin Air MPA DIV. RKU</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>52</td>
+				 <td>TPRE</td>
+				 <td>Mesin</td>				 
+				 <td>MA</td>			 		
+				 <td>TPREMA0016</td>
+				 <td></td>
+				 <td>2016</td>
+				 <td></td>
+				 <td>0</td>		
+				 <td></td>	
+				 <td>JD Basic 5</td> 
+				 <td>Mesin Air MPA DIV. BENGKEL</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>53</td>
+				 <td>TPRE</td>
+				 <td>Mesin</td>				 
+				 <td>MA</td>			 		
+				 <td>TPREMA0017</td>
+				 <td></td>
+				 <td>2016</td>
+				 <td></td>
+				 <td>0</td>		
+				 <td></td>	
+				 <td>EX17 6.0</td> 
+				 <td>Mesin Air MESIN ROBIN</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>54</td>
+				 <td>TPRE</td>
+				 <td>Kendaraan</td>				 
+				 <td>MB</td>			 		
+				 <td>TPREMB0001</td>
+				 <td></td>
+				 <td>2004</td>
+				 <td></td>
+				 <td>0</td>		
+				 <td>MNBLS4D404W105831</td>	
+				 <td>WLAT461979</td> 
+				 <td>Minibus</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>55</td>
+				 <td>TPRE</td>
+				 <td>Kendaraan</td>				 
+				 <td>MB</td>			 		
+				 <td>TPREMB0002</td>
+				 <td></td>
+				 <td>2004</td>
+				 <td></td>
+				 <td>0</td>		
+				 <td>MNBBSFE804W386971</td>	
+				 <td>W94T141149</td> 
+				 <td>Minibus</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>56</td>
+				 <td>TPRE</td>
+				 <td>Kendaraan</td>				 
+				 <td>MB</td>			 		
+				 <td>TPREMB0003</td>
+				 <td></td>
+				 <td>2008</td>
+				 <td></td>
+				 <td>0</td>		
+				 <td>MNBBSFE400W232694</td>	
+				 <td>WLAT322530</td> 
+				 <td>Minibus</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>57</td>
+				 <td>TPRE</td>
+				 <td>Kendaraan</td>				 
+				 <td>MB</td>			 		
+				 <td>TPREMB0004</td>
+				 <td></td>
+				 <td>2008</td>
+				 <td></td>
+				 <td>1700</td>		
+				 <td>MNBBSFE806W516200</td>	
+				 <td>W9AT167967</td> 
+				 <td>Minibus</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>58</td>
+				 <td>TPRE</td>
+				 <td>Kendaraan</td>				 
+				 <td>MB</td>			 		
+				 <td>TPREMB0005</td>
+				 <td></td>
+				 <td>2008</td>
+				 <td></td>
+				 <td>1300</td>		
+				 <td>MHML0WY398K002343</td>	
+				 <td>4D56C-D58584</td> 
+				 <td>Minibus</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>59</td>
+				 <td>TPRE</td>
+				 <td>Kendaraan</td>				 
+				 <td>TB</td>			 		
+				 <td>TPRETB0001</td>
+				 <td></td>
+				 <td>1995</td>
+				 <td></td>
+				 <td>0</td>		
+				 <td>FE119E-044391</td>	
+				 <td>4D34C-5X4395</td> 
+				 <td>Dump Truck</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>60</td>
+				 <td>TPRE</td>
+				 <td>Kendaraan</td>				 
+				 <td>TB</td>			 		
+				 <td>TPRETB0002</td>
+				 <td></td>
+				 <td>1995</td>
+				 <td></td>
+				 <td>2700</td>		
+				 <td>FE119E-039155</td>	
+				 <td>4D34C-579158</td> 
+				 <td>Dump Truck</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>61</td>
+				 <td>TPRE</td>
+				 <td>Kendaraan</td>				 
+				 <td>TB</td>			 		
+				 <td>TPRETB0003</td>
+				 <td></td>
+				 <td>2005</td>
+				 <td></td>
+				 <td>3500</td>		
+				 <td>MHMFE349E5R081671</td>	
+				 <td>4D34-A45689</td> 
+				 <td>Dump Truck</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>62</td>
+				 <td>TPRE</td>
+				 <td>Kendaraan</td>				 
+				 <td>TB</td>			 		
+				 <td>TPRETB0004</td>
+				 <td></td>
+				 <td>2006</td>
+				 <td></td>
+				 <td>0</td>		
+				 <td>MHMFE349H6R018757</td>	
+				 <td>4D34D-B58518</td> 
+				 <td>Dump Truck</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>63</td>
+				 <td>TPRE</td>
+				 <td>Kendaraan</td>				 
+				 <td>TB</td>			 		
+				 <td>TPRETB0005</td>
+				 <td></td>
+				 <td>2012</td>
+				 <td></td>
+				 <td>0</td>		
+				 <td>MHMFE84PBCJ004211</td>	
+				 <td>4D34T-H55645</td> 
+				 <td>Truck/Bus</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>64</td>
+				 <td>TPRE</td>
+				 <td>Kendaraan</td>				 
+				 <td>TB</td>			 		
+				 <td>TPRETB0006</td>
+				 <td></td>
+				 <td>2016</td>
+				 <td></td>
+				 <td>5160</td>		
+				 <td>MHMFE84PBGJ007480</td>	
+				 <td>4D34T-P16176</td> 
+				 <td>Truck/Bus</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>65</td>
+				 <td>TPRE</td>
+				 <td>Alat Berat</td>				 
+				 <td>TL</td>			 		
+				 <td>TPRETL0001</td>
+				 <td></td>
+				 <td>0</td>
+				 <td></td>
+				 <td>0</td>		
+				 <td></td>	
+				 <td></td> 
+				 <td>TRAILLER T.26</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>66</td>
+				 <td>TPRE</td>
+				 <td>Alat Berat</td>				 
+				 <td>TL</td>			 		
+				 <td>TPRETL0002</td>
+				 <td></td>
+				 <td>0</td>
+				 <td></td>
+				 <td>0</td>		
+				 <td></td>	
+				 <td></td> 
+				 <td>TRAILLER T.27</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>67</td>
+				 <td>TPRE</td>
+				 <td>Alat Berat</td>				 
+				 <td>TL</td>			 		
+				 <td>TPRETL0003</td>
+				 <td></td>
+				 <td>0</td>
+				 <td></td>
+				 <td>0</td>		
+				 <td></td>	
+				 <td></td> 
+				 <td>TRAILLER TA. 1</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>68</td>
+				 <td>TPRE</td>
+				 <td>Alat Berat</td>				 
+				 <td>TR</td>			 		
+				 <td>TPRETR0001</td>
+				 <td></td>
+				 <td>1996</td>
+				 <td></td>
+				 <td>0</td>		
+				 <td>E 665500</td>	
+				 <td>249871 OD 17</td> 
+				 <td>Tractor</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>69</td>
+				 <td>TPRE</td>
+				 <td>Alat Berat</td>				 
+				 <td>TR</td>			 		
+				 <td>TPRETR0002</td>
+				 <td></td>
+				 <td>2006</td>
+				 <td></td>
+				 <td>0</td>		
+				 <td>440406c0033160</td>	
+				 <td>SC8C8A8696509N</td> 
+				 <td>Tractor</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>70</td>
+				 <td>TPRE</td>
+				 <td>Alat Berat</td>				 
+				 <td>TR</td>			 		
+				 <td>TPRETR0003</td>
+				 <td></td>
+				 <td>2007</td>
+				 <td></td>
+				 <td>0</td>		
+				 <td>440232047</td>	
+				 <td>141AC84710588C</td> 
+				 <td>Tractor</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			<tr class=rowcontent>
+				 <td>71</td>
+				 <td>TPRE</td>
+				 <td>Kendaraan</td>				 
+				 <td>DT</td>			 		
+				 <td>TPREUMUM</td>
+				 <td></td>
+				 <td>0</td>
+				 <td></td>
+				 <td>0</td>		
+				 <td></td>	
+				 <td></td> 
+				 <td>KODE KEND UNTUK PENEMPUNG BIAYA UMUM WS</td> 	
+				 <td>Milik Sendiri</td>		
+			</tr>
+			</tbody></table>Print Time:20190401143146<br>By:JHON LISTON SIMANJUNTAK

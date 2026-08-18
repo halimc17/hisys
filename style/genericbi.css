@@ -1,0 +1,171 @@
+/* nangkoel@gmail.com
+ * www.nangkoel.com
+ * Bogor Indonesia`2008
+ */
+BODY {
+	margin-top:0px;
+	margin-right:1px;
+	margin-bottom:20px;
+	margin-left:1px;
+	font-family: "Arial",sans-serif,"Myriad Pro","Myriad Web","Tahoma";  
+	font-size:10px;
+}
+
+    table .data{
+        background-color:#97AECA;
+                font-size:12px;
+        font-family: "Tahoma",sans-serif,"Myriad Pro","Myriad Web","Arial";
+    }
+        table .sortable thead{
+        background-color:#97AECA;
+                font-size:13px;
+                text-transform:capitalize;
+                cursor:pointer;
+                text-align:center;	
+    }
+        table .sortable, table .data  thead tr {
+        background-color:#56B5E7;
+        }
+
+        table .sortable thead tr td, table .data thead tr td{
+        background-color:#275370;
+        color:#A5C1D6;
+        text-transform:capitalize;	
+        }
+        table .sortable thead tr th, table .data thead tr th{
+        background-color:#275370;
+        color:#A5C1D6;
+        text-transform:capitalize;  
+        }
+
+        thead tr td{
+        background-color:#275370;
+        color:#A5C1D6;
+        text-transform:capitalize;	
+        }
+
+        thead tr th{
+        background-color:#275370;
+        color:#A5C1D6;
+        text-transform:capitalize;  
+        }
+
+        thead tr td:hover{
+                background-color:#97AECA;
+                color:#FFFFFF;
+                cursor:pointer;
+        }
+        thead tr th:hover{
+                background-color:#97AECA;
+                color:#FFFFFF;
+                cursor:pointer;
+        }
+        table  .sortable thead td:hover, table .data  thead td:hover{
+                background-color:#97AECA;
+                color:#FFFFFF;
+        }
+        table  .sortable thead th:hover, table .data  thead th:hover{
+          background-color:#97AECA;
+          color:#FFFFFF;
+        }
+
+    table tfoot{
+        background-color:#97AECA;
+                text-transform:capitalize;	    	
+    }
+    table tfoot td:hover{
+        background-color:#9eada8;	    	
+    }	
+        .head{
+                text-align:center;
+                background-color:#275370;
+                color:#A5C1D6;
+                text-transform:capitalize;	
+                }	
+        .head td:hover{
+                        background-color:#97AECA;
+                        color:#FFFFFF;
+                }
+    
+
+		
+        .rowcontent{
+        background-color:#D7EBFA;	
+    }	
+
+        .rowcontentClick{
+        background-color:#D7EBFA;
+                cursor:pointer;
+    }	
+
+        .rowcontentClick:hover{
+       font-weight:bolder;
+    }	
+        .rowcontentClick td:hover{
+                background-color:#FFF688;
+        }
+        tr.rowcontent:hover{
+                background-color:#FFFFFF;
+        }
+        tr.rowcontentClick:hover{
+                background-color:#FFFFFF;
+        }
+        .rowcontent td:hover{
+                background-color:#FFF688;
+        }	
+		
+	
+		
+	        .rowcontentdet{
+        background-color:#C8C8FE;	
+    }	
+
+        .rowcontentdetClick{
+        background-color:#D7EBFA;
+                cursor:pointer;
+    }	
+
+        .rowcontentdetClick:hover{
+       font-weight:bolder;
+    }	
+        .rowcontentdetClick td:hover{
+                background-color:#FFF688;
+        }
+        tr.rowcontentdet:hover{
+                background-color:#FFFFFF;
+        }
+        tr.rowcontentdetClick:hover{
+                background-color:#FFFFFF;
+        }
+        .rowcontentdet td:hover{
+                background-color:#FFF688;
+        }		
+		
+		
+		
+		        .rowcontentdetail{
+        background-color:#C0C0C0;	
+    }	
+
+        .rowcontentdettailClick{
+        background-color:#D7EBFA;
+                cursor:pointer;
+    }	
+
+        .rowcontentdettailClick:hover{
+       font-weight:bolder;
+    }	
+        .rowcontentdettailClick td:hover{
+                background-color:#FFF688;
+        }
+        tr.rowcontentdettail:hover{
+                background-color:#FFFFFF;
+        }
+        tr.rowcontentdettailClick:hover{
+                background-color:#FFFFFF;
+        }
+        .rowcontentdettail td:hover{
+                background-color:#FFF688;
+        }		
+		
+       

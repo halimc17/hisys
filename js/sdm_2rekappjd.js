@@ -1,0 +1,125 @@
+function getsubunit() {
+    unit = document.getElementById("unit").value;
+  
+    param = "method=getsubunit&unit=" + unit;
+    tujuan = "sdm_slave_2rekappjd.php";
+    post_response_text(tujuan, param, respog);
+  
+    function respog() {
+      if (con.readyState == 4) {
+        if (con.status == 200) {
+          busy_off();
+          if (!isSaveResponse(con.responseText)) {
+            alert(con.responseText);
+          } else {
+            document.getElementById("subunit").innerHTML = con.responseText;
+          }
+        } else {
+          busy_off();
+          error_catch(con.status);
+        }
+      }
+    }
+  }
+  
+  function preview(tipeprint, ev) {
+    unit = document.getElementById("unit").value;
+    subunit = document.getElementById("subunit").value;
+    tipekaryawan = document.getElementById("tipekaryawan").value;
+    tanggaldari = document.getElementById("tanggaldari").value;
+    tanggalsampai = document.getElementById("tanggalsampai").value;
+  
+    param =
+      "method=preview&tipeprint=" +
+      tipeprint +
+      "&unit=" +
+      unit +
+      "&subunit=" +
+      subunit +
+      "&tanggaldari=" +
+      tanggaldari +
+      "&tanggalsampai=" +
+      tanggalsampai +
+      "&tipekaryawan=" +
+      tipekaryawan;
+    tujuan = "sdm_slave_2rekappjd.php";
+    if (tipeprint != "html") {
+      judul = tipeprint;
+      ev = "event";
+      printFile(param, tujuan, judul, ev);
+    }
+    post_response_text(tujuan, param, respog);
+  
+    function respog() {
+      if (con.readyState == 4) {
+        if (con.status == 200) {
+          busy_off();
+          if (!isSaveResponse(con.responseText)) {
+            alert(con.responseText);
+          } else {
+            document.getElementById("printContainer").innerHTML = con.responseText;
+            leftFixedTable();
+          }
+        } else {
+          busy_off();
+          error_catch(con.status);
+        }
+      }
+    }
+  }
+  
+  function printFile(param, tujuan, title, ev) {
+    tujuan = tujuan + "?" + param;
+    width = "";
+    height = "";
+    content =
+      "<iframe frameborder=0 width=100% height=100% src='" +
+      tujuan +
+      "'></iframe>";
+    showDialog1(title, content, width, height, ev);
+  }
+
+
+function detail(notransaksi) {
+
+    param = 'notransaksi=' + notransaksi ;
+    tujuan = 'sdm_slave_2rekappjd.php';
+    function respog() {
+        if (con.readyState == 4) {
+            if (con.status == 200) {
+                busy_off();
+                if (!isSaveResponse(con.responseText)) {
+                    alert(con.responseText);
+                } else {
+                    alertify.popup("Detail",con.responseText).set({'resizable':true,'maximizable':true}).resizeTo('80%','70%');
+                }
+            } else {
+                busy_off();
+                error_catch(con.status);
+            }
+        }
+    }
+    post_response_text(tujuan + '?' + 'method=detail', param, respog);
+}
+
+function detail2(notransaksi) {
+
+  param = 'notransaksi=' + notransaksi ;
+  tujuan = 'sdm_slave_2rekappjd.php';
+  function respog() {
+      if (con.readyState == 4) {
+          if (con.status == 200) {
+              busy_off();
+              if (!isSaveResponse(con.responseText)) {
+                  alert(con.responseText);
+              } else {
+                  alertify.popup("Detail",con.responseText).set({'resizable':true,'maximizable':true}).resizeTo('80%','70%');
+              }
+          } else {
+              busy_off();
+              error_catch(con.status);
+          }
+      }
+  }
+  post_response_text(tujuan + '?' + 'method=detail2', param, respog);
+}

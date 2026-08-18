@@ -1,0 +1,4 @@
+#format file [namalaporan]=[filetujuan]=[alt onmouseover]
+BIAYA PENGOLAHAN=lbm_pks_bypengolahan=BIAYA PENGOLAHAN
+KEUANGAN=bi_graph_keuangan=KEUANGAN
+KEBUN=bi_graph_kebun=KEBUN

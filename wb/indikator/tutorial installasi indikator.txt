@@ -1,0 +1,23 @@
+Catatan : Sebelum melakukan installasi jangan lupa sesuaikan SERVER_TIMBANGAN DAN SERVER_DATABASE di file .env
+##WINDOWS##
+1. Download nodejs v 14+
+2. Jika folder node_modules belum ada silahkan lakukan installasi diterminal dengan command 'npm i'
+3. Buka xampp dengan run as administrator, masuk ke Config >  centang apache pada autostart of modules dan centang 'Start Control Panel Minimized' lalu simpan
+4. run file (windows + r) masuk ke 'shell:startup' atau langsung masuk direktori C:\Users\{User PC}\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup
+5. Edit file owl.bat, sesuaikan direktori folder indikator nodejs ini
+5. copas paste shortcut xampp dan script owl.bat
+6. selesai
+
+##UBUNTU##
+1. Lakukan installasi nodejs:
+   curl -sL https://deb.nodesource.com/setup | sudo bash -
+   sudo apt-get -y install nodejs
+2. Jika folder node_modules belum ada silahkan lakukan installasi diterminal dengan command 'npm i'
+3. Jalakan script nodejs dengan mengetikan 'pm2 start index'
+4. Simpan sesi dengan mengetikan 'pm2 save'
+5. selanjutnya ketikan perintah 'pm2 startup'
+5. Selesai
+
+
+Created by wanda
+22 Desember 2022

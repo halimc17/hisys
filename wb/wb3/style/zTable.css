@@ -1,0 +1,199 @@
+.zImgBtn {
+	width:13px;
+	height:13px;
+	cursor:pointer;
+}
+
+.zImgOffBtn {
+	width:12px;
+	height:12px;
+}
+
+.zImgPrint {
+	width:30px;
+	height:30px;
+	cursor:pointer;
+}
+
+.notification {
+  color: white;
+  text-decoration: none;
+  position: relative;
+  display: inline-block;
+  border-radius: 2px;
+}
+
+.notification:hover {
+  height:55px;
+}
+
+.notification .badge {
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  padding: 5px 10px;
+  border-radius: 50%;
+  background: red;
+  color: white;
+  font-size:10px;
+}
+
+
+/**** FREEZE TABLE ****/
+.table-scroll{
+	position: relative;
+	width:100%;
+	z-index: 1;
+	margin: auto;
+	margin-top: 20px;
+	overflow: auto;
+	max-height: 445px;
+	background-color:#D7EBFA;
+}
+.table-scroll table {
+	width: 99.9%;
+	/*min-width: 1280px;*/
+	margin: auto;
+	border-collapse: separate;
+	border-spacing: 1;
+}
+.table-wrap {
+	position: relative;
+}
+.table-scroll th,
+.table-scroll td {
+	padding: 3px 3px;
+	background: #D7EBFA;
+	vertical-align: top;
+}
+.table-scroll thead th {
+	background: #275370;
+	color: #A5C1D6;
+	position: -webkit-sticky;
+	position: sticky;
+	cursor:pointer;
+}
+/* safari and ios need the tfoot itself to be position:sticky also */
+.table-scroll tfoot,
+.table-scroll tfoot th,
+.table-scroll tfoot td {
+	position: -webkit-sticky;
+	position: sticky;
+	bottom: 0;
+	background: #97AECA;
+	color: #fff;
+	z-index:4;
+	text-align:center;
+}
+
+.table-scroll .left-fixed{
+	position: -webkit-sticky;
+	position: sticky;
+	z-index: 2;
+}
+.table-scroll th,.table-scroll tbody td.left-fixed{
+	background: #AED6F1;
+    color: #000000;
+}
+
+.table-scroll thead th.left-fixed,
+.table-scroll tfoot th.left-fixed {
+	z-index: 5;
+}
+
+.table-scroll .resize-handle {
+  position: absolute;
+  top: 0;
+  right: -1.5px;
+  bottom: 0;
+  background: black;
+  opacity: 0;
+  width: 3px;
+  cursor: col-resize;
+}
+ 
+.table-scroll .resize-handle:hover,
+.table-scroll .header--being-resized .resize-handle {
+  opacity: 0.5;
+}
+ 
+.table-scroll th:hover .resize-handle {
+  opacity: 0.3;
+}
+
+.table-scrollx{
+	position: relative;
+	z-index: 1;
+	margin: auto;
+	margin-top: 20px;
+	overflow: auto;
+	background-color:#D7EBFA;
+}
+.table-scrollx table {
+	margin: auto;
+	border-collapse: separate;
+	border-spacing: 1;
+}
+.table-wrap {
+	position: relative;
+}
+.table-scrollx th,
+.table-scrollx td {
+	padding: 3px 3px;
+	background: #D7EBFA;
+	vertical-align: top;
+}
+.table-scrollx thead th {
+	background: #275370;
+	color: #A5C1D6;
+	position: -webkit-sticky;
+	position: sticky;
+	cursor:pointer;
+}
+/* safari and ios need the tfoot itself to be position:sticky also */
+.table-scrollx tfoot,
+.table-scrollx tfoot th,
+.table-scrollx tfoot td {
+	position: -webkit-sticky;
+	position: sticky;
+	bottom: 0;
+	background: #97AECA;
+	color: #fff;
+	z-index:4;
+	text-align:center;
+}
+
+.table-scrollx .left-fixed{
+	position: -webkit-sticky;
+	position: sticky;
+	z-index: 2;
+}
+.table-scrollx th,.table-scrollx tbody td.left-fixed{
+	background: #AED6F1;
+    color: #000000;
+}
+
+.table-scrollx thead th.left-fixed,
+.table-scrollx tfoot th.left-fixed {
+	z-index: 5;
+}
+
+.table-scrollx .resize-handle {
+  position: absolute;
+  top: 0;
+  right: -1.5px;
+  bottom: 0;
+  background: black;
+  opacity: 0;
+  width: 3px;
+  cursor: col-resize;
+}
+ 
+.table-scrollx .resize-handle:hover,
+.table-scrollx .header--being-resized .resize-handle {
+  opacity: 0.5;
+}
+ 
+.table-scrollx th:hover .resize-handle {
+  opacity: 0.3;
+}

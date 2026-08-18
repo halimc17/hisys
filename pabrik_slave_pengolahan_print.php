@@ -1,0 +1,202 @@
+<?php
+include_once('master_validation.php');
+include_once('lib/nangkoelib.php');
+include_once('lib/zLib.php');
+include_once('lib/formTable.php');
+include_once('lib/fpdf.php');
+
+$proses = $_GET['proses'];
+$param = $_POST;
+
+
+/** Report Prep **/
+# Data
+$cols = 'nopengolahan,kodeorg,tanggal,shift,jammulai,jamselesai,mandor,'.
+    'asisten,jamdinasbruto,jamstagnasi,jumlahlori,tbsdiolah';
+$colArr = explode(',',$cols);
+$where = "kodeorg='".$_SESSION['empl']['lokasitugas']."'";
+$query = selectQuery($dbname,'pabrik_pengolahan',$cols,$where);
+$data = fetchData($query);
+
+// print_r($query);
+
+
+$title = $_SESSION['lang']['operasipabrik'];
+$align = explode(",","L,L,L,R,L,L,L,L,L,L,L,L");
+$length = explode(",","10,10,7,7,7,7,10,10,7,7,9,9");
+
+# Options
+$whereKar = "karyawanid in (";
+$isFirst = true;
+foreach($data as $key=>$row) {
+    if($key==0) {
+        if($row['mandor']=='') {
+            if($row['asisten'!='']) {
+                $whereKar .= $row['asisten'];
+                $isFirst = false;
+            }
+        } else {
+            $whereKar .= $row['mandor'];
+            $isFirst = false;
+            if($row['asisten']!='') {
+                $whereKar .= ",".$row['asisten'];
+            }
+        }
+    } else {
+        if($row['mandor']=='') {
+            if($row['asisten']!='') {
+                if($isFirst==true) {
+                    $whereKar .= $row['asisten'];
+                    $isFirst = false;
+                } else {
+                    $whereKar .= ",".$row['asisten'];
+                }
+            }
+        } else {
+            if($isFirst==true) {
+                $whereKar .= $row['mandor'];
+                $isFirst = false;
+                if($row['asisten'!='']) {
+                    $whereKar .= ",".$row['asisten'];
+                }
+            } else {
+                $whereKar .= ",".$row['mandor'];
+                if($row['asisten']!='') {
+                    $whereKar .= ",".$row['asisten'];
+                }
+            }
+        }
+    }
+}
+$whereKar .= ")";
+//$optKar = makeOption($dbname,'datakaryawan','karyawanid,namakaryawan',$whereKar,'0',true);
+$optKar = makeOption($dbname,'datakaryawan','karyawanid,namakaryawan');
+$whereOrg = "kodeorganisasi='".$_SESSION['empl']['lokasitugas']."'";
+$optOrg = makeOption($dbname,'organisasi','kodeorganisasi,namaorganisasi',$whereOrg,'0',true);
+
+# Data Show
+$dataShow = $data;
+foreach($dataShow as $key=>$row) {
+    $dataShow[$key]['kodeorg'] = $optOrg[$row['kodeorg']];
+    $dataShow[$key]['mandor'] = $optKar[$row['mandor']];
+    $dataShow[$key]['asisten'] = $optKar[$row['asisten']];
+    $dataShow[$key]['tanggal'] = tanggalnormal($row['tanggal']);
+}
+
+/** Output Format **/
+switch($proses) {
+    case 'pdf':
+        class PDF extends FPDF
+        {
+            function Header() {
+                global $conn;
+                global $dbname;
+                global $align;
+                global $length;
+                global $colArr;
+                global $title;
+                
+                // # Bulan
+                // $optBulan = 
+                
+                // # Alamat & No Telp
+                // $query = selectQuery($dbname,'organisasi','alamat,telepon',
+                    // "kodeorganisasi='".$_SESSION['org']['kodeorganisasi']."'");
+                // $orgData = fetchData($query);
+                
+                // $width = $this->w - $this->lMargin - $this->rMargin;
+                // $height = 12;
+                // $path='images/logo.jpg';
+                // $this->Image($path,$this->lMargin,$this->tMargin,0,45);
+                // $this->SetFont('Arial','B',9);
+                // $this->SetFillColor(255,255,255);	
+                // $this->SetX(90);   
+                // $this->Cell($width-100,$height,$_SESSION['org']['namaorganisasi'],0,1,'L');	 
+                // $this->SetX(90); 		
+                // $this->Cell($width-100,$height,$orgData[0]['alamat'],0,1,'L');	
+                // $this->SetX(90); 			
+                // $this->Cell($width-100,$height,"Tel: ".$orgData[0]['telepon'],0,1,'L');	
+                // $this->Line($this->lMargin,$this->tMargin+($height*4),
+                    // $this->lMargin+$width,$this->tMargin+($height*4));
+					
+					
+				$arrHead = setheadreport('',$_SESSION['org']['kodeorganisasi']);
+				
+                $width = $this->w - $this->lMargin - $this->rMargin;
+                $height = 15;
+                $path=$arrHead['logo'];
+                $this->Image($path,$this->lMargin,($this->tMargin-12),0,55);
+                $this->SetFont('Arial','B',9);
+                $this->SetFillColor(255,255,255);	
+                $this->SetX(110);   
+                $this->Cell($width-100,$height,$arrHead['nama'],0,1,'L');	 
+                $this->SetX(110); 		
+                $this->Cell($width-100,$height,$arrHead['alamat'],0,1,'L');	
+                $this->SetX(110); 			
+                $this->Cell($width-100,$height,"Tel: ".$arrHead['telepon'],0,1,'L');	
+                $this->Line($this->lMargin,$this->tMargin+($height*4),
+				$this->lMargin+$width,$this->tMargin+($height*4));
+					
+                $this->Ln();
+                
+                $this->SetFont('Arial','',8);
+                $this->Cell((20/100*$width)-5,$height,$_SESSION['lang']['kodeorg'],'',0,'L');
+                $this->Cell(5,$height,':','',0,'L');
+                $this->Cell(45/100*$width,$height,$_SESSION['empl']['lokasitugas'],'',0,'L');
+                $this->Cell((20/100*$width)-5,$height,$_SESSION['lang']['periode'],'',0,'L');
+                $this->Cell(5,$height,':','',0,'L');
+                $this->Cell(15/100*$width,$height,
+                    numToMonth($_SESSION['org']['period']['bulan'],'I','long')." ".
+                    $_SESSION['org']['period']['tahun'],0,0,'L');
+                $this->Ln();
+                
+                $this->Cell((20/100*$width)-5,$height,$_SESSION['lang']['user'],'',0,'L');
+                $this->Cell(5,$height,':','',0,'L');
+                $this->Cell(45/100*$width,$height,$_SESSION['standard']['username'],'',0,'L');
+                $this->Cell((20/100*$width)-5,$height,$_SESSION['lang']['tanggal'],'',0,'L');
+                $this->Cell(5,$height,':','',0,'L');
+                $this->Cell(15/100*$width,$height,date('d-m-Y H:i:s'),'',1,'L');		
+                
+                $this->Ln();
+                $this->SetFont('Arial','U',12);
+                $this->Cell($width,$height,strtoupper($title),0,1,'C');	
+                $this->Ln();	
+                $this->SetFont('Arial','B',9);	
+                $this->SetFillColor(220,220,220);
+                foreach($colArr as $key=>$head) {
+                    $this->Cell($length[$key]/100*$width,$height,$_SESSION['lang'][$head],1,0,'C',1);
+                }
+                $this->Ln();
+            }
+                
+            function Footer()
+            {
+                $this->SetY(-15);
+                $this->SetFont('Arial','I',8);
+                $this->Cell(10,10,'Page '.$this->PageNo(),0,0,'C');
+            }
+        }
+        $pdf=new PDF('L','pt','A4');
+        $width = $pdf->w - $pdf->lMargin - $pdf->rMargin;
+        $height = 12;
+	$pdf->AddPage();
+        
+        $pdf->SetFillColor(255,255,255);
+	$pdf->SetFont('Arial','',9);
+        foreach($dataShow as $key=>$row) {    
+            $i=0;
+            foreach($row as $cont) {
+                $pdf->Cell($length[$i]/100*$width,$height,$cont,1,0,$align[$i],1);
+                $i++;
+            }
+            $pdf->Ln();
+        }
+	
+        $pdf->Output();
+        break;
+    case 'excel':
+        break;
+    default:
+    break;
+}
+?>

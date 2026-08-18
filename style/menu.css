@@ -1,0 +1,250 @@
+/*nangkoel 2010
+ * jakarta indonesia
+ * nangkoel@gmail.ocm
+ */
+/*!!!!!!!!!!! NangkoelMenu Core CSS [Do Not Modify!] !!!!!!!!!!!!!*/
+.qmmc .qmdivider{display:block;font-size:1px;border-width:0px;border-style:solid;position:relative;z-index:1;}.qmmc .qmdividery{float:left;width:0px;}.qmmc .qmtitle{display:block;cursor:default;white-space:nowrap;position:relative;z-index:1;}.qmclear {font-size:1px;height:0px;width:0px;clear:left;line-height:0px;display:block;float:none !important;}.qmmc {position:relative;zoom:1;z-index:10;}.qmmc a, .qmmc li {float:left;display:block;white-space:nowrap;position:relative;z-index:1;}.qmmc div a, .qmmc ul a, .qmmc ul li {float:none;}.qmsh div a {float:left;}.qmmc div{visibility:hidden;position:absolute;}.qmmc .qmcbox{cursor:default;display:inline-block;position:relative;z-index:1;}.qmmc .qmcbox a{display:inline;}.qmmc .qmcbox div{float:none;position:static;visibility:inherit;left:auto;}.qmmc li {z-index:auto;}.qmmc ul {left:-10000px;position:absolute;z-index:10;}.qmmc, .qmmc ul {list-style:none;padding:0px;margin:0px;}.qmmc li a {float:none;}.qmmc li:hover>ul{left:auto;}#qm0 ul {top:100%;}#qm0 ul li:hover>ul{top:0px;left:100%;}
+
+
+	/*"""""""" (MAIN) Container""""""""*/	
+	#qm0	
+	{	
+		padding:5px 0px;
+		/* overflow: hidden; */
+	}
+	#qm0 DIV.qm_bodychild.active{ 
+		overflow:unset!important;
+		height:auto;
+		padding: 10px 15px 10px 10px;
+		width: auto;
+	} 
+	#qm0 DIV.qm_bodychild{ 
+		overflow:hidden;
+		height:0px;
+		width: 0px;
+		padding: 0px;
+	} 
+
+	/*"""""""" (MAIN) Items""""""""*/	
+	.qm_bodychild a.qmparent i.arrow{
+		float: right;
+		padding-top: 2px;
+		margin-right: -15px;
+	}
+	.qm_bodychild a.qmparent i.fa-file:before{
+		content:"\f07b" !important;
+		color:#FBDC89;
+	}
+	.qm_bodychild a.qmparent.active i.fa-file:before{
+		color:#FBDC89;
+	}
+	.qm_bodychild a.active i.fa-file:before{
+		color:#FFF;
+	}
+	.qm_bodychild a i.fa-file{
+		position:relative;
+		left:-6px;
+	}
+	
+	.qm_bodychild a.qmparent i img:before{
+		content:"\f07b" !important;
+		color:#FBDC89;
+	}
+	.qm_bodychild a.qmparent.active i img:before{
+		color:#FBDC89;
+	}
+	.qm_bodychild a.active i img:before{
+		color:#FFF;
+	}
+	.qm_bodychild a i img{
+		position:relative;
+		left:-6px;
+	}
+	#qm0 a	
+	{	
+		padding:5px 10px 5px 10px;
+		color:#FFFFFF;
+		font-family:Arial,Fixedsys,Tahoma;
+		font-size:10px;
+		text-decoration:none;
+		text-align:left;
+	}
+
+.menulinebox{
+	display:inline-block !important;
+}
+
+.menulinebox div.qmmc>a.qmparent{
+	display:inline-block !important;
+	float:unset !important;
+	
+}
+.menulinebox div.qmmc>a.qmparent:nth-child(1n) {
+  border-left:0.5px solid #89a1bf;
+}
+.menulinebox div.qmmc>a.qmparent:first-child {
+  border-left:0px;
+}
+.box-green{
+	background: #8bc34a;
+    padding: 3px 5px;
+    border-radius: 3px;
+    font-size: 10px;
+    color: #fff;
+    text-shadow: 1px 1px #3e5423;
+}
+	/*"""""""" (SUB) Container""""""""*/	
+	#qm0 div, #qm0 ul	
+	{	
+		padding:10px;
+		margin:-2px 0px 0px;
+		background-color:transparent;
+		border-style:none;
+	}
+
+
+	/*"""""""" (SUB) Items""""""""*/	
+	#qm0 div a, #qm0 ul a	
+	{	
+		
+		background-color:transparent;
+		font-size:11px;
+		border-width:0px;
+		border-style:none;
+		color:#CDCDCD;
+	}
+
+
+	/*"""""""" (SUB) Hover State""""""""*/	
+	#qm0 div a:hover	
+	{	
+		background-color:#5A86A3;
+		color:#FFFFFF;
+	}
+
+
+	/*"""""""" (SUB) Hover State - (duplicated for pure CSS)""""""""*/	
+	#qm0 ul li:hover>a	
+	{	
+		background-color:#5A86A3;
+		color:#FFFFFF;
+	}
+
+
+	/*"""""""" (SUB) Active State""""""""*/	
+	body #qm0 div .qmactive, body #qm0 div .qmactive:hover	
+	{	
+		background-color:#5A86A3;
+		color:#C6E2F8;
+	}
+
+
+	/*"""""""" Individual Titles""""""""*/	
+	#qm0 .qmtitle	
+	{	
+		cursor:default;
+		padding:3px 0px 3px 4px;
+		color:#FBDC89;
+		font-family:tahoma;
+		font-size:11px;
+		font-weight:bold;
+	}
+#qm0 .qmparent.active,#qm0 a.qmparent.qmactive{
+	padding: 5px 10px !important;
+}
+#qm0 .qmparent.active,#qm0 a.active{
+	background: #E8750D;
+    color: #3e3f40;
+    font-weight: bold;
+	border-radius:3px;
+	-moz-border-radius:3px;
+	-webkit-border-radius:3px;
+	-o-border-radius:3px;
+}
+#qm0 .qmparent.active:hover,#qm0 a.active:hover{
+	color: #FFF;
+}
+#qm0 .qmparent.active.qmactive,#qm0 a.active.qmactive{
+	color: #FFF;
+}
+	/*"""""""" Individual Horizontal Dividers""""""""*/	
+	#qm0 .qmdividerx	
+	{	
+		border-top-width:1px;
+		margin:4px 0px;
+		border-color:#BB8370;
+	}
+
+
+	/*"""""""" Individual Vertical Dividers""""""""*/	
+	#qm0 .qmdividery	
+	{	
+		border-left-width:1px;
+		height:15px;
+		margin:4px 2px 0px;
+		border-color:#AAAAAA;
+	}
+
+
+	/*"""""""" (main) Rounded Items""""""""*/	
+	#qm0 .qmritem span	
+	{	
+		border-color:#E8750D;
+		background-color:#275370;
+	}
+
+
+	/*"""""""" (main) Rounded Items Content""""""""*/	
+	#qm0 .qmritemcontent	
+	{	
+		padding:0px 0px 0px 4px;
+	}
+
+
+	/*"""""""" Custom Rule""""""""*/	
+	ul#qm0 ul	
+	{	
+		padding:10px;
+		margin:-2px 0px 0px;
+		background-color:#D8EEFD;
+		border-width:1px;
+		border-style:solid;
+		border-color:#0570E7;
+	}
+
+
+	/*"""""""" Custom Rule""""""""*/	
+	ul#qm0 li:hover > a	
+	{	
+		background-color:#D8EEFD;
+	}
+
+.progress img{
+	width:50px;
+}
+.progress .progress-body{
+	margin: auto;
+    width: 100px;
+    text-align: center;
+    position: relative;
+	overflow: hidden;
+	background: rgba(255,255,255,0.9);
+	padding: 10px;
+    height: 60px;
+    border-radius: 10px;
+    box-shadow: 1px 1px 6px rgba(0,0,0,0.8);
+}
+.progress{
+	background: rgba(10,10,10,0);
+	z-index: 999999;
+	position: fixed;
+	top: 0px;
+	left: 0px;
+	right: 0px;
+	bottom: 0px;
+	min-height: 100%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	/* backdrop-filter: blur(2px); */
+}

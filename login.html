@@ -1,0 +1,100 @@
+<?
+session_start();//to make sure all session is destroyed
+	        //turn on Addtype application/x-php	.html on your apache config
+session_destroy();
+require_once('config/connection.php');
+$loginFrom = "";
+if(isset($_GET['module']) and $_GET['module'] == 'lab'){
+	$loginFrom = "lab";
+}
+?>
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html>
+<head>
+<meta name="viewport" content="user-scalable=no, initial-scale=1, maximum-scale=1, minimum-scale=1, width=device-width" />
+<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+<link rel="shortcut icon" href="images/owl2.ico" type="image/x-icon">
+<title>OWL-Plantation</title>
+</head>
+<link rel=stylesheet type='text/css' href='style/login.css?v=2.1'>
+<style>
+	
+</style>
+<script language=JavaScript1.2 src='js/generic.js?v=2.7'></script>
+<script language=JavaScript1.2 src='js/login.js?v=2.8'></script>
+
+
+<body>
+    <div class="block">
+	
+<div class="form-structor">
+		<marquee style='width:100%;padding-top:15px;height:17px;color:#AAEECC' title='Drag to move' scrolldelay='500'>
+			OWL-Plantation System v.2.02
+		</marquee>
+	<div class="signup">
+		<div class="logo-client" style="padding:0px;"><img src="images/logo.png"></div>
+		<h2 class="form-title" id="signup">Log in</h2>
+		<div class="form-holder">
+			<input autofocus type="text" name="username" class="input" placeholder="Username" id="name" onkeypress="return enter(event);" />
+			<input type="password" name="password" class="input" placeholder="Password" id="pwd" onkeypress="return enter(event);"/>
+		</div>	
+		
+		<div class="form-holder" style="margin-top:15px;">
+			<? if($loginFrom == 'lab'){ ?>	
+				<select id="language" name="module" style="display:none;"><option value="dashboard" selected>DASHBOARD</option></select>
+			<? }else{ ?>
+				<select id="language" class="input" name="language">
+				<?
+				$str=$owlPDO->query("select * from ".$dbname.".namabahasa order by code");
+				$str->setFetchMode(PDO::FETCH_OBJ);
+				while($bar=$str->fetch())
+				{ 
+				  echo "<option value='".$bar->code."'";
+				  # Default Language
+				  if($bar->code=='ID') {
+					echo " selected";
+				  }
+				  echo ">".$bar->name."</option>";
+				}
+				?>
+
+			</select>
+			<? } ?>
+			<select id="theme" class="input" style="display:none;">
+				<option value='skyblue'>Skyblue(Default)</option>
+				<option value='gray'>Gray</option>		
+				<option value='red'>Dark Red</option>
+			</select>
+		</div>
+		<button class="submit-btn"  onclick="login()">Log in</button>
+		<div id="msg" class="errortext"></div>
+	</div>
+	<div class="login slide-up">
+		<div class="center">
+			<h2 class="form-title" id="login">Powered By : <a href=http://www.owl-plantation.com target=new>nangkoel</a></h2>
+		</div>
+	</div>
+</div>	
+	
+</div>	
+	
+<script type="text/javascript">
+var myVar=setInterval(function(){myTimer()},300000); // update tiap 5 menit
+function myTimer()
+{
+    var d = new Date();
+}
+window.onload=myTimer() 
+</script>
+
+
+<?
+//echo CLOSE_THEME();
+?>		
+<div id="progress" class="progress" style="display: none;">
+<div class="progress-body">
+<img src="images/progress.gif?v=2">
+</div>
+</div>
+</body>
+</html>
