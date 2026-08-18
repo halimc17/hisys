@@ -1,4 +1,7 @@
-config/
-mobile/
+config/connection.php
+config/connection2.php
+mobile/m_fileDocuments
+mobile/update
 .svn/
-fileupload/
+fileupload/keu_kasbankx
+fileupload/lbr

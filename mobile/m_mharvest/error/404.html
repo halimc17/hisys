@@ -1,0 +1,98 @@
+
+	<style>
+		.vertical-center {
+		  min-height: 100%;
+		  display: flex;
+		  align-items: center;
+		  background: aquamarine !important;
+		}
+		<?php 
+			if($_POST){ ?>
+				.vertical-center{
+					position: fixed !important;
+					z-index: 9999 !important;
+					left: 0px;
+					top: 5px;
+					right: 0px;
+					bottom: 0px;
+				}
+		<?php
+			}
+			//exit();
+		?>
+	</style>
+<?php 
+	$error = "Oops! Page Not Be Found";
+	$message = "Sorry but the page you are looking for does not exist.";
+	$btn = '<a href="#">Back to homepage</a>';
+	if(isset($_GET['error'])){
+		switch($_GET['error']){
+			case'session':
+				if($_GET['case'] == 'expired'){
+					$error = "Your session has expired";
+					$message = "Please press button \"Back to login\" and login again..!";
+					$btn = '<a id="buttontimelogout" class="mybutton" href="login.html">Back to login</a>';
+				}
+			break;
+			case'authorized':
+				if($_GET['case'] == 'wrong'){
+					$error = "Not Authorized";
+					$message = "Please press button \"Back to login\" and login again..!";
+					$btn = '<a id="buttontimelogout" class="mybutton" href="login.html">Back to login</a>';
+				}
+			break;
+			case'serverbackup':
+				$error = "SORRY";
+				$message = "Server is on routine backup process,<br> Please login after ".$_GET['case'].", thank you";
+				$btn = '';
+			break;
+			case'cracker':
+				$error = "SORRY";
+				$message = "Sorry, You entering the system like cracker";
+				$btn = "";
+			break;
+		}
+		
+	
+	}
+	
+?>
+	<div class="vertical-center">
+		<div class="container">
+			<div id="notfound" class="text-center ">
+				<h1>😮</h1>
+				<h2><?php echo $error; ?></h2>
+				<div id="timelogout_text1" style="display:none">Auto</div><h1 id="timelogout" style="display: inline-block;margin-left: 10px;font-size: 50px;margin-top: 0px;margin-bottom: 0px;"></h1>
+				<p><?php echo $message; ?></p>
+				<?php echo $btn; ?>
+			</div>
+		</div>
+	</div>
+<script>
+	var elLogOut = $.getElementById("timelogout");
+	var timelogout_text1 = $.getElementById("timelogout_text1");
+	if(typeof sessionStorage.timebacklogin === 'undefined' || sessionStorage.timebacklogin == ""){
+		sessionStorage.timebacklogin = 20;
+	}
+	numLog = sessionStorage.timebacklogin;
+	var btnLogOut = $.getElementById("buttontimelogout");
+	if(btnLogOut){
+		btnLogOut.href = "login.html?q="+window.history.state.page;
+	}
+	if(timebacklogin){
+		clearInterval(timebacklogin);
+	}
+	var timebacklogin = setInterval(function(){
+		if(sessionStorage.timebacklogin == 0){
+			sessionStorage.timebacklogin = "";
+			 clearInterval(timebacklogin);
+			window.location = btnLogOut.href;
+		}else{
+			timelogout_text1.style.display = "inline-block";
+			elLogOut.innerHTML = sessionStorage.timebacklogin;
+			numLog--;
+			sessionStorage.timebacklogin = numLog;
+		}
+	},1000);
+	
+</script>

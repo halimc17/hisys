@@ -1,0 +1,119 @@
+html.offline div.user{
+	/* display:none !important; */
+}
+html.offline div.user_alert label.fa-isonline:before{
+	color:yellow;
+	content: "\f071";
+	font: normal normal normal 14px/1 FontAwesome;
+    font-size: inherit;
+}
+@-webkit-keyframes blinker {
+  from {opacity: 1.0;}
+  to {opacity: 0.0;}
+}
+html.offline div.user_alert label.fa-isonline:after{
+	content:"OFFLINE";
+	font-size: inherit;
+	margin-left:10px;
+	font-family: "Arial",sans-serif,"Myriad Pro","Myriad Web","Tahoma";
+    font-size: 12px;
+	text-decoration: blink;
+	-webkit-animation-name: blinker;
+	-webkit-animation-duration: 0.6s;
+	-webkit-animation-iteration-count:infinite;
+	-webkit-animation-timing-function:ease-in-out;
+	-webkit-animation-direction: alternate;
+}
+html.offline div.user_alert{
+	/* display:inline-block !important; */
+}
+html.online div.user{
+	/* display:unset; */
+}
+/* html.online div.user_alert{ */
+	/* display:none !important; */
+/* } */
+html.online div.user_alert label.fa-isonline:before{
+	color:white;
+	content: "\f012";
+	font: normal normal normal 14px/1 FontAwesome;
+    font-size: inherit;
+}
+html.online div.user_alert label.fa-isonline:after{
+	content:"ONLINE";
+	font-size: inherit;
+	margin-left:10px;
+	font-family: "Arial",sans-serif,"Myriad Pro","Myriad Web","Tahoma";
+    font-size: 12px;
+}
+html.offline{
+	filter: grayscale(50%); transition: filter 2s ease 0s;
+}
+div.user_alert{
+	/* display:unset; */
+}
+.owlnotifikasi[status="attention"]:before{
+	content:"Warning"!important;
+	color:#8a6d3b !important;
+}
+.owlnotifikasi[status="attention"]:after{
+	content:"\f071"!important;
+	color:#8a6d3b !important;
+}
+.owlnotifikasi[status="error"]:before{
+	content:"Error"!important;
+	color:#fff !important;
+}
+.owlnotifikasi[status="error"]:after{
+	content:"\f00d"!important;
+	color:#fff !important;
+}
+.owlnotifikasi.onpost{
+	opacity:1;
+}
+.owlnotifikasi:before{
+	position:absolute;
+	display: inline-block;
+    font-size: inherit;
+    text-rendering: auto;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+	top: -14px;
+    left: 25px;
+	font-size: .9em;
+}
+.owlnotifikasi:after{
+	position:absolute;
+	display: inline-block;
+    font: normal normal normal 14px/1 FontAwesome;
+    font-size: inherit;
+    text-rendering: auto;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+	
+	top: -14px;
+    left: 10px;
+}
+.owlnotifikasi[status="attention"]{
+	border-top: 20px solid #ffd30b !important;
+}
+.owlnotifikasi[status="error"]{
+	border-top: 20px solid #ff8686 !important;
+}
+.owlnotifikasi{
+	border-top: 20px solid #cfcfcf;
+	color: #0e90be;
+    font-size: 9pt;
+    position: absolute;
+    top: 0px;
+    text-align: center;
+    margin: auto;
+    padding: 5px;
+    background: #fff;
+    border-radius: 5px;
+    display: inline-block;
+    width: 100%;
+	opacity:0;
+	transition: opacity 0.5s,border-top 0.5s;
+	cursor:pointer;
+}

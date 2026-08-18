@@ -1,0 +1,32 @@
+/* nangkoel@gmail.com
+ * www.nangkoel.com
+ * Bogor Indonesia`2008
+ */
+.legend{
+	width:550px;
+	
+}
+
+#mode{
+	font-weight:bolder;
+}
+.mmgr{
+	width:500px;
+}
+
+
+.mmgrchart i.fa-folder-open{
+	font-size: 15px;
+    color: #f59825;
+    text-shadow: 1px 1px #adadad;
+	cursor:pointer;
+}
+.mmgrchart i.fa-folder{
+	font-size: 15px;
+    color: #ffd400;
+    text-shadow: 1px 1px #adadad;
+	cursor:pointer;
+}
+.mmgrchart{
+	width:500px;
+}

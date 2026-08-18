@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="format-detection" content="telephone=no" />
+    <meta name="msapplication-tap-highlight" content="no" />
+    <meta name="viewport" content="user-scalable=no, initial-scale=1, maximum-scale=1, minimum-scale=1, width=device-width" />
+	<meta http-equiv=“Content-Security-Policy” content=“default-src ‘self’ gap://ready file://* *; style-src ‘self’ ‘unsafe-inline’; script-src ‘self’ ‘unsafe-inline’ ‘unsafe-eval’”/>
+    <title>OWL Mobile</title>
+    <script type="text/javascript" src="cordova.js"></script>
+	
+    <link rel="stylesheet" href="style/owlMobile.css" type="text/css"/>
+	<link rel="stylesheet" href="style/owlMobilePlus.css" type="text/css"/>
+	<link rel="stylesheet" href="style/owlMobileGrid.css" type="text/css"/>
+    <link rel="stylesheet" href="style/calendar-mobile.css" type="text/css"/>
+	<link rel="stylesheet" href="style/touch-sideswipe.css">
+	<link rel="stylesheet" href="style/slidetouch.css">
+	<link rel="stylesheet" href="signature/css/signature-pad.css">
+	<link rel="stylesheet" href="font-awesome/css/font-awesome.css">
+	<script type="text/javascript" src="js/bluetooth.js"></script>
+	<script type="text/javascript" src="js/qrscanner.js"></script>
+	<script type="text/javascript" src="js/hashkit.js"></script>
+	<script type="text/javascript" src="js/notification.js"></script>
+	<script type="text/javascript" src="js/connection.js"></script>
+	<script type="text/javascript" src="js/generate_md5.js"></script>
+    <script type="text/javascript" src='js/owlMobile.js'></script>
+    <script type="text/javascript" src='js/mobileTransaction.js'></script>
+    <script type="text/javascript" src='js/backgroundmode.js'></script>
+	<script type="text/javascript" src='js/syn.js'></script>
+    <script type="text/javascript" src='js/headerfixed.min.js'></script>
+    <script type="text/javascript" src='js/calendar-mobile.js'></script>
+	<script type="text/javascript" src='js/camera.js'></script>
+    <script type="text/javascript" src='js/qrcode.js'></script>
+	
+	<!--
+	==================================================================
+	sudah tidak di pakai karena sudah memakai sistem auto reload javascript
+	berdasarkan module yang di pilih, semua js Masuk ke folder [Formjs]
+	Author: Atwal Arifin
+	==================================================================
+	
+    <script type="text/javascript" src='js/bkm.js'></script>
+    <script type="text/javascript" src='js/panen.js'></script>
+    <script type="text/javascript" src='js/spb.js'></script>
+    <script type="text/javascript" src='js/mutuhancak.js'></script>
+    
+    
+    <script type="text/javascript" src='js/pp.js'></script>
+    <script type="text/javascript" src='js/traksi.js'></script>
+    <script type="text/javascript" src='js/lapkebun.js'></script>
+    <script type="text/javascript" src='js/lappabrik.js'></script>
+    <script type="text/javascript" src='js/keuangan.js'></script>
+    <script type="text/javascript" src='js/lapsdm.js'></script>
+    <script type="text/javascript" src='js/lappur.js'></script>
+    <script type="text/javascript" src='js/sdm.js'></script>
+	-->
+    </head>
+<body onresize="resizeAllPanel()" onload="resizeAllPanel()">
+<div id="owl-content" class="owl-container bg-white full-height">
+	<div id="header" class="header-content">
+		<div class="container-fluid relative">
+			<div class="pull-left full-height visible-sm visible-xs">
+				<div class="header-inner">
+					<!--
+					<a class="btn-link visible-sm-inline-block visible-xs-inline-block" onclick="displayMainMenu()">
+						<i class="icon-set-dark menu-hambuger"></i>
+					</a>
+					-->
+				</div>
+				
+			</div>
+			<div class="pull-left full-height visible-sm visible-xs">
+				<div class="header-inner">
+					<div class="brandleft p-l-10">
+						<span class="icon-set-logo-dark title-apps"></span>
+					</div>
+				</div>
+			</div>
+			
+			<div class="pull-center">
+				<div class="header-inner">
+					<div class="brand">
+						<!-- Brand Middle -->
+					</div>
+				</div>
+			</div>
+			<div class="pull-right full-height visible-sm visible-xs">
+				<div class="header-inner">
+					<a class="btn-link visible-sm-inline-block visible-xs-inline-block" onclick="menuside_start();Check_tabel('loginonfo');Check_tabel('menumobile');">
+						<img src="images/synchronize.png" class="submenuIcon m-r-0">
+					</a>
+				</div>
+			</div>
+		</div>
+	</div>
+	<div id="owl-content-wrapper" class="owl-content-wrapper home-wrap">
+		<div id="content" class="content">
+			<div class="col-xl-12 col-lg-12  col-sm-12 col-xs-12" id="home" style="padding:10px 0px 50px 0px;left:0px;top: 55px;overflow: scroll;position:fixed;bottom:0px;">
+				
+			</div>
+		</div>
+	</div>	 
+	<div id="footerhome" class="footer-content">
+		<div class="footer-nav">
+			<a class="col-xl-3 col-lg-3 col-sm-3 col-xs-3 no-padding home-menu hm_gray active">
+				<div class='icon_home imghome auto-margin bottom-nav'></div>
+			</a>
+			<a class="col-xl-4 col-lg-3 col-sm-3 col-xs-3 no-padding home-menu hm_gray " href="map.html">
+				<div class='icon_home imgpin auto-margin bottom-nav'></div>
+			</a>
+			<a class="col-xl-3 col-lg-3 col-sm-3 col-xs-3 no-padding home-menu hm_gray" href="graphic.html" >
+				<div class='icon_home imgconnection auto-margin bottom-nav'></div>
+			</a>
+			<a class="col-xl-3 col-lg-3 col-sm-3 col-xs-3 no-padding home-menu hm_gray " onclick="openprofile();">
+				<div class='icon_home imgakun auto-margin bottom-nav'></div>
+			</a>
+		</div>
+	</div>
+</div>
+<div id='detailmenu'></div>
+
+<div class="progress">
+	<img src="images/loading_owl.gif" height="50px">
+</div>
+
+<div id="lihatlog">
+	<div id="lihatlogdata" >
+		<!-- console log -->
+	</div>
+</div>
+<!-- 
+<div id="touchSideSwipe" class="touch-side-swipe">
+<!-- header NEW author Atwal Arifin
+<nav id="owl-sidebar" class="owl-sidebar " data-pages="sidebar">
+	<div class="sidebar-header">
+		<img src="img/logo.png" class="mainmenulogo m-l-20 m-t-20">
+		<div class="sidebar-header-controls pull-right">
+			<a class="btn-link margin-5 icon-set-dark menu-times m-r-10 m-t-10" onclick="closeMainMenu()"></a>
+		</div>
+	</div>
+	<br>
+	<div class="clearfix"></div>
+	<div class="sidebar-menu p-t-20" >
+		<ul id="identity" class="menu-content">
+			<li id="nama_user" class="list-menuside"></li>
+			<li id="lokasi_user" class="list-menuside"></li>
+		</ul>
+		<ul id="allmenu" class="menu-content">
+			<li class="list-menuside">
+				<span onclick="frame_panel('panelLogin','{login}',this);" newfunction="getLoginInfo" data-param=""><i class="icon-set menu-login"></i><label id="lblmenulogin"><label></span>
+			</li>
+			<li class="list-menuside">
+				<span onclick="closeAllPanel();getUserMenu();closeMainMenu();">
+				<i class="icon-set menu-home"></i><label id="lblmenuutama"><label></span>
+			</li>
+			<li class="list-menuside">
+				<script>document.write('<span newfunction="writeVersion" data-param="'+sessionStorage.version+'" onclick="frame_panel(\'about\',\'{about}\',this);"><i class="icon-set menu-info"></i><label id="lblmenuabout"><label></span>');</script>
+			</li>
+		</ul>
+		<ul class="menu-content">
+			<li class="list-menuside"><span class='pull-left' onclick="logout()"><i class="icon-set menu-quit"></i>Logout</span></li>
+		</ul>
+		<div class="clearfix"></div>
+	</div>
+</nav>
+
+</div> -->
+</body>
+	<script type="text/javascript" src="js/touch-sideswipe.js"></script>
+    <script type="text/javascript">
+		//* detect CSS text-shadow support in JavaScript
+		function onDeviceReadySwipe() {
+			menuside_start();
+			//Check_tabel('loginonfo');
+			//Check_tabel('menumobile');
+			var config = {
+				elementID: 'touchSideSwipe',
+				elementWidth: 400, //px
+				elementMaxWidth: 0.8, // *100%
+				sideHookWidth: 44, //px
+				moveSpeed: 0.2, //sec
+				opacityBackground: 0.8,
+				shiftForStart: 50, // px
+				windowMaxWidth: 1024, // px
+			}
+			var touchSideSwipe = new TouchSideSwipe(config);
+			var langNode = document.getElementById('language');
+			scaningScriptJava(langNode);
+			//create_identity();
+		}
+		function onDeviceReadyOld() {
+			menuside_start();
+			//Check_tabel('loginonfo');
+			//Check_tabel('menumobile');
+			var langNode = document.getElementById('language');
+			scaningScriptJava(langNode);
+			//create_identity();
+			//notifAlert('Your android version is too old','{perhatian}');
+		}
+		/*if (document.createElement("detect").style.animationName !== undefined) {
+			//document.addEventListener("deviceready", onDeviceReady,false);
+			document.addEventListener("DOMContentLoaded", onDeviceReadySwipe,false);
+		}else{
+			//document.addEventListener("deviceready", onDeviceReadyOld,false);
+		}*/
+		document.addEventListener("DOMContentLoaded", onDeviceReadyOld,false);
+		
+    </script>
+	<script id="myscript" type="text/javascript" src=""></script>
+	<script src="signature/js/signature_pad.js"></script>
+	<script src="signature/js/app.js"></script>
+</html>

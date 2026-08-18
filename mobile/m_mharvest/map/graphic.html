@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="format-detection" content="telephone=no" />
+    <meta name="msapplication-tap-highlight" content="no" />
+    <meta name="viewport" content="user-scalable=no, initial-scale=1, maximum-scale=1, minimum-scale=1, width=device-width" />
+	<meta http-equiv=“Content-Security-Policy” content=“default-src ‘self’ gap://ready file://* *; style-src ‘self’ ‘unsafe-inline’; script-src ‘self’ ‘unsafe-inline’ ‘unsafe-eval’”/>
+    <title>OWL Mobile</title>
+    <script type="text/javascript" src="cordova.js"></script>
+	
+    <link rel="stylesheet" href="style/owlMobile.css" type="text/css"/>
+	<link rel="stylesheet" href="style/owlMobilePlus.css" type="text/css"/>
+	<link rel="stylesheet" href="style/owlMobileGrid.css" type="text/css"/>
+    <link rel="stylesheet" href="style/calendar-mobile.css" type="text/css"/>
+	<link rel="stylesheet" href="style/slidetouch.css">
+	<link rel="stylesheet" href="signature/css/signature-pad.css">
+	<link rel="stylesheet" href="font-awesome/css/font-awesome.css">
+	<script type="text/javascript" src="js/notification.js"></script>
+	<script type="text/javascript" src="js/connection.js"></script>
+	<script type="text/javascript" src="js/generate_md5.js"></script>
+    <script type="text/javascript" src='js/owlMobile.js'></script>
+    <script type="text/javascript" src='js/mobileTransaction.js'></script>
+    <script type="text/javascript" src='js/backgroundmode.js'></script>
+	<script type="text/javascript" src='js/syn.js'></script>
+    <script type="text/javascript" src='js/calendar-mobile.js'></script>
+    <script type="text/javascript" src='js/chart/Chart.js'></script>
+    </head>
+<body onresize="resizeAllPanel()" onload="resizeAllPanel()">
+<div id="owl-content" class="owl-container bg-white full-height">
+	<div id="header" class="header-content">
+		<div class="container-fluid relative">
+			<div class="pull-left full-height visible-sm visible-xs">
+				<div class="header-inner">
+					<!--
+					<a class="btn-link visible-sm-inline-block visible-xs-inline-block" onclick="displayMainMenu()">
+						<i class="icon-set-dark menu-hambuger"></i>
+					</a>
+					-->
+				</div>
+				
+			</div>
+			<div class="pull-left full-height visible-sm visible-xs">
+				<div class="header-inner">
+					<div class="brandleft p-l-10">
+						<span class="icon-set-logo-dark title-apps"></span>
+					</div>
+				</div>
+			</div>
+			
+			<div class="pull-center">
+				<div class="header-inner">
+					<div class="brand">
+						<!-- Brand Middle -->
+					</div>
+				</div>
+			</div>
+			<div class="pull-right full-height visible-sm visible-xs">
+				<div class="header-inner">
+					<a class="btn-link visible-sm-inline-block visible-xs-inline-block" onclick="menuside_start();Check_tabel('loginonfo');Check_tabel('menumobile');">
+						<img src="images/synchronize.png" class="submenuIcon m-r-0">
+					</a>
+				</div>
+			</div>
+		</div>
+	</div>
+	<div id="owl-content-wrapper" class="owl-content-wrapper home-wrap">
+		<div id="content" class="content">
+			<div class="col-xl-12 col-lg-12  col-sm-12 col-xs-12" id="home" style="padding:10px 0px 50px 0px;left:0px;top: 55px;overflow: scroll;position:fixed;bottom:0px;">
+				
+			</div>
+		</div>
+	</div>	 
+	<div id="footerhome" class="footer-content">
+		<div class="footer-nav">
+			<a class="col-xl-3 col-lg-3 col-sm-3 col-xs-3 no-padding home-menu hm_gray" href="index.html">
+				<div class='icon_home imghome auto-margin bottom-nav'></div>
+			</a>
+			<a class="col-xl-4 col-lg-3 col-sm-3 col-xs-3 no-padding home-menu hm_gray " href="map.html">
+				<div class='icon_home imgpin auto-margin bottom-nav'></div>
+			</a>
+			<a class="col-xl-3 col-lg-3 col-sm-3 col-xs-3 no-padding home-menu hm_gray active" >
+				<div class='icon_home imgconnection auto-margin bottom-nav'></div>
+			</a>
+			<a class="col-xl-3 col-lg-3 col-sm-3 col-xs-3 no-padding home-menu hm_gray " onclick="openprofile();">
+				<div class='icon_home imgakun auto-margin bottom-nav'></div>
+			</a>
+		</div>
+	</div>
+</div>
+<div id='detailmenu'></div>
+
+<div class="progress">
+	<img src="images/loading_owl.gif" height="50px">
+</div>
+
+<div id="lihatlog">
+	<div id="lihatlogdata" >
+		<!-- console log -->
+	</div>
+</div>
+</body>
+	<script type="text/javascript" src="js/touch-sideswipe.js"></script>
+    <script type="text/javascript">
+		function onDeviceReadyOld() {
+			//menuside_start();
+			//Check_tabel('loginonfo');
+			//Check_tabel('menumobile');
+		}
+		document.addEventListener("DOMContentLoaded", onDeviceReadyOld,false);
+		
+    </script>
+	<script id="myscript" type="text/javascript" src=""></script>
+</html>
