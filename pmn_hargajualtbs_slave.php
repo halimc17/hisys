@@ -326,7 +326,7 @@ switch ($method) {
 		}
 		
 		
-		$limit = 10;
+		$limit = 20;
 		$page = 0;
 		if (isset($_POST['page'])) {
 			$page = $_POST['page'];

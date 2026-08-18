@@ -12,10 +12,33 @@ include('lib/zLib.php');
 $optunit=$optcustomer="<option value=''>".$_SESSION['lang']['pilihdata']."</option>"; 
 
 ## GET PERIODE
-$str="select * from ".$dbname.".organisasi where tipe='KEBUN' AND inti='1'";
-$res=fetchdata($str);
-foreach($res as $val){
-    $optunit.="<option value='".$val['kodeorganisasi']."'>".$val['kodeorganisasi']." - ".$val['namaorganisasi']."</option>"; 
+// $str="select * from ".$dbname.".organisasi where tipe='KEBUN' AND inti='1'";
+// $res=fetchdata($str);
+// foreach($res as $val){
+//     $optunit.="<option value='".$val['kodeorganisasi']."'>".$val['kodeorganisasi']." - ".$val['namaorganisasi']."</option>"; 
+// }
+
+## GET PT
+// $optunit='';
+$unit='';
+$arrUnit = getOrgDetail(23);
+foreach($arrUnit as $key=>$val){
+	$induk = makeOption($dbname, 'organisasi', 'kodeorganisasi,induk',"kodeorganisasi='".$key."'");
+	$d=$induk[$key];
+	if($d!=$n){			
+		$optunit.="<optgroup label='".$d." - ".getNamaOrg($d)."'>";
+	}
+	
+	// if($key==$_SESSION['empl']['lokasitugas']){
+	// 	$optunit.="<option value='".$key."' selected>".$key." - ".$val."</option>";	
+	// 	$unit=$key;
+	// }else{
+		$optunit.="<option value='".$key."'>".$key." - ".$val."</option>";			
+	// }
+	$n=$d;
+	if($d!=$n){			
+		$optunit.="</optgroup>";
+	}
 }
 
 $sql = selectQuery($dbname,"setup_parameterappl","*","kodeaplikasi='TB' and kodeparameter='TBTBS'");
@@ -118,7 +141,7 @@ OPEN_BOX('','');
 	";
 
     echo "
-    <div class=table-scroll style='height:50vh'>";
+    <div class=table-scroll style='height:80vh'>";
            echo " <table cellpadding=5 cellspacing=1 border=0 class=sortable >
             <thead>
                 <tr class=rowheader>
