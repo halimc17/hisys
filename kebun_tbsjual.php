@@ -28,10 +28,32 @@ $optunitro=$optcustomer=$optnokontrak="<option value=''>".$_SESSION['lang']['pil
 
 $nmsupplier=makeOption($dbname,'log_5supplier','supplierid,namasupplier');
 
-$str = "select * from ".$dbname.".organisasi where length(kodeorganisasi)=4 and tipe='KEBUN' and inti=1";
-$res=fetchdata($str);
-foreach($res as $bar){ 
-	@$optunit.="<option value='".$bar['kodeorganisasi']."'>".$bar['kodeorganisasi']."-".$bar['namaorganisasi']."</option>";
+// $str = "select * from ".$dbname.".organisasi where length(kodeorganisasi)=4 and tipe='KEBUN' and inti=1";
+// $res=fetchdata($str);
+// foreach($res as $bar){ 
+// 	@$optunit.="<option value='".$bar['kodeorganisasi']."'>".$bar['kodeorganisasi']."-".$bar['namaorganisasi']."</option>";
+// }
+
+
+$unit='';
+$arrUnit = getOrgDetail(23);
+foreach($arrUnit as $key=>$val){
+	$induk = makeOption($dbname, 'organisasi', 'kodeorganisasi,induk',"kodeorganisasi='".$key."'");
+	$d=$induk[$key];
+	if($d!=$n){			
+		$optunit.="<optgroup label='".$d." - ".getNamaOrg($d)."'>";
+	}
+	
+	// if($key==$_SESSION['empl']['lokasitugas']){
+	// 	$optunit.="<option value='".$key."' selected>".$key." - ".$val."</option>";	
+	// 	$unit=$key;
+	// }else{
+		$optunit.="<option value='".$key."'>".$key." - ".$val."</option>";			
+	// }
+	$n=$d;
+	if($d!=$n){			
+		$optunit.="</optgroup>";
+	}
 }
 
 $str = "select * from ".$dbname.".organisasi where length(kodeorganisasi)=4 and tipe='KANWIL' or tipe='HOLDING' and inti=1 and induk!=''";
@@ -40,11 +62,11 @@ foreach($res as $bar){
 	@$optunitro.="<option value='".$bar['kodeorganisasi']."'>".$bar['kodeorganisasi']."-".$bar['namaorganisasi']."</option>";
 }
 
-// $str = "select * from ".$dbname.".pmn_4customer";
-// $res=fetchdata($str);
-// foreach($res as $bar){ 
-// 	@$optcustomer.="<option value='".$bar['kodecustomer']."'>".$bar['kodecustomer']."-".$bar['namacustomer']."</option>";
-// }
+$str = "select * from ".$dbname.".pmn_4customer";
+$res=fetchdata($str);
+foreach($res as $bar){ 
+	@$optcustomer.="<option value='".$bar['kodecustomer']."'>".$bar['kodecustomer']."-".$bar['namacustomer']."</option>";
+}
 
 $str = "select nokontrak,nokontrak_manual from ".$dbname.".pmn_kontrakjual where tanggalberlaku>=CURDATE() order by tanggalkontrak";
 $res=fetchdata($str);

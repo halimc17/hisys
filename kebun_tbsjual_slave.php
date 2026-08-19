@@ -232,7 +232,7 @@ switch($method){
 			$where.=" and kodecustomer like '%".$param['kodecustomersch']."%'";
 		}
 		
-		$limit = 15;
+		$limit = 20;
 		$page = 0;
 		if (isset($_POST['page'])) {
 			$page = $_POST['page'];
@@ -243,18 +243,17 @@ switch($method){
 		
 		$offset = $page * $limit;
 		// $str = "select count(*) as jlhbrs from ".$dbname.".".$table." where ".$where." group by notransaksi  ";
-		$str = "select count(distinct(notransaksi)) as jlhbrs from ".$dbname.".".$table." where ".$where."  ";
+		$str = "select count(distinct(notransaksi)) as jlhbrs from ".$dbname.".".$table." where ".$where." and unit in (" . getOrgDetail(2) . ")";
         $res = $owlPDO->query($str) or die(print " Gagal: " . PDOException::getMessage());
         $res->setFetchMode(PDO::FETCH_ASSOC);
         while($bar = $res->fetch()){
             $jlhbrs = $bar['jlhbrs'];
 		}
+		
 		$colspan=12;
 		$no = 0;
 		$no=$maxdisplay;
-		$str = "select sum(kgnetto) as kgnetto,sum(totalrp) as totalrp,tanggal,tanggaltbs1,tanggaltbs2,kodecustomer,keteranganht,unit,notransaksi,posting,createby,postingby,createtime,postingtime from ".$dbname.".".$table." where ".$where."  group by notransaksi order by tanggal desc,notransaksi desc  limit " . $offset . "," . $limit . " ";
-			// echo $str;
-			// exit();
+		$str = "select sum(kgnetto) as kgnetto,sum(totalrp) as totalrp,tanggal,tanggaltbs1,tanggaltbs2,kodecustomer,keteranganht,unit,notransaksi,posting,createby,postingby,createtime,postingtime from ".$dbname.".".$table." where ".$where." and unit in (" . getOrgDetail(2) . ")  group by notransaksi order by tanggal desc,notransaksi desc  limit " . $offset . "," . $limit . " ";
 		$res=fetchdata($str);
 		foreach($res as $bar){
 			
