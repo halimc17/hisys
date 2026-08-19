@@ -112,6 +112,7 @@ $rtrcust=fetchData($strcust);
 foreach ($rtrcust as $key => $val) {
 	//$optsup.="<option value=".$val['kodecustomer'].">".$val['kodecustomer']." - ".$val['namacustomer']."</option>";
 }
+
 $optkategori="<option value=''></option>";
 $arrtipe=getEnum($dbname,'lgl_pengajuanspkht','kategori');
 foreach( $arrtipe as $key => $val){
@@ -125,6 +126,8 @@ foreach( $arrtipe as $key => $val){
 		}
 	}
 }
+
+$optjns="<option value=''>Pilih Data</option>";
 $arrtipe=getEnum($dbname,'lgl_pengajuanspkht','jenis');
 foreach( $arrtipe as $key => $val){
 	$optjns.="<option value=".$val.">".$val."</option>";

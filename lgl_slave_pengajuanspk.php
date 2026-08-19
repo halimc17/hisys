@@ -134,6 +134,7 @@ switch ($method) {
 		$optjns="<option value=''></option>";
 		$arrtipe=getEnum($dbname,'lgl_pengajuanspkht','jenis');
 		foreach( $arrtipe as $key => $val){
+			
 			if($_SESSION['empl']['tipelokasitugas'] == 'HOLDING'){
 				if($val=='HOLDING'){
 					$optjns.="<option value=".$val.">".$val."</option>";
@@ -1677,14 +1678,16 @@ switch ($method) {
 	}
 	break;
 	case'loaddata':
+
 	$where = "";
-	if($_SESSION['empl']['tipelokasitugas']=='HOLDING'){
-		$where.="";
-	}elseif($_SESSION['empl']['tipelokasitugas']=='KANWIL'){
-		$where.=" and pt = '".$_SESSION['empl']['kodeorganisasi']."'";
-	}else{
+	// if($_SESSION['empl']['tipelokasitugas']=='HOLDING'){
+	// 	$where.="";
+	// }elseif($_SESSION['empl']['tipelokasitugas']=='KANWIL'){
+	// 	$where.=" and pt = '".$_SESSION['empl']['kodeorganisasi']."'";
+	// }else{
 		$where.=" and unit in  (".getOrgDetail(2).")";
-	}
+	// }
+
 	if($projectsch!=''){
 		$where.=" and project like '%" . $projectsch . "%' ";
 	}
@@ -1707,7 +1710,7 @@ switch ($method) {
 		$where.=" and statuspersetujuan='".$statussch."' ";
 	}
 
-	$limit = 10;
+	$limit = 20;
 	$page = 0;
 	$_POST['page'] = isset($_POST['page']) ? $_POST['page'] : '0';
 	if (isset($_POST['page'])) {
@@ -1742,12 +1745,16 @@ switch ($method) {
 			if($a==1){
 				//$xx.=" style=background-color:#F5EEF8 ";
 			}
+			
 			$xxx='';
 			if($bar['statuspersetujuan']==3){
 				$xxx=" style=background-color:red ";
 			}
 			if($bar['statuspersetujuan']==1){
 				$xxx=" style=background-color:green ";
+			}
+			if($bar['statuspersetujuan']==0){
+				$xxx=" style=background-color:yellow ";
 			}
 
 			$sqlapp = "SELECT notransaksi FROM " . $dbname . ".approval where notransaksi='".$bar['notransaksi']."' and status='0'";
@@ -1782,15 +1789,26 @@ switch ($method) {
 			#$tab.="<td>" . $bar['perjanjianinduk'] . "</td>";
 			$tab.="<td align=right>".hidezerodecimal($resx[0]['nilai'])."</td>";
 
-			if($bar['pendukung']==1){$e="Hanya Pendukung";$q="style=background-color:yellow";}else{$q=$e="";}
+			if($bar['pendukung']==1){
+				$e="Hanya Pendukung";$q="style=background-color:yellow";
+			}else{
+				$q=$e="";
+			}
+
 			$tab.="<td hidden align=center ".$q.">".$e."</td>";
 
-			if($bar['close']==1){$e="\nCLOSE";$q="style=background-color:red";}else{$q=$e="";}
-			if($bar['statuspersetujuan']==0 and $bar['posting']==0){
-				$tab.="<td nowrap>Belum diajukan".$e."</td>";
+			if($bar['close']==1){
+				$e="\nCLOSE";$q="style=background-color:red";
 			}else{
-				$tab.="<td nowrap align=left ".$q." ".$xxx.">".$arrHsl[$bar['statuspersetujuan']]."".$e."</td>";
+				$q=$e="";
 			}
+			
+			if($bar['statuspersetujuan']==0 and $bar['posting']==0){
+				$tab.="<td align=center nowrap>Belum diajukan".$e."</td>";
+			}else{
+				$tab.="<td align=center nowrap align=left ".$q." ".$xxx.">".$arrHsl[$bar['statuspersetujuan']]."".$e."</td>";
+			}
+
 			$tab.="<td align=center>".$sttSpk."</td>";
 			$tab.="<td align=center style=cursor:pointer;color:blue;font-weight:bold; title=\"Click untuk melihat BAPP\" onclick=\"viewdetailbapp('".$optBapp[$optSpk[$bar['notransaksi']]]."','".$bar['unit']."','viewhtml','event')\">".$sttBapp."</td>";
 			$tab.="<td align=left>" . $nmkar[$bar['updateby']] . "</td>";
@@ -1873,6 +1891,15 @@ switch ($method) {
 			$hsl['notransaksiold'] 		= $bar['notransaksiold'];
 			$hsl['jlhhm']				= $bar['jlhhm'];
 		}
+
+		## Cek kategori jika orang HO tidak bisa edit SPK KEBUN, dan begitu juga kebalikan nya (Biar gak dikira bug)
+		if($hsl['kategori'] == 'LOKAL' and $_SESSION['empl']['tipelokasitugas'] == 'HOLDING' ){
+				exit("Warning: Lokasi tugas Holding tidak dapat edit SPK kategori Lokal ");
+		}	
+
+		if($hsl['kategori'] == 'PUSAT' and $_SESSION['empl']['tipelokasitugas'] != 'HOLDING' ){
+				exit("Warning: Lokasi tugas Holding tidak dapat edit SPK kategori Lokal ");
+		}	
 
 		$str="select * from ".$dbname.".lgl_pengajuanspkdt where notransaksi='".$notransaksi."' and tipe='rupiah' and nourut='1'";
 		$res = fetchdata($str);
