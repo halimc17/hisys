@@ -1111,6 +1111,7 @@ switch ($method) {
 		break;
 
 	case 'loaddata':
+
 		$where = "";
 		$kdorg = $_SESSION['empl']['kodeorganisasi'];
 		if ($notransaksicr != '') {
@@ -1126,13 +1127,13 @@ switch ($method) {
 			$where .= " and tanggal = '" . tanggalsystem($tglcr) . "'";
 		}
 
-		if ($_SESSION['empl']['tipelokasitugas'] == 'HOLDING') {
-			$where .= " and length(kodeorg)=4";
-		} else if ($_SESSION['empl']['tipelokasitugas'] == 'TRAKSI' or $_SESSION['empl']['tipelokasitugas'] == 'KANWIL') {
-			$where .= " and length(kodeorg)=4 and kodeorg in (select kodeorganisasi from " . $dbname . ".organisasi where induk = '" . $kdOrganisasi . "') ";
-		} else {
+		// if ($_SESSION['empl']['tipelokasitugas'] == 'HOLDING') {
+		// 	$where .= " and length(kodeorg)=4";
+		// } else if ($_SESSION['empl']['tipelokasitugas'] == 'TRAKSI' or $_SESSION['empl']['tipelokasitugas'] == 'KANWIL') {
+		// 	$where .= " and length(kodeorg)=4 and kodeorg in (select kodeorganisasi from " . $dbname . ".organisasi where induk = '" . $kdOrganisasi . "') ";
+		// } else {
 			$where .= " and kodeorg IN (" . getOrgDetail(2) . ")";
-		}
+		// }
 
 		$where .= " and nopengajuan in (select notransaksi from " . $dbname . ".lgl_pengajuanspkht where jenis not in ('PO/SO','BELITBS','JUALTBS'))";
 
@@ -1192,12 +1193,33 @@ switch ($method) {
 				
 				$statusLunas = "";
 				if ($totalTagihan == 0) {
-					$statusLunas = "<span style='color:gray;'>Belum Tagih</span>";
-				} else if ($totalBayar > 0 && $totalBayar >= $totalTagihan) {
-					$statusLunas = "<span style='color:green; font-weight:bold;'>Lunas</span>";
-				} else {
-					$statusLunas = "<span style='color:red; font-weight:bold;'>Belum Lunas</span>";
-				}
+
+						$statusLunas = "<span style='color:gray;'>Belum Tagih</span>";
+
+					} else {
+
+							$persentase = ($totalBayar / $totalTagihan) * 100;
+							$persentase = min($persentase, 100);
+
+							if ($totalBayar >= $totalTagihan && $totalBayar >= $val['nilaikontrak']) {
+
+									$statusLunas = "<span style='color:green; font-weight:bold;'>
+											Lunas (100%)
+									</span>";
+
+							} else if ($totalBayar > 0) {
+
+									$statusLunas = "<span style='color:orange; font-weight:bold;'>
+											Dibayar " . number_format($persentase, 0) . "%
+									</span>";
+
+							} else {
+
+									$statusLunas = "<span style='color:red; font-weight:bold;'>
+											Belum Lunas (0%)
+									</span>";
+							}
+					}
 
 				$tab .= "<tr class=rowcontent style='text-align:center'>
 					<td style='vertical-align:top'>" . $no . "</td>

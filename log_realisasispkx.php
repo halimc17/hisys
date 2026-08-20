@@ -18,19 +18,19 @@ OPEN_BOX('','<span class=judul>'.getMenu('log_realisasispkx').'</span><br>');
 
 ##Get Unit & Sub unit
 $where="";
-if($_SESSION['empl']['tipelokasitugas']=='HOLDING'){
-	$where.= " and length(kodeorg)=4";
-}else if($_SESSION['empl']['tipelokasitugas']=='TRAKSI' or $_SESSION['empl']['tipelokasitugas']=='KANWIL') {
-	$where.= " and length(kodeorg)=4 and kodeorg in (select kodeorganisasi from ".$dbname.".organisasi where induk = '".$kdOrganisasi."') ";
-} else {
-	$where.= " and kodeorg='".$_SESSION['empl']['lokasitugas']."'";
-}
+// if($_SESSION['empl']['tipelokasitugas']=='HOLDING'){
+// 	$where.= " and length(kodeorg)=4";
+// }else if($_SESSION['empl']['tipelokasitugas']=='TRAKSI' or $_SESSION['empl']['tipelokasitugas']=='KANWIL') {
+// 	$where.= " and length(kodeorg)=4 and kodeorg in (select kodeorganisasi from ".$dbname.".organisasi where induk = '".$kdOrganisasi."') ";
+// } else {
+// 	$where.= " and kodeorg='".$_SESSION['empl']['lokasitugas']."'";
+// }
 
-$str="select distinct(kodeorg) as kodeorg from ".$dbname.".log_spkht where 1=1 ".$where." order by kodeorg asc";
+$str="select distinct(kodeorg) as kodeorg from ".$dbname.".log_spkht where 1=1 and kodeorg in (".getOrgDetail('2').") order by kodeorg asc";
 $res=fetchdata($str);
 $optunit="<option value=''>".$_SESSION['lang']['all']."</option>";
 foreach($res as $val){
-	$optunit.="<option value='".$val['kodeorg']."'>".$val['kodeorg']."</option>";
+	$optunit.="<option value='".$val['kodeorg']."'>".$val['kodeorg']." - ".getNamaOrg($val['kodeorg'])."</option>";
 }
 
 echo"<div id=action_list>
