@@ -740,7 +740,7 @@ switch($proses){
 				a.jjg, a.kgwb, a.kgwbnetto, a.bjr, a.brondolan, a.totalkg, a.kgbjr, c.kodeorg, c.tanggal as tglspb, c.posting
 				FROM $dbname.kebun_spbdt a JOIN $dbname.".$dbaseblok." b on a.blok = b.indukblok and b.tahuntanam <= (".(intval(date('Y'))-3).") and b.tahuntanam!='0'
 				JOIN $dbname.kebun_spbht c on a.nospb = c.nospb
-				WHERE 1=1 and ($tahun-b.tahuntanam)>=3 ".$where1." ".$whereKodeOrg." ".$whereblok."";
+				WHERE 1=1 and ($tahun-b.tahuntanam)>=3 and b.luasareaproduktif>0 ".$where1." ".$whereKodeOrg." ".$whereblok."";
 		$res = fetchdata($str);
 		$nospbx = $divisix = $blokx = $indukblokx = $thntnmx = $luasblokx = $klaslahanx = $tglpanenx = $tglpanenindk = array();
 		$sesix = $notphx = $pemanenx = array();
