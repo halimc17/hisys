@@ -80,7 +80,8 @@ if (isTransactionPeriod()) //check if transaction period is normal
 
 	$kurs = 1; // default untuk kurs sebagai pengali
 	$kodept = '';
-	$str = "select kodeorg,kurs,matauang,addcost as ongkosangkutan,pbbkb from " . $dbname . ".log_poht where nopo='" . $nopo . "'";
+	$kodeunit = '';
+	$str = "select kodeorg,kurs,matauang,addcost as ongkosangkutan,pbbkb,kodeunit from " . $dbname . ".log_poht where nopo='" . $nopo . "'";
 	$res = $owlPDO->query($str) or die(print " Gagal: " . PDOException::getMessage());
 	$res->setFetchMode(PDO::FETCH_OBJ);
 	$matauang = '';
@@ -90,6 +91,7 @@ if (isTransactionPeriod()) //check if transaction period is normal
 		$matauang = str_replace(" ", "", $bar->matauang);
 		$ongAngkut = $bar->ongkosangkutan * $bar->kurs;
 		$pbbkb = $bar->pbbkb * $bar->kurs;
+		$kodeunit = $bar->kodeunit;
 	}
 
 	/*$str2="select hargasatuan,jumlahpesan,satuan,matauang,kodebarang from ".$dbname.".log_podt where 
@@ -334,9 +336,12 @@ if (isTransactionPeriod()) //check if transaction period is normal
 		try {
 			$owlPDO->exec($str); //insert hedaer
 
-			$subgdg = explode('/', $nopo);
+			// $subgdg = explode('/', $nopo);
+			// $countApp = getCountApproval('GR', $subgdg[4]);
 
-			$countApp = getCountApproval('GR', $subgdg[4]);
+			$subgdg = $kodeunit;
+			$countApp = getCountApproval('GR', $kodeunit);
+
 			// exit("Error:".$countApp);
 			for ($i = 1; $i <= $countApp; $i++) {
 				$str = "insert into " . $dbname . ".approval (notransaksi,jenispersetujuan,level,karyawanid,status) values ('" . $nodok . "','GR','" . $i . "','" . $_POST['persetujuan' . $i] . "','0')";
