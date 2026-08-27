@@ -51,6 +51,7 @@ $wherePnn = "";
 $whereBKM = "";
 $whereBMTBS = "";
 $whereTRAKSI = "";
+$whereTRAKSISPL = "";
 $whereSDM = "";
 
 
@@ -65,6 +66,7 @@ if ($param['div'] != "") {
 	$whereBKM .= " and (a.kodeorg like '" . $param['div'] . "%' or b.subbagian = '" . $param['div'] . "') ";
 	$whereBMTBS .= " and (a.divisi like '" . $param['div'] . "%' or b.subbagian = '" . $param['div'] . "') ";
 	$whereTRAKSI .= " and (a.kodeorg like '" . $param['div'] . "%' or b.subbagian = '" . $param['div'] . "%')";
+	$whereTRAKSISPL .= " and c.divisi like '" . $param['div'] . "%'";
 	$whereSDM .= " and (a.kodeorg like '" . $param['div'] . "%' or b.subbagian = '" . $param['div'] . "%')";
 }
 
@@ -74,6 +76,7 @@ if ($param['unit'] != "") {
 	$whereBKM .= " and (a.unit LIKE '" . $param['unit'] . "%' or b.lokasitugas = '" . $param['unit'] . "')";
 	$whereBMTBS .= " and (a.kodeorg LIKE '" . $param['unit'] . "%' or b.lokasitugas = '" . $param['unit'] . "')";
 	$whereTRAKSI .= " and (a.kodeorg LIKE '" . $param['unit'] . "%' or b.lokasitugas = '" . $param['unit'] . "')";
+	$whereTRAKSISPL .= " and c.kodeorg LIKE '" . $param['unit'] . "%'";
 	$whereSDM .= " and (a.kodeorg LIKE '" . $param['unit'] . "%' or b.lokasitugas = '" . $param['unit'] . "')";
 }
 
@@ -82,6 +85,7 @@ if ($param['tgl'] != "" && $param['tglx'] != "") {
 	$whereBKM .= " and a.tanggal between '" . tanggalsystemn($param['tgl']) . "' and '" . tanggalsystemn($param['tglx']) . "'";
 	$whereBMTBS .= " and a.tanggal between '" . tanggalsystemn($param['tgl']) . "' and '" . tanggalsystemn($param['tglx']) . "'";
 	$whereTRAKSI .= " and a.tanggal between '" . tanggalsystemn($param['tgl']) . "' and '" . tanggalsystemn($param['tglx']) . "'";
+	$whereTRAKSISPL .= " and c.tanggal between '" . tanggalsystemn($param['tgl']) . "' and '" . tanggalsystemn($param['tglx']) . "'";
 	$whereSDM .= " and a.tanggal between '" . tanggalsystemn($param['tgl']) . "' and '" . tanggalsystemn($param['tglx']) . "'";
 }
 
@@ -281,6 +285,43 @@ foreach ($result as $val) {
 	$gtTRAKSI += $val['upah'] + $val['premi'];
 }
 
+## Ambil kegiatan traksi SPL
+$str = "SELECT a.nik, a.absensi, a.insentif as premi, a.umr as upah, jhk AS hk, c.divisi, kodekegiatan, tanggal, b.alokasi, a.hasilkerja
+		FROM {$dbname}.vhc_spl_kehadiran a
+    	LEFT JOIN {$dbname}.vhc_spl_prestasi b on a.notransaksi = b.notransaksi
+    		AND a.nik = b.nik
+    		AND a.nourut = b.nourut
+    	LEFT JOIN {$dbname}.vhc_spl_aktifitas c on a.notransaksi = c.notransaksi
+		WHERE 1=1
+			{$whereTRAKSISPL}
+		ORDER BY kodekegiatan ASC,
+			b.alokasi ASC,
+			nik ASC
+		";
+$result = fetchData($str);
+foreach ($result as $val) {
+	$karyid = $val['nik'];
+	$tgl = $val['tanggal'];
+	$notrans = $val['notransaksi'];
+	$div = substr($val['divisi'], 0, 6);
+
+	$karyawan[$karyid][$tgl][$div] = $val['nik'];
+	$hk_traksi[$karyid][$tgl][$div] += $val['hk'];
+	$umr_traksi[$karyid][$tgl][$div] += $val['upah'];
+	$premi_traksi[$karyid][$tgl][$div] += $val['premi'];
+	$total_pertgl_traksi[$karyid][$tgl][$div] += $val['upah'] + $val['premi'];
+
+	$HK_TRAKSI[$karyid] += $val['hk'];
+	$RP_TRAKSI[$karyid] += $val['upah'];
+	$PREMI_TRAKSI[$karyid] += $val['premi'];
+	$totalTRAKSI[$karyid] += $val['upah'] + $val['premi'];
+
+	$gtottotalHK_TRAKSI	+= $val['hk'];
+	$gtottotalRP_TRAKSI	+= $val['upah'];
+	$gtottotalPREMI_TRAKSI	+= $val['premi'];
+	$gtTRAKSI += $val['upah'] + $val['premi'];
+}
+
 ## Kegiatan Umum
 $query = "select a.*, b.namakaryawan,b.subbagian from " . $dbname . ".sdm_absensidt a
 	left join datakaryawan b on a.karyawanid=b.karyawanid
@@ -357,6 +398,8 @@ if ($tabMode == 'all') {
 	$view .= "<th align=center colspan=4>KEGIATAN BM TBS</th>";
 	$view .= "<th align=center colspan=4>KEGIATAN TRAKSI</th>";
 	$view .= "<th align=center colspan=4>KEGIATAN UMUM</th>";
+	$view .= "<th align=center rowspan=3>TOTAL UPAH</th>";
+	$view .= "<th align=center rowspan=3>TOTAL PREMI</th>";
 	$view .= "<th align=center rowspan=3>TOTAL</th>";
 	$view .= "</tr><tr class=rowheader>";
 }
@@ -436,6 +479,7 @@ $view .= "</thead>";
 $view .= "<tbody>";
 $subtotal = array();
 $GTtotal = array();
+$totalPremiUpah = array();
 $no = 0;
 $adaData = false;
 if (count($karyawan) > 0) {
@@ -488,30 +532,42 @@ if (count($karyawan) > 0) {
 					$nilaiRow[] = $rpbrondolan[$karykey][$tglbkmx][$divisi_key];
 					$nilaiRow[] = $dendapanen[$karykey][$tglbkmx][$divisi_key];
 					$nilaiRow[] = $totalrppanen[$karykey][$tglbkmx][$divisi_key];
+
+					$totalPremiUpah[$karykey][$tglbkmx][$divisi_key]['upah'] += $rphkbuahbesar[$karykey][$tglbkmx][$divisi_key] + $rphkbuahkecil[$karykey][$tglbkmx][$divisi_key];
+					$totalPremiUpah[$karykey][$tglbkmx][$divisi_key]['premi'] += $totalpremipanen[$karykey][$tglbkmx][$divisi_key];
 				}
 				if ($tabMode == 'all' || $tabMode == 'rawat') {
 					$nilaiRow[] = $hk_rawat[$karykey][$tglbkmx][$divisi_key];
 					$nilaiRow[] = $umr_rawat[$karykey][$tglbkmx][$divisi_key];
 					$nilaiRow[] = $premi_rawat[$karykey][$tglbkmx][$divisi_key];
 					$nilaiRow[] = $total_pertgl_rawat[$karykey][$tglbkmx][$divisi_key];
+
+					$totalPremiUpah[$karykey][$tglbkmx][$divisi_key]['upah'] += $umr_rawat[$karykey][$tglbkmx][$divisi_key];
+					$totalPremiUpah[$karykey][$tglbkmx][$divisi_key]['premi'] += $premi_rawat[$karykey][$tglbkmx][$divisi_key];
 				}
 				if ($tabMode == 'all' || $tabMode == 'bmtbs') {
 					$nilaiRow[] = $hk_bmtbs[$karykey][$tglbkmx][$divisi_key];
 					$nilaiRow[] = $umr_bmtbs[$karykey][$tglbkmx][$divisi_key];
 					$nilaiRow[] = $premi_bmtbs[$karykey][$tglbkmx][$divisi_key];
 					$nilaiRow[] = $total_pertgl_bmtbs[$karykey][$tglbkmx][$divisi_key];
+					$totalPremiUpah[$karykey][$tglbkmx][$divisi_key]['upah'] += $umr_bmtbs[$karykey][$tglbkmx][$divisi_key];
+					$totalPremiUpah[$karykey][$tglbkmx][$divisi_key]['premi'] += $premi_bmtbs[$karykey][$tglbkmx][$divisi_key];
 				}
 				if ($tabMode == 'all' || $tabMode == 'traksi') {
 					$nilaiRow[] = $hk_traksi[$karykey][$tglbkmx][$divisi_key];
 					$nilaiRow[] = $umr_traksi[$karykey][$tglbkmx][$divisi_key];
 					$nilaiRow[] = $premi_traksi[$karykey][$tglbkmx][$divisi_key];
 					$nilaiRow[] = $total_pertgl_traksi[$karykey][$tglbkmx][$divisi_key];
+					$totalPremiUpah[$karykey][$tglbkmx][$divisi_key]['upah'] += $umr_traksi[$karykey][$tglbkmx][$divisi_key];
+					$totalPremiUpah[$karykey][$tglbkmx][$divisi_key]['premi'] += $premi_traksi[$karykey][$tglbkmx][$divisi_key];
 				}
 				if ($tabMode == 'all' || $tabMode == 'umum') {
 					$nilaiRow[] = $hk_sdm[$karykey][$tglbkmx][$divisi_key];
 					$nilaiRow[] = $umr_sdm[$karykey][$tglbkmx][$divisi_key];
 					$nilaiRow[] = $premi_sdm[$karykey][$tglbkmx][$divisi_key];
 					$nilaiRow[] = $total_pertgl_sdm[$karykey][$tglbkmx][$divisi_key];
+					$totalPremiUpah[$karykey][$tglbkmx][$divisi_key]['upah'] += $umr_sdm[$karykey][$tglbkmx][$divisi_key];
+					$totalPremiUpah[$karykey][$tglbkmx][$divisi_key]['premi'] += $premi_sdm[$karykey][$tglbkmx][$divisi_key];
 				}
 
 				$adaNilai = false;
@@ -601,6 +657,11 @@ if (count($karyawan) > 0) {
 				if ($tabMode == 'all' || $tabMode == 'traksi') $totalRow += $total_pertgl_traksi[$karykey][$tglbkmx][$divisi_key];
 				if ($tabMode == 'all' || $tabMode == 'umum') $totalRow += $total_pertgl_sdm[$karykey][$tglbkmx][$divisi_key];
 
+				if ($tabMode == 'all') {
+					$view .= "<td align=right>" . number_format($totalPremiUpah[$karykey][$tglbkmx][$divisi_key]['upah'], 2) . "</td>";
+					$view .= "<td align=right>" . number_format($totalPremiUpah[$karykey][$tglbkmx][$divisi_key]['premi'], 2) . "</td>";
+				}
+
 				$view .= "<td align=right>" . number_format($totalRow, 2) . "</td>";
 				$view .= "</tr>";
 
@@ -645,6 +706,8 @@ if (count($karyawan) > 0) {
 					'hk_sdm' => $hk_sdm[$karykey][$tglbkmx][$divisi_key],
 					'umr_sdm' => $umr_sdm[$karykey][$tglbkmx][$divisi_key],
 					'premi_sdm' => $premi_sdm[$karykey][$tglbkmx][$divisi_key],
+					'allupah' => $totalPremiUpah[$karykey][$tglbkmx][$divisi_key]['upah'],
+					'allpremi' => $totalPremiUpah[$karykey][$tglbkmx][$divisi_key]['premi'],
 					'total_sdm' => $total_pertgl_sdm[$karykey][$tglbkmx][$divisi_key]
 				);
 
@@ -724,6 +787,11 @@ if (count($karyawan) > 0) {
 				if ($tabMode == 'all' || $tabMode == 'traksi') $subTotalRow += $subtotal[$karykey][$divisi_key]['total_traksi'];
 				if ($tabMode == 'all' || $tabMode == 'umum') $subTotalRow += $subtotal[$karykey][$divisi_key]['total_sdm'];
 
+				if ($tabMode == 'all') {
+					$view .= "<td align=center>" . number_format($subtotal[$karykey][$divisi_key]['allupah'], 2) . "</td>";
+					$view .= "<td align=center>" . number_format($subtotal[$karykey][$divisi_key]['allpremi'], 2) . "</td>";
+				}
+
 				$view .= "<td align=center>" . number_format($subTotalRow, 2) . "</td>";
 				$view .= "</tr>";
 			}
@@ -798,6 +866,11 @@ if (count($karyawan) > 0) {
 			if ($tabMode == 'all' || $tabMode == 'bmtbs') $gtRow += $GTtotal[$karykey]['total_bmtbs'];
 			if ($tabMode == 'all' || $tabMode == 'traksi') $gtRow += $GTtotal[$karykey]['total_traksi'];
 			if ($tabMode == 'all' || $tabMode == 'umum') $gtRow += $GTtotal[$karykey]['total_sdm'];
+
+			if ($tabMode == 'all') {
+				$view .= "<td align=center>" . number_format($GTtotal[$karykey]['allupah'], 2) . "</td>";
+				$view .= "<td align=center>" . number_format($GTtotal[$karykey]['allpremi'], 2) . "</td>";
+			}
 
 			$view .= "<td align=center>" . number_format($gtRow, 2) . "</td>";
 			$view .= "</tr>";
