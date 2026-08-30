@@ -4236,7 +4236,16 @@ switch ($method) {
 			}
 
 
-			$jumlahkb = $jumlahkbppn = $jumlahtotalkb = 0;
+			$jumlahkb = $jumlahkbppn = $jumlahtotalkb = $jumlahkbgabungan = 0;
+			#= Setup khusus per PT (keu_5setuppenagihanpt) - kalau aktif, alokasi kasbank invoice ini
+			#= dicatat gabungan (tag 'GABUNGAN'), jadi perhitungan sisa di bawah juga harus digabung
+			$gabungPiutangKB2 = '0';
+			$strSetupOrgKB2 = "select gabungpiutang from " . $dbname . ".keu_5setuppenagihanpt where kodept='" . $bar['kodept'] . "' and (kodejenis='CIPP' or kodejenis='CITBS') and kodebarang='" . $bar['kodebarang'] . "'";
+			$resSetupOrgKB2 = fetchdata($strSetupOrgKB2);
+			if (!empty($resSetupOrgKB2)) {
+				$gabungPiutangKB2 = $resSetupOrgKB2[0]['gabungpiutang'];
+			}
+
 			// $strdt = "select sum(jumlah) as jumlah,keterangan3,notransaksi from " . $dbname . ".keu_kasbankdt where keterangan1='" . $bar['noinvoice'] . "' and keterangan3 NOT LIKE '%KAS%' group by keterangan3";
 			$strdt = "select sum(jumlah) as jumlah,keterangan3,notransaksi from " . $dbname . ".keu_kasbankdt where keterangan1='" . $bar['noinvoice'] . "' group by keterangan3";
 			// echo $strdt;
@@ -4250,6 +4259,9 @@ switch ($method) {
 				}
 				if ($bardt['keterangan3'] == 'PAJAKPPH') {
 					$jumlahkbpph = ($bardt['jumlah'] * -1);
+				}
+				if ($bardt['keterangan3'] == 'GABUNGAN') {
+					$jumlahkbgabungan = $bardt['jumlah'];
 				}
 				@$jumlahtotalkb += $bardt['jumlah'];
 				@$notransaksikb = $bardt['notransaksi'];
@@ -4273,10 +4285,17 @@ switch ($method) {
 			$bar['nilaippn'] = $bar['nilaippn'] - ($persenppn * $nilaiklaim);
 			$nilaitotalinv = $bar['nilaiinvoice'] + $bar['nilaippn'] - $bar['nilaipph'];
 
-			$sisadpp = $bar['nilaiinvoice'] - $jumlahkb;
-			$sisappn = $bar['nilaippn'] - $jumlahkbppn;
-			$sisapph = ($bar['nilaipph'] * -1) + $jumlahkbpph;
-			$sisatotal = $sisadpp + $sisappn - ($sisapph * -1);
+			if ($gabungPiutangKB2 == '1') {
+				$sisadpp = ($bar['nilaiinvoice'] + $bar['nilaippn'] - $bar['nilaipph']) - $jumlahkbgabungan;
+				$sisappn = 0;
+				$sisapph = 0;
+				$sisatotal = $sisadpp;
+			} else {
+				$sisadpp = $bar['nilaiinvoice'] - $jumlahkb;
+				$sisappn = $bar['nilaippn'] - $jumlahkbppn;
+				$sisapph = ($bar['nilaipph'] * -1) + $jumlahkbpph;
+				$sisatotal = $sisadpp + $sisappn - ($sisapph * -1);
+			}
 
 
 
@@ -4404,8 +4423,6 @@ switch ($method) {
 		$explnotransaksi = explode('/', $param['notransaksi']);
 		$param['kode'] = $explnotransaksi[2];
 
-
-
 		#= ambil nomor max
 		/*
 		$str = "select max(nourut) as nourut from ".$dbname.".".$tabledt." where  notransaksi='".$param['notransaksi']."'";
@@ -4442,7 +4459,14 @@ switch ($method) {
 			$noakunpph = $noparam[0];
 			$noaruspph = $noparam[1];
 
+			// ini kenapa kodebarang nagmbil nya dari BAST aja ?
 			$kodebarang = makeOption($dbname, "pmn_bast", "nokontrak,kodebarang", "nokontrak='{$param['nodok']}'")[$param['nodok']];
+
+			// Jika kodebarang BAST gak ada maka default nya saya kasih TBS
+			if($kodebarang == ''){
+				$kodebarang = '40000003';
+			}
+
 			$str = "select * from " . $dbname . ".keu_5jenispenagihandt where (kodejenis='CIPP' or kodejenis='CITBS') and kodebarang='" . $kodebarang . "'";
 			$res = fetchdata($str);
 			foreach ($res as $bar) {
@@ -4508,88 +4532,142 @@ switch ($method) {
 				}
 			}
 		}
-		if ($param['jumlahdt'] != '0') {
-			$param['keterangan3'] = "DPP";
-			$param['keterangan2'] = "DPP Invoice " . $param['keterangan1'] . "; nomor kontrak " . $param['nodok'] . "";
-
-			$str = "insert into " . $dbname . "." . $tabledt . "
-			(notransaksi,noakun,tipetransaksi,tanggal,jumlah,
-			noakun2a,kode,keterangan1,keterangan2,matauang,
-			kurs,kurs2,noaruskas,kodeorg,kodekegiatan,
-			kodeasset,nik,kodecustomer,kodesupplier,kodevhc,
-			orgalokasi,nodok,hutangunit1,pemilikhutang1,nourut,
-			keterangan3) 
-			values 
-			('" . $param['notransaksi'] . "','" . $param['noakundt'] . "','" . $param['tipetransaksi'] . "','" . $param['tanggal'] . "','" . $param['jumlahdt'] . "',
-			'" . $param['noakun'] . "','" . $param['kode'] . "','" . $param['keterangan1'] . "','" . $param['keterangan2'] . "','" . $param['matauang'] . "',
-			'" . $param['kurs'] . "','" . $param['kurs'] . "','" . $param['noaruskas'] . "','" . $param['kodeorg'] . "','" . $param['kodekegiatan'] . "',
-			'" . $param['kodeasset'] . "','" . $param['nik'] . "','" . $param['kodecustomer'] . "','" . $param['kodesupplier'] . "','" . $param['kodevhc'] . "',
-			'" . $param['orgalokasi'] . "','" . $param['nodok'] . "','" . $param['hutangunit1'] . "','" . $param['pemilikhutang1'] . "','" . $param['nourut'] . "',
-			'" . $param['keterangan3'] . "')";
-			// exit("Error:$str");
-			try {
-				$owlPDO->exec($str);
-			} catch (PDOException $e) {
-				print " Gagal  !: " . $e->getMessage() . "\n";
-				die();
+		#= Setup khusus per PT (keu_5setuppenagihanpt) - tabel yang sama dipakai di invoice posting
+		#= (keu_slave_penagihan.php): apakah alokasi DPP/PPN/PPh ke Piutang di kasbank ini digabung
+		#= jadi 1 baris, atau dipisah seperti biasa (default). Kalau tidak ada row/flag='0', jalur
+		#= lama (3 baris terpisah) tetap dipakai persis seperti sebelumnya, PT lain tidak terpengaruh.
+		$gabungPiutangKB = '0';
+		$rdataInvKB = fetchdata("select kodept, kodebarang from " . $dbname . ".keu_penagihanht where noinvoice='" . $param['keterangan1'] . "'");
+		if (!empty($rdataInvKB)) {
+			$strSetupOrgKB = "select gabungpiutang from " . $dbname . ".keu_5setuppenagihanpt where kodept='" . $rdataInvKB[0]['kodept'] . "' and (kodejenis='CIPP' or kodejenis='CITBS') and kodebarang='" . $rdataInvKB[0]['kodebarang'] . "'";
+			$resSetupOrgKB = fetchdata($strSetupOrgKB);
+			if (count($resSetupOrgKB) > 1) {
+				exit('warning : Setup keu_5setuppenagihanpt ganda untuk invoice ' . $param['keterangan1'] . ', silahkan hubungi IT.');
+			}
+			if (!empty($resSetupOrgKB)) {
+				$gabungPiutangKB = $resSetupOrgKB[0]['gabungpiutang'];
 			}
 		}
 
-		if ($param['jumlahdt2'] != '0') {
-			// $param['nourut']++;
-			$param['keterangan2'] = "PPN Keluaran Invoice " . $param['keterangan1'] . "; nomor kontrak " . $param['nodok'] . "";
-			$param['keterangan3'] = "PAJAKPPN";
-
-			$str = "insert into " . $dbname . "." . $tabledt . "
-			(notransaksi,noakun,tipetransaksi,tanggal,jumlah,
-			noakun2a,kode,keterangan1,keterangan2,matauang,
-			kurs,kurs2,noaruskas,kodeorg,kodekegiatan,
-			kodeasset,nik,kodecustomer,kodesupplier,kodevhc,
-			orgalokasi,nodok,hutangunit1,pemilikhutang1,nourut,
-			keterangan3) 
-			values 
-			('" . $param['notransaksi'] . "','" . $param['noakundt2'] . "','" . $param['tipetransaksi'] . "','" . $param['tanggal'] . "','" . $param['jumlahdt2'] . "',
-			'" . $param['noakun'] . "','" . $param['kode'] . "','" . $param['keterangan1'] . "','" . $param['keterangan2'] . "','" . $param['matauang'] . "',
-			'" . $param['kurs'] . "','" . $param['kurs'] . "','" . $param['noaruskas2'] . "','" . $param['kodeorg'] . "','" . $param['kodekegiatan'] . "',
-			'" . $param['kodeasset'] . "','" . $param['nik'] . "','" . $param['kodecustomer'] . "','" . $param['kodesupplier'] . "','" . $param['kodevhc'] . "',
-			'" . $param['orgalokasi'] . "','" . $param['nodok'] . "','" . $param['hutangunit1'] . "','" . $param['pemilikhutang1'] . "','',
-			'" . $param['keterangan3'] . "')";
-			// exit("Error:$str");
-			//".$param['nourut']."
-			try {
-				$owlPDO->exec($str);
-			} catch (PDOException $e) {
-				print " Gagal  !: " . $e->getMessage() . "\n";
-				die();
+		if ($gabungPiutangKB == '1') {
+			if (trim($param['noakundt']) == '') {
+				exit('warning : Noakun may not empty / Terdapat nomor akun piutang yang kosong untuk invoice ' . $param['keterangan1'] . ', silahkan cek setup akun terkait.');
 			}
-		}
+			#= Gabung DPP+PPN+PPh (PPh biasanya sudah bertanda negatif dari perhitungan sisapph)
+			#= jadi 1 baris kasbankdt saja, akun sama-sama pakai noakundt (piutang)
+			$jumlahGabungKB = $param['jumlahdt'] + $param['jumlahdt2'] + $param['jumlahdt3'];
+			if ($jumlahGabungKB < 0) {
+				exit('warning : Nilai piutang gabungan untuk invoice ' . $param['keterangan1'] . ' menjadi negatif (' . number_format($jumlahGabungKB, 2) . '), silahkan cek kembali nilai DPP/PPN/PPh.');
+			}
+			if ($jumlahGabungKB != '0') {
+				$param['keterangan3'] = "GABUNGAN";
+				$param['keterangan2'] = "Piutang (Gabungan DPP + PPN + PPh) Invoice " . $param['keterangan1'] . "; nomor kontrak " . $param['nodok'] . "";
 
-		if ($param['jumlahdt3'] != '0') {
-			// $param['nourut']++;
-			$param['keterangan2'] = "PPH Invoice " . $param['keterangan1'] . "; nomor kontrak " . $param['nodok'] . "";
-			$param['keterangan3'] = "PAJAKPPH";
+				$str = "insert into " . $dbname . "." . $tabledt . "
+				(notransaksi,noakun,tipetransaksi,tanggal,jumlah,
+				noakun2a,kode,keterangan1,keterangan2,matauang,
+				kurs,kurs2,noaruskas,kodeorg,kodekegiatan,
+				kodeasset,nik,kodecustomer,kodesupplier,kodevhc,
+				orgalokasi,nodok,hutangunit1,pemilikhutang1,nourut,
+				keterangan3)
+				values
+				('" . $param['notransaksi'] . "','" . $param['noakundt'] . "','" . $param['tipetransaksi'] . "','" . $param['tanggal'] . "','" . $jumlahGabungKB . "',
+				'" . $param['noakun'] . "','" . $param['kode'] . "','" . $param['keterangan1'] . "','" . $param['keterangan2'] . "','" . $param['matauang'] . "',
+				'" . $param['kurs'] . "','" . $param['kurs'] . "','" . $param['noaruskas'] . "','" . $param['kodeorg'] . "','" . $param['kodekegiatan'] . "',
+				'" . $param['kodeasset'] . "','" . $param['nik'] . "','" . $param['kodecustomer'] . "','" . $param['kodesupplier'] . "','" . $param['kodevhc'] . "',
+				'" . $param['orgalokasi'] . "','" . $param['nodok'] . "','" . $param['hutangunit1'] . "','" . $param['pemilikhutang1'] . "','" . $param['nourut'] . "',
+				'" . $param['keterangan3'] . "')";
+				try {
+					$owlPDO->exec($str);
+				} catch (PDOException $e) {
+					print " Gagal  !: " . $e->getMessage() . "\n";
+					die();
+				}
+			}
+		} else {
+			if ($param['jumlahdt'] != '0') {
+				$param['keterangan3'] = "DPP";
+				$param['keterangan2'] = "DPP Invoice " . $param['keterangan1'] . "; nomor kontrak " . $param['nodok'] . "";
 
-			$str = "insert into " . $dbname . "." . $tabledt . "
-			(notransaksi,noakun,tipetransaksi,tanggal,jumlah,
-			noakun2a,kode,keterangan1,keterangan2,matauang,
-			kurs,kurs2,noaruskas,kodeorg,kodekegiatan,
-			kodeasset,nik,kodecustomer,kodesupplier,kodevhc,
-			orgalokasi,nodok,hutangunit1,pemilikhutang1,nourut,
-			keterangan3) 
-			values 
-			('" . $param['notransaksi'] . "','" . $param['noakundt3'] . "','" . $param['tipetransaksi'] . "','" . $param['tanggal'] . "','" . $param['jumlahdt3'] . "',
-			'" . $param['noakun'] . "','" . $param['kode'] . "','" . $param['keterangan1'] . "','" . $param['keterangan2'] . "','" . $param['matauang'] . "',
-			'" . $param['kurs'] . "','" . $param['kurs'] . "','" . $param['noaruskas2'] . "','" . $param['kodeorg'] . "','" . $param['kodekegiatan'] . "',
-			'" . $param['kodeasset'] . "','" . $param['nik'] . "','" . $param['kodecustomer'] . "','" . $param['kodesupplier'] . "','" . $param['kodevhc'] . "',
-			'" . $param['orgalokasi'] . "','" . $param['nodok'] . "','" . $param['hutangunit1'] . "','" . $param['pemilikhutang1'] . "','',
-			'" . $param['keterangan3'] . "')";
-			// exit("Error:$str");
-			//".$param['nourut']."
-			try {
-				$owlPDO->exec($str);
-			} catch (PDOException $e) {
-				print " Gagal  !: " . $e->getMessage() . "\n";
-				die();
+				$str = "insert into " . $dbname . "." . $tabledt . "
+				(notransaksi,noakun,tipetransaksi,tanggal,jumlah,
+				noakun2a,kode,keterangan1,keterangan2,matauang,
+				kurs,kurs2,noaruskas,kodeorg,kodekegiatan,
+				kodeasset,nik,kodecustomer,kodesupplier,kodevhc,
+				orgalokasi,nodok,hutangunit1,pemilikhutang1,nourut,
+				keterangan3)
+				values
+				('" . $param['notransaksi'] . "','" . $param['noakundt'] . "','" . $param['tipetransaksi'] . "','" . $param['tanggal'] . "','" . $param['jumlahdt'] . "',
+				'" . $param['noakun'] . "','" . $param['kode'] . "','" . $param['keterangan1'] . "','" . $param['keterangan2'] . "','" . $param['matauang'] . "',
+				'" . $param['kurs'] . "','" . $param['kurs'] . "','" . $param['noaruskas'] . "','" . $param['kodeorg'] . "','" . $param['kodekegiatan'] . "',
+				'" . $param['kodeasset'] . "','" . $param['nik'] . "','" . $param['kodecustomer'] . "','" . $param['kodesupplier'] . "','" . $param['kodevhc'] . "',
+				'" . $param['orgalokasi'] . "','" . $param['nodok'] . "','" . $param['hutangunit1'] . "','" . $param['pemilikhutang1'] . "','" . $param['nourut'] . "',
+				'" . $param['keterangan3'] . "')";
+				// exit("Error:$str");
+				try {
+					$owlPDO->exec($str);
+				} catch (PDOException $e) {
+					print " Gagal  !: " . $e->getMessage() . "\n";
+					die();
+				}
+			}
+
+			if ($param['jumlahdt2'] != '0') {
+				// $param['nourut']++;
+				$param['keterangan2'] = "PPN Keluaran Invoice " . $param['keterangan1'] . "; nomor kontrak " . $param['nodok'] . "";
+				$param['keterangan3'] = "PAJAKPPN";
+
+				$str = "insert into " . $dbname . "." . $tabledt . "
+				(notransaksi,noakun,tipetransaksi,tanggal,jumlah,
+				noakun2a,kode,keterangan1,keterangan2,matauang,
+				kurs,kurs2,noaruskas,kodeorg,kodekegiatan,
+				kodeasset,nik,kodecustomer,kodesupplier,kodevhc,
+				orgalokasi,nodok,hutangunit1,pemilikhutang1,nourut,
+				keterangan3)
+				values
+				('" . $param['notransaksi'] . "','" . $param['noakundt2'] . "','" . $param['tipetransaksi'] . "','" . $param['tanggal'] . "','" . $param['jumlahdt2'] . "',
+				'" . $param['noakun'] . "','" . $param['kode'] . "','" . $param['keterangan1'] . "','" . $param['keterangan2'] . "','" . $param['matauang'] . "',
+				'" . $param['kurs'] . "','" . $param['kurs'] . "','" . $param['noaruskas2'] . "','" . $param['kodeorg'] . "','" . $param['kodekegiatan'] . "',
+				'" . $param['kodeasset'] . "','" . $param['nik'] . "','" . $param['kodecustomer'] . "','" . $param['kodesupplier'] . "','" . $param['kodevhc'] . "',
+				'" . $param['orgalokasi'] . "','" . $param['nodok'] . "','" . $param['hutangunit1'] . "','" . $param['pemilikhutang1'] . "','',
+				'" . $param['keterangan3'] . "')";
+				// exit("Error:$str");
+				//".$param['nourut']."
+				try {
+					$owlPDO->exec($str);
+				} catch (PDOException $e) {
+					print " Gagal  !: " . $e->getMessage() . "\n";
+					die();
+				}
+			}
+
+			if ($param['jumlahdt3'] != '0') {
+				// $param['nourut']++;
+				$param['keterangan2'] = "PPH Invoice " . $param['keterangan1'] . "; nomor kontrak " . $param['nodok'] . "";
+				$param['keterangan3'] = "PAJAKPPH";
+
+				$str = "insert into " . $dbname . "." . $tabledt . "
+				(notransaksi,noakun,tipetransaksi,tanggal,jumlah,
+				noakun2a,kode,keterangan1,keterangan2,matauang,
+				kurs,kurs2,noaruskas,kodeorg,kodekegiatan,
+				kodeasset,nik,kodecustomer,kodesupplier,kodevhc,
+				orgalokasi,nodok,hutangunit1,pemilikhutang1,nourut,
+				keterangan3)
+				values
+				('" . $param['notransaksi'] . "','" . $param['noakundt3'] . "','" . $param['tipetransaksi'] . "','" . $param['tanggal'] . "','" . $param['jumlahdt3'] . "',
+				'" . $param['noakun'] . "','" . $param['kode'] . "','" . $param['keterangan1'] . "','" . $param['keterangan2'] . "','" . $param['matauang'] . "',
+				'" . $param['kurs'] . "','" . $param['kurs'] . "','" . $param['noaruskas2'] . "','" . $param['kodeorg'] . "','" . $param['kodekegiatan'] . "',
+				'" . $param['kodeasset'] . "','" . $param['nik'] . "','" . $param['kodecustomer'] . "','" . $param['kodesupplier'] . "','" . $param['kodevhc'] . "',
+				'" . $param['orgalokasi'] . "','" . $param['nodok'] . "','" . $param['hutangunit1'] . "','" . $param['pemilikhutang1'] . "','',
+				'" . $param['keterangan3'] . "')";
+				// exit("Error:$str");
+				//".$param['nourut']."
+				try {
+					$owlPDO->exec($str);
+				} catch (PDOException $e) {
+					print " Gagal  !: " . $e->getMessage() . "\n";
+					die();
+				}
 			}
 		}
 

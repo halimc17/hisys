@@ -253,6 +253,7 @@ function loopsave(currRow, maxRow) {
             document.getElementById("nilaiinvoice").value = isdt[0];
             document.getElementById("nilaippn").value = isdt[1];
             document.getElementById("kuantitas").value = isdt[2];
+            document.getElementById("nilaipph").value = isdt[3];
             alert("Done");
             loaddatadetail();
           } else {
@@ -903,10 +904,17 @@ function fillField(noinv) {
             getnpwpunit(isis[49], isis[8]);
             setTimeout(() => {
               document.getElementById("tipeinvoice").value = isis[50];
-              getBarang("update", isis[47]);
+              getBarang("update", isis[47], isis[4]);
             }, 1000);
           }, 500);
-          document.getElementById("nilaipph").value = isis[51]; n
+          document.getElementById("nilaipph").value = isis[51];
+          tarks = document.getElementById("tipearuskasht");
+          for (a = 0; a < tarks.length; a++) {
+            if (tarks.options[a].value == isis[52]) {
+              tarks.options[a].selected = true;
+            }
+          }
+          document.getElementById("tipearuskashtold").value = isis[52];
         }
       } else {
         busy_off();
@@ -1668,6 +1676,44 @@ function updatefaktur(notrans, nofakturpajak) {
   }
 }
 
+function previewPostingJurnal(notrans) {
+  param = "noinvoice=" + notrans + "&proses=postingData&previewonly=1";
+  tujuan = "keu_slave_penagihan.php";
+  busy_on();
+  post_response_text(tujuan, param, respog);
+  function respog() {
+    if (con.readyState == 4) {
+      if (con.status == 200) {
+        busy_off();
+        if (!isSaveResponse(con.responseText)) {
+          alertify.alert("Informasi", con.responseText);
+        } else {
+          content =
+            "<div style='background-color:#FFFFFF;'>" +
+            con.responseText +
+            "</div>" +
+            "<div style='text-align:center;margin-top:10px;'>" +
+            "<button class=mybutton onclick=\"closeDialog5();postingData('" +
+            notrans +
+            "');\">Lanjutkan Posting</button>&nbsp;" +
+            "<button class=mybutton onclick=closeDialog5()>Batal</button>" +
+            "</div>";
+          showDialog5(
+            "Preview Jurnal - " + notrans,
+            content,
+            "700",
+            "auto",
+            "event"
+          );
+        }
+      } else {
+        busy_off();
+        error_catch(con.status);
+      }
+    }
+  }
+}
+
 function postingData(notrans) {
   param = "noinvoice=" + notrans + "&proses=postingData";
   tujuan = "keu_slave_penagihan.php";
@@ -2297,12 +2343,13 @@ function viewlistfile(ev, noinvoice) {
   }
 }
 
-function getBarang(ev = "insert", kodebarang = "") {
+function getBarang(ev = "insert", kodebarang = "", kodecustomer = "") {
   tipe = document.getElementById("tipeinvoice").value;
 
   param = "proses=getbarang&tipeinvoice=" + tipe;
   if (ev == "update") {
     param += "&kodebarang=" + kodebarang;
+    param += "&kodecustomer=" + (kodecustomer || document.getElementById("kodecustomer").value);
   }
 
   tujuan = "keu_slave_penagihan.php";
@@ -2323,9 +2370,11 @@ function getBarang(ev = "insert", kodebarang = "") {
           let nodokumen = document.getElementById("noorder");
 
           document.getElementById("berikat").disabled = false;
-          document.getElementById("berikat").checked = false;
-          document.getElementById("kuantitas").disabled = false;
-          document.getElementById("kuantitas").value = 0;
+          if (ev !== "update") {
+            document.getElementById("berikat").checked = false;
+            document.getElementById("kuantitas").disabled = false;
+            document.getElementById("kuantitas").value = 0;
+          }
           if (tipe == "OTPI") {
             nodokumen.removeAttribute("onclick");
             document.getElementById("jenis").disabled = true;
@@ -2337,13 +2386,15 @@ function getBarang(ev = "insert", kodebarang = "") {
           } else if (tipe == "FEM") {
             nodokumen.removeAttribute("onclick");
             document.getElementById("jenis").disabled = true;
-            document.getElementById("jenis").value = "";
             document.getElementById("jenisinvoice").disabled = true;
-            document.getElementById("jenisinvoice").value = "PL";
             document.getElementById("berikat").disabled = true;
-            document.getElementById("berikat").checked = false;
             document.getElementById("kuantitas").disabled = true;
-            document.getElementById("kuantitas").value = 1;
+            if (ev !== "update") {
+              document.getElementById("jenis").value = "";
+              document.getElementById("jenisinvoice").value = "PL";
+              document.getElementById("berikat").checked = false;
+              document.getElementById("kuantitas").value = 1;
+            }
           } else {
             nodokumen.setAttribute(
               "onclick",

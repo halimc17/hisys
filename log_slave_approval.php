@@ -661,6 +661,12 @@ switch ($method) {
 
                     $value = count($respo);
                 }
+                if ($key == 'KBPT') {
+                    $strpo = "select * from " . $dbname . ".approval where jenispersetujuan='KBPT' and karyawanid='" . $karyawanid . "' and status='0' group by notransaksi";
+                    $respo = fetchData($strpo);
+
+                    $value = count($respo);
+                }
                 if ($key == 'IJNSC') {
                     $strpo = "select * from " . $dbname . ".approval where jenispersetujuan='IJNSC' and karyawanid='" . $karyawanid . "' and status='0' group by notransaksi";
                     $respo = fetchData($strpo);
@@ -6114,6 +6120,9 @@ switch ($method) {
                 break;
             case 'IJNSC':
                 include "sdm_slave_approval_ijnsc.php";
+                break;
+            case 'KBPT':
+                include "pmn_slave_approval_kbpt.php";
                 break;
             case 'IJSC':
                 include "sdm_slave_approval_ijsc.php";

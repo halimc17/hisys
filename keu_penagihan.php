@@ -42,7 +42,7 @@ $sakun = $owlPDO->query("select distinct kodecustomer,namacustomer from " . $dbn
 $sakun->setFetchMode(PDO::FETCH_ASSOC);
 $optCust .= "<optgroup label='CUSTOMER'>";
 while ($rakun =  $sakun->fetch()) {
-	$optCust .= "<option value='" . $rakun['kodecustomer'] . "'>" . $rakun['kodecustomer'] . "-" . $rakun['namacustomer'] . "</option>";
+	$optCust .= "<option value='" . $rakun['kodecustomer'] . "'> [" . $rakun['kodecustomer'] . "] - " . $rakun['namacustomer'] . "</option>";
 }
 $optCust .= "</optgroup>";
 
@@ -58,15 +58,15 @@ $optCust .= "</optgroup>";
 ### GSW
 $optUnKerja = $optnpwp = "<option value=''>" . $_SESSION['lang']['pilihdata'] . "</option>";
 $nmOrg = makeOption($dbname, 'organisasi', 'kodeorganisasi,namaorganisasi');
-$sunkerja = $owlPDO->query("select distinct kodeorg from " . $dbname . ".keu_penagihanht order by kodeorg asc");
+$sunkerja = $owlPDO->query("select distinct kodeorg from " . $dbname . ".keu_penagihanht where kodeorg in (".getOrgDetail(2).") order by kodeorg asc");
 $sunkerja->setFetchMode(PDO::FETCH_ASSOC);
 while ($runkerja =  $sunkerja->fetch()) {
-	$optUnKerja .= "<option value='" . $runkerja['kodeorg'] . "'>" . $runkerja['kodeorg'] . "</option>";
+	$optUnKerja .= "<option value='" . $runkerja['kodeorg'] . "'>" . $runkerja['kodeorg'] . " - ".getNamaOrg($runkerja['kodeorg'])."</option>";
 }
 
 #unit
 
-$sakun = $owlPDO->query("select * from " . $dbname . ".organisasi where ((tipe='KANWIL' or tipe='HOLDING') or kodeorganisasi IN (select kodeorganisasi from " . $dbname . ".organisasi where tipe='KEBUN' and inti=1)) and length(kodeorganisasi)=4");
+$sakun = $owlPDO->query("select * from " . $dbname . ".organisasi where ((tipe='KANWIL' or tipe='HOLDING') or kodeorganisasi IN (select kodeorganisasi from " . $dbname . ".organisasi where tipe='KEBUN' and inti=1)) and length(kodeorganisasi)=4 and kodeorganisasi in (".getOrgDetail(2).")");
 $sakun->setFetchMode(PDO::FETCH_ASSOC);
 while ($rakun =  $sakun->fetch()) {
 	$optunit .= "<option value='" . $rakun['kodeorganisasi'] . "'>" . $rakun['kodeorganisasi'] . "-" . $rakun['namaorganisasi'] . "</option>";
@@ -199,18 +199,83 @@ echo "<table>
            <img class=delliconBig src=images/skyblue/list.png title='" . $_SESSION['lang']['list'] . "'><br>" . $_SESSION['lang']['list'] . "</td>
          <td><fieldset><legend>" . $_SESSION['lang']['find'] . "</legend>";
 echo "<table>";
-echo "<tr>";
-echo "<td>" . $_SESSION['lang']['noinvoice'] . " : <input type=text id=txtsearch onkeypress='enterkey(event,cariData)' size=18 maxlength=30 class=myinputtext></td>";
-echo "<td>" . $_SESSION['lang']['periode'] . " : <select id=tgl_cari>" . $optPeriode . "</select></td>";
-echo "<td>" . $_SESSION['lang']['customer'] . " : <select id=customersch style='width:150px'>" . $optCust . "</select></td>";
-echo "</tr>";
 
-echo "<tr>";
-echo "<td>" . $_SESSION['lang']['NoKontrak'] . " : &nbsp<input type=text id=nokontraksch onkeypress='enterkey(event,cariData)' size=18 maxlength=30 class=myinputtext></td>";
-echo "<td>" . $_SESSION['lang']['status'] . " : <select id=statId>" . $optStat . "</select></td>";
+echo "<tr>
+    <td style='padding:3px 0; white-space:nowrap;'>
 
-echo "<td>" . $_SESSION['lang']['unit'] . " kerja : <select id=unitkerjasch style='width:153px'>" . $optUnKerja . "</select></td>";
-echo "</tr>";
+        <span style='display:inline-block; width:75px;'>
+            " . $_SESSION['lang']['noinvoice'] . " :
+        </span>
+        <input
+            type='text'
+            id='txtsearch'
+            style='width:150px; margin-right:15px;'
+            onkeypress='enterkey(event,cariData)'
+            maxlength='30'
+            class='myinputtext'
+        >
+
+        <span style='display:inline-block; width:55px;'>
+            " . $_SESSION['lang']['periode'] . " :
+        </span>
+        <select
+            id='tgl_cari'
+            style='width:150px; margin-right:15px;'
+        >
+            " . $optPeriode . "
+        </select>
+
+        <span style='display:inline-block; width:65px;'>
+            " . $_SESSION['lang']['customer'] . " :
+        </span>
+        <select
+            id='customersch'
+            style='width:150px;'
+        >
+            " . $optCust . "
+        </select>
+
+    </td>
+</tr>";
+
+echo "<tr>
+    <td style='padding:3px 0; white-space:nowrap;'>
+
+        <span style='display:inline-block; width:75px;'>
+            " . $_SESSION['lang']['NoKontrak'] . " :
+        </span>
+        <input
+            type='text'
+            id='nokontraksch'
+            style='width:150px; margin-right:15px;'
+            onkeypress='enterkey(event,cariData)'
+            maxlength='30'
+            class='myinputtext'
+        >
+
+        <span style='display:inline-block; width:55px;'>
+            " . $_SESSION['lang']['status'] . " :
+        </span>
+        <select
+            id='statId'
+            style='width:150px; margin-right:15px;'
+        >
+            " . $optStat . "
+        </select>
+
+        <span style='display:inline-block; width:65px;'>
+            " . $_SESSION['lang']['unit'] . " :
+        </span>
+        <select
+            id='unitkerjasch'
+            style='width:150px;'
+        >
+            " . $optUnKerja . "
+        </select>
+
+    </td>
+</tr>";
+
 echo "</table><button class=mybutton onclick=loadData(0)>" . $_SESSION['lang']['find'] . "</button>";
 echo "</fieldset></td>
      </tr>

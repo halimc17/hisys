@@ -141,8 +141,12 @@ OPEN_BOX();
 					<th  align=center>".$_SESSION['lang']['unit']."</th>
                     <th  align=center>".$_SESSION['lang']['customer']."</th>
                     <th  align=center>".$_SESSION['lang']['tanggal']." ".$_SESSION['lang']['tbs']."</th>
-					 
+
+                    <th  align=center>".$_SESSION['lang']['berat']." TBS</th>
                     <th  align=center>".$_SESSION['lang']['netto']."</th>
+                    <th  align=center>".$_SESSION['lang']['potongan']."</th>
+                    <th  align=center>".$_SESSION['lang']['total']." Rp.</th>
+                    <th  align=center>Status Revisi</th>
                     <th  align=center>".$_SESSION['lang']['keterangan']."</th>
                     <th  align=center>".$_SESSION['lang']['dibuat']."</th>
                     <th  align=center>".$_SESSION['lang']['posting']."</th>

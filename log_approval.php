@@ -39,6 +39,7 @@ OPEN_BOX('','<span class=judul>'.getMenu('log_approval').'</span>');
 <script language=javascript src='js/log_approval_ijs.js?v=<?php echo time(); ?>'></script>
 <script language=javascript src='js/log_approval_ijsc.js?v=<?php echo time(); ?>'></script>
 <script language=javascript src='js/log_approval_ijnsc.js?v=<?php echo time(); ?>'></script>
+<script language=javascript src='js/log_approval_kbpt.js?v=<?php echo time(); ?>'></script>
 <script language=javascript src='js/log_approval_cbs.js?v=<?php echo time(); ?>'></script>
 
 <?php

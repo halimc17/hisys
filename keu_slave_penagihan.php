@@ -127,13 +127,15 @@ switch ($proses) {
 			$qCustomer = selectQuery($dbname, "setup_parameterappl", "SUBSTRING_INDEX(kodeparameter, '/', -1) as kodecustomer", "kodeparameter LIKE 'MF_COA/%'");
 			$rCustomer = fetchData($qCustomer);
 			foreach ($rCustomer as $row) {
-				$optionCust .= "<option value='" . $row['kodecustomer'] . "'>" . $optnmCust[$row['kodecustomer']] . "</option>";
+				$selectedcust = (isset($param['kodecustomer']) && $param['kodecustomer'] == $row['kodecustomer']) ? "selected" : "";
+				$optionCust .= "<option $selectedcust value='" . $row['kodecustomer'] . "'>" . $optnmCust[$row['kodecustomer']] . "</option>";
 			}
 		} else {
 			$qCustomer = selectQuery($dbname, "pmn_4customer", "distinct kodecustomer, namacustomer", "", "namacustomer asc");
 			$rCustomer = fetchData($qCustomer);
 			foreach ($rCustomer as $row) {
-				$optionCust .= "<option value='" . $row['kodecustomer'] . "'>" . $row['namacustomer'] . "</option>";
+				$selectedcust = (isset($param['kodecustomer']) && $param['kodecustomer'] == $row['kodecustomer']) ? "selected" : "";
+				$optionCust .= "<option $selectedcust value='" . $row['kodecustomer'] . "'>" . $row['namacustomer'] . "</option>";
 			}
 		}
 
@@ -563,7 +565,7 @@ switch ($proses) {
 			echo " Gagal," . addslashes($e->getMessage());
 		}
 
-		echo number_format($totalrpdt) . "####" . number_format($nilppndt) . "####" . $kgdt;
+		echo number_format($totalrpdt) . "####" . number_format($nilppndt) . "####" . $kgdt . "####" . number_format($param['nilaipphcust']);
 
 		// exit("Error:$str");
 
@@ -623,6 +625,12 @@ switch ($proses) {
 		// $arrthntanamspb=makeOption($dbname,'kebun_spb_vw','nospb,tahuntanam');
 		$arrthntanamspb = makeOption($dbname, 'kebun_spb_detail_vw', 'nospb,tahuntanam');
 
+		$totalKgBrutoDetail    = 0;
+		$totalKgPotonganDetail = 0;
+		$totalKgNettoDetail    = 0;
+		$totalRpDetail         = 0;
+		$notransaksiPending    = [];
+
 		if ($param['tipetbsdetail'] == 'ext') {
 
 			$str = "select * from " . $dbname . ".kebun_tbsjual where kodero='" . $param['kodeorganisasi'] . "' and tanggalpks between '" . tanggalsystemn($param['tanggal1detail']) . "'  and '" . tanggalsystemn($param['tanggal2detail']) . "' " . $whrt . " and posting=1 ";
@@ -630,9 +638,26 @@ switch ($proses) {
 			foreach ($res as $bar) {
 
 				$no += 1;
-				$stream .= "<tr class=rowcontent id=rowdetail" . $no . ">";
+
+				// Tandai baris yang masih ada revisi (koreksi tahun tanam/harga) menunggu
+				// persetujuan di BA Penjualan TBS - nilai kgbruto/rpkg/totalrp di sini masih
+				// yang lama (belum berubah), tapi bisa berubah kalau revisinya nanti disetujui.
+				$rowStylePending = '';
+				$revNote         = '';
+				if ((int)$bar['revstatus'] === 9) {
+					$rowStylePending = " style='background-color:#FFF3CD;'";
+					$revNote         = " <span style='color:#B8860B;font-weight:bold;' title='Masih ada revisi koreksi yang menunggu persetujuan di BA Penjualan TBS, nilai bisa berubah kalau disetujui'>&#9888; Revisi Menggantung</span>";
+					$notransaksiPending[$bar['notransaksi']] = true;
+				}
+
+				$totalKgBrutoDetail    += (float)$bar['kgbruto'];
+				$totalKgPotonganDetail += (float)$bar['kgpotongan'];
+				$totalKgNettoDetail    += (float)$bar['kgnetto'];
+				$totalRpDetail         += (float)$bar['totalrp'];
+
+				$stream .= "<tr class=rowcontent id=rowdetail" . $no . $rowStylePending . ">";
 				$stream .= "<td align=center>" . $no . "</td>";
-				$stream .= "<td align=left id=notransaksidetail" . $no . ">" . $bar['notransaksi'] . "</td>";
+				$stream .= "<td align=left id=notransaksidetail" . $no . ">" . $bar['notransaksi'] . $revNote . "</td>";
 				$stream .= "<td align=left id=notiketdetail" . $no . ">" . $bar['notiket'] . "</td>";
 				$stream .= "<td align=left id=nospbdetail" . $no . ">" . $bar['nospb'] . "</td>";
 				// $stream.="<td align=right id=tahuntanamdetail".$no.">".$arrthntanamspb[$bar['nospb']]."</td>";
@@ -705,6 +730,11 @@ switch ($proses) {
 				}
 
 
+				$totalKgBrutoDetail    += (float)$bar['kgbruto'];
+				$totalKgPotonganDetail += (float)$bar['kgpotongan'];
+				$totalKgNettoDetail    += (float)$bar['kgnetto'];
+				$totalRpDetail         += (float)$bar['totalrp'];
+
 				$no += 1;
 				$stream .= "<tr class=rowcontent id=rowdetail" . $no . ">";
 				$stream .= "<td align=center>" . $no . "</td>";
@@ -732,6 +762,23 @@ switch ($proses) {
 				$stream .= "</tr>";
 			}
 		}
+		
+		$stream .= "<tr class=rowheader style='font-weight:bold;background-color:#FFD966;'>";
+		$stream .= "<td colspan=11 align=center>" . $_SESSION['lang']['total'] . "</td>";
+		$stream .= "<td align=right>" . number_format($totalKgBrutoDetail, 2) . "</td>";
+		$stream .= "<td align=right>" . number_format($totalKgPotonganDetail, 2) . "</td>";
+		$stream .= "<td align=right>" . number_format($totalKgNettoDetail, 2) . "</td>";
+		$stream .= "<td></td>";
+		$stream .= "<td align=right>" . number_format($totalRpDetail, 2) . "</td>";
+		$stream .= "<td colspan=4></td>";
+		$stream .= "</tr>";
+
+		if (!empty($notransaksiPending)) {
+			$stream .= "<tr><td colspan=20 style='background-color:#FFF3CD;color:#856404;padding:8px;'>
+				<b>&#9888; Perhatian:</b> Ada baris di atas yang notransaksi-nya masih menggantung revisi koreksi (belum final) status persetujuannya di BA Penjualan TBS: <b>" . implode(', ', array_keys($notransaksiPending)) . "</b>. Kalau revisi itu nanti disetujui, kgbruto/tahuntanam/harga/total baris terkait bisa berubah dari yang ditampilkan sekarang.
+			</td></tr>";
+		}
+
 		$stream .= "<tr class=rowcontent>";
 		$stream .= "<td colspan=20 align=center>
 			<button class=mybutton onclick=savealldetail(" . $no . ");>" . $_SESSION['lang']['proses'] . "</button></td>";
@@ -1406,6 +1453,10 @@ switch ($proses) {
 		if ($param['customer'] != '') {
 			$where .= " and kodecustomer = '" . $param['customer'] . "'";
 		}
+
+		## Detail Akses PT 
+		$wherePT = " and kodept in (".getOrgDetail(4).") ";
+
 		$sdel = "";
 		$limit = 20;
 		$page = 0;
@@ -1415,7 +1466,7 @@ switch ($proses) {
 		}
 		$offset = $page * $limit;
 		// $sql=$owlPDO->query("select count(*) jmlhrow from ".$dbname.".keu_penagihanht where 1=1 ".$where." order by tanggal desc,posting asc");
-		$sql = "select count(*) jmlhrow from " . $dbname . ".keu_penagihanht where 1=1 " . $where . " order by tanggal desc,posting asc";
+		$sql = "select count(*) jmlhrow from " . $dbname . ".keu_penagihanht where 1=1 " . $where . "  ".$wherePT." order by tanggal desc,posting asc";
 		$res = $owlPDO->query($sql) or die(print " Gagal: " . PDOException::getMessage());
 		$res->setFetchMode(PDO::FETCH_ASSOC);
 		while ($jsl = $res->fetch()) {
@@ -1423,7 +1474,7 @@ switch ($proses) {
 		}
 
 		// $str=$owlPDO->query("select * from ".$dbname.".keu_penagihanht where 1=1 ".$where."  order by tanggal desc,posting asc  limit ".$offset.",".$limit." ");
-		$str = "select * from " . $dbname . ".keu_penagihanht where 1=1 " . $where . "  order by tanggal desc,posting asc  limit " . $offset . "," . $limit . " ";
+		$str = "select * from " . $dbname . ".keu_penagihanht where 1=1 " . $where . "  ".$wherePT."  order by tanggal desc,posting asc  limit " . $offset . "," . $limit . " ";
 
 		// $a="select * from ".$dbname.".keu_penagihanht where  nokontrak!=''  ".$where."  order by tanggal desc,posting asc  limit ".$offset.",".$limit."";
 		// // echo $a;
@@ -1459,7 +1510,7 @@ switch ($proses) {
 			$nilaiTot = $nilaiinv - $nilaiKlaimPengurang - $ppnKlaim;
 			$excldata = '';
 			if ($rstr['kodebarang'] == '40000003') {
-				$excldata = "<img class=zImgBtn src='images/skyblue/excel.jpg' style='cursor:pointer' onclick=detailtbs('" . $rstr['noinvoice'] . "',event) title='Print XLS Detail TBS " . $rstr['noinvoice'] . "'>";
+				$excldata = "<img class=zImgBtn src='images/skyblue/excel.jpg' style='cursor:pointer' onclick=\"detailtbs('" . $rstr['noinvoice'] . "',event)\" title='Print XLS Detail TBS " . $rstr['noinvoice'] . "'>";
 			}
 			// echo $nilaiinv._.$nilaiKlaimPengurang._.$totalkurang;
 
@@ -1493,7 +1544,7 @@ switch ($proses) {
 				}
 				$tab .= "<td align=center><img src=images/application/application_edit.png class=zImgBtn  title='Edit " . $rstr['noinvoice'] . "' onclick=\"fillField('" . $rstr['noinvoice'] . "');\" ></td>";
 				$tab .= "<td align=center><img src=images/application/application_delete.png class=zImgBtn  title='Hapus " . $rstr['noinvoice'] . "' onclick=\"delData('" . $rstr['noinvoice'] . "','" . $rstr['nofakturpajak'] . "');\" ></td>";
-				$tab .= "<td align=center><img src=images/skyblue/posting.png class=zImgBtn  title='Posting " . $rstr['noinvoice'] . "' onclick=\"postingData('" . $rstr['noinvoice'] . "');\" ></td>";
+				$tab .= "<td align=center><img src=images/skyblue/posting.png class=zImgBtn  title='Posting " . $rstr['noinvoice'] . "' onclick=\"previewPostingJurnal('" . $rstr['noinvoice'] . "');\" ></td>";
 				$tab .= "<td align=center>" . $excldata . "</td>";
 				$tab .= "<td align=center><img title='" . $_SESSION['lang']['upload'] . "' class=zImgBtn onclick=\"viewlistfile(event,'" . $rstr['noinvoice'] . "')\" src='images/upload-2-xxl.png'/></td>";
 				$tab .= "<td align=center>
@@ -1550,7 +1601,7 @@ switch ($proses) {
 
 			$tab .= "</tr>";
 		}
-		$skeupenagih = $owlPDO->query("select count(*) as rowd from " . $dbname . ".keu_penagihanht where nokontrak!=''  " . $where);
+		$skeupenagih = $owlPDO->query("select count(*) as rowd from " . $dbname . ".keu_penagihanht where nokontrak!='' ".$where." ".$wherePT." " );
 		$skeupenagih->setFetchMode(PDO::FETCH_ASSOC);
 		$rkeupenagih = $skeupenagih->fetch();
 		$totrows = ceil($rkeupenagih['rowd'] / $limit);
@@ -1595,7 +1646,7 @@ switch ($proses) {
 			$tanggalbupot . "###" . $rdata['jenispph'] . "###" . number_format($rdata['pphrupiah']) . "###" . $rdata['jenispenghasilan'] . "###" .
 			$rdata['carabayar'] . "###" . $rdata['npwp'] . "###" . $rdata['berikat'] . "###" . $nmakun[$rdata['jenispph']] . "###" .
 			$jnsp[$rdata['jenispenghasilan']] . "###" . $rdata['keterangantambahan'] . "###" . $rdata['notransaksikasbank'] . "###" .
-			$rdata['jenisinvoice'] . "###" . $rdata['kodebarang'] . "###" . $rdata['transport'] . "###" . $rdata['npwpunit'] . "###" . $rdata['tipeinvoice']. "###" . $rdata['nilaipph'];
+			$rdata['jenisinvoice'] . "###" . $rdata['kodebarang'] . "###" . $rdata['transport'] . "###" . $rdata['npwpunit'] . "###" . $rdata['tipeinvoice']. "###" . $rdata['nilaipph'] . "###" . $rdata['tipearuskas'];
 
 		break;
 
@@ -2648,6 +2699,12 @@ switch ($proses) {
 
 		//     continue;
 		// }
+		#= Preview Jurnal : jalankan proses posting seperti biasa di dalam transaction,
+		#= lalu di-rollback (tidak commit) supaya bisa ditampilkan tanpa mengubah data sungguhan
+		$previewJurnal = (isset($param['previewonly']) && $param['previewonly'] == '1');
+		if ($previewJurnal) {
+			$owlPDO->beginTransaction();
+		}
 		$sdata = $owlPDO->query("select * from " . $dbname . ".keu_penagihanht where noinvoice='" . $param['noinvoice'] . "'");
 		$sdata->setFetchMode(PDO::FETCH_ASSOC);
 		$roc = owlBaris($sdata);
@@ -2902,6 +2959,9 @@ switch ($proses) {
 			}
 			$ketpph = 'PPH atas penagihan : ' . $rdata['noinvoice'] . '; No.Kontrak : ' . $rdata['nokontrak'] . ';';
 		}
+		//noakun PPH, dipakai di semua tahap pembentukan jurnal di bawah (jangan didefinisikan ulang di tempat lain)
+		$noakunpph = '1160103';
+		$noaruspph = '10803';
 		# ========================= #
 		# END PPH
 		# ========================= #
@@ -2971,7 +3031,6 @@ switch ($proses) {
 		# Transform No Jurnal dari No Transaksi
 		$nojurnal = str_replace("-", "", $rdata['tanggal']) . "/" . $rdata['kodeorg'] . "/" . $kodejurnal . "/" . $counterj;
 
-
 		$ket1 = 'Piutang atas penagihan : ' . $rdata['noinvoice'] . '; No.dokumen/Kontrak : ' . $rdata['nokontrak'] . ';';
 		$ket2 = 'Ppn atas penagihan : ' . $rdata['noinvoice'] . '; No.dokumen/Kontrak : ' . $rdata['nokontrak'] . ';';
 		$ket3 = 'Penjualan atas penagihan : ' . $rdata['noinvoice'] . '; No.dokumen/Kontrak : ' . $rdata['nokontrak'] . ';';
@@ -3008,12 +3067,10 @@ switch ($proses) {
 			$noakunkredit = $resrkp->akunpiutang;
 		}
 
-		// if ($_SESSION['standard']['userid'] == "0000000001") {
-		// 	exit("Warning {$strxx}: " . $noakundebet . " || " . $noakunkredit . " || " . $noakunppn);
-		// }
 		if ($noakundebet == '' || $noakunkredit == '' || $noakunppn == '') {
 			exit('warning : Noakun may not empty / Terdapat nomor akun yang kosong silahkan cek setup : Keuangan->Setup->Penagihan/Invoice AR');
 		}
+		#= TAHAP A: khusus kodebarang 40000033 + jenisinvoice PL (bukan TBS) - akun dari setup_parameterappl per customer
 		if (($rdata['kodebarang'] == '40000033') and $rdata['jenisinvoice'] == 'PL') {
 			$nilaitotal = $rdata['nilaiinvoice'] + $rdata['nilaippn'];
 			$akunpiutang = empty(fetchData(selectQuery($dbname, "setup_parameterappl", "nilai", "kodeparameter= CONCAT('MF_COA/', '" . $rdata['kodecustomer'] . "')"))) ? exit("Warning : Akun piutang untuk customer " . $rdata['kodecustomer'] . " belum disetup di parameter aplikasi") : fetchData(selectQuery($dbname, "setup_parameterappl", "nilai", "kodeparameter= CONCAT('MF_COA/', '" . $rdata['kodecustomer'] . "')"))[0]['nilai'];
@@ -3121,7 +3178,10 @@ switch ($proses) {
 				#= debet piutang
 			}
 		} else {
-
+			#= TAHAP B: jurnal default/umum untuk semua jenis invoice selain Tahap A (UM/PL/OTPI/OTPB/dll)
+			#= akun dari keu_5jenispenagihandt keyed by tipeinvoice. CATATAN: kalau jenisinvoice=='PL' dan ini
+			#= adalah invoice sales pertama di kontrak tsb (jurnalsales<1) dan kodebarang bukan 40000033,
+			#= hasil tahap ini akan DITIMPA TOTAL oleh TAHAP C di bawah (lihat kondisi $jurnalsales).
 			$dataRes['header'] = array();
 			$dataRes['detail'] = array();
 
@@ -3235,14 +3295,6 @@ switch ($proses) {
 			//1170101 (akun PPH 22)
 			##jurnal pph tbs
 			if ($nilaiPPh != 0) {
-				//noakun PPH
-				// $sappl = "select nilai from " . $dbname . ".setup_parameterappl where kodeparameter='NAPPH'";
-				// $rappl = fetchData($sappl);
-				// $noparam = $rappl[0]['nilai'];
-				// $noparam = explode(',', $noparam);
-				$noakunpph = '1160103';
-				$noaruspph = '10803';
-
 				$dataRes['detail'][] = array(
 					'nojurnal' => $nojurnal,
 					'tanggal' => $rdata['tanggal'],
@@ -3355,6 +3407,10 @@ switch ($proses) {
 
 		// if($rdata['jenisinvoice']=='PL'){
 
+		#= TAHAP C: khusus jenisinvoice PL (Pelunasan) yang merupakan invoice sales PERTAMA di kontrak ini
+		#= (belum ada jurnal SLE sebelumnya untuk nokontrak ini) dan kodebarang bukan 40000033.
+		#= Ini yang jalan untuk kodebarang TBS (40000003) - akun dari keu_5jenispenagihandt keyed by
+		#= kodejenis CIPP/CITBS. Jurnal Tahap A/B di atas DIBUANG total kalau kondisi ini kena.
 		if ($rdata['jenisinvoice'] == 'PL' and $jurnalsales < 1 && $rdata['kodebarang'] != '40000033') {
 
 			#= jurnal baru untuk BA pelunasan
@@ -3426,6 +3482,20 @@ switch ($proses) {
 				$noakunppn = $bar['noakunppn']; // ppn
 			}
 
+			#= Setup khusus per PT (keu_5setuppenagihanpt) : apakah piutang PPN & netting PPh
+			#= digabung jadi satu baris piutang, atau dipisah seperti biasa (default). Tabel ini
+			#= terpisah dari keu_5jenispenagihandt (yang dipakai bersama semua PT) supaya perubahan
+			#= ini tidak mempengaruhi PT lain yang pakai kodejenis/kodebarang yang sama.
+			$gabungPiutang = '0';
+			$strSetupOrg = "select gabungpiutang from " . $dbname . ".keu_5setuppenagihanpt where kodept='" . $rdata['kodept'] . "' and (kodejenis='CIPP' or kodejenis='CITBS') and kodebarang='" . $rdata['kodebarang'] . "'";
+			$resSetupOrg = fetchdata($strSetupOrg);
+			if (count($resSetupOrg) > 1) {
+				exit('warning : Setup keu_5setuppenagihanpt ganda untuk kodept ' . $rdata['kodept'] . ' + kodebarang ' . $rdata['kodebarang'] . ' (kodejenis CIPP dan CITBS dua-duanya ada), silahkan hubungi IT.');
+			}
+			if (!empty($resSetupOrg)) {
+				$gabungPiutang = $resSetupOrg[0]['gabungpiutang'];
+			}
+
 
 			#= ambil data jumlah sales dari BA
 			// $str =" select count(*) as jumlahbast, sum(kg) as jumlahkuantitas  from ".$dbname.".pmn_billofloading where nokontrak='".$rdata['nokontrak']."' and posting='1'";
@@ -3482,6 +3552,22 @@ switch ($proses) {
 
 			$noUrut = 1;
 
+			#= kalau gabungPiutang aktif: baris piutang utama ini langsung memuat PPN (nambah)
+			#= dan netting PPh (ngurang), jadi baris "debit PPN ke piutang" dan "kredit piutang utk PPh"
+			#= di bawah tidak perlu dibentuk lagi terpisah (lihat pengecekan $gabungPiutang di bawah)
+			$jumlahPiutangUtama = $nilaitotal;
+			if ($gabungPiutang == '1') {
+				if ($param['ppnkas'] == 1 && $rdata['nilaippn'] != 0) {
+					$jumlahPiutangUtama += $rdata['nilaippn'];
+				}
+				if ($nilaiPPh != 0) {
+					$jumlahPiutangUtama -= $nilaiPPh;
+				}
+				if ($jumlahPiutangUtama <= 0) {
+					exit('warning : Nilai piutang gabungan invoice ' . $rdata['noinvoice'] . ' menjadi nol/negatif (' . number_format($jumlahPiutangUtama, 2) . ') setelah dikurangi PPh, silahkan cek kembali nilai PPh/PPN/invoice.');
+				}
+			}
+
 			#= debet1 piutang
 			$dataRes['detail'][] = array(
 				'nojurnal' => $nojurnal,
@@ -3489,7 +3575,7 @@ switch ($proses) {
 				'nourut' => $noUrut,
 				'noakun' => $noakundebet1,
 				'keterangan' => $ket1,
-				'jumlah' => $nilaitotal,
+				'jumlah' => $jumlahPiutangUtama,
 				'matauang' => 'IDR',
 				'kurs' => '1',
 				'kodeorg' => $rdata['kodeorg'],
@@ -3537,7 +3623,7 @@ switch ($proses) {
 				$noUrut++;
 			}
 
-			if ($param['ppnkas'] == 1) {
+			if ($param['ppnkas'] == 1 && $gabungPiutang != '1') {
 				if ($rdata['nilaippn'] != 0) {
 					#= debet piutang
 					#= db ppn
@@ -3545,7 +3631,7 @@ switch ($proses) {
 						'nojurnal' => $nojurnal,
 						'tanggal' => $rdata['tanggal'],
 						'nourut' => $noUrut,
-						'noakun' => $noakundebet,
+						'noakun' => $noakundebet1,
 						'keterangan' => $ket2,
 						'jumlah' => $rdata['nilaippn'] * 1,
 						'matauang' => 'IDR',
@@ -3571,14 +3657,6 @@ switch ($proses) {
 
 			##jurnal pph tbs
 			if ($nilaiPPh != 0) {
-				//noakun PPH
-				// $sappl = "select nilai from " . $dbname . ".setup_parameterappl where kodeparameter='NAPPH'";
-				// $rappl = fetchData($sappl);
-				// $noparam = $rappl[0]['nilai'];
-				// $noparam = explode(',', $noparam);
-				$noakunpph = '1160103';
-				$noaruspph = '10803';
-
 				$dataRes['detail'][] = array(
 					'nojurnal' => $nojurnal,
 					'tanggal' => $rdata['tanggal'],
@@ -3665,13 +3743,14 @@ switch ($proses) {
 				$noUrut++;
 			}
 
-			##jurnal pph tbs
-			if ($nilaiPPh != 0) {
+			##jurnal pph tbs (kredit piutang utk netting pph - dilewati kalau gabungPiutang aktif,
+			#= karena netting-nya sudah masuk ke baris "debet1 piutang" di atas)
+			if ($nilaiPPh != 0 && $gabungPiutang != '1') {
 				$dataRes['detail'][] = array(
 					'nojurnal' => $nojurnal,
 					'tanggal' => $rdata['tanggal'],
 					'nourut' => $noUrut,
-					'noakun' => $noakundebet,
+					'noakun' => $noakundebet1,
 					'keterangan' => $ket1,
 					'jumlah' => $nilaiPPh * (-1),
 					'matauang' => 'IDR',
@@ -3710,6 +3789,23 @@ switch ($proses) {
 		// exit('warning');
 
 		if ($ket1 != "") {
+			#= Validasi sebelum jurnal disimpan : no akun kosong & balance debet/kredit
+			$totalDebetChk  = 0;
+			$totalKreditChk = 0;
+			foreach ($dataRes['detail'] as $dChk) {
+				if (trim($dChk['noakun']) == '') {
+					exit('warning : Noakun may not empty / Terdapat nomor akun yang kosong pada jurnal invoice ' . $rdata['noinvoice'] . ', silahkan cek setup akun terkait.');
+				}
+				if ($dChk['jumlah'] > 0) {
+					$totalDebetChk += $dChk['jumlah'];
+				} else {
+					$totalKreditChk += abs($dChk['jumlah']);
+				}
+			}
+			if (abs($totalDebetChk - $totalKreditChk) > 1) {
+				exit('warning : Jurnal Tidak Balance untuk invoice ' . $rdata['noinvoice'] . ' (Debet: ' . number_format($totalDebetChk, 2) . ', Kredit: ' . number_format($totalKreditChk, 2) . '), silahkan hubungi IT.');
+			}
+
 			$str = insertQuery($dbname, 'keu_jurnalht', $dataRes['header']);
 			try {
 				$owlPDO->exec($str);
@@ -3741,8 +3837,6 @@ switch ($proses) {
 				$errCounter .= "Update Counter Parameter Jurnal Error :" . $e->getMessage();
 			}
 		}
-
-
 
 		if ($totalpinalti != 0 and $jurnalsales < 1) {
 
@@ -3883,6 +3977,23 @@ switch ($proses) {
 				$noUrut++;
 			}
 
+			#= Validasi sebelum jurnal disimpan : no akun kosong & balance debet/kredit
+			$totalDebetChk  = 0;
+			$totalKreditChk = 0;
+			foreach ($dataRes['detail'] as $dChk) {
+				if (trim($dChk['noakun']) == '') {
+					exit('warning : Noakun may not empty / Terdapat nomor akun yang kosong pada jurnal klaim invoice ' . $rdata['noinvoice'] . ', silahkan cek setup akun terkait.');
+				}
+				if ($dChk['jumlah'] > 0) {
+					$totalDebetChk += $dChk['jumlah'];
+				} else {
+					$totalKreditChk += abs($dChk['jumlah']);
+				}
+			}
+			if (abs($totalDebetChk - $totalKreditChk) > 1) {
+				exit('warning : Jurnal Klaim Tidak Balance untuk invoice ' . $rdata['noinvoice'] . ' (Debet: ' . number_format($totalDebetChk, 2) . ', Kredit: ' . number_format($totalKreditChk, 2) . '), silahkan hubungi IT.');
+			}
+
 			$str = insertQuery($dbname, 'keu_jurnalht', $dataRes['header']);
 			try {
 				$owlPDO->exec($str);
@@ -3890,7 +4001,7 @@ switch ($proses) {
 				$errorDB .= "Header Error :" . $e->getMessage() . "\n";
 			}
 
-	
+
 			foreach ($dataRes['detail'] as $key => $dataDet) {
 				$str = insertQuery($dbname, 'keu_jurnaldt', $dataDet);
 				try {
@@ -3915,14 +4026,11 @@ switch ($proses) {
 			}
 		}
 
-
 		// echo "<pre>";
 		// print_r($dataRes['header']);
 		// print_r($dataRes['detail']);
 		// echo "</pre>";
 		// exit('warning:'.$jurnalsales);
-
-
 
 		#= cek jurnal yang terbentuk
 		if ($jurnalsales > 0) {
@@ -3968,6 +4076,58 @@ switch ($proses) {
 				print "Rollback 2 Error: " . $e->getMessage() . "<br/>";
 				die();
 			}
+		}
+
+		if ($previewJurnal) {
+			$strPrev = "select nojurnal,noakun,namaakun,keterangan,debet,kredit from " . $dbname . ".keu_jurnaldt_vw
+				where noreferensi='" . $rdata['noinvoice'] . "' order by nojurnal,nourut";
+			$resPrev = fetchdata($strPrev);
+			$owlPDO->rollBack();
+
+			if ($errorDB != '') {
+				echo "Warning: Gagal membentuk preview jurnal, silahkan hubungi IT.\n" . $errorDB;
+				break;
+			}
+
+			if (empty($resPrev)) {
+				echo "<i>Invoice " . $rdata['noinvoice'] . " tidak akan membentuk jurnal.</i>";
+				break;
+			}
+
+			$totdebPrev = 0;
+			$totkrdPrev = 0;
+			foreach ($resPrev as $jr) {
+				$totdebPrev += $jr['debet'];
+				$totkrdPrev += $jr['kredit'];
+			}
+
+			$streamPrev = "<table cellpadding=6 cellspacing=0 border=1 class=sortable style='width:100%;border-collapse:collapse;'>
+				<thead><tr class=rowheader>
+					<th align=center>No Jurnal</th>
+					<th align=center>No Akun</th>
+					<th align=center>Nama Akun</th>
+					<th align=left>Keterangan</th>
+					<th align=center>Debet</th>
+					<th align=center>Kredit</th>
+				</tr></thead><tbody>";
+			foreach ($resPrev as $jr) {
+				$streamPrev .= "<tr class=rowcontent>
+					<td align=left>" . $jr['nojurnal'] . "</td>
+					<td align=left>" . $jr['noakun'] . "</td>
+					<td align=left>" . $jr['namaakun'] . "</td>
+					<td align=left>" . $jr['keterangan'] . "</td>
+					<td align=right>" . number_format($jr['debet'], 2) . "</td>
+					<td align=right>" . number_format($jr['kredit'], 2) . "</td>
+				</tr>";
+			}
+			$streamPrev .= "<tr class=rowcontent style='font-weight:bold;background-color:#F5F5F5;'>
+				<td colspan=4 align=center>Total</td>
+				<td align=right>" . number_format($totdebPrev, 2) . "</td>
+				<td align=right>" . number_format($totkrdPrev, 2) . "</td>
+			</tr>";
+			$streamPrev .= "</tbody></table>";
+			echo $streamPrev;
+			break;
 		}
 
 		break;

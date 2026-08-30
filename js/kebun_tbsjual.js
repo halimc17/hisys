@@ -1,3 +1,302 @@
+ function koreksi(notransaksi) {
+    param = 'notransaksi=' + notransaksi;
+    tujuan = 'kebun_tbsjual_slave.php';
+    function respog() {
+        if (con.readyState == 4) {
+            if (con.status == 200) {
+                busy_off();
+                if (!isSaveResponse(con.responseText)) {
+                    alert(con.responseText);
+                } else {
+                    alertify.popup("Koreksi",con.responseText).set({'resizable':true,'maximizable':true}).resizeTo('80%','70%');
+                }
+            } else {
+                busy_off();
+                error_catch(con.status);
+            }
+        }
+    }
+    post_response_text(tujuan + '?' + 'method=koreksiTransaksi', param, respog);
+  }
+
+// Data harga (hargaMasterKoreksi) dikirim server lewat <script type="application/json">, bukan
+// <script> biasa - karena isi popup ini disuntikkan lewat innerHTML (alertify.popup), dan <script>
+// yang disuntik lewat innerHTML tidak pernah dieksekusi browser (variable-nya tidak akan pernah
+// terbentuk kalau dikirim sebagai `var hargaMasterKoreksi = [...]` biasa). Dibaca ulang tiap
+// dipakai supaya tidak tergantung timing eksekusi script.
+function getHargaMasterKoreksi() {
+	var el = document.getElementById('hargaMasterKoreksiData');
+	if (!el) return [];
+	try {
+		return JSON.parse(el.textContent || el.innerHTML);
+	} catch (e) {
+		return [];
+	}
+}
+
+// Daftar calon approver, dikirim server dengan cara yang sama seperti hargaMasterKoreksiData.
+function getApproverList() {
+	var el = document.getElementById('approverListData');
+	if (!el) return [];
+	try {
+		return JSON.parse(el.textContent || el.innerHTML);
+	} catch (e) {
+		return [];
+	}
+}
+
+// Dipanggil tiap kali dropdown Tahun Tanam (Koreksi) di satu baris diganti.
+// Cari harga yang berlaku untuk tahun tanam baru pada tanggal PKS baris itu, lalu hitung ulang
+// Harga/Kg & Total kolom "Setelah Koreksi", plus grand total. Kalau tidak ada harga yang cocok
+// (belum ada / belum posting untuk tahun tanam & tanggal itu), ditandai merah + keterangan.
+function hitungKoreksi(no) {
+	var selTT = document.getElementById('kortahuntanam' + no);
+	var nettoCell = document.getElementById('kornetto' + no);
+	if (!selTT || !nettoCell) return;
+
+	var newTT = selTT.value;
+	var netto = parseFloat(nettoCell.getAttribute('data-netto')) || 0;
+	var tglPks = nettoCell.getAttribute('data-tglpks');
+
+	var elHargaBaru = document.getElementById('korhargabaru' + no);
+	var elTotalBaru = document.getElementById('kortotalbaru' + no);
+	var elKet = document.getElementById('korket' + no);
+
+	// Belum pilih tahun tanam koreksi (baris "Campur" defaultnya kosong) -> jangan hitung apa-apa dulu.
+	if (newTT === '') {
+		elHargaBaru.innerHTML = '-';
+		elTotalBaru.innerHTML = elTotalBaru.getAttribute('data-totallama') || elTotalBaru.innerHTML;
+		elTotalBaru.style.color = '';
+		elTotalBaru.setAttribute('data-valid', '0');
+		if (elKet) elKet.innerHTML = '<font color=red>Pilih tahun tanam koreksi</font>';
+		hitungGrandTotalKoreksi();
+		return;
+	}
+
+	var hargaMasterKoreksi = getHargaMasterKoreksi();
+	var hargaBaru = 0;
+	for (var i = 0; i < hargaMasterKoreksi.length; i++) {
+		var h = hargaMasterKoreksi[i];
+		if (h.tt == newTT && tglPks >= h.awal && tglPks <= h.akhir) {
+			hargaBaru = h.harga;
+			break;
+		}
+	}
+
+	var totalBaru = hargaBaru * netto;
+	var valid = hargaBaru > 0;
+
+	elHargaBaru.innerHTML = numberFormat(hargaBaru, 2);
+	elTotalBaru.innerHTML = numberFormat(totalBaru, 2);
+	elTotalBaru.style.color = valid ? '' : 'red';
+	elTotalBaru.setAttribute('data-valid', valid ? '1' : '0');
+
+	if (elKet) {
+		elKet.innerHTML = valid ? '' : '<font color=red>Belum ada harga tahun tanam ' + newTT + ' untuk tanggal PKS ini / belum di-posting</font>';
+	}
+
+	hitungGrandTotalKoreksi();
+}
+
+function hitungGrandTotalKoreksi() {
+	var els = document.querySelectorAll('[id^=kortotalbaru]');
+	var total = 0;
+	els.forEach(function (el) {
+		total += parseFloat(el.innerHTML.replace(/,/g, '')) || 0;
+	});
+	var elGrand = document.getElementById('korgrandtotalbaru');
+	if (elGrand) elGrand.innerHTML = numberFormat(total, 2);
+}
+
+// TODO: backend pengajuan/approval (case 'ajukanPersetujuanKoreksi' + tabel approval) belum dibuat -
+// itu menyusul dari sisi user. Update tahuntanam/harga/total/keterangan ke tabel asli baru terjadi
+// saat approval TERAKHIR disetujui, bukan di titik ini. Untuk sekarang, tombol ini cuma mengumpulkan
+// & memvalidasi baris yang mau diajukan.
+function ajukanPersetujuanKoreksi(notransaksi, maxRow) {
+	var perubahan = [];
+	var belumPilihCampur = 0;
+	var hargaTidakValid = 0;
+	var belumAdaKeterangan = 0;
+
+	for (var i = 1; i <= maxRow; i++) {
+		var elLama = document.getElementById('kortahuntanamlama' + i);
+		var elBaru = document.getElementById('kortahuntanam' + i);
+		if (!elLama || !elBaru) continue;
+
+		var row = document.getElementById('rowkoreksi' + i);
+		var isMixed = row && row.getAttribute('data-mixed') === '1';
+		var baru = elBaru.value.trim();
+
+		if (isMixed && baru === '') {
+			belumPilihCampur++;
+			continue;
+		}
+
+		var lama = elLama.innerHTML.trim();
+		if (lama !== baru) {
+			var elTotalBaru = document.getElementById('kortotalbaru' + i);
+			if (elTotalBaru && elTotalBaru.getAttribute('data-valid') === '0') {
+				hargaTidakValid++;
+				continue;
+			}
+
+			var elKetRevisi = document.getElementById('korketrevisi' + i);
+			var keteranganRevisi = elKetRevisi ? elKetRevisi.value.trim() : '';
+			if (keteranganRevisi === '') {
+				belumAdaKeterangan++;
+				if (elKetRevisi) elKetRevisi.style.backgroundColor = '#ffe0e0';
+				continue;
+			}
+			if (elKetRevisi) elKetRevisi.style.backgroundColor = '';
+
+			perubahan.push({
+				tanggal: document.getElementById('kortanggal' + i).innerHTML,
+				nokendaraan: document.getElementById('kornokendaraan' + i).innerHTML,
+				tahuntanamLama: lama,
+				tahuntanamBaru: baru,
+				hargaLama: document.getElementById('korhargalama' + i).innerHTML.trim(),
+				hargaBaru: document.getElementById('korhargabaru' + i).innerHTML.trim(),
+				totalLama: document.getElementById('kortotallama' + i).innerHTML.trim(),
+				totalBaru: elTotalBaru.innerHTML.trim(),
+				keteranganRevisi: keteranganRevisi
+			});
+		}
+	}
+
+	if (belumPilihCampur > 0) {
+		alertify.alert('Informasi', 'Ada ' + belumPilihCampur + ' truck/tanggal dengan tahun tanam Campur yang belum dipilih koreksinya. Tolong pilih dulu tahun tanam yang benar untuk baris tersebut.');
+		return;
+	}
+
+	if (hargaTidakValid > 0) {
+		alertify.alert('Informasi', 'Ada ' + hargaTidakValid + ' baris yang tahun tanam koreksinya belum punya harga (belum di-posting) untuk tanggal PKS truck tsb. Lihat kolom Info berwarna merah, tidak bisa diajukan sebelum harganya tersedia.');
+		return;
+	}
+
+	if (belumAdaKeterangan > 0) {
+		alertify.alert('Informasi', 'Ada ' + belumAdaKeterangan + ' baris yang berubah tahun tanamnya tapi belum diisi Keterangan Revisi. Wajib diisi alasan koreksinya.');
+		return;
+	}
+
+	if (perubahan.length === 0) {
+		alertify.alert('Informasi', 'Tidak ada perubahan tahun tanam untuk diajukan.');
+		return;
+	}
+
+	tampilkanRekapKoreksi(notransaksi, perubahan);
+}
+
+// Rekap ringkas HANYA baris yang berubah + total rupiah lama vs baru, ditampilkan sebelum
+// benar-benar diajukan - supaya tidak perlu scroll ke tabel detail lagi buat lihat dampaknya.
+function tampilkanRekapKoreksi(notransaksi, perubahan) {
+	var totalLamaAll = 0, totalBaruAll = 0;
+	var rows = '';
+
+	perubahan.forEach(function (p) {
+		totalLamaAll += parseFloat(p.totalLama.replace(/,/g, '')) || 0;
+		totalBaruAll += parseFloat(p.totalBaru.replace(/,/g, '')) || 0;
+
+		rows += "<tr class=rowcontent>" +
+			"<td align=center>" + p.tanggal + "</td>" +
+			"<td align=center>" + p.nokendaraan + "</td>" +
+			"<td align=center>" + p.tahuntanamLama + " &rarr; <b>" + p.tahuntanamBaru + "</b></td>" +
+			"<td align=right>" + p.hargaLama + " &rarr; <b>" + p.hargaBaru + "</b></td>" +
+			"<td align=right>" + p.totalLama + " &rarr; <b>" + p.totalBaru + "</b></td>" +
+			"<td>" + p.keteranganRevisi + "</td>" +
+			"</tr>";
+	});
+
+	var selisih = totalBaruAll - totalLamaAll;
+	var warnaSelisih = selisih < 0 ? 'red' : (selisih > 0 ? 'green' : '');
+	var labelSelisih = (selisih > 0 ? '+' : '') + numberFormat(selisih, 2);
+
+	var html = "<div style='max-height:450px;overflow-y:auto;'>" +
+		"<table cellpadding=5 cellspacing=1 border=1 class=sortable width=100%>" +
+		"<thead><tr class=rowheader style='text-align:center;font-weight:bold;'>" +
+		"<th>Tanggal</th><th>No Polisi</th><th>Tahun Tanam</th><th>Harga/Kg</th><th>Total</th><th>Keterangan Revisi</th>" +
+		"</tr></thead><tbody>" + rows + "</tbody>" +
+		"<tfoot>" +
+		"<tr class=rowheader style='font-weight:bold;'>" +
+		"<td align=center colspan=4>Total (" + perubahan.length + " baris berubah)</td>" +
+		"<td align=right>" + numberFormat(totalLamaAll, 2) + " &rarr; " + numberFormat(totalBaruAll, 2) + "</td>" +
+		"<td></td>" +
+		"</tr>" +
+		"<tr class=rowheader style='font-weight:bold;'>" +
+		"<td align=center colspan=4>Selisih Total Rupiah</td>" +
+		"<td align=right style='color:" + warnaSelisih + ";'>" + labelSelisih + "</td>" +
+		"<td></td>" +
+		"</tr>" +
+		"</tfoot>" +
+		"</table></div>";
+
+	// Dropdown "Ajukan Kepada" - SEMENTARA daftar semua karyawan di unit ini (belum ada alur
+	// approval yang sebenarnya, lihat catatan di getApproverList() & case insertApprovalKoreksi).
+	var approverList = getApproverList();
+	var optApprover = "<option value=''>-- Pilih Approver --</option>";
+	approverList.forEach(function (a) {
+		optApprover += "<option value='" + a.id + "'>" + a.nama + "</option>";
+	});
+
+	html += "<div style='margin-top:10px;'>" +
+		"<label>Ajukan Kepada: </label>" +
+		"<select id=korapprover class=myinputtext style='width:250px;'>" + optApprover + "</select>" +
+		"</div>" +
+		"<div align=center style='margin-top:10px;'>" +
+		"<button class=mybutton onclick=konfirmasiAjukanKoreksi()>Konfirmasi &amp; Ajukan</button>&nbsp;" +
+		"<button class=mybutton onclick=\"alertify.popup2().destroy()\">Tutup, Edit Lagi</button>" +
+		"</div>";
+
+	// Disimpan di window karena tombol di dalam HTML popup2 tidak bisa langsung
+	// menangkap closure JS - dibaca lagi oleh konfirmasiAjukanKoreksi() saat diklik.
+	window.__koreksiPending = { notransaksi: notransaksi, perubahan: perubahan, totalBaruAll: totalBaruAll };
+
+	alertify.popup2("Ringkasan Perubahan Koreksi", html).set({ 'resizable': true, 'maximizable': true }).resizeTo('60%', '70%');
+}
+
+// Kirim pengajuan koreksi ke server (case 'insertApprovalKoreksi' di kebun_tbsjual_slave.php).
+// Itu masih skeleton di sisi user (tabel/kolom & alur approval sebenarnya menyusul), tapi jalur
+// JS -> server-nya sudah terhubung di sini.
+function konfirmasiAjukanKoreksi() {
+	var data = window.__koreksiPending;
+	if (!data) return;
+
+	var elApprover = document.getElementById('korapprover');
+	var approverid = elApprover ? elApprover.value : '';
+	if (approverid === '') {
+		alertify.alert('Informasi', 'Pilih dulu approver-nya.');
+		return;
+	}
+
+	var param = 'method=insertApprovalKoreksi';
+	param += '&notransaksi=' + encodeURIComponent(data.notransaksi);
+	param += '&approverid=' + encodeURIComponent(approverid);
+	param += '&dataKoreksi=' + encodeURIComponent(JSON.stringify(data.perubahan));
+
+	var tujuan = 'kebun_tbsjual_slave.php';
+	post_response_text(tujuan, param, respog);
+
+	function respog() {
+		if (con.readyState == 4) {
+			if (con.status == 200) {
+				busy_off();
+				if (!isSaveResponse(con.responseText)) {
+					alertify.alert('Informasi', con.responseText);
+				} else {
+					alertify.popup2().destroy();
+					alertify.popup().destroy();
+					alertify.alert('Informasi', 'Koreksi berhasil diajukan, total rupiah jadi ' + numberFormat(data.totalBaruAll, 2) + '. Menunggu approval.');
+					loaddata(0);
+				}
+			} else {
+				busy_off();
+				error_catch(con.status);
+			}
+		}
+	}
+}
+
+
+
 
 function excel(notransaksi) {
 	param = 'method=excel' + '&notransaksi=' + notransaksi;
@@ -9,7 +308,6 @@ function excel(notransaksi) {
 	title = "";
 	showDialog5(title, content, width, height, 'event');
 }
-
 
 function posting(notransaksi) {
 	param='method=posting'+'&notransaksi='+notransaksi;
@@ -137,9 +435,6 @@ function loaddata(num) {
 		}
 	}
 }
-
-
-
 
 function displaylist() {
 	cancelht();
@@ -507,19 +802,21 @@ function hitungBruto(idnum,idnummax) {
 	// ============================ //
 
 	// Perhitungan
-	var newJumlah = bruto-potongan;	
+	// Netto dibulatkan ke kg genap dulu sebelum dikali harga, biar total rupiahnya sama
+	// dengan rekap grading manual (Excel) yang juga membulatkan netto per baris ke kg genap.
+	var newJumlah = Math.round(bruto-potongan);
 	var newTotalRupiah = newJumlah*rpkg;
 
 	// Masih bisa minus
 	// if(bruto < potongan) {
 	// 	var newJumlah = 0;
-	// } 
+	// }
 
 	// Cek Error
 	// console.log("rupiah : "+ rpkg + "\n")
 	// console.log("total rupiah : "+newTotalRupiah)
 
-	document.getElementById('kgnetto'+idnum).value = newJumlah; 
+	document.getElementById('kgnetto'+idnum).value = newJumlah;
 	document.getElementById('totalrp'+idnum).innerHTML = numberFormat(newTotalRupiah,2);
 	document.getElementById('ttlkgbruto').innerHTML = numberFormat(total,0); 
 	document.getElementById('ttlkgnetto').innerHTML = numberFormat(totalnetto,0); 
@@ -557,12 +854,13 @@ function hitungPotongan(idnum,idnummax) {
 	// console.log('Total:', total);
 
 	// Perhitungan
-	var newJumlah = bruto-potongan;
+	// Netto dibulatkan ke kg genap dulu sebelum dikali harga (samain sama rekap Excel manual).
+	var newJumlah = Math.round(bruto-potongan);
 	var newTotalRupiah = newJumlah*rpkg;
 
-	document.getElementById('kgnetto'+idnum).value = newJumlah; 
+	document.getElementById('kgnetto'+idnum).value = newJumlah;
 	document.getElementById('totalrp'+idnum).innerHTML = numberFormat(newTotalRupiah,2);
-	document.getElementById('ttlkgpot').innerHTML = numberFormat(total,0); 
+	document.getElementById('ttlkgpot').innerHTML = numberFormat(total,0);
 }
 function hitungNetto(idnum,idnummax) {
 	var bruto = document.getElementById('kgbruto'+idnum).value;  
@@ -616,12 +914,16 @@ function hitungNetto(idnum,idnummax) {
 	// ============================ //
 
 	// Perhitungan
-	var newJumlah = netto-potongan;
-	var newTotalRupiah = newJumlah*rpkg;
+	// Netto dibulatkan ke kg genap dulu (samain sama rekap Excel manual). Total rupiah dihitung
+	// dari netto (bukan dari newJumlah/bruto hasil turunan) - konsisten sama hitungBruto/hitungPotongan.
+	var nettoBulat = Math.round(netto);
+	var newJumlah = nettoBulat-potongan;
+	var newTotalRupiah = nettoBulat*rpkg;
 
-	document.getElementById('kgbruto'+idnum).value = newJumlah; 
+	document.getElementById('kgnetto'+idnum).value = nettoBulat;
+	document.getElementById('kgbruto'+idnum).value = newJumlah;
 	document.getElementById('totalrp'+idnum).innerHTML = numberFormat(newTotalRupiah,2);
-	document.getElementById('ttlkgbruto').innerHTML = numberFormat(total,0); 
-	document.getElementById('ttlkgnetto').innerHTML = numberFormat(totalnetto,0); 
+	document.getElementById('ttlkgbruto').innerHTML = numberFormat(total,0);
+	document.getElementById('ttlkgnetto').innerHTML = numberFormat(totalnetto,0);
 	document.getElementById('ttlrp').innerHTML = numberFormat(totaltotalrp,0); 
 }
