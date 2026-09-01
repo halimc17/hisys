@@ -96,31 +96,28 @@ switch ($method) {
 			exit("Warning : Potongan Wajib Diisi ");
 		}
 
-		$stream = "<table class=sortable border=1 cellpadding=5 cellspacing=5>
-					<thead>
-					<tr class=rowheader>
-						<td align=center>" . $_SESSION['lang']['nik'] . "</td>
-						<td align=center>" . $_SESSION['lang']['nama'] . "</td>
-						<td align=center>" . $_SESSION['lang']['jabatan'] . "</td>
-						<td align=center>" . $_SESSION['lang']['lokasitugas'] . "</td>
-						<td align=center>" . $_SESSION['lang']['divisi'] . "</td>
-						<td align=center>" . $_SESSION['lang']['jumlah'] . "</td>
-						<td align=center>" . $_SESSION['lang']['keterangan'] . "</td>
-					</tr>
-					</thead><tbody>";
-
-
 		$strdkar = "select karyawanid from " . $dbname . ".datakaryawan_hist a where approval_status='8' and version_type='B' and periodegaji='" . $per . "' and  lokasitugas = '" . $org . "'";
 		$resdkar = fetchdata($strdkar);
 		if (count($resdkar) > 0) {
 			$str = "select namakaryawan,nik,karyawanid,lokasitugas,tipekaryawan from " . $dbname . ".datakaryawan_hist where approval_status='8' and lokasitugas = '" . $org . "' and version_type='B' and periodegaji='" . $per . "' and (tanggalkeluar >= '" . $per . "-01' or tanggalkeluar = '0000-00-00') order by namakaryawan";
 		} else {
-			$str = "select * from " . $dbname . ".datakaryawan 
+			$str = "select * from " . $dbname . ".datakaryawan
 			where (tanggalkeluar='0000-00-00' or tanggalkeluar>'" . date('Y-m-d') . "') and lokasitugas = '" . $org . "' and tipekaryawan != 0 order by namakaryawan";
 		}
 
-
 		$res = fetchData($str);
+
+		$objPHPExcel = new PHPExcel();
+		$sheet = $objPHPExcel->getActiveSheet();
+		$sheet->setCellValue('A1', $_SESSION['lang']['nik']);
+		$sheet->setCellValue('B1', $_SESSION['lang']['nama']);
+		$sheet->setCellValue('C1', $_SESSION['lang']['jabatan']);
+		$sheet->setCellValue('D1', $_SESSION['lang']['lokasitugas']);
+		$sheet->setCellValue('E1', $_SESSION['lang']['divisi']);
+		$sheet->setCellValue('F1', $_SESSION['lang']['jumlah']);
+		$sheet->setCellValue('G1', $_SESSION['lang']['keterangan']);
+
+		$row = 2;
 		foreach ($res as $bar) {
 
 			if ($bar['subbagian'] == '') {
@@ -129,44 +126,40 @@ switch ($method) {
 				$text = $bar['subbagian'];
 			}
 
-			$stream .= "<tr class=rowcontent>
-								<td>" . $bar['nik'] . "</td>
-								<td>" . $bar['namakaryawan'] . "</td>
-								<td>" . getJabatanKaryawan($bar['karyawanid']) . "</td>
-								<td>" . $bar['lokasitugas'] . "</td>
-								<td>" . $text . "</td>
-								<td></td>
-								<td></td>
-							</tr>";
+			$sheet->setCellValueExplicit('A' . $row, $bar['nik'], PHPExcel_Cell_DataType::TYPE_STRING);
+			$sheet->setCellValue('B' . $row, $bar['namakaryawan']);
+			$sheet->setCellValue('C' . $row, getJabatanKaryawan($bar['karyawanid']));
+			$sheet->setCellValueExplicit('D' . $row, $bar['lokasitugas'], PHPExcel_Cell_DataType::TYPE_STRING);
+			$sheet->setCellValue('E' . $row, $text);
+			$row++;
 		}
 
-		$stream .= "</tbody></table>";
-
 		$nop_ = "Daftar_Karyawan_" . $org;
-		if (strlen($stream) > 0) {
-			if ($handle = opendir('tempExcel')) {
-				while (false !== ($file = readdir($handle))) {
-					if ($file != "." && $file != ".." && $file != "index.html") {
-						@unlink('tempExcel/' . $file);
-					}
+		if ($handle = opendir('tempExcel')) {
+			while (false !== ($file = readdir($handle))) {
+				if ($file != "." && $file != ".." && $file != "index.html") {
+					@unlink('tempExcel/' . $file);
 				}
-				closedir($handle);
 			}
-			$handle = fopen("tempExcel/" . $nop_ . ".xls", 'w');
-			if (!fwrite($handle, $stream)) {
-				echo "<script language=javascript>
-						parent.window.alert('Can't convert to excel format');
-						</script>";
-				exit;
-			} else {
-				echo "<script language=javascript>
-						window.location='tempExcel/" . $nop_ . ".xls';
-						</script>";
-			}
-			fclose($handle);
+			closedir($handle);
+		}
+
+		try {
+			$objWriter = PHPExcel_IOFactory::createWriter($objPHPExcel, 'Excel5');
+			$objWriter->save("tempExcel/" . $nop_ . ".xls");
+			echo "<script language=javascript>
+					window.location='tempExcel/" . $nop_ . ".xls';
+					</script>";
+		} catch (Exception $e) {
+			echo "<script language=javascript>
+					parent.window.alert('Can't convert to excel format');
+					</script>";
+			exit;
 		}
 		break;
 	case 'insertfile':
+
+		$previewOnly = (checkPostGet('previewonly', '') == '1');
 
 		if ($org == '') {
 			exit("Warning : Unit Kerja Wajib Diisi ");
@@ -185,13 +178,27 @@ switch ($method) {
 			if (in_array($filetype, array('.xls', '.xlsx'))) {
 				$load = PHPExcel_IOFactory::load($file);
 				$sheets = $load->getActiveSheet()->toArray(null, true, false, true);
-				$firsturut1 = 1;
+				$karyawan_id = makeOption($dbname, 'datakaryawan', 'nik,karyawanid');
+
+				$firsturut1 = null;
+				$maxScanHeader = min(10, count($sheets));
+				for ($r = 1; $r <= $maxScanHeader; $r++) {
+					$nikCandidate = isset($sheets[$r]['A']) ? trim((string)$sheets[$r]['A']) : '';
+					if ($nikCandidate !== '' && isset($karyawan_id[$nikCandidate])) {
+						$firsturut1 = $r - 1;
+						break;
+					}
+				}
+
+				if ($firsturut1 === null) {
+					exit("Warning : Format file tidak valid atau NIK pada file tidak ditemukan di data karyawan. Pastikan file sesuai template.");
+				}
+
 				$i = 1;
 
 				try {
 					$owlPDO->beginTransaction();
 
-					$karyawan_id = makeOption($dbname, 'datakaryawan', 'nik,karyawanid');
 					foreach ($sheets as $sheet) {
 						if ($i <= $firsturut1) {
 							$i++;
@@ -276,6 +283,55 @@ switch ($method) {
 						}
 
 						$i++;
+					}
+
+					if ($previewOnly) {
+						$strPrev = "select nik, jumlahpotongan, keterangan from " . $dbname . ".sdm_potongandt
+							where kodeorg='" . $org . "' and periodegaji='" . $per . "' and tipepotongan='" . $kom . "'
+							order by nik";
+						$resPrev = fetchdata($strPrev);
+						$owlPDO->rollback();
+
+						$infoPrev = "<table cellpadding=2 cellspacing=0 border=0 style='margin-bottom:8px'>
+							<tr><td>" . $_SESSION['lang']['unitkerja'] . "</td><td>:</td><td><b>" . $org . " - " . $nmOrg[$org] . "</b></td></tr>
+							<tr><td>" . $_SESSION['lang']['periode'] . "</td><td>:</td><td><b>" . $per . "</b></td></tr>
+							<tr><td>" . $_SESSION['lang']['potongan'] . "</td><td>:</td><td><b>" . $optNmPotongan[$kom] . "</b></td></tr>
+						</table>";
+
+						if (empty($resPrev)) {
+							echo $infoPrev . "<i>Tidak ada data potongan yang akan disimpan untuk unit ini.</i>";
+							break;
+						}
+
+						$totPrev = 0;
+						$streamPrev = $infoPrev . "<table cellpadding=6 cellspacing=0 border=1 class=sortable style='width:100%;border-collapse:collapse;'>
+							<thead><tr class=rowheader>
+								<th align=center>No</th>
+								<th align=center>NIK</th>
+								<th align=center>Nama Karyawan</th>
+								<th align=center>Jumlah Potongan</th>
+								<th align=center>Keterangan</th>
+							</tr></thead><tbody>";
+						$noPrev = 0;
+						foreach ($resPrev as $pr) {
+							$noPrev++;
+							$totPrev += $pr['jumlahpotongan'];
+							$streamPrev .= "<tr class=rowcontent>
+								<td align=center>" . $noPrev . "</td>
+								<td align=center>" . $optNikKar[$pr['nik']] . "</td>
+								<td>" . $optNmKar[$pr['nik']] . "</td>
+								<td align=right>" . number_format($pr['jumlahpotongan'], 0) . "</td>
+								<td>" . $pr['keterangan'] . "</td>
+							</tr>";
+						}
+						$streamPrev .= "<tr class=rowcontent style='font-weight:bold;background-color:#F5F5F5;'>
+							<td colspan=3 align=center>Total</td>
+							<td align=right>" . number_format($totPrev, 0) . "</td>
+							<td></td>
+						</tr>";
+						$streamPrev .= "</tbody></table>";
+						echo $streamPrev;
+						break;
 					}
 
 					$owlPDO->commit();

@@ -718,6 +718,74 @@ function hapusfill() {
   document.getElementById("filex").value = "";
 }
 
+function previewInsertfile() {
+  var file = document.getElementById("filex").files[0];
+  org = document.getElementById("kodeorg2").value;
+  per = document.getElementById("periode2").value;
+  kom = document.getElementById("potongan2").value;
+
+  if (org == "") {
+    alert("Warning : Harap Unit Kerja Diisikan.");
+    return false;
+  }
+  if (per == "") {
+    alert("Warning : Harap Periode Diisikan.");
+    return false;
+  }
+  if (kom == "") {
+    alert("Warning : Harap Potongan Diisikan.");
+    return false;
+  }
+  if (getValue("filex") == "") {
+    alert("Warning : Tidak ada data yang di upload !");
+    return false;
+  }
+
+  var formdata = new FormData();
+  formdata.append("file", file);
+  formdata.append("fileupload", getValue("filex"));
+  formdata.append("org", org);
+  formdata.append("per", per);
+  formdata.append("kom", kom);
+  formdata.append("previewonly", "1");
+
+  busy_on();
+  var con = createXMLHttpRequest();
+  con.open("POST", "sdm_slave_potongan.php?method=insertfile", true);
+  con.onreadystatechange = eval(respon);
+  con.send(formdata);
+
+  function respon() {
+    if (con.readyState == 4) {
+      if (con.status == 200) {
+        busy_off();
+        if (!isSaveResponse(con.responseText)) {
+          alert(con.responseText);
+        } else {
+          var content =
+            "<div style='background-color:#FFFFFF;'>" +
+            con.responseText +
+            "</div>" +
+            "<div style='text-align:center;margin-top:10px;'>" +
+            "<button class=mybutton onclick=\"closeDialog5();insertfile();\">Lanjutkan Simpan</button>&nbsp;" +
+            "<button class=mybutton onclick=closeDialog5()>Batal</button>" +
+            "</div>";
+          showDialog5(
+            "Preview Data Potongan",
+            content,
+            "700",
+            "auto",
+            "event"
+          );
+        }
+      } else {
+        busy_off();
+        error_catch(con.status);
+      }
+    }
+  }
+}
+
 function insertfile() {
   var file = document.getElementById("filex").files[0];
   org = document.getElementById("kodeorg2").value;

@@ -171,7 +171,7 @@ CLOSE_BOX();
                 <td colspan="2"></td>
                 <td colspan="3">
                     <div>
-                        <button class=mybutton onclick=insertfile()><?php echo $_SESSION['lang']['save'] ?></button>
+                        <button class=mybutton onclick=previewInsertfile()><?php echo $_SESSION['lang']['save'] ?></button>
                         <button class=mybutton onclick=displayList()><?php echo $_SESSION['lang']['cancel'] ?></button>
                     </div>
                 </td>

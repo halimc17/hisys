@@ -6144,7 +6144,11 @@ function normalizeNumberExcel($value)
 		$value
 	);
 
-	$value = preg_replace('/[^0-9,\.\-]/', '', $value);
+	$value = preg_replace('/^(Rp\.?|IDR)/i', '', $value);
+
+	if (!preg_match('/^[0-9,\.\-]+$/', $value)) {
+		return null;
+	}
 
 	if ($value === '' || $value === '-') {
 		return null;
