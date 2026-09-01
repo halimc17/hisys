@@ -110,6 +110,58 @@ function preview() {
     }
   }
 }
+function exportExcel() {
+  unit = document.getElementById("unitId").value;
+  periode = document.getElementById("periodeId").value;
+  tipe = document.getElementById("tipe").value;
+  akunpersediaan = document.getElementById("akunpersediaan").value;
+  divisiId = document.getElementById("divisiId").value;
+  barangId = document.getElementById("barangId").value;
+
+  if (tipe == "" || periode == "" || unit == "") {
+    alert("Form Tidak Boleh Kosong...");
+    return false;
+  }
+
+  if (tipe == "8" || tipe == "8.1") {
+    if (divisiId == "") {
+      alert("Divisi dan barang tidak boleh kosong");
+      return false;
+    }
+  }
+
+  param =
+    "unitId=" +
+    unit +
+    "&proses=" +
+    tipe +
+    "&periodeId=" +
+    periode +
+    "&akunpersediaan=" +
+    akunpersediaan +
+    "&divisiId=" +
+    divisiId +
+    "&barangId=" +
+    barangId +
+    "&export=1";
+  post_response_text("log_slave_3cekselisihgudang.php", param, respon);
+  function respon() {
+    if (con.readyState == 4) {
+      if (con.status == 200) {
+        busy_off();
+        if (!isSaveResponse(con.responseText)) {
+          alert(con.responseText);
+        } else {
+          window.location = "tempExcel/" + con.responseText;
+        }
+      } else {
+        busy_off();
+        error_catch(con.status);
+      }
+    }
+  }
+}
+
 function showDetail(title, ev) {
   content =
     "<fieldset><legend>" +
