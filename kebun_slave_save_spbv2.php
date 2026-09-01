@@ -2,7 +2,7 @@
 //error_reporting(0);
 require_once('master_validation.php');
 require_once('config/connection.php');
-// require_once('config/connection2.php');
+require_once('config/connection2.php');
 include_once('lib/nangkoelib.php');
 include_once('lib/zLib.php');
 include_once('lib/HtmlExcel.php');
