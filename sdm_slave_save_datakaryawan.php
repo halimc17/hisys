@@ -142,16 +142,8 @@ function upload_photo($pathlocation, $dataphoto, $rename)
 			$ext = "";
 			if ($mime_type == "image/jpeg") {
 				$ext = ".jpeg";
-			} elseif ($mime_type == "image/png") {
-				$ext = ".png";
-			} elseif ($mime_type == "image/gif") {
-				$ext = ".gif";
-			} elseif ($mime_type == "image/wbmp") {
-				$ext = ".wbmp";
 			} else {
-				## Kalau kasih warning error waktu update datakaryawan gak kena
-				// return "ERROR: Format sekarang adalah [$mime_type], seharusnya salah satu dari: image/jpeg, image/png, image/gif, image/wbmp";
-				$ext = "";
+				return "ERROR: Format foto [$mime_type] tidak didukung, foto harus format JPEG";
 			}
 
 			$filename = $path . $rename . $ext;
@@ -186,30 +178,21 @@ switch ($method) {
 			exit($photo);
 		}
 		$updatePhoto = updateQuery($dbname, 'datakaryawan', $data, "karyawanid='" . $karyawanid . "'");
-		if ($owlPDO->exec($updatePhoto)) {
+		try {
+			// exec() return jumlah baris berubah, bukan status sukses. Nama file foto
+			// selalu sama (photo_<karyawanid>.jpeg) walau isi gambarnya beda, jadi kolom
+			// `photo` seringkali tidak berubah nilainya (0 rows affected) padahal query-nya sukses.
+			$owlPDO->exec($updatePhoto);
 			$result = array('success' => true, 'message' => 'Photo berhasil diupdate', 'photo' => $param['photo']);
-		} else {
-			$result = array('success' => false, 'message' => 'Photo gagal diupdate', 'error' => $updatePhoto);
+		} catch (PDOException $e) {
+			$result = array('success' => false, 'message' => 'Photo gagal diupdate', 'error' => $e->getMessage());
 		}
 		echo json_encode($result);
 		break;
 	case 'deletePhoto':
-		$sKaryawan = selectQuery($dbname, 'datakaryawan', 'photo', "nik='" . $nik . "'");
-		$rKaryawan = fetchData($sKaryawan);
-		$pathlocation = "./photokaryawan/";
-		$dataphoto = $rKaryawan[0]['photo'];
-		unlink($pathlocation . $dataphoto);
-		$data = [
-			'photo' => '',
-		];
-		$updatePhoto = updateQuery($dbname, 'datakaryawan', $data, "nik='" . $nik . "'");
-		if ($owlPDO->exec($updatePhoto)) {
-			$result = array('success' => true, 'message' => 'Photo berhasil dihapus', 'photo' => $param['photo']);
-		} else {
-			$result = array('success' => false, 'message' => 'Photo gagal dihapus', 'error' => $updatePhoto);
-		}
-		echo json_encode($result);
-		break;
+		// Foto wajib ada untuk setiap karyawan, jadi tidak boleh dihapus sampai kosong.
+		// Untuk mengganti foto, upload foto baru lewat method 'savePhoto' (otomatis menimpa yang lama).
+		exit("Warning : Foto tidak dapat dihapus karena wajib diisi. Silakan upload foto baru untuk menggantinya.");
 	case 'getDivisi';
 		$divisi = "<option value=''></option>";
 
@@ -738,24 +721,24 @@ switch ($method) {
 			}
 		}
 
-		if ($photo == '') {
-			exit("Warning : Photo wajib diisi !");
-		}
-
-		if ($photo != "") {
+		// Foto karyawan existing sekarang disimpan lewat method 'savePhoto' (multipart)
+		// yang terpisah dari update ini, jadi $photo di sini normalnya selalu kosong.
+		// Guard data:image tetap dijaga sebagai proteksi kalau suatu saat ada
+		// pemanggil lain yang tetap mengirim foto lewat method ini.
+		if (stripos($photo, 'data:image') === 0) {
 			$path = "./photokaryawan/";
 			$renamephoto = "photo_" . $karyawanid;
 			$oldfile = $oldData['photo'];
-			if ($oldfile != "") {
+			$uploadname = upload_photo($path, $photo, $renamephoto);
+			if (stripos($uploadname, "error") !== false) {
+				exit($uploadname);
+			}
+			if ($oldfile != "" and $oldfile != $uploadname) {
 				unlink($path . $oldfile);
 			}
-			$uploadname = upload_photo($path, $photo, $renamephoto);
 			$upload_update = "`photo`='" . $uploadname . "',";
 		} else {
 			$upload_update = "";
-		}
-		if (stripos($uploadname, "error") !== false) {
-			exit($uploadname);
 		}
 		$loktgs = $nmkaryktp = "";
 		$cekktp = "select noktp,namakaryawan,lokasitugas,tanggalkeluar from " . $dbname . ".datakaryawan where noktp='" . $noktp . "' and karyawanid!='" . $karyawanid . "'AND (tanggalkeluar IS NULL OR tanggalkeluar='0000-00-00')";

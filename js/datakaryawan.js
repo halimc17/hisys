@@ -60,8 +60,27 @@ function gettanggalangkat(){
 // }
 
 
+// Sama seperti post_response_text() di generic.js, tapi tanpa pengecekan
+// isSaveResponse() pada seluruh body request. Dipakai khusus saat request
+// membawa foto (base64), karena isi foto yang panjang & acak bisa kebetulan
+// mengandung kata "error"/"warning"/"gagal" dan salah terdeteksi sebagai
+// kata terlarang. Pemanggil wajib sudah mengecek field non-foto sendiri.
+function post_response_text_photo(tujuan, param, functiontoexecute) {
+	busy_on();
+	zz = verify();
+	if (zz) {
+		par = parent.location.href.replace("http://", "");
+		par = par.replace("https://", "");
+		param += "&par=" + par;
+		con.open("POST", tujuan, true);
+		con.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+		con.onreadystatechange = eval(functiontoexecute);
+		con.send(param);
+	} else window.location = "logout.php";
+}
+
 //==========================================================
-// Abdul 
+// Abdul
 function savePhoto() {
 	var nik = document.querySelector("#nik").value;
 	var photo = document.querySelector('#displayphoto').getAttribute("src");
@@ -93,6 +112,7 @@ function savePhoto() {
 					alertify.alert(con.responseText);
 				} else {
 					//=== Success Response
+					document.getElementById('savePhoto').hidden = true;
 					alertify.alert('Uploaded Success.');
 				}
 			} else {
@@ -106,30 +126,9 @@ function savePhoto() {
 //======================================================================
 
 function deletePhoto() {
-	const nik = document.querySelector("#nik").value;
-	const photo = document.querySelector('#displayphoto').getAttribute("src");
-
-	param = `method=deletePhoto&nik=${nik}&photo=${photo}`;
-	tujuan = 'sdm_slave_save_datakaryawan.php';
-	post_response_text(tujuan, param, respog);
-	function respog() {
-		if (con.readyState == 4) {
-			if (con.status == 200) {
-				busy_off();
-				if (!isSaveResponse(con.responseText)) {
-					const photoEl = document.querySelector('#displayphoto');
-					photoEl.setAttribute('src', '');				
-				} else {
-					const photo = document.querySelector('#displayphoto');
-					photo.setAttribute('src', '');
-					alertify.alert("Delete Success");
-				}
-			} else {
-				busy_off();
-				error_catch(con.status);
-			}
-		}
-	}
+	// Foto wajib ada untuk setiap karyawan, jadi tidak boleh dihapus sampai kosong.
+	// Untuk mengganti foto, pilih foto baru lalu klik "Save Photo" (otomatis menimpa yang lama).
+	alertify.alert('Foto tidak dapat dihapus karena wajib diisi.\nUntuk mengganti foto, pilih foto baru lalu klik "Save Photo".');
 }
 
 function getDivisi(){
@@ -466,12 +465,12 @@ function getImageSizeInBytes(imgURL) {
 }
 function readURL(data) {
 	if (data.files && data.files[0]) {
-		var typeimg = ["image/jpeg", "image/png", "image/gif", "image/wbmp"];
+		var typeimg = ["image/jpeg"];
 		var a = typeimg.indexOf(data.files[0].type);
-		if (data.files[0].size > 10000000) {
-			alertify.alert("Image Max. 7 MB");
+		if (data.files[0].size > 2 * 1024 * 1024) {
+			alertify.alert("Ukuran foto maksimal 2 MB");
 		} else if (a == -1) {
-			alertify.alert("File Image Anda selain [ jpeg,png,gif,wbmp ] !!");
+			alertify.alert("Format foto harus JPEG !!");
 		} else {
 			var reader = new FileReader();
 			reader.onload = function (e) {
@@ -490,6 +489,12 @@ function readURL(data) {
 					photoboth.style.width = "150px";
 					photoboth.style.height = height + "px";
 					photoboth.style.border = "solid 2px #FFF";
+
+					// Untuk karyawan existing (mode update), foto disimpan lewat
+					// tombol "Save Photo" (multipart), bukan ikut tombol Simpan.
+					if (document.getElementById('method').value == 'update') {
+						document.getElementById('savePhoto').hidden = false;
+					}
 				}
 			};
 			reader.readAsDataURL(data.files[0]);
@@ -688,7 +693,7 @@ function simpanKaryawan() {
 		alertify.alert('ID: Jika periode gaji terakhir di input maka tanggal keluar harus di input');
 	} else {
 
-		param = 'nik=' + nik + '&namakaryawan=' + namakaryawan + '&tempatlahir=' + tempatlahir + '&photo=' + photo;
+		param = 'nik=' + nik + '&namakaryawan=' + namakaryawan + '&tempatlahir=' + tempatlahir;
 		param += '&tanggallahir=' + tanggallahir + '&noktp=' + noktp;
 		param += '&nopassport=' + nopassport + '&npwp=' + npwp + '&bpjs=' + bpjs + '&kodepos=' + kodepos + '&pensiun=' + pensiun;
 		param += '&alamataktif=' + alamataktif + '&kota=' + kota + '&noteleponrumah=' + noteleponrumah
@@ -719,11 +724,28 @@ function simpanKaryawan() {
 		param += '&bulandaftarbpjs=' + bulandaftarbpjs;
 		param += '&levelkaryawan=' + levelkaryawan;
 
-		
+		// Cek kata terlarang hanya pada field yang diisi manual oleh user.
+		// Foto (base64) sengaja tidak ikut dicek karena isinya data biner acak
+		// yang kebetulan bisa saja mengandung teks "error"/"warning"/"gagal".
+		if (!isSaveResponse(param)) {
+			alertify.alert('errorcode : Hindari penggunaan kata : ERROR, WARNING dan GAGAL');
+			return false;
+		}
+
+		if (method == 'insert') {
+			// Karyawan baru: foto wajib & langsung ikut tersimpan dalam satu langkah.
+			param += '&photo=' + encodeURIComponent(photo);
+		} else if (!document.getElementById('savePhoto').hidden) {
+			// Karyawan existing: ada foto baru yang dipilih tapi belum di-"Save Photo".
+			if (!confirm('Anda memilih foto baru tapi belum klik "Save Photo".\nFoto baru TIDAK akan ikut tersimpan kalau lanjut.\nLanjutkan menyimpan data lainnya?')) {
+				return false;
+			}
+		}
+
 		tujuan = 'sdm_slave_save_datakaryawan.php';
 		if (confirm('Menyimpan riwayat data untuk ' + namakaryawan + '.  Apakah Anda yakin?'))
 
-			post_response_text(tujuan, param, respog);
+			post_response_text_photo(tujuan, param, respog);
 		}
 
 	function respog() {
@@ -863,6 +885,7 @@ function cancelDataKaryawan() {
 	document.getElementById('sim').value = '';
 	document.getElementById('dptPremi').checked = false;
 	document.getElementById('method').value = 'insert';
+	document.getElementById('savePhoto').hidden = true;
 	document.getElementById('tabFRM0').innerHTML = 'Karyawan Baru';
 	document.getElementById('container').innerHTML = '';
 	document.getElementById('containerpendidikan').innerHTML = '';
@@ -2145,7 +2168,9 @@ function loadFormKaryawan(tex) {
 	if (displayphoto !== "*") {
 		//console.log("photokaryawan/"+displayphoto);
 		var photoimg = document.getElementById('displayphoto');
-		photoimg.setAttribute("src", "photokaryawan/" + displayphoto);
+		// Nama file foto tetap sama walau isinya diganti (photo_<karyawanid>.jpeg),
+		// jadi perlu cache-buster supaya browser tidak menampilkan foto lama dari cache.
+		photoimg.setAttribute("src", "photokaryawan/" + displayphoto + "?v=" + new Date().getTime());
 		var photoboth = document.getElementById('photoboth');
 		photoimg.style.width = 150 + "px";
 		photoboth.style.backgroundImage = "";
@@ -2380,6 +2405,7 @@ function loadFormKaryawan(tex) {
 	document.getElementById('alokasi').value = alokasi;
 	//change the method to update===========================
 	document.getElementById('method').value = 'update';
+	document.getElementById('savePhoto').hidden = true;
 	document.getElementById('karyawanid').value = karyawanid;
 	document.getElementById('karyawanidreward').value = karyawanid;
 
@@ -2591,7 +2617,9 @@ function loadFormKaryawanhist(tex) {
 	if (displayphoto !== "*") {
 		//console.log("photokaryawan/"+displayphoto);
 		var photoimg = document.getElementById('displayphoto');
-		photoimg.setAttribute("src", "photokaryawan/" + displayphoto);
+		// Nama file foto tetap sama walau isinya diganti (photo_<karyawanid>.jpeg),
+		// jadi perlu cache-buster supaya browser tidak menampilkan foto lama dari cache.
+		photoimg.setAttribute("src", "photokaryawan/" + displayphoto + "?v=" + new Date().getTime());
 		var photoboth = document.getElementById('photoboth');
 		photoimg.style.width = 150 + "px";
 		photoboth.style.backgroundImage = "";
@@ -2810,6 +2838,7 @@ function loadFormKaryawanhist(tex) {
 	document.getElementById('alokasi').value = alokasi;
 	//change the method to update===========================
 	document.getElementById('method').value = 'update';
+	document.getElementById('savePhoto').hidden = true;
 	document.getElementById('nourut').value = nourut;
 	document.getElementById('karyawanid').value = karyawanid;
 	document.getElementById('karyawanidreward').value = karyawanid;
