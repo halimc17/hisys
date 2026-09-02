@@ -73,6 +73,24 @@ $kamusjenis['6'] = 'Pengembalian penerimaan';
 $kamusjenis['7'] = 'Pengeluaran mutasi';
 $kamusjenis['8'] = 'Pengeluaran Adjustment';
 
+// export excel, pola sama seperti keu_kasdanbank_slave.php (tulis file ke tempExcel/, browser download filenya)
+function exportTabToExcel($tab, $proses)
+{
+    if (!is_dir('tempExcel')) {
+        mkdir('tempExcel', 0755, true);
+    }
+
+    // bersihkan file lama milik modul ini saja (jangan ganggu file modul lain di folder bersama ini)
+    foreach (glob('tempExcel/CekSelisihGudang_Tipe*.xls') as $oldFile) {
+        @unlink($oldFile);
+    }
+
+    $filename = 'CekSelisihGudang_Tipe' . str_replace('.', '_', $proses) . '_' . date('YmdHis') . '.xls';
+    $handle = fopen('tempExcel/' . $filename, 'w');
+    fwrite($handle, $tab);
+    fclose($handle);
+    echo $filename;
+}
 
 switch ($proses) {
     #=cek gudang divisi harus 0
@@ -171,7 +189,11 @@ switch ($proses) {
 
         $tab .= "</tbody></table>";
 
-        echo $tab;
+        if (isset($param['export']) && $param['export'] == '1') {
+            exportTabToExcel($tab, $proses);
+        } else {
+            echo $tab;
+        }
         break;
 
 
@@ -513,7 +535,11 @@ switch ($proses) {
 
         $tab .= "</tbody></table>";
 
-        echo $tab;
+        if (isset($param['export']) && $param['export'] == '1') {
+            exportTabToExcel($tab, $proses);
+        } else {
+            echo $tab;
+        }
         break;
 
 
@@ -634,8 +660,11 @@ switch ($proses) {
             }
         }
 
-        echo $tab;
-
+        if (isset($param['export']) && $param['export'] == '1') {
+            exportTabToExcel($tab, $proses);
+        } else {
+            echo $tab;
+        }
 
         break;
 
@@ -763,7 +792,11 @@ switch ($proses) {
             }
         }
 
-        echo $tab;
+        if (isset($param['export']) && $param['export'] == '1') {
+            exportTabToExcel($tab, $proses);
+        } else {
+            echo $tab;
+        }
 
         break;
 
@@ -942,7 +975,11 @@ switch ($proses) {
 
         $tab .= "</tbody></table>";
 
-        echo $tab;
+        if (isset($param['export']) && $param['export'] == '1') {
+            exportTabToExcel($tab, $proses);
+        } else {
+            echo $tab;
+        }
         break;
 
 
@@ -1167,7 +1204,11 @@ switch ($proses) {
         $tab .= "</tbody></table>";
 
 
-        echo $tab;
+        if (isset($param['export']) && $param['export'] == '1') {
+            exportTabToExcel($tab, $proses);
+        } else {
+            echo $tab;
+        }
 
         /* * ************************************************************
         * [END] Rekalkulasi harga ********************

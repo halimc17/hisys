@@ -141,7 +141,10 @@ OPEN_BOX('', '<span class=judul>' . (getMenu('log_3cekselisihgudang')) . '</span
             <tr>
                 <td>
                 <td>
-                <td><button onclick="preview('html',event)" class="mybutton" name="preview" id="preview"><? echo $_SESSION['lang']['preview'] ?></button></td>
+                <td>
+                    <button onclick="preview('html',event)" class="mybutton" name="preview" id="preview"><? echo $_SESSION['lang']['preview'] ?></button>
+                    <button onclick="exportExcel()" class="mybutton" name="exportExcel" id="exportExcel">Export Excel</button>
+                </td>
             </tr>
 
         </table>

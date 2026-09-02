@@ -556,15 +556,15 @@ $frm[0]="<fieldset style='width:".$widthfieldset."px;text-align:center;'><legend
 					<div id='photoboth' class='photoboth' onclick=\"chooseFile('fupload');\" style=\"background-image:url('images/user-alerts.svg');\">
 						<img src='' id=displayphoto >
 						<div style='height:0px;overflow:hidden'>
-							<input id='fupload' type='file' name='fupload' oninput='readURL(this);'>
+							<input id='fupload' type='file' name='fupload' accept='image/jpeg' oninput='readURL(this);'>
 						</div>
 					</div>
 					<div class='caption_uploadimage'>
-						<img src='images/box/icon-warning.gif' width='10'> Upload Photo </br> (Max 2 MB)
+						<img src='images/box/icon-warning.gif' width='10'> Upload Photo </br> (Max 2 MB) </br> Klik foto untuk mengganti
 					</div>
 					<div class='btn-group'>
 						<button hidden class='btn btn-info' id='savePhoto' onclick=\"savePhoto();\"><i class='fa fa-upload'></i> Save Photo</button>
-						<button class='btn btn-danger' id='deletePhoto' onclick=\"deletePhoto()\"><i class='fa fa-trash'></i> Delete Photo</button>
+						<button hidden class='btn btn-danger' id='deletePhoto' onclick=\"deletePhoto()\"><i class='fa fa-trash'></i> Delete Photo</button>
 					</div>
 				</div>
 			</td>
