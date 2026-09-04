@@ -531,18 +531,16 @@ switch($method){
 	case'loaddatadt':
 			$notransaksi = $param['notransaksi'];
 
+			$tglAwalBaru  = tanggalsystemn($param['tanggaltbs1']);
+			$tglAkhirBaru = tanggalsystemn($param['tanggaltbs2']);
+
 			// 1. Cek Sumber Data
 			$strcount = "SELECT count(*) as count FROM ".$dbname.".kebun_tbsjual WHERE notransaksi='".$notransaksi."'";
 			$rescount = fetchdata($strcount);
 
-			if ($rescount[0]['count'] > 0) {
-					$tabledata = "kebun_tbsjual";
-					$whrdata = "AND unit='".$param['unit']."' AND kodecustomer='".$param['kodecustomer']."' AND notransaksi='{$notransaksi}'";
-			} else {
+			if ($rescount[0]['count'] == 0) {
 					// Transaksi baru - cek dulu apakah periode tanggal ini (unit+customer yang sama)
 					// sudah pernah ditarik jadi BA Penjualan lain, biar gak ke-double tarik tiket yang sama.
-					$tglAwalBaru  = tanggalsystemn($param['tanggaltbs1']);
-					$tglAkhirBaru = tanggalsystemn($param['tanggaltbs2']);
 					$strCekSudahTarik = "select distinct notransaksi, tanggaltbs1, tanggaltbs2 from ".$dbname.".kebun_tbsjual
 							where unit='".$param['unit']."' and kodecustomer='".$param['kodecustomer']."'
 							and tanggaltbs1 <= '".$tglAkhirBaru."' and tanggaltbs2 >= '".$tglAwalBaru."'";
@@ -555,10 +553,16 @@ switch($method){
 							echo "Warning:Periode tanggal ".tanggalnormal($tglAwalBaru)." s/d ".tanggalnormal($tglAkhirBaru)." untuk unit & customer ini sudah pernah ditarik di BA Penjualan: ".implode(', ', $daftarBentrok).". Tidak bisa ditarik berulang.";
 							exit;
 					}
-
-					$tabledata = "pabrik_timbangan_vw";
-					$whrdata = "AND kodeorg='".$param['unit']."' AND tanggal BETWEEN '".$tglAwalBaru."' AND '".$tglAkhirBaru."' AND kodecustomer='".$param['kodecustomer']."'";
 			}
+
+			// Sumber data SELALU dari tabel timbangan asal (bukan dari kebun_tbsjual yang sudah
+			// tersimpan) - baik transaksi baru maupun yang sudah pernah disimpan. Ini penting karena
+			// 1 baris tersimpan di kebun_tbsjual cuma nyimpen 1 nospb wakil dari gabungan beberapa
+			// tiket (truck+tanggal+tahun tanam yang sama), jadi kalau narik ulang berdasarkan nospb
+			// yang tersimpan itu, tiket lain yang aslinya ikut digabung akan hilang dan angka jadi
+			// lebih kecil / berubah setiap kali form ini dibuka ulang setelah simpan.
+			$tabledata = "pabrik_timbangan_vw";
+			$whrdata = "AND kodeorg='".$param['unit']."' AND tanggal BETWEEN '".$tglAwalBaru."' AND '".$tglAkhirBaru."' AND kodecustomer='".$param['kodecustomer']."'";
 
 			// 2. Ambil Data Transaksi Utama
 			$str = "SELECT nospb, tanggal, notiket FROM ".$dbname.".".$tabledata." WHERE 1=1 $whrdata";
@@ -986,7 +990,7 @@ switch($method){
 		$param['oldkgnetto']=str_replace(',', '',$param['oldkgnetto']);
 		$param['oldkgpotongan']=str_replace(',', '',$param['oldkgpotongan']);
 		$param['oldjjg']=str_replace(',', '',$param['oldjjg']);
-		$param['oldbjr']=(str_replace(',', '',$param['oldkgnetto'])/str_replace(',', '',$param['oldjjg']));
+		$param['oldbjr']=($param['oldjjg']>0 ? ($param['oldkgnetto']/$param['oldjjg']) : 0);
 		
 		if($param['sortasi'] == "") {
 			$param['sortasi'] = 0;
