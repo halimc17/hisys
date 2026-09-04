@@ -978,7 +978,8 @@ switch($method){
 		$param['kgnetto']=str_replace(',', '',$param['kgnetto']);
 		$param['kgpotongan']=str_replace(',', '',$param['kgpotongan']);
 		$param['jjg']=str_replace(',', '',$param['jjg']);
-		
+		$param['bjr']=($param['jjg']>0 ? ($param['kgnetto']/$param['jjg']) : 0);
+
 		# Data OLD
 		$param['oldtotalrp']=(str_replace(',', '',$param['rpkg'])*str_replace(',', '',$param['oldkgnetto']));
 		$param['oldkgbruto']=str_replace(',', '',$param['oldkgbruto']);
