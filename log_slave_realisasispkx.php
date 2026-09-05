@@ -1118,7 +1118,7 @@ switch ($method) {
 		if (substr($kodekegdt, 0, 3) == '611' and $getBlok[substr($kodekegdt, 0, 3)] != 'TM') {
 			exit("Gagal, Kegiatan " . getNamaKeg($kodekegdt) . " harus menggunakan blok TM.");
 		}
-		if (substr($kodekegdt, 0, 3) == '126' and ($getBlok[substr($kodekegdt, 0, 3)] != 'TBM' and $getBlok[substr($kodekegdt, 0, 3)] != 'TB')) {
+		if (substr($kodekegdt, 0, 3) == '126' and ($getBlok[substr($kodekegdt, 0, 3)] != 'TBM' or $getBlok[substr($kodekegdt, 0, 3)] != 'TB')) {
 			exit("Gagal, Kegiatan " . getNamaKeg($kodekegdt) . " harus menggunakan blok TBM atau TB.\nStatus Blok " . getNamaOrg($kodeblokdt2) . " = " . $getBlok[substr($kodekegdt, 0, 3)]);
 		}
 
