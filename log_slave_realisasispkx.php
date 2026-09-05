@@ -687,7 +687,7 @@ switch ($method) {
 		} else {
 			$str_blok = "SELECT b.kodeorganisasi as kodeorg, b.namaorganisasi as namaorg FROM " . $dbname . ".setup_blok a LEFT JOIN " . $dbname . ".organisasi b 
 				ON a.kodeorg = b.kodeorganisasi 
-				WHERE a.luasareaproduktif >0 and b.kodeorganisasi like '" . substr($divisi, 0, 6) . "%' 
+				WHERE (a.luasareaproduktif > 0 OR a.lc > 0 OR a.luasbloking > 0) and b.kodeorganisasi like '" . substr($divisi, 0, 6) . "%' 
 				and length(b.kodeorganisasi)>6";
 			$res_blok = $owlPDO->query($str_blok) or die(print " Gagal: " . PDOException::getMessage());
 			$res_blok->setFetchMode(PDO::FETCH_OBJ);
@@ -856,7 +856,7 @@ switch ($method) {
 
 		$str = "SELECT b.kodeorganisasi as kodeorg, b.namaorganisasi as namaorg FROM " . $dbname . ".setup_blok a LEFT JOIN " . $dbname . ".organisasi b 
 			ON a.kodeorg = b.kodeorganisasi 
-			WHERE a.luasareaproduktif >0 and b.kodeorganisasi like '" . substr($divisi, 0, 4) . "%' 
+			WHERE (a.luasareaproduktif > 0 OR a.lc > 0 OR a.luasbloking > 0) and b.kodeorganisasi like '" . substr($divisi, 0, 4) . "%' 
 			and length(b.kodeorganisasi)>6";
 		$res = fetchdata($str);
 		foreach ($res as $val) {
@@ -1095,7 +1095,7 @@ switch ($method) {
 		$str = "select indukblok,statusblok,kodeorg from " . $dbname . ".setup_blok where indukblok like '" . $kodeblokdt2 . "%'";
 		$getBlokk = fetchdata($str);
 		foreach ($getBlokk as $v) {
-			if ($v['statusblok'] == 'TB' || $v['statusblok'] == 'TBM') {
+			if ($v['statusblok'] == 'TB' || $v['statusblok'] == 'TBM' || $v['statusblok'] == 'LC') {
 				$getBlok['126'] = $v['statusblok'];
 			}
 			if ($v['statusblok'] == 'BBT') {
