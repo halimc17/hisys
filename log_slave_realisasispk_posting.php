@@ -428,24 +428,31 @@ foreach ($res as $v) {
 }
 
 if ($kelbyy == '126') {
-	$whblok = " and statusblok='TBM' and luasareaproduktif>0  and " . $whrcol . " like '" . $blok . "%'";
-	if (!in_array('TBM', $statusbloknya)) {
-		exit("Gagal, Kegiatan " . getNamaKeg($param['kodekegiatan']) . " harus menggunakan blok TBM atau TB.");
+
+	$whblok = " and statusblok in ('TBM','TB','LC')
+	and (luasareaproduktif > 0 OR lc > 0 OR luasbloking > 0)
+	and " . $whrcol . " like '" . $blok . "%'";
+
+	if (!array_intersect(['TBM', 'TB', 'LC'], $statusbloknya)) {
+    exit("Gagal, Kegiatan " . getNamaKeg($param['kodekegiatan']) . " harus menggunakan blok TBM, TB, atau LC.");
 	}
 
-	if (!in_array('TBM', $statusbloknya)) {
-		exit("Gagal, Kegiatan " . getNamaKeg($param['kodekegiatan']) . " harus menggunakan blok TBM atau TB.");
+	if (!array_intersect(['TBM', 'TB', 'LC'], $statusbloknya)) {
+    exit("Gagal, Kegiatan " . getNamaKeg($param['kodekegiatan']) . " harus menggunakan blok TBM, TB, atau LC.");
 	}
+
 } elseif ($kelbyy == '128') {
 	if (substr($param['kodekegiatan'], 0, 5) == '12801') {
 		$whblok = " and statusblok='BBT' and kodeorg like '%PN%'";
 	} else {
 		$whblok = " and statusblok='BBT' and kodeorg like '%MN%'";
 	}
+
 	if (!in_array('BBT', $statusbloknya)) {
 		exit("Gagal, Kegiatan " . getNamaKeg($param['kodekegiatan']) . " harus menggunakan blok Bibitan.");
 	}
 } elseif ($kelbyy == '621') {
+
 	$whblok = " and statusblok='TM' and luasareaproduktif>0  and " . $whrcol . " like '" . $blok . "%'";
 	if (!in_array('TM', $statusbloknya)) {
 		$ttnya = (date('Y') - $tahuntanamnya[$blok]);
@@ -454,6 +461,7 @@ if ($kelbyy == '126') {
 		}
 	}
 } elseif ($kelbyy == '611') {
+
 	$whblok = " and statusblok='TM' and luasareaproduktif>0  and " . $whrcol . " like '" . $blok . "%'";
 	if (!in_array('TM', $statusbloknya)) {
 		$ttnya = (date('Y') - $tahuntanamnya[$blok]);
@@ -461,6 +469,7 @@ if ($kelbyy == '126') {
 			exit("Gagal, Kegiatan " . getNamaKeg($param['kodekegiatan']) . " harus menggunakan blok TM.");
 		}
 	}
+
 } else {
 	$whblok = " and kodeorg=''";
 }
