@@ -577,7 +577,7 @@ switch ($method) {
 			}
 		}else{
 			if($jenis=='KEBUN'){
-				$wh.=" and indukblok like '".$unit."%' and indukblok in (select indukblok from ".$dbname.".setup_blok where luasareaproduktif>0 and status='A')";
+				$wh.=" and indukblok like '".$unit."%' and indukblok in (select indukblok from ".$dbname.".setup_blok where (luasareaproduktif > 0 OR lc > 0 OR luasbloking > 0) and status='A')";
 			}else if($jenis=='PABRIK'){
 				$wh.=" and induk='".$unit."'";
 			}else{
@@ -649,13 +649,14 @@ switch ($method) {
 				}
 			}
 		}
+		
 		$whr='';
 		if($jenis=='KEBUN' and $divisi!=''){
-			$whr.=" and kelompok in ('BBT','PNN','TB','TBM','TM')";
+			$whr.=" and kelompok in ('BBT','PNN','TB','TBM','TM','LC')";
 		}elseif($jenis=='KEBUN' and $divisi==''){
 			$whr.=" and kelompok in ('KNT')";
 		}elseif($jenis=='SEWA.HM' and $divisi!=''){
-			$whr.=" and kelompok in ('TRK','BBT','PNN','TB','TBM','TM')";
+			$whr.=" and kelompok in ('TRK','BBT','PNN','TB','TBM','TM','LC')";
 		}elseif($jenis=='ANGKUTTBS' and $divisi!=''){
 			$whr.=" and kelompok in ('PNN')";
 		}else{
