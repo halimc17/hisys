@@ -160,6 +160,18 @@ switch ($method) {
 		echo $optadk . "###" . $optnik . "###" . $optvhc . "###" . $optalokasi . "###" . $optnoakun . "###" . $optkodekegiatan . "###" . $kodekegiatan . "###" . $kodeblok;
 		break;
 
+	case 'getkurs':
+		$kurs = 1;
+		if ($param['matauang'] != 'IDR') {
+			$str = "select * from " . $dbname . ".setup_matauangrate where
+				kode='" . $param['matauang'] . "' and daritanggal<='" . tanggalsystemn($param['tanggal']) . "' order by daritanggal desc limit 1 ";
+			$res = fetchdata($str);
+			$kurs = $res[0]['kurs'];
+		}
+		echo $kurs;
+
+		break;
+
 	case 'getkodekegiatanalokasi':
 
 
@@ -2145,18 +2157,20 @@ switch ($method) {
 
 			if ($param['jalanke'] == '1') {
 				$data = array(
-					'nojurnal' => $param['nojurnal'],
-					'kodeorg'    => $param['kodeorg'],
-					'kodejurnal' => $param['kodejurnal'],
-					'tanggal'    => $param['tanggalupload'],
-					'tanggalentry' => $param['tanggalupload'],
-					'posting'	 => '0',
+					'nojurnal' 		=> $param['nojurnal'],
+					'kodeorg'    	=> $param['kodeorg'],
+					'kodejurnal' 	=> $param['kodejurnal'],
+					'tanggal'    	=> $param['tanggalupload'],
+					'tanggalentry' 	=> $param['tanggalupload'],
+					'posting'	 			=> '0',
 					'totaldebet'    => $param['totaldebet'],
-					'totalkredit'    => $param['totalkredit'],
-					'createby'   => $_SESSION['standard']['userid'],
-					'createtime'   => date('Y-m-d H:i:s'),
-					'updatetime'   => date('Y-m-d H:i:s'),
-					'updateby'   => ''
+					'totalkredit'   => $param['totalkredit'],
+					'matauang'    	=> 'IDR',
+					'kurs'    			=> '1',
+					'createby'   		=> $_SESSION['standard']['userid'],
+					'createtime'   	=> date('Y-m-d H:i:s'),
+					'updatetime'   	=> date('Y-m-d H:i:s'),
+					'updateby'   		=> ''
 				);
 
 				$cols = array();

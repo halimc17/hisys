@@ -141,6 +141,38 @@ function loaddata(num) {
   }
 }
 
+function getkurs() {
+  matauang = document.getElementById("matauang").value;
+  tanggal = document.getElementById("tanggal").value;
+  method = "getkurs";
+  param = "";
+  param += "&matauang=" + matauang + "&tanggal=" + tanggal;
+  param += "&method=" + method;
+  if (tanggal == "" || matauang == "") {
+    alertify.alert("tanggal atau matauang masih kosong");
+    document.getElementById("matauang").value = "IDR";
+    document.getElementById("kurs").value = "1";
+    return;
+  }
+  tujuan = "keu_jurnalmemorial_slave.php";
+  post_response_text(tujuan, param, respog);
+  function respog() {
+    if (con.readyState == 4) {
+      if (con.status == 200) {
+        busy_off();
+        if (!isSaveResponse(con.responseText)) {
+          alertify.alert("Informasi", con.responseText);
+        } else {
+          document.getElementById("kurs").value = con.responseText;
+        }
+      } else {
+        busy_off();
+        error_catch(con.status);
+      }
+    }
+  }
+}
+
 function getrevisi(revisi) {
   tipetransaksi = document.getElementById("tipetransaksi").value;
   if (tipetransaksi == "JM") {
@@ -249,8 +281,8 @@ function editht(nojurnal) {
           ar = con.responseText.split("###");
           document.getElementById("nojurnal").value = ar[0];
           document.getElementById("kodeorg").value = ar[1];
-          document.getElementById("kodeorg").disabled = true;
-          document.getElementById("matauang").disabled = true;
+          document.getElementById("kodeorg").disabled = false;
+          document.getElementById("matauang").disabled = false;
           document.getElementById("tanggal").value = ar[2];
           document.getElementById("matauang").value = ar[3];
           document.getElementById("kurs").value = ar[4];
