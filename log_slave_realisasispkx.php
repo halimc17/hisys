@@ -326,10 +326,13 @@ switch ($method) {
 			// 	// print_r($bar);
 			// 	exit("Warning");
 			// }
+			
 			if ($rAlokasi['kelompok'] == 'PNN') {
 				$statusblok = " and statusblok = 'TM'";
 			} else if ($rAlokasi['kelompok'] == 'LC') {
 				$statusblok = " and statusblok IN ('LC','TBM')";
+			} else if ($rAlokasi['kelompok'] == 'TB') {
+				$statusblok = " and statusblok IN ('TB')";
 			} else {
 				$statusblok = " and statusblok = '" . $rAlokasi['kelompok'] . "'";
 			}
@@ -350,8 +353,14 @@ switch ($method) {
 			} else {
 				$indukblok = $subunit[0];
 			}
-			$str_blok = selectQuery($dbname, 'organisasi', 'kodeorganisasi,namaorganisasi,indukblok,namaindukblok', "indukblok like '" . $indukblok . "%' and (tipe='BLOK' OR tipe='BIBITAN') and kodeorganisasi in 
-                (select distinct kodeorg from $dbname.setup_blok where indukblok like '" . $indukblok . "%' and luasareaproduktif>0 $statusblok and status='A') group by indukblok", 'tipe desc,kodeorganisasi');
+
+			## Tambah kondisi jika TB gak perlu cek luas produktif > 0 , karena HA nya belum ada sesuai kondisi setup blok yang ada
+			if($rAlokasi['kelompok'] == 'TB'){
+				$str_blok = selectQuery($dbname, 'organisasi', 'kodeorganisasi,namaorganisasi,indukblok,namaindukblok', "indukblok like '" . $indukblok . "%' and (tipe='BLOK' OR tipe='BIBITAN') and kodeorganisasi in (select distinct kodeorg from $dbname.setup_blok where indukblok like '" . $indukblok . "%' $statusblok and status='A') group by indukblok", 'tipe desc,kodeorganisasi');
+			}else{
+				$str_blok = selectQuery($dbname, 'organisasi', 'kodeorganisasi,namaorganisasi,indukblok,namaindukblok', "indukblok like '" . $indukblok . "%' and (tipe='BLOK' OR tipe='BIBITAN') and kodeorganisasi in (select distinct kodeorg from $dbname.setup_blok where indukblok like '" . $indukblok . "%' and luasareaproduktif>0 $statusblok and status='A') group by indukblok", 'tipe desc,kodeorganisasi');
+			}
+
 			$res_blok = $owlPDO->query($str_blok) or die(print " Gagal: " . PDOException::getMessage());
 			$res_blok->setFetchMode(PDO::FETCH_OBJ);
 			while ($bar = $res_blok->fetch()) {
