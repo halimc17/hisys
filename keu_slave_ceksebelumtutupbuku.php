@@ -645,10 +645,6 @@ if($wherekarid!=''){
 	foreach ($resjumlahminus as $key => $val) {
 		$arrjmlhminus += $val['jmlh'];
 	}
-}else{
-	$datasalah['25'][]="Kami tidak menemukan data penggajian, apakah Proses penggajian sudah dilakukan ?<br>Jika belum silahkan lakukan proses : HCM - Proses - Penggajian Bulanan dan Harian.";
-}
-
 ## GET TOTAL ALOKASI PLUS
 $getalokplus = "SELECT sum(kredit) as debet
 				FROM ".$dbname.".keu_jurnaldt_vw 
@@ -812,6 +808,9 @@ $selisihtotal = $selisihplus-$selisihminus;
 
 if(abs($selisihtotal)>200){//arahan bang ari samakan nilai toleransi dengan yang ada ditutup buku
 	$datasalah['25'][]="Gaji belum terlalokasi seluruhnya terdapat selisih ".$selisihtotal.", silahkan cek laporan Keuangan - Laporan - Transaksi Lainnya - Daftar Alokasi Gaji.<br>Untuk mengalokasikan gaji silahkan lakukan proses pada menu Keuangan - Proses - Proses Akhir Bulan";
+}
+}else{
+	$datasalah['25'][]="Kami tidak menemukan data penggajian, apakah Proses penggajian sudah dilakukan ?<br>Jika belum silahkan lakukan proses : SDM - Proses - Penggajian Bulanan dan Harian.";
 }
 
 
