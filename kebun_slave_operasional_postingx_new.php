@@ -217,8 +217,9 @@ try {
 				$statPre = 0;
 
 				// Cek Data Karyawan Hist Karyawan
-				$scekhst = "SELECT a.karyawanid FROM " . $dbname . ".datakaryawan_hist a 
-				JOIN " . $dbname . ".kebun_prestasi_detail b ON a.karyawanid = b.nik
+				// NIK pekerja bisa tersimpan di kolom nik ATAU nikpemel tergantung tipe transaksi (mis. tipe TM pakai nikpemel)
+				$scekhst = "SELECT a.karyawanid FROM " . $dbname . ".datakaryawan_hist a
+				JOIN " . $dbname . ".kebun_prestasi_detail b ON (a.karyawanid = b.nik OR a.karyawanid = b.nikpemel)
 				WHERE a.periodegaji='{$prdgj}' AND b.notransaksi='{$notranX}'";
 				$rcekhst = fetchData($scekhst);
 				$counthst = count($rcekhst);
