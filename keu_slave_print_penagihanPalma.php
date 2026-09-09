@@ -306,11 +306,23 @@ $pathnonpalma='images/logo/KOP INVOICE.png';
             $tab.="<tr>";
                 $tab.="<td style='font-size: 14px;'>Dengan Hormat,</td>";
 			$tab.="</tr>";
-            $tab.="<tr>";
-                $tab.="<td style='font-size: 14px;'>Berdasarkan Berita Acara Serah Terima Barang atas nama $namapt (Kode Vendor: PPPX) untuk periode $namabulaninvoice $tahuninvoice adalah sebagai berikut:</td>";
+
+			$hariX = (int) date('d', strtotime($tanggalinvoice));
+
+			if ($hariX <= 15) {
+					$periodeX = "Periode 1";
+					$periodeXY = "Periode 1- 15 ".namabulaninvoice." ".$tahuninvoice."";
+			} else {
+					$periodeX = "Periode 2";
+					$periodeXY = "Periode 16 - ".$hariX." ".$namabulaninvoice." ".$tahuninvoice."";
+			}
+
+
+      $tab.="<tr>";
+          $tab.="<td style='font-size: 14px;'>Berdasarkan Berita Acara Serah Terima Barang atas nama $namapt (Kode Vendor: PPPX) untuk $periodeX bulan $namabulaninvoice $tahuninvoice adalah sebagai berikut:</td>";
 			$tab.="</tr>";
+
 			$tab.="</table>";
-			
 			$tab.="<br/>";
 
 			$tab.="<table style='width:90%;margin:0 auto!important;' cellpadding=".$cellpadding." cellspacing=0 border='".$border."'>";
@@ -321,6 +333,10 @@ $pathnonpalma='images/logo/KOP INVOICE.png';
                 $tab.="<td align=center>".$_SESSION['lang']['harga']."</td>";
                 $tab.="<td align=center>".$_SESSION['lang']['jumlah']."<br/>(Rp)</td>";
             $tab.="</tr>";
+						$tab.="<tr id=header >";
+						    $tab.="<td colspan=6 align=center>".$periodeXY."</td>";
+            $tab.="</tr>";
+
 
             # Arr Potongan & Penambah
             $arrpotpen = array('dpp' => 'DPP', 'ppn' => 'PPN', 'pph22' => 'PPH 22', 'ttlinv' => 'Total Invoice');
@@ -447,6 +463,9 @@ $pathnonpalma='images/logo/KOP INVOICE.png';
 			
 			# Tanda Tangan
 			$tab.="<table style='width:100%;margin:0 auto!important;' cellpadding=".$cellpadding." cellspacing=0 border='0'>";
+						$tab.="<tr>";
+								$tab.="<td><br></td>";
+            $tab.="</tr>";
             $tab.="<tr id=tandatangan>";
                 $tab.="<td style='color:#fff;' align=center>Jakarta, ".$tanggalinvoice."</td>";
                 $tab.="<td style='font-wight:bold;font-size:14px;' align=center>Jakarta, ".substr($tanggalinvoice,8,2)." ".$namabulaninvoice." ".$tahuninvoice."</td>";
