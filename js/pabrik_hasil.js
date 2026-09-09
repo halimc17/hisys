@@ -272,7 +272,7 @@ function getVol(){
 							document.getElementById('kuantitas').disabled=false;							
 						 }else{
 							document.getElementById('kuantitas').value=a[0];
-							document.getElementById('kuantitas').disabled=true;
+							document.getElementById('kuantitas').disabled=false;
 						 }
 						  document.getElementById('kernelquantity').value=0;
 					 }else{

@@ -491,7 +491,7 @@ function formHeader($mode,$data) {
     );
     $els[] = array(
 	makeElement('kuantitas','label',$_SESSION['lang']['cpokuantitas']),
-	makeElement('kuantitas','textnum',number_format($data['kuantitas']),array('style'=>'width:100px','disabled'=>'disabled'))." Kg"
+	makeElement('kuantitas','textnum',number_format($data['kuantitas']),array('style'=>'width:100px'))." Kg"
     );
 	//$els[] = array(
 	//makeElement('cporendemen','label',$_SESSION['lang']['cporendemen']),
