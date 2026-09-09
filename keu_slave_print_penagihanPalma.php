@@ -334,7 +334,7 @@ $pathnonpalma='images/logo/KOP INVOICE.png';
                 $tab.="<td align=center>".$_SESSION['lang']['jumlah']."<br/>(Rp)</td>";
             $tab.="</tr>";
 						$tab.="<tr id=header >";
-						    $tab.="<td colspan=6 align=center>".$periodeXY."</td>";
+						    $tab.="<td colspan=5 align=center>".$periodeXY."</td>";
             $tab.="</tr>";
 
 
@@ -344,14 +344,14 @@ $pathnonpalma='images/logo/KOP INVOICE.png';
             $arrbayar  = array('bank' => 'Bank', 'norek' => 'Nomor Rekening', 'an' => 'Atas Nama');
             $total = array();
 
-			if($jenis=='TBS'){
+			if($kodebarang=='40000003'){
             	$sql = selectQuery($dbname,"keu_penagihandt","tanggaltbs1, tanggaltbs2, SUM(kgnetto) as jumlahkg, SUM(totalrp) as jumlahrp, tahuntanam, rpkg as harga","noinvoice='".$noinvoice."' GROUP BY tahuntanam");
 			}else{
 				$sql = selectQuery($dbname,"keu_penagihandt","tanggaltbs1, tanggaltbs2, SUM(kgnetto) as jumlahkg, SUM(totalrp) as jumlahrp, tahuntanam, rpkg as harga","noinvoice='".$noinvoice."' GROUP BY tanggaltbs1");
 			}
-			
+
 			$res = fetchData($sql,"OBJECT");
-			
+
             if(count($res) == 0) {
                 $tab.="<tr>";
                     $tab.="<td colspan=5 align=center>Tidak Ada Data</td>";
@@ -374,7 +374,7 @@ $pathnonpalma='images/logo/KOP INVOICE.png';
                     $no++;
                     $tab.="<tr id=data>";
                         $tab.="<td align=center>".$no."</td>";
-                        $tab.="<td align=center>TT. ".$val->tanggaltbs1."</td>";
+                        $tab.="<td align=center>TT. ".($kodebarang=='40000003' ? $val->tahuntanam : $val->tanggaltbs1)."</td>";
                         $tab.="<td align=right>".number_format($val->jumlahkg,2)."</td>";
                         $tab.="<td>";
 						$tab.="<table width=100%;>";
