@@ -398,6 +398,7 @@ if ($tabMode == 'all') {
 	$view .= "<th align=center colspan=4>KEGIATAN BM TBS</th>";
 	$view .= "<th align=center colspan=4>KEGIATAN TRAKSI</th>";
 	$view .= "<th align=center colspan=4>KEGIATAN UMUM</th>";
+	$view .= "<th align=center rowspan=3>TOTAL HK</th>";
 	$view .= "<th align=center rowspan=3>TOTAL UPAH</th>";
 	$view .= "<th align=center rowspan=3>TOTAL PREMI</th>";
 	$view .= "<th align=center rowspan=3>TOTAL</th>";
@@ -480,6 +481,7 @@ $view .= "<tbody>";
 $subtotal = array();
 $GTtotal = array();
 $totalPremiUpah = array();
+$totalHKperkaryawan = array();
 $no = 0;
 $adaData = false;
 if (count($karyawan) > 0) {
@@ -535,6 +537,7 @@ if (count($karyawan) > 0) {
 
 					$totalPremiUpah[$karykey][$tglbkmx][$divisi_key]['upah'] += $rphkbuahbesar[$karykey][$tglbkmx][$divisi_key] + $rphkbuahkecil[$karykey][$tglbkmx][$divisi_key];
 					$totalPremiUpah[$karykey][$tglbkmx][$divisi_key]['premi'] += $totalpremipanen[$karykey][$tglbkmx][$divisi_key];
+					$totalHKperkaryawan[$karykey][$tglbkmx][$divisi_key] += $hkbuahbesar[$karykey][$tglbkmx][$divisi_key] + $hkbuahkecil[$karykey][$tglbkmx][$divisi_key];
 				}
 				if ($tabMode == 'all' || $tabMode == 'rawat') {
 					$nilaiRow[] = $hk_rawat[$karykey][$tglbkmx][$divisi_key];
@@ -544,6 +547,7 @@ if (count($karyawan) > 0) {
 
 					$totalPremiUpah[$karykey][$tglbkmx][$divisi_key]['upah'] += $umr_rawat[$karykey][$tglbkmx][$divisi_key];
 					$totalPremiUpah[$karykey][$tglbkmx][$divisi_key]['premi'] += $premi_rawat[$karykey][$tglbkmx][$divisi_key];
+					$totalHKperkaryawan[$karykey][$tglbkmx][$divisi_key] += $hk_rawat[$karykey][$tglbkmx][$divisi_key];
 				}
 				if ($tabMode == 'all' || $tabMode == 'bmtbs') {
 					$nilaiRow[] = $hk_bmtbs[$karykey][$tglbkmx][$divisi_key];
@@ -552,6 +556,7 @@ if (count($karyawan) > 0) {
 					$nilaiRow[] = $total_pertgl_bmtbs[$karykey][$tglbkmx][$divisi_key];
 					$totalPremiUpah[$karykey][$tglbkmx][$divisi_key]['upah'] += $umr_bmtbs[$karykey][$tglbkmx][$divisi_key];
 					$totalPremiUpah[$karykey][$tglbkmx][$divisi_key]['premi'] += $premi_bmtbs[$karykey][$tglbkmx][$divisi_key];
+					$totalHKperkaryawan[$karykey][$tglbkmx][$divisi_key] += $hk_bmtbs[$karykey][$tglbkmx][$divisi_key];
 				}
 				if ($tabMode == 'all' || $tabMode == 'traksi') {
 					$nilaiRow[] = $hk_traksi[$karykey][$tglbkmx][$divisi_key];
@@ -560,6 +565,7 @@ if (count($karyawan) > 0) {
 					$nilaiRow[] = $total_pertgl_traksi[$karykey][$tglbkmx][$divisi_key];
 					$totalPremiUpah[$karykey][$tglbkmx][$divisi_key]['upah'] += $umr_traksi[$karykey][$tglbkmx][$divisi_key];
 					$totalPremiUpah[$karykey][$tglbkmx][$divisi_key]['premi'] += $premi_traksi[$karykey][$tglbkmx][$divisi_key];
+					$totalHKperkaryawan[$karykey][$tglbkmx][$divisi_key] += $hk_traksi[$karykey][$tglbkmx][$divisi_key];
 				}
 				if ($tabMode == 'all' || $tabMode == 'umum') {
 					$nilaiRow[] = $hk_sdm[$karykey][$tglbkmx][$divisi_key];
@@ -568,6 +574,7 @@ if (count($karyawan) > 0) {
 					$nilaiRow[] = $total_pertgl_sdm[$karykey][$tglbkmx][$divisi_key];
 					$totalPremiUpah[$karykey][$tglbkmx][$divisi_key]['upah'] += $umr_sdm[$karykey][$tglbkmx][$divisi_key];
 					$totalPremiUpah[$karykey][$tglbkmx][$divisi_key]['premi'] += $premi_sdm[$karykey][$tglbkmx][$divisi_key];
+					$totalHKperkaryawan[$karykey][$tglbkmx][$divisi_key] += $hk_sdm[$karykey][$tglbkmx][$divisi_key];
 				}
 
 				$adaNilai = false;
@@ -658,6 +665,7 @@ if (count($karyawan) > 0) {
 				if ($tabMode == 'all' || $tabMode == 'umum') $totalRow += $total_pertgl_sdm[$karykey][$tglbkmx][$divisi_key];
 
 				if ($tabMode == 'all') {
+					$view .= "<td align=right>" . number_format($totalHKperkaryawan[$karykey][$tglbkmx][$divisi_key], 2) . "</td>";
 					$view .= "<td align=right>" . number_format($totalPremiUpah[$karykey][$tglbkmx][$divisi_key]['upah'], 2) . "</td>";
 					$view .= "<td align=right>" . number_format($totalPremiUpah[$karykey][$tglbkmx][$divisi_key]['premi'], 2) . "</td>";
 				}
@@ -708,6 +716,7 @@ if (count($karyawan) > 0) {
 					'premi_sdm' => $premi_sdm[$karykey][$tglbkmx][$divisi_key],
 					'allupah' => $totalPremiUpah[$karykey][$tglbkmx][$divisi_key]['upah'],
 					'allpremi' => $totalPremiUpah[$karykey][$tglbkmx][$divisi_key]['premi'],
+					'allhk' => $totalHKperkaryawan[$karykey][$tglbkmx][$divisi_key],
 					'total_sdm' => $total_pertgl_sdm[$karykey][$tglbkmx][$divisi_key]
 				);
 
@@ -788,6 +797,7 @@ if (count($karyawan) > 0) {
 				if ($tabMode == 'all' || $tabMode == 'umum') $subTotalRow += $subtotal[$karykey][$divisi_key]['total_sdm'];
 
 				if ($tabMode == 'all') {
+					$view .= "<td align=center>" . number_format($subtotal[$karykey][$divisi_key]['allhk'], 2) . "</td>";
 					$view .= "<td align=center>" . number_format($subtotal[$karykey][$divisi_key]['allupah'], 2) . "</td>";
 					$view .= "<td align=center>" . number_format($subtotal[$karykey][$divisi_key]['allpremi'], 2) . "</td>";
 				}
@@ -795,6 +805,7 @@ if (count($karyawan) > 0) {
 				$view .= "<td align=center>" . number_format($subTotalRow, 2) . "</td>";
 				$view .= "</tr>";
 			}
+
 		}
 
 		#= Grand Total per karyawan dari seluruh Divisi Tugas yang memiliki nilai
@@ -868,6 +879,7 @@ if (count($karyawan) > 0) {
 			if ($tabMode == 'all' || $tabMode == 'umum') $gtRow += $GTtotal[$karykey]['total_sdm'];
 
 			if ($tabMode == 'all') {
+				$view .= "<td align=center>" . number_format($GTtotal[$karykey]['allhk'], 2) . "</td>";
 				$view .= "<td align=center>" . number_format($GTtotal[$karykey]['allupah'], 2) . "</td>";
 				$view .= "<td align=center>" . number_format($GTtotal[$karykey]['allpremi'], 2) . "</td>";
 			}
@@ -880,7 +892,7 @@ if (count($karyawan) > 0) {
 
 if (!$adaData) {
 	$colspan = 7;
-	if ($tabMode == 'all') $colspan += 43;
+	if ($tabMode == 'all') $colspan += 44;
 	elseif ($tabMode == 'panen') $colspan += 27;
 	else $colspan += 4;
 
