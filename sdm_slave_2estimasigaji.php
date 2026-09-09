@@ -35,6 +35,19 @@ if ($param['tipekar']!='') {
 	$tpkar2=" tipekaryawan != '0' and";
 }
 
+## Filter tambahan: Subbagian & Jabatan (hanya membatasi roster utama di query1)
+$filterSubbagian = checkPostGet('subbagian','');
+$filterJabatan = checkPostGet('jabatan','');
+$whereFilterRoster = "";
+if($filterSubbagian=='KANTOR'){
+	$whereFilterRoster .= " and (a.subbagian='' or a.subbagian is null)";
+}else if($filterSubbagian!=''){
+	$whereFilterRoster .= " and a.subbagian='".$filterSubbagian."'";
+}
+if($filterJabatan!=''){
+	$whereFilterRoster .= " and a.kodejabatan='".$filterJabatan."'";
+}
+
 # Get Period Range
 $qPeriod = selectQuery($dbname, 'sdm_5periodegaji', 'tanggalmulai,tanggalsampai', "periode='" . $param['periodegaji'] . "' and kodeorg='" .$param['kodeorg'] . "'");
 $resPeriod = fetchData($qPeriod);
@@ -48,13 +61,13 @@ $resPeriod = fetchData($qPeriod);
 @$tanggal2 = $resPeriod[0]['tanggalsampai'];
 
 ## Apakah ada datakaryawan Hist nya gak
-$str = "select karyawanid,nik,namakaryawan,nourut from ".$dbname.".datakaryawan_hist where lokasitugas = '".$param['kodeorg']."' and periodegaji ='".$param['periodegaji']."'  and version_type='B'  "; 
+$str = "select karyawanid,nik,namakaryawan,nourut from ".$dbname.".datakaryawan_hist where lokasitugas = '".$param['kodeorg']."' and periodegaji ='".$param['periodegaji']."'  and version_type='B' and approval_status='8'  ";
 $res = fetchdata($str);
-if(count($res)>0){ 
+if(count($res)>0){
     $table_hist = "datakaryawan_hist";
-    $whereHistA = "and a.periodegaji='".$param['periodegaji']."' and a.version_type='B' ";
-    $whereHistB = "and b.periodegaji='".$param['periodegaji']."' and b.version_type='B' ";
-    $whereHistX = "and periodegaji='".$param['periodegaji']."' and version_type='B'";
+    $whereHistA = "and a.periodegaji='".$param['periodegaji']."' and a.version_type='B' and a.approval_status='8' ";
+    $whereHistB = "and b.periodegaji='".$param['periodegaji']."' and b.version_type='B' and b.approval_status='8' ";
+    $whereHistX = "and periodegaji='".$param['periodegaji']."' and version_type='B' and approval_status='8'";
 }else{
     $table_hist = "datakaryawan";
     $whereHistA = "";
@@ -62,7 +75,7 @@ if(count($res)>0){
     $whereHistX = "";
 }
 
-$query1 = "select a.karyawanid,a.nik,a.subbagian,a.bagian,a.tmkjamsostek,statuspajak,tipekaryawan,namakaryawan,tipekaryawan,kodejabatan,jms,bpjs,pensiun,lokasitugas, a.jumlahtanggungan as jmltanggungan,a.kodecatu as kodecatu,bagian from " . $dbname . ".".$table_hist." a where ".$tpkar2." lokasitugas='" . $param['kodeorg'] . "' and (tanggalkeluar >= '" . $tanggal1 . "' or tanggalkeluar='0000-00-00') and alokasi in ('0','1') and ( tanggalmasuk <='" . $tanggal2 . "' or tanggalmasuk='0000-00-00' or tanggalmasuk is null) ".$whereHistA." group by a.karyawanid order by a.namakaryawan asc";
+$query1 = "select a.karyawanid,a.nik,a.subbagian,a.bagian,a.tmkjamsostek,statuspajak,tipekaryawan,namakaryawan,tipekaryawan,kodejabatan,jms,bpjs,pensiun,lokasitugas, a.jumlahtanggungan as jmltanggungan,a.kodecatu as kodecatu,bagian from " . $dbname . ".".$table_hist." a where ".$tpkar2." lokasitugas='" . $param['kodeorg'] . "' and (tanggalkeluar >= '" . $tanggal1 . "' or tanggalkeluar='0000-00-00') and alokasi in ('0','1') and ( tanggalmasuk <='" . $tanggal2 . "' or tanggalmasuk='0000-00-00' or tanggalmasuk is null) ".$whereHistA.$whereFilterRoster." group by a.karyawanid order by a.subbagian asc, a.namakaryawan asc";
 $absRes = fetchData($query1);
 
 
@@ -116,15 +129,18 @@ $absRes = fetchData($query1);
 				   and a.idkomponen in (select id from " . $dbname . ".sdm_ho_component where type='basic' and id not in ('59')) ".$whereHistB." ";	
 	$resgjh = fetchData($strgjh);
 	foreach ($resgjh as $idx => $val) {
-		if($val['karyawanid'] == 4){
+		## gajiperhari selalu dari GAJI POKOK (idkomponen 1) saja, jangan sampai ketimpa komponen basic lain
+		if($val['idkomponen'] == '1'){
+			$gajiperhari[$val['karyawanid']] = $val['umrbulanan']/25;
+		}
+
+		if($val['tipekaryawan'] == 4){
 			if($val['idkomponen'] == '1'){
-				$gajiperhari[$val['karyawanid']] = $val['umrbulanan']/25;
 				$umrbulanan[$val['karyawanid']] = $val['umrbulanan'];
 			}
 		}else{
-			$gajiperhari[$val['karyawanid']] = $val['umrbulanan']/25;
 			$umrbulanan[$val['karyawanid']] += $val['umrbulanan'];
-		}	
+		}
 	}
 
 
@@ -247,8 +263,8 @@ $absRes = fetchData($query1);
 	$query4 = "select lokasitugas,a.karyawanid,jenis,sum(jumlah) as bulanan from " . $dbname . ".sdm_angsuran a 
 	left join " . $dbname . ".sdm_angsurandt c on a.notransaksi=c.notransaksi
 	left join " . $dbname . ".".$table_hist." b on a.karyawanid=b.karyawanid 
-	where 1=1 and b.lokasitugas='" . $param['kodeorg'] . "' 
-	and  (b.tanggalkeluar>='" . $tanggal1 . "' or b.tanggalkeluar='0000-00-00') and b.alokasi in ('0','1') and a.status=1  and bulan='".$param['periodegaji']."' ".$whereHistB." group by jenis,karyawanid";
+	where 1=1 and b.lokasitugas='" . $param['kodeorg'] . "'
+	and  (b.tanggalkeluar>='" . $tanggal1 . "' or b.tanggalkeluar='0000-00-00') and b.alokasi in ('0','1') and bulan='".$param['periodegaji']."' ".$whereHistB." group by jenis,karyawanid";
 	$angRes = fetchData($query4);
 	foreach ($angRes as $idx => $row) {
 		if ($id[$row['karyawanid']][0] == $row['karyawanid']) {
@@ -308,9 +324,11 @@ $absRes = fetchData($query1);
 	$premRes1 = fetchData($query6);
 	foreach ($premRes1 as $idx => $val) {
 		@$premi[$val['karyawanid']]+=$val['premi'];
-		@$penalty[$val['karyawanid']]+=$val['penalty'];
 		if ($tipekaryawan[$val['karyawanid']] == '4') {
+				@$penalty[$val['karyawanid']]+=$val['penalty'];
 				@$gapokbhl[$val['karyawanid']]+=$val['upahkerja'];
+			} else {
+				@$penalty[$val['karyawanid']]+=$val['penalty'] + $val['upahpenalty'];
 			}
 		@$hk[$val['karyawanid']]+=$val['hk'];
 	}
@@ -369,48 +387,60 @@ $absRes = fetchData($query1);
 
 
 	#6.3.4 Get Premi Kemandoran
-	// $query8 = "select sum(a.premiinput) as premi,a.karyawanid
-	// 	  from " . $dbname . ".kebun_premikemandoran a left join 
-	// 	  " . $dbname . ".".$table_hist." b on a.karyawanid=b.karyawanid 
-	// 	  where 1=1 ".$tpkar." and b.lokasitugas='" . $param['kodeorg'] . "' 
-	// 	  and  (b.tanggalkeluar>='" . $tanggal1 . "' or b.tanggalkeluar='0000-00-00') 
-	// 	  and b.karyawanid in (select karyawanid from ".$table_hist." where lokasitugas = '".$param['kodeorg']."' ".$whereHistX.")  
-	// 	  and a.periode = '" . $param['periodegaji'] . "'     
-	// 	   and a.kontanan!='KONTAN' ".$whereHistB." group by a.karyawanid";
-	// $premRes2 = fetchData($query8);
-	// foreach ($premRes2 as $idx => $val) {
-	//   $premi[$val['karyawanid']]+=$val['premi'];
-	// }
+	$query8 = "select sum(a.premiinput) as premi,a.karyawanid
+		  from " . $dbname . ".kebun_premikemandoran a left join
+		  " . $dbname . ".".$table_hist." b on a.karyawanid=b.karyawanid
+		  where 1=1 ".$tpkar." and b.lokasitugas='" . $param['kodeorg'] . "'
+		  and  (b.tanggalkeluar>='" . $tanggal1 . "' or b.tanggalkeluar='0000-00-00') and b.alokasi in ('0','1')
+		  and b.karyawanid in (select karyawanid from ".$table_hist." where lokasitugas = '".$param['kodeorg']."' ".$whereHistX.")
+		  and a.kodeorg='" . $param['kodeorg'] . "' and a.periode = '" . $param['periodegaji'] . "'
+		   and a.kontanan!='KONTAN' ".$whereHistB." group by a.karyawanid";
+	$premRes2 = fetchData($query8);
+	$adaPremiKemandoran = false;
+	if(count($premRes2)>0){
+		$adaPremiKemandoran = true;
+	}
+	foreach ($premRes2 as $idx => $val) {
+	  $premi[$val['karyawanid']]+=$val['premi'];
+	}
 
-	// #kontanan
-	// $query88 = "select sum(a.premiinput) as premi,a.karyawanid
-	// 		from " . $dbname . ".kebun_premikemandoran a left join 
-	// 		" . $dbname . ".".$table_hist." b on a.karyawanid=b.karyawanid 
-	// 		where 1=1 ".$tpkar." and b.lokasitugas='" . $param['kodeorg'] . "' 
-	// 		and  (b.tanggalkeluar>='" . $tanggal1 . "' or b.tanggalkeluar='0000-00-00') 
-	// 		and a.periode = '" . $param['periodegaji'] . "'     
-	// 		and a.kontanan='KONTAN' ".$whereHistB." group by a.karyawanid";
-	// $premRes28 = fetchData($query88);
-	// foreach ($premRes28 as $idx => $val) {
-	//   @$premikontanan[$val['karyawanid']]+=$val['premi'];
-	//   @$potkontanan[$val['karyawanid']]+=$val['premi'];
-	// }
+	#kontanan
+	$query88 = "select sum(a.premiinput) as premi,a.karyawanid
+			from " . $dbname . ".kebun_premikemandoran a left join
+			" . $dbname . ".".$table_hist." b on a.karyawanid=b.karyawanid
+			where 1=1 ".$tpkar." and b.lokasitugas='" . $param['kodeorg'] . "'
+			and  (b.tanggalkeluar>='" . $tanggal1 . "' or b.tanggalkeluar='0000-00-00') and b.alokasi in ('0','1')
+			and a.kodeorg='" . $param['kodeorg'] . "' and a.periode = '" . $param['periodegaji'] . "'
+			and a.kontanan='KONTAN' ".$whereHistB." group by a.karyawanid";
+	$premRes28 = fetchData($query88);
+	if(count($premRes28)>0){
+		$adaPremiKemandoran = true;
+	}
+	foreach ($premRes28 as $idx => $val) {
+	  @$premikontanan[$val['karyawanid']]+=$val['premi'];
+	  @$potkontanan[$val['karyawanid']]+=$val['premi'];
+	}
 
 
 	#= BMTBS NON KONTAN
-	$query20 = "select sum(a.rppremi) as premi,sum(a.rphk) as rphk,sum(a.nilai1hk) as nilai1hk,a.karyawanid,sum(a.hk) as jumlahhk
-			from " . $dbname . ".kebun_3premibmtbs a left join 
-			" . $dbname . ".".$table_hist." b on a.karyawanid=b.karyawanid 
+	$query20 = "select sum(a.rppremi) as premi,sum(a.rphk) as rphk,a.nilai1hk as nilai1hk,a.karyawanid,sum(a.hk) as jumlahhk
+			from " . $dbname . ".kebun_3premibmtbs a left join
+			" . $dbname . ".".$table_hist." b on a.karyawanid=b.karyawanid
 			where 1=1 ".$tpkar." and b.karyawanid in (select karyawanid from ".$table_hist." where lokasitugas = '".$param['kodeorg']."' ".$whereHistX.")
-			and  (b.tanggalkeluar>='" . $tanggal1 . "' or b.tanggalkeluar='0000-00-00') 
-			and a.periode = '" . $param['periodegaji'] . "'     
-			and a.kontanan!='KONTAN' ".$whereHistB." group by a.karyawanid";
+			and  (b.tanggalkeluar>='" . $tanggal1 . "' or b.tanggalkeluar='0000-00-00')
+			and a.periode = '" . $param['periodegaji'] . "'
+			and a.kontanan!='KONTAN' ".$whereHistB." group by a.karyawanid, a.tanggal";
 	$res20 = fetchData($query20);
 	foreach ($res20 as $idx => $val) {
 		if ($tipekaryawan[$val['karyawanid']] == '4') {
+			## KHL/Harian dibayar dari rphk langsung, tidak ada penalti BMTBS terpisah
 			@$gapokbhl[$val['karyawanid']]+=$val['rphk'];
-		}	
-		if($val['premi']>0){   
+		} else {
+			if (!($val['jumlahhk'] == 0 and $val['premi'] > 0)) {
+				@$penalty[$val['karyawanid']] += $val['nilai1hk'] - $val['rphk'];
+			}
+		}
+		if($val['premi']>0){
 			$premi[$val['karyawanid']]+=$val['premi'];
 		}
 		@$hk[$val['karyawanid']]+=$val['jumlahhk'];
@@ -445,8 +475,6 @@ $absRes = fetchData($query1);
 
 	  	if ($tipekaryawan[$val['karyawanid']] == '4') {
 		 	@$gapokbhl[$val['karyawanid']]+=$val['upah'];
-		}else{
-			@$penalty[$val['karyawanid']]+= $val['nilai1hk'] - $val['rphk'] ;
 		}
 
 		@$hk[$val['karyawanid']]+=$val['jhk'];
@@ -687,6 +715,11 @@ $absRes = fetchData($query1);
 	if(@$dtkarhktdkbayar>0){
 		foreach(@$lstKary as $idx=>$val){
 
+		## Potongan HK (Pot. Absensi) hanya berlaku untuk Bulanan, KHL/Harian tidak dipotong (sudah dibayar sesuai hari kerja saja)
+		if($tipekaryawan[$val] == '4'){
+			continue;
+		}
+
 		if($hktdkbyr[$val]==''){
 			@$hktdkbyr[$val]=0;
 		}
@@ -700,7 +733,7 @@ $absRes = fetchData($query1);
 			'pengali' => 1,
 			'hk'=>$hktdkbyr[$val]);
 		}
-	} 
+	}
 	
 	#add gapok BHL to ready data
 	foreach ($gapokbhl as $key => $val) {
@@ -899,9 +932,30 @@ $absRes = fetchData($query1);
 				'pengali' => 1,
 				'hk'=>0);
 			if($val['idkomponen']=='14'){
-				$rapelgaji[$val['karyawanid']]=$val['jumlah'];  
+				$rapelgaji[$val['karyawanid']]=$val['jumlah'];
 			}
 		}
+
+		## PPh 21 : ambil dari sdm_gaji (hasil proses PPh 21), tidak dihitung ulang di estimasi
+		$adaPph21 = false;
+		$strPph21 = "select karyawanid,sum(jumlah*pengali) as jumlah from " . $dbname . ".sdm_gaji where kodeorg='" . $param['kodeorg'] . "' and periodegaji='" . $param['periodegaji'] . "' and idkomponen='42' group by karyawanid";
+		$resPph21 = fetchData($strPph21);
+		if(count($resPph21)>0){
+			$adaPph21 = true;
+			foreach ($resPph21 as $idx => $val) {
+				if (isset($id[$val['karyawanid']])) {
+					$readyData[] = array(
+						'kodeorg' => $param['kodeorg'],
+						'periodegaji' => $param['periodegaji'],
+						'karyawanid' => $val['karyawanid'],
+						'idkomponen' => 42,
+						'jumlah' => $val['jumlah'],
+						'pengali' => 1,
+						'hk'=>0);
+				}
+			}
+		}
+		## End PPh 21
 
 
 		#######################################################################################################################################
@@ -1000,7 +1054,7 @@ $absRes = fetchData($query1);
 			  if ($bpjstenaga[$key] != '') {
 
 				if($tipekaryawan[$key] != 4){
-					$nilai=$nilai + $natura_karyawan[$key];
+					$nilai=$nilai;
 				}else{
 					$nilai=$umpDaerah;
 				}
@@ -1008,11 +1062,9 @@ $absRes = fetchData($query1);
 				#Kondisi Perhitungan BPJS selain PALMA
 				if (!empty($nilaiPengganti[$key])) {
 					$nilai=$nilaiPengganti[$key]+ $natura_karyawan[$key];
-					if($nilai < $umpDaerah) {
-						$nilai = $umpDaerah;
-					}else{
-						$nilai=$nilai;
-					}
+				}
+				if($nilai < $umpDaerah) {
+					$nilai = $umpDaerah;
 				}
 				
 
@@ -1037,7 +1089,7 @@ $absRes = fetchData($query1);
 				  'jumlah' => ($bebankaryawan / 100 * ($nilai)),
 				  'pengali' => 1,
 				  'hk'=>0);
-				  
+
 				$readyData[] = array(
 				  'kodeorg' => $lokasitugas[$key],
 				  'periodegaji' => $param['periodegaji'],
@@ -1045,12 +1097,17 @@ $absRes = fetchData($query1);
 				  'idkomponen' => $bar['jenisbpjsplus'],
 				  'jumlah' => ($bebanperusahaan / 100 * ($nilai)),
 				  'pengali' => 1,
-				  'hk'=>0); 
-				  
+				  'hk'=>0);
+
+				@$bpjsTkKar[$key] += ($bebankaryawan / 100 * ($nilai));
+				@$bpjsTkPer[$key] += ($bebanperusahaan / 100 * ($nilai));
+				$bpjsIdsKar[$bar['jenisbpjs']] = $bar['jenisbpjs'];
+				$bpjsIdsPer[$bar['jenisbpjsplus']] = $bar['jenisbpjsplus'];
+
 			  }
 			}
 		  }
-		  
+
 		  #= kesehatan
 		  if(in_array($bar['jenisbpjs'],$arrkes)){
 		  #= jika diparameter aplikasi diset 0 maka akan ambil dari gapok
@@ -1058,19 +1115,17 @@ $absRes = fetchData($query1);
 				if ($bpjskes[$key] != '') {
 
 				if($tipekaryawan[$key] != 4){
-					$nilai=$nilai + $natura_karyawan[$key];
+					$nilai=$nilai;
 				}else{
 					$nilai=$umpDaerah;
-				}					
+				}
 					#Kondisi Perhitungan BPJS selain PALMA
-						
+
 					if (!empty($nilaiPengganti[$key])) {
 						$nilai=$nilaiPengganti[$key]+ $natura_karyawan[$key];
-						if($nilai < $umpDaerah) {
-							$nilai = $umpDaerah;
-						}else{
-							$nilai=$nilai;
-						}
+					}
+					if($nilai < $umpDaerah) {
+						$nilai = $umpDaerah;
 					}
 					
 
@@ -1095,7 +1150,7 @@ $absRes = fetchData($query1);
 					'jumlah' => ($bebankaryawan / 100 * ($nilai)),
 					'pengali' => 1,
 					'hk'=>0);
-				
+
 				  $readyData[] = array(
 					'kodeorg' => $lokasitugas[$key],
 					'periodegaji' => $param['periodegaji'],
@@ -1104,31 +1159,34 @@ $absRes = fetchData($query1);
 					'jumlah' => ($bebanperusahaan / 100 * ($nilai)),
 					'pengali' => 1,
 					'hk'=>0);
+
+				  @$bpjsKesKar[$key] += ($bebankaryawan / 100 * ($nilai));
+				  @$bpjsKesPer[$key] += ($bebanperusahaan / 100 * ($nilai));
+				  $bpjsIdsKar[$bar['jenisbpjs']] = $bar['jenisbpjs'];
+				  $bpjsIdsPer[$bar['jenisbpjsplus']] = $bar['jenisbpjsplus'];
 				}
-				
+
 			  }
-			
+
 		  }
-		  
+
 		  #= pensiun
 		  if(in_array($bar['jenisbpjs'],$arrpen)){
 			foreach ($umrbulanan as $key => $nilai) {
 			  if ($bpjspensiun[$key] != '') {
 
 				if($tipekaryawan[$key] != 4){
-					$nilai=$nilai + $natura_karyawan[$key];
+					$nilai=$nilai;
 				}else{
 					$nilai=$umpDaerah;
-				}		
-							
+				}
+
 				#Kondisi baca tipe karyawan Perhitungan BPJS selain PALMA
 				if (!empty($nilaiPengganti[$key])) {
 					$nilai=$nilaiPengganti[$key]+ $natura_karyawan[$key];
-					if($nilai < $umpDaerah) {
-						$nilai = $umpDaerah;
-					}else{
-						$nilai=$nilai;
-					}
+				}
+				if($nilai < $umpDaerah) {
+					$nilai = $umpDaerah;
 				}
 				
 
@@ -1153,7 +1211,7 @@ $absRes = fetchData($query1);
 				  'jumlah' => ($bebankaryawan / 100 * ($nilai)),
 				  'pengali' => 1,
 				  'hk'=>0);
-				  
+
 				$readyData[] = array(
 				  'kodeorg' => $lokasitugas[$key],
 				  'periodegaji' => $param['periodegaji'],
@@ -1161,12 +1219,17 @@ $absRes = fetchData($query1);
 				  'idkomponen' => $bar['jenisbpjsplus'],
 				  'jumlah' => ($bebanperusahaan / 100 * ($nilai)),
 				  'pengali' => 1,
-				  'hk'=>0); 
+				  'hk'=>0);
+
+				@$bpjsJpKar[$key] += ($bebankaryawan / 100 * ($nilai));
+				@$bpjsJpPer[$key] += ($bebanperusahaan / 100 * ($nilai));
+				$bpjsIdsKar[$bar['jenisbpjs']] = $bar['jenisbpjs'];
+				$bpjsIdsPer[$bar['jenisbpjsplus']] = $bar['jenisbpjsplus'];
 			  }
 			}
 		  }
 		}
-	
+
 	### End BPJS
 	#########################################################################################################################################
 	
@@ -1184,20 +1247,26 @@ $absRes = fetchData($query1);
 			}, $idkomponen_unique));
 
 			
+			@$bpjsIdsKar = isset($bpjsIdsKar) ? $bpjsIdsKar : array();
+			@$bpjsIdsPer = isset($bpjsIdsPer) ? $bpjsIdsPer : array();
+
 			$strx="select * FROM ".$dbname.".sdm_ho_component where id in (".$inkomponen.")";
-			$res = fetchData($strx); 
+			$res = fetchData($strx);
 			foreach($res as $bar){
 				if($bar['plus']==1){
-					
+					## Tunjangan BPJS (beban perusahaan) ditampilkan di kolom BPJS tersendiri, bukan di Penambah
 					$idsxc = array('70', '71', '72', '73', '80');
-					if (!in_array($bar['id'], $idsxc)) {
+					if (!in_array($bar['id'], $idsxc) and !isset($bpjsIdsPer[$bar['id']])) {
 						@$dtkomplus[$bar['id']]=$bar['id'];
 					}
 				}else{
-					@$dtkommin[$bar['id']]=$bar['id'];
+					## Potongan BPJS (beban karyawan) ditampilkan di kolom BPJS tersendiri, bukan di Pengurang umum
+					if (!isset($bpjsIdsKar[$bar['id']])) {
+						@$dtkommin[$bar['id']]=$bar['id'];
+					}
 				}
 				$nmkom[$bar['id']]=$bar['name'];
-			}    
+			}
 			
 			
 			$new_jumlah = [];
@@ -1239,15 +1308,25 @@ $absRes = fetchData($query1);
 				$list0 .= "<th rowspan=2 >".$_SESSION['lang']['departemen']."</th>";
 				$list0 .= "<th colspan = ".($colspan_komplus+1)." >".$_SESSION['lang']['penambah']."</th>";
 				$list0 .= "<th rowspan=2>Total Penambah</th>";
+				$list0 .= "<th colspan=2>BPJS KES</th>";
+				$list0 .= "<th colspan=2>BPJS TK</th>";
+				$list0 .= "<th colspan=2>BPJS JP</th>";
 				$list0 .= "<th colspan = ".$colspan_komin." >".$_SESSION['lang']['pengurang']."</th>";
 				$list0 .= "<th rowspan=2>Total Pengurang</th>";
-				$list0 .= "<th rowspan=2>Total Gaji</th>";
+				$list0 .= "<th rowspan=2>Gaji Bruto</th>";
+				$list0 .= "<th rowspan=2>Gaji Netto</th>";
 			$list0.="</tr>";
 			$list0.="<tr>";
 				foreach ($dtkomplus as $komplus){
 					$list0.="<th align=center >".$nmkom[$komplus]."</th>";
 				}
 				$list0.="<th align=center >Pembulatan Gaji</th>";
+				$list0.="<th align=center >Peserta</th>";
+				$list0.="<th align=center >Perusahaan</th>";
+				$list0.="<th align=center >Peserta</th>";
+				$list0.="<th align=center >Perusahaan</th>";
+				$list0.="<th align=center >Peserta</th>";
+				$list0.="<th align=center >Perusahaan</th>";
 				foreach ($dtkommin as $kommin){
 						$list0.="<th align=center >".$nmkom[$kommin]."</th>";
 				}
@@ -1262,6 +1341,13 @@ $absRes = fetchData($query1);
 			$list3='';
 			$no=0;
 
+			$grandKomplus1 = array(); $grandPembulatan1 = 0; $grandTotalPenambah1 = 0;
+			$grandKommin1 = array(); $grandTotalPengurang1 = 0; $grandTotalGaji1 = 0;
+			$grandKomplus2 = array(); $grandPembulatan2 = 0; $grandTotalPenambah2 = 0;
+			$grandKommin2 = array(); $grandTotalPengurang2 = 0; $grandTotalGaji2 = 0;
+			$grandBpjsKesKar1 = 0; $grandBpjsKesPer1 = 0; $grandBpjsTkKar1 = 0; $grandBpjsTkPer1 = 0; $grandBpjsJpKar1 = 0; $grandBpjsJpPer1 = 0;
+			$grandBpjsKesKar2 = 0; $grandBpjsKesPer2 = 0; $grandBpjsTkKar2 = 0; $grandBpjsTkPer2 = 0; $grandBpjsJpKar2 = 0; $grandBpjsJpPer2 = 0;
+
 			if($readyData<1){
 				exit("Error:Data Kosong");
 			}
@@ -1274,9 +1360,54 @@ $absRes = fetchData($query1);
 				$comp[$row['komponen']] = $row['pengali'];
 				$nakomp[$row['komponen']] = $row['nakomp'];
 			}
-			
-	   
+
+			## Subtotal per Subbagian
+			function renderSubtotalSubbagian($label, $dtkomplus, $dtkommin, $subKomplus, $subKommin, $subPembulatan, $subTotalPenambah, $subBpjsKesKar, $subBpjsKesPer, $subBpjsTkKar, $subBpjsTkPer, $subBpjsJpKar, $subBpjsJpPer, $subTotalPengurang, $subTotalGaji, $kolomAwal){
+				$out = "<tr class=rowheader style='font-weight:bold; background:#dbe9f5'>";
+				$out .= "<td colspan=".$kolomAwal." align=right>SUBTOTAL - ".$label."</td>";
+				foreach ($dtkomplus as $komplus){
+					$out .= "<td align=right>".number_format(@$subKomplus[$komplus],0)."</td>";
+				}
+				$out .= "<td align=right>".number_format($subPembulatan,0)."</td>";
+				$out .= "<td align=right>".number_format($subTotalPenambah,0)."</td>";
+				$out .= "<td align=right>".number_format($subBpjsKesKar,0)."</td>";
+				$out .= "<td align=right>".number_format($subBpjsKesPer,0)."</td>";
+				$out .= "<td align=right>".number_format($subBpjsTkKar,0)."</td>";
+				$out .= "<td align=right>".number_format($subBpjsTkPer,0)."</td>";
+				$out .= "<td align=right>".number_format($subBpjsJpKar,0)."</td>";
+				$out .= "<td align=right>".number_format($subBpjsJpPer,0)."</td>";
+				foreach ($dtkommin as $kommin){
+					$out .= "<td align=right>".number_format(@$subKommin[$kommin],0)."</td>";
+				}
+				$out .= "<td align=right>".number_format($subTotalPengurang,0)."</td>";
+				$out .= "<td align=right>".number_format($subTotalPenambah,0)."</td>";
+				$out .= "<td align=right>".number_format($subTotalGaji,0)."</td>";
+				$out .= "</tr>";
+				return $out;
+			}
+
+			$kolomAwal = 9; // Nomor s/d Departemen
+			$optSubbagianNama = makeOption($dbname, 'organisasi', 'kodeorganisasi,namaorganisasi');
+			$curSubbagianKey2 = null;
+			$curSubbagianLabel2 = '';
+			$subKomplus2 = array(); $subKommin2 = array();
+			$subPembulatan2 = 0; $subTotalPenambah2 = 0;
+			$subBpjsKesKar2 = 0; $subBpjsKesPer2 = 0; $subBpjsTkKar2 = 0; $subBpjsTkPer2 = 0; $subBpjsJpKar2 = 0; $subBpjsJpPer2 = 0;
+			$subTotalPengurang2 = 0; $subTotalGaji2 = 0;
+
+
 		   foreach($id as $key=>$val){
+			$thisSubbagianKey2 = @$subbagianKry[$val[0]];
+			if($curSubbagianKey2 !== null && $thisSubbagianKey2 !== $curSubbagianKey2){
+				$list2 .= renderSubtotalSubbagian($curSubbagianLabel2, $dtkomplus, $dtkommin, $subKomplus2, $subKommin2, $subPembulatan2, $subTotalPenambah2, $subBpjsKesKar2, $subBpjsKesPer2, $subBpjsTkKar2, $subBpjsTkPer2, $subBpjsJpKar2, $subBpjsJpPer2, $subTotalPengurang2, $subTotalGaji2, $kolomAwal);
+				$subKomplus2 = array(); $subKommin2 = array();
+				$subPembulatan2 = 0; $subTotalPenambah2 = 0;
+				$subBpjsKesKar2 = 0; $subBpjsKesPer2 = 0; $subBpjsTkKar2 = 0; $subBpjsTkPer2 = 0; $subBpjsJpKar2 = 0; $subBpjsJpPer2 = 0;
+				$subTotalPengurang2 = 0; $subTotalGaji2 = 0;
+			}
+			$curSubbagianKey2 = $thisSubbagianKey2;
+			$curSubbagianLabel2 = isset($optSubbagianNama[$thisSubbagianKey2]) ? ($thisSubbagianKey2." - ".$optSubbagianNama[$thisSubbagianKey2]) : ($thisSubbagianKey2!='' ? $thisSubbagianKey2 : 'KANTOR');
+
 			$sisa[$val[0]] = 0;
 
 			foreach ($readyData as $dat => $bar) {
@@ -1358,6 +1489,14 @@ $absRes = fetchData($query1);
 
 						$list1 .= "<td align=right>".number_format($tt_jumkomplus[$val[0]],0)."</td>";
 
+						$list1 .= "<td align=right>".number_format(@$bpjsKesKar[$val[0]],0)."</td>";
+						$list1 .= "<td align=right>".number_format(@$bpjsKesPer[$val[0]],0)."</td>";
+						$list1 .= "<td align=right>".number_format(@$bpjsTkKar[$val[0]],0)."</td>";
+						$list1 .= "<td align=right>".number_format(@$bpjsTkPer[$val[0]],0)."</td>";
+						$list1 .= "<td align=right>".number_format(@$bpjsJpKar[$val[0]],0)."</td>";
+						$list1 .= "<td align=right>".number_format(@$bpjsJpPer[$val[0]],0)."</td>";
+						$tt_jumkomin[$val[0]] += @$bpjsKesKar[$val[0]] + @$bpjsTkKar[$val[0]] + @$bpjsJpKar[$val[0]];
+
 						foreach ($dtkommin as $kommin){
 							$list1 .= "<td align=right>".number_format($new_jumlah[$val[0]][$kommin],0)."</td>";
 							$tt_jumkomin[$val[0]] += $new_jumlah[$val[0]][$kommin];
@@ -1367,7 +1506,25 @@ $absRes = fetchData($query1);
 
 						$ttt_gaji[$val[0]] = $tt_jumkomplus[$val[0]] - $tt_jumkomin[$val[0]];
 
+						$list1 .= "<td align=right>".number_format($tt_jumkomplus[$val[0]],0)."</td>";
 						$list1 .= "<td style = color:red align=right>".number_format($ttt_gaji[$val[0]],0)."</td>";
+
+						foreach ($dtkomplus as $komplus){
+							@$grandKomplus1[$komplus] += $new_jumlah[$val[0]][$komplus];
+						}
+						foreach ($dtkommin as $kommin){
+							@$grandKommin1[$kommin] += $new_jumlah[$val[0]][$kommin];
+						}
+						$grandPembulatan1 += $penambahdibelakang[$val[0]];
+						$grandTotalPenambah1 += $tt_jumkomplus[$val[0]];
+						@$grandBpjsKesKar1 += @$bpjsKesKar[$val[0]];
+						@$grandBpjsKesPer1 += @$bpjsKesPer[$val[0]];
+						@$grandBpjsTkKar1 += @$bpjsTkKar[$val[0]];
+						@$grandBpjsTkPer1 += @$bpjsTkPer[$val[0]];
+						@$grandBpjsJpKar1 += @$bpjsJpKar[$val[0]];
+						@$grandBpjsJpPer1 += @$bpjsJpPer[$val[0]];
+						$grandTotalPengurang1 += $tt_jumkomin[$val[0]];
+						$grandTotalGaji1 += $ttt_gaji[$val[0]];
 
 					$negatif = false;
 				
@@ -1446,6 +1603,14 @@ $absRes = fetchData($query1);
 
 						$list2 .= "<td align=right>".number_format($tt_jumkomplus[$val[0]],0)."</td>";
 
+						$list2 .= "<td align=right>".number_format(@$bpjsKesKar[$val[0]],0)."</td>";
+						$list2 .= "<td align=right>".number_format(@$bpjsKesPer[$val[0]],0)."</td>";
+						$list2 .= "<td align=right>".number_format(@$bpjsTkKar[$val[0]],0)."</td>";
+						$list2 .= "<td align=right>".number_format(@$bpjsTkPer[$val[0]],0)."</td>";
+						$list2 .= "<td align=right>".number_format(@$bpjsJpKar[$val[0]],0)."</td>";
+						$list2 .= "<td align=right>".number_format(@$bpjsJpPer[$val[0]],0)."</td>";
+						$tt_jumkomin[$val[0]] += @$bpjsKesKar[$val[0]] + @$bpjsTkKar[$val[0]] + @$bpjsJpKar[$val[0]];
+
 						foreach ($dtkommin as $kommin){
 							$list2 .= "<td align=right>".number_format($new_jumlah[$val[0]][$kommin],0)."</td>";
 							$tt_jumkomin[$val[0]] += $new_jumlah[$val[0]][$kommin];
@@ -1455,22 +1620,119 @@ $absRes = fetchData($query1);
 
 						$ttt_gaji[$val[0]] = $tt_jumkomplus[$val[0]] - $tt_jumkomin[$val[0]];
 
+						$list2 .= "<td align=right>".number_format($tt_jumkomplus[$val[0]],0)."</td>";
 						$list2 .= "<td align=right>".number_format($ttt_gaji[$val[0]],0)."</td>";
 
-					$list2 .= "</tr>";  
-				}	
+						foreach ($dtkomplus as $komplus){
+							@$grandKomplus2[$komplus] += $new_jumlah[$val[0]][$komplus];
+							@$subKomplus2[$komplus] += $new_jumlah[$val[0]][$komplus];
+						}
+						foreach ($dtkommin as $kommin){
+							@$grandKommin2[$kommin] += $new_jumlah[$val[0]][$kommin];
+							@$subKommin2[$kommin] += $new_jumlah[$val[0]][$kommin];
+						}
+						$grandPembulatan2 += $penambahdibelakang[$val[0]];
+						$grandTotalPenambah2 += $tt_jumkomplus[$val[0]];
+						@$grandBpjsKesKar2 += @$bpjsKesKar[$val[0]];
+						@$grandBpjsKesPer2 += @$bpjsKesPer[$val[0]];
+						@$grandBpjsTkKar2 += @$bpjsTkKar[$val[0]];
+						@$grandBpjsTkPer2 += @$bpjsTkPer[$val[0]];
+						@$grandBpjsJpKar2 += @$bpjsJpKar[$val[0]];
+						@$grandBpjsJpPer2 += @$bpjsJpPer[$val[0]];
+						$grandTotalPengurang2 += $tt_jumkomin[$val[0]];
+						$grandTotalGaji2 += $ttt_gaji[$val[0]];
+
+						$subPembulatan2 += $penambahdibelakang[$val[0]];
+						$subTotalPenambah2 += $tt_jumkomplus[$val[0]];
+						@$subBpjsKesKar2 += @$bpjsKesKar[$val[0]];
+						@$subBpjsKesPer2 += @$bpjsKesPer[$val[0]];
+						@$subBpjsTkKar2 += @$bpjsTkKar[$val[0]];
+						@$subBpjsTkPer2 += @$bpjsTkPer[$val[0]];
+						@$subBpjsJpKar2 += @$bpjsJpKar[$val[0]];
+						@$subBpjsJpPer2 += @$bpjsJpPer[$val[0]];
+						$subTotalPengurang2 += $tt_jumkomin[$val[0]];
+						$subTotalGaji2 += $ttt_gaji[$val[0]];
+
+					$list2 .= "</tr>";
+				}
 			}
 
-	$list3="</tbody><table>";  
+			if($curSubbagianKey2 !== null){
+				$list2 .= renderSubtotalSubbagian($curSubbagianLabel2, $dtkomplus, $dtkommin, $subKomplus2, $subKommin2, $subPembulatan2, $subTotalPenambah2, $subBpjsKesKar2, $subBpjsKesPer2, $subBpjsTkKar2, $subBpjsTkPer2, $subBpjsJpKar2, $subBpjsJpPer2, $subTotalPengurang2, $subTotalGaji2, $kolomAwal);
+			}
+
+			if(!empty($list1)){
+				$list1 .= "<tr class=rowheader style='font-weight:bold; background:#AED6F1'>";
+				$list1 .= "<td colspan=".$kolomAwal." align=right>TOTAL</td>";
+				foreach ($dtkomplus as $komplus){
+					$list1 .= "<td align=right>".number_format(@$grandKomplus1[$komplus],0)."</td>";
+				}
+				$list1 .= "<td align=right>".number_format($grandPembulatan1,0)."</td>";
+				$list1 .= "<td align=right>".number_format($grandTotalPenambah1,0)."</td>";
+				$list1 .= "<td align=right>".number_format($grandBpjsKesKar1,0)."</td>";
+				$list1 .= "<td align=right>".number_format($grandBpjsKesPer1,0)."</td>";
+				$list1 .= "<td align=right>".number_format($grandBpjsTkKar1,0)."</td>";
+				$list1 .= "<td align=right>".number_format($grandBpjsTkPer1,0)."</td>";
+				$list1 .= "<td align=right>".number_format($grandBpjsJpKar1,0)."</td>";
+				$list1 .= "<td align=right>".number_format($grandBpjsJpPer1,0)."</td>";
+				foreach ($dtkommin as $kommin){
+					$list1 .= "<td align=right>".number_format(@$grandKommin1[$kommin],0)."</td>";
+				}
+				$list1 .= "<td align=right>".number_format($grandTotalPengurang1,0)."</td>";
+				$list1 .= "<td align=right>".number_format($grandTotalPenambah1,0)."</td>";
+				$list1 .= "<td align=right>".number_format($grandTotalGaji1,0)."</td>";
+				$list1 .= "</tr>";
+			}
+
+			if(!empty($list2)){
+				$list2 .= "<tr class=rowheader style='font-weight:bold; background:#AED6F1'>";
+				$list2 .= "<td colspan=".$kolomAwal." align=right>TOTAL</td>";
+				foreach ($dtkomplus as $komplus){
+					$list2 .= "<td align=right>".number_format(@$grandKomplus2[$komplus],0)."</td>";
+				}
+				$list2 .= "<td align=right>".number_format($grandPembulatan2,0)."</td>";
+				$list2 .= "<td align=right>".number_format($grandTotalPenambah2,0)."</td>";
+				$list2 .= "<td align=right>".number_format($grandBpjsKesKar2,0)."</td>";
+				$list2 .= "<td align=right>".number_format($grandBpjsKesPer2,0)."</td>";
+				$list2 .= "<td align=right>".number_format($grandBpjsTkKar2,0)."</td>";
+				$list2 .= "<td align=right>".number_format($grandBpjsTkPer2,0)."</td>";
+				$list2 .= "<td align=right>".number_format($grandBpjsJpKar2,0)."</td>";
+				$list2 .= "<td align=right>".number_format($grandBpjsJpPer2,0)."</td>";
+				foreach ($dtkommin as $kommin){
+					$list2 .= "<td align=right>".number_format(@$grandKommin2[$kommin],0)."</td>";
+				}
+				$list2 .= "<td align=right>".number_format($grandTotalPengurang2,0)."</td>";
+				$list2 .= "<td align=right>".number_format($grandTotalPenambah2,0)."</td>";
+				$list2 .= "<td align=right>".number_format($grandTotalGaji2,0)."</td>";
+				$list2 .= "</tr>";
+			}
+
+	$list3="</tbody><table>";
+
+	$infoBelumTersedia = array();
+	if(!$adaPph21){
+		$infoBelumTersedia[] = "PPh 21 belum tersedia untuk periode ini karena proses PPh 21 belum dilakukan.";
+	}
+	if(!$adaPremiKemandoran){
+		$infoBelumTersedia[] = "Premi Kemandoran belum tersedia untuk periode ini karena biasanya baru diinput di akhir bulan.";
+	}
+	if($param['periodegaji'] < date('Y-m')){
+		$infoBelumTersedia[] = "Periode ini sudah lewat, sebagian kecil angka bisa berbeda dari yang sudah diposting (data acuan seperti status Angsuran & harga Catu per Kg tidak menyimpan riwayat per periode).";
+	}
+
+	$notePph21 = '';
+	if(!empty($infoBelumTersedia)){
+		$notePph21 = "<div id='infoDinamisSrc'>" . implode("<br>", $infoBelumTersedia) . "</div>";
+	}
 
 switch ($method) {
     case 'preview':
 		if($tipeprint == 'html'){
 			if ($negatif){
-				echo $listx . $list0 . $list1 . $list3;
-	
+				echo $listx . $list0 . $list1 . $list3 . $notePph21;
+
 			}else{
-				echo $listbutton . $list0 . $list2 . $list3;
+				echo $listbutton . $list0 . $list2 . $list3 . $notePph21;
 			}
 		}else{
 			$stream='';

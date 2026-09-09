@@ -40,8 +40,8 @@ foreach($arrUnit as $key=>$val){
 
 ##GET SUBUNIT
 $optSubUnit="<option value=''>".$_SESSION['lang']['all']."</option>";
-$optSubUnit.="<option value=''>".$unit." - UMUM</option>";
-$str="select kodeorganisasi,namaorganisasi from ".$dbname.".organisasi where induk='".$unit."' order by kodeorganisasi";
+$optSubUnit.="<option value='KANTOR'>".$unit." - KANTOR</option>";
+$str="select kodeorganisasi,namaorganisasi,tipe from ".$dbname.".organisasi where induk='".$unit."' and  tipe not like '%GUDANG%' order by kodeorganisasi";
 $res=fetchdata($str);
 foreach($res as $val){
 	$optSubUnit.="<option value='".$val['kodeorganisasi']."'>".$val['kodeorganisasi']." - ".$val['namaorganisasi']."</option>";
@@ -63,6 +63,14 @@ foreach($res as $val){
 	$optTipe.="<option value='".$val['id']."'>".$val['tipe']."</option>";
 }
 
+## GET JABATAN
+$optJab="<option value=''>".$_SESSION['lang']['all']."</option>";
+$str="select * from ".$dbname.".sdm_5jabatan where aktif=1 order by namajabatan asc";
+$res=fetchdata($str);
+foreach($res as $val){
+	$optJab.="<option value='".$val['kodejabatan']."'>".$val['namajabatan']."</option>";
+}
+
 ## FILTER REPORT ##
 echo"
 <fieldset style=float:left>
@@ -82,6 +90,27 @@ echo"
 			</td>
 		</tr>
 		<tr>
+			<td>".$_SESSION['lang']['tipekaryawan']."</td>
+			<td>:</td>
+			<td>
+				<select class=select2 id='tipekar' style='width:246px'>".$optTipe."</select>
+			</td>
+		</tr>
+		<tr>
+			<td>".$_SESSION['lang']['subbagian']."</td>
+			<td>:</td>
+			<td>
+				<select class=select2 id='subbagian' style='width:246px'>".$optSubUnit."</select>
+			</td>
+		</tr>
+		<tr>
+			<td>".$_SESSION['lang']['jabatan']."</td>
+			<td>:</td>
+			<td>
+				<select class=select2 id='jabatan' style='width:246px'>".$optJab."</select>
+			</td>
+		</tr>
+		<tr>
 			<td colspan=2></td>
 			<td>
 				<button onclick=\"preview('html',event)\" class='mybutton'>".$_SESSION['lang']['preview']."</button>
@@ -90,10 +119,17 @@ echo"
 		</tr>
 	</table>
 </fieldset>";
+
+echo "<fieldset style='float:left; margin-left:20px; width:280px; font-size:12px; line-height:1.5;'>
+		<legend>Info</legend>
+			<div>Ini ESTIMASI, bukan data gaji yang sudah/akan dibayarkan.</div>
+			<div id='infoDinamis' style='margin-top:8px; color:#b06000;'></div>
+</fieldset>";
+
 CLOSE_BOX();
 
 OPEN_BOX();
-echo"<div  class='table-scroll' style='height:500px;overflow:auto;' id=printContainer></div>";
+echo"<div class='table-scroll' style='height:750px;overflow:auto;' id=printContainer></div>";
 CLOSE_BOX();
 echo close_body();
 ?>
