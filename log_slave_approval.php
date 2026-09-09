@@ -1316,6 +1316,9 @@ switch ($method) {
                 break;
 
             case 'PHP':
+
+                $nmprjct        = makeOption($dbname,'project','kode,nama');
+
                 #ambil sisa persetujuan
                 $strjlhper = "select max(level) as jumlah from " . $dbname . ".approval where jenispersetujuan='PHP'";
                 $resjlhper = $owlPDO->query($strjlhper) or die(print " Gagal: " . PDOException::getMessage());
