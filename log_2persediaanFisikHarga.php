@@ -65,7 +65,7 @@ $frm[0] = "<fieldset style=float:left>
 			<select class=select2 id=pt style='width:150px;' onchange=getGudang()>" . $optpt . "</select>
 		</td>
 		
-		<td style='padding-left:10px'>" . $_SESSION['lang']['sloc'] . "</td>
+		<td style='padding-left:10px'>" . $_SESSION['lang']['sloc'] . " Unit</td>
 		<td>:</td>
 		<td>
 			<select class=select2 id=gudang style='width:150px;' onchange=hideById('printPanel')>" . $optgudang1 . "</select>
@@ -135,7 +135,7 @@ $frm[0] = "<fieldset style=float:left>
 $frm[1] = "<fieldset style=float:left>
      <legend>" . $_SESSION['lang']['find'] . "</legend>
 	 " . $_SESSION['lang']['pt'] . ":&nbsp;<select class=select2 id=pt1 style='width:150px;' onchange=getGudang3()>" . $optpt . "</select>
-	 " . $_SESSION['lang']['sloc'] . ":&nbsp;<select class=select2 id=gudang1 style='width:150px;' onchange=hideById('printPanel1')>" . $optgudang1 . "</select>
+	 " . $_SESSION['lang']['sloc'] . " Divisi :&nbsp;<select class=select2 id=gudang1 style='width:150px;' onchange=hideById('printPanel1')>" . $optgudang1 . "</select>
 	 " . $_SESSION['lang']['periode'] . ":&nbsp;<select class=select2 id=periode1 style='width:150px;' onchange=hideById('printPanel1')>" . $optper1 . "</select>
 		<button class=mybutton onclick=getLaporanFisikHarga1()>" . $_SESSION['lang']['preview'] . "</button>
 		<button class=mybutton onclick=getLaporanFisikHarga1_excel()>" . $_SESSION['lang']['excel'] . "</button>

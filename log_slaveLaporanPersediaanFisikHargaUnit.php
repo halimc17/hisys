@@ -173,7 +173,7 @@ switch($proses)
      echo $optUnit;
     break;
 	case'getGudang2':
-		$optUnit="<option value=''>".$_SESSION['lang']['all']."</option>";
+		$optUnit="<option value=''>".$_SESSION['lang']['pilihdata']."</option>";
 	if($pt!=''){
 		$sUnit="select distinct kodeorganisasi,namaorganisasi,induk,tipe from ".$dbname.".organisasi where 
 				alokasi = '".$pt."' and tipe like 'GUDANG%' group by left(kodeorganisasi,4) order by kodeorganisasi asc";
