@@ -47,8 +47,21 @@ for($x=0;$x<=24;$x++){
 <script language=javascript src='js/zTools.js'></script>
 <script language=javascript src='js/zReport.js'></script>
 <script>
+function getMultipleValues(id) {
+    var el = document.getElementById(id);
+    var res = [];
+    if (el && el.options) {
+        for (var i = 0; i < el.options.length; i++) {
+            if (el.options[i].selected && el.options[i].value !== '') {
+                res.push(el.options[i].value);
+            }
+        }
+    }
+    return res.join(',');
+}
+
 function getPeriode() {
-	trksi = document.getElementById('traksiId').options[document.getElementById('traksiId').selectedIndex].value;
+	trksi = getMultipleValues('traksiId');
 
 	param = 'traksiId=' + trksi + '&proses=getPrd';
 	//alert(param);
@@ -75,6 +88,40 @@ function getPeriode() {
 		}
 	}
 }
+
+function customPreview() {
+    var traksiId = getMultipleValues('traksiId');
+    var afdId = getMultipleValues('afdId');
+    var periode = getValue('periode');
+    var param = "traksiId=" + traksiId + "&afdId=" + afdId + "&periode=" + periode;
+    
+    function respon() {
+        if (con.readyState == 4) {
+            if (con.status == 200) {
+                busy_off();
+                if (!isSaveResponse(con.responseText)) {
+                    alert("Informasi: " + con.responseText);
+                } else {
+                    var res = document.getElementById('printContainer');
+                    res.innerHTML = con.responseText;
+                }
+            } else {
+                busy_off();
+                error_catch(con.status);
+            }
+        }
+    }
+    post_response_text('kebun_slave_2spbvspenerimaan_external.php?proses=preview', param, respon);
+}
+
+function customExcel() {
+    var traksiId = getMultipleValues('traksiId');
+    var afdId = getMultipleValues('afdId');
+    var periode = getValue('periode');
+    var param = "traksiId=" + traksiId + "&afdId=" + afdId + "&periode=" + periode + "&proses=excel";
+    
+    printnopopup('kebun_slave_2spbvspenerimaan_external.php?' + param);
+}
 </script>
 
 <link rel='stylesheet' type='text/css' href='style/zTable.css'>
@@ -84,16 +131,16 @@ OPEN_BOX('','<span class=judul>'.getMenu('kebun_2spbvspenerimaan_external').'</s
 <fieldset style="float: left;">
 <legend><?echo $_SESSION['lang']['form'];?></legend>
 <table cellspacing="1" border="0" >
-<tr><td><label><?php echo $_SESSION['lang']['kebun']?></label></td><td>:</td><td><select class='select2' id="traksiId" name="traksiId"  style="width:200px" onchange=getPeriode()><?php echo $optOrg?></select></td></tr>
-<tr><td><label><?php echo $_SESSION['lang']['divisi']?></label></td><td>:</td><td><select class='select2' id="afdId" name="afdId"  style="width:200px"><?php echo $optAfd?></select></td></tr>
+<tr><td><label><?php echo $_SESSION['lang']['kebun']?></label></td><td>:</td><td><select multiple="multiple" class='select2' id="traksiId" name="traksiId"  style="width:300px" onchange=getPeriode()><?php echo $optOrg?></select></td></tr>
+<tr><td><label><?php echo $_SESSION['lang']['divisi']?></label></td><td>:</td><td><select multiple="multiple" class='select2' id="afdId" name="afdId"  style="width:300px"><?php echo $optAfd?></select></td></tr>
 <tr><td><label><?php echo $_SESSION['lang']['periode']?></label></td><td>:</td><td>
 <select  class='select2' id="periode"  style=width:200px><?php echo $optPeriode?></select></td></tr>
 
 
-<tr><td colspan="2"><td colspan="2" align=left ><button onclick="zPreview('kebun_slave_2spbvspenerimaan_external','<?php echo $arr?>','printContainer')" class="mybutton" name="preview" id="preview">Preview</button>
+<tr><td colspan="2"><td colspan="2" align=left ><button onclick="customPreview()" class="mybutton" name="preview" id="preview">Preview</button>
                     <!--<button onclick="zPdf('sdm_slave_2rekapabsen','<?php echo $arr?>','printContainer')" class="mybutton" name="preview" id="preview">PDF</button>
                         <button onclick="Clear1()" class="mybutton" name="btnBatal" id="btnBatal"><?php echo $_SESSION['lang']['cancel']?></button></td></tr>-->
-                    <button onclick="zExcel(event,'kebun_slave_2spbvspenerimaan_external.php','<?php echo $arr?>')" class="mybutton" name="preview" id="preview">Excel</button>
+                    <button onclick="customExcel()" class="mybutton" name="preview" id="preview">Excel</button>
                     
 
 </table>

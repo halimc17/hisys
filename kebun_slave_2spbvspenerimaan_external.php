@@ -11,17 +11,26 @@ $traksiId = checkPostGet('traksiId','');
 $periode = checkPostGet('periode','');
 $afdId = checkPostGet('afdId','');
 
-if($proses=='preview'||$proses=='excel'){
+if($proses=='preview'||$proses=='excel'){ 
 
     if($traksiId!='')
     {
-        $whr=" and  b.kodeorg='".$traksiId."'";
-        $whrpab=" and kodeorg='".$traksiId."'";
+        $tr_arr = explode(',', $traksiId);
+        $tr_in = implode("','", $tr_arr);
+        $whr=" and  b.kodeorg in ('".$tr_in."')";
+        $whrpab=" and kodeorg in ('".$tr_in."')";
     }
     if($afdId!='')
     {
-        $whr=" and a.nospb like '%".$afdId."%'";
-        $whrpab=" and nospb like '%".$afdId."%'";
+        $afd_arr = explode(',', $afdId);
+        $afd_whr = array();
+        $afd_whrpab = array();
+        foreach($afd_arr as $afd) {
+            $afd_whr[] = "a.nospb like '%".$afd."%'";
+            $afd_whrpab[] = "nospb like '%".$afd."%'";
+        }
+        $whr.=" and (".implode(" or ", $afd_whr).")";
+        $whrpab.=" and (".implode(" or ", $afd_whrpab).")";
     }
 
     if($periode=='')
@@ -293,8 +302,10 @@ switch($proses)
         case'getPrd':
             //$traksiId
         $optPeriode="<option value=''>".$_SESSION['lang']['pilihdata']."</option>";
+        $tr_arr = explode(',', $traksiId);
+        $tr_in = implode("','", $tr_arr);
         $str="select distinct left(tanggal,7) as periode from ".$dbname.".kebun_spbht 
-               where kodeorg = '".$traksiId."' order by left(tanggal,7) desc";
+               where kodeorg in ('".$tr_in."') order by left(tanggal,7) desc";
         $res=$owlPDO->query($str) or die(print " Gagal: ".PDOException::getMessage());
 		$res->setFetchMode(PDO::FETCH_ASSOC);
 		while($bar=$res->fetch()){
@@ -302,7 +313,7 @@ switch($proses)
         }
         $optAfd="<option value=''>".$_SESSION['lang']['all']."</option>";
         $str="select distinct kodeorganisasi,namaorganisasi from ".$dbname.".organisasi 
-               where induk = '".$traksiId."' and tipe='afdeling' order by namaorganisasi asc";
+               where induk in ('".$tr_in."') and tipe='afdeling' order by namaorganisasi asc";
 		$res=$owlPDO->query($str) or die(print " Gagal: ".PDOException::getMessage());
 		$res->setFetchMode(PDO::FETCH_ASSOC);
 		while($bar=$res->fetch()){            
