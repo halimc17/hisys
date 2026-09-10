@@ -79,6 +79,10 @@ try {
 					$param['notransaksi'] . "'");
 				$dataH = fetchData($queryH);
 
+				if (empty($dataH)) {
+					throw new PDOException("Data kebun_aktifitas untuk notransaksi " . $param['notransaksi'] . " tidak ditemukan.");
+				}
+
 				$arrDetailAkses = explode(',', getOrgDetail(28));
 
 				if (!in_array($dataH[0]['kodeorg'], $arrDetailAkses)) {
@@ -1454,6 +1458,10 @@ try {
 		$param['notransaksi'] . "'");
 	$dataH = fetchData($queryH);
 
+	if (empty($dataH)) {
+		throw new PDOException("Data kebun_aktifitas untuk notransaksi " . $param['notransaksi'] . " tidak ditemukan.");
+	}
+
 	#cek apakah 1 no transaksi terdiri dari beberapa keg dan blok
 	$str3 = "SELECT * FROM " . $dbname . ".kebun_pakaimaterial where notransaksi='" . $param['notransaksi'] . "'"; #exit('error'.$str3);
 	$res3 = $owlPDO->query($str3) or die(print " Gagal: " . PDOException::getMessage());
@@ -2070,21 +2078,24 @@ try {
 }
 
 #ada jurnal yg isinya kosong, kalau pakai if di atas banyak kali, nah solusinya adalah hapus saja jurnalnya
-$str = "delete from " . $dbname . ".keu_jurnalht where noreferensi='" . $dataH[0]['notransaksi'] . "' and totaldebet='0' and totalkredit='0' and nojurnal not in (select nojurnal from " . $dbname . ".keu_jurnaldt)";
-try {
-	$owlPDO->exec($str);
-} catch (PDOException $e) {
-	print " Gagal  !: " . $e->getMessage() . "\n";
-	die();
-}
+#= guard: jangan jalankan cleanup ini kalau notransaksi kosong, supaya tidak menyapu jurnal modul lain yang noreferensi-nya kebetulan juga kosong
+if (!empty($dataH[0]['notransaksi'])) {
+	$str = "delete from " . $dbname . ".keu_jurnalht where noreferensi='" . $dataH[0]['notransaksi'] . "' and totaldebet='0' and totalkredit='0' and nojurnal not in (select nojurnal from " . $dbname . ".keu_jurnaldt)";
+	try {
+		$owlPDO->exec($str);
+	} catch (PDOException $e) {
+		print " Gagal  !: " . $e->getMessage() . "\n";
+		die();
+	}
 
 
-$str = "delete from " . $dbname . ".keu_jurnaldt where noreferensi='" . $dataH[0]['notransaksi'] . "' and jumlah='0'";
-try {
-	$owlPDO->exec($str);
-} catch (PDOException $e) {
-	print " Gagal  !: " . $e->getMessage() . "\n";
-	die();
+	$str = "delete from " . $dbname . ".keu_jurnaldt where noreferensi='" . $dataH[0]['notransaksi'] . "' and jumlah='0'";
+	try {
+		$owlPDO->exec($str);
+	} catch (PDOException $e) {
+		print " Gagal  !: " . $e->getMessage() . "\n";
+		die();
+	}
 }
 
 echo "Posting Sukses.";

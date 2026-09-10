@@ -15,6 +15,10 @@ try {
 $queryH= selectQuery($dbname,'kebun_aktifitas',"*","notransaksi='".$param['notransaksi']."'");
 $dataH = fetchData($queryH);
 
+if(count($dataH)==0) {
+    throw new PDOException($_SESSION['lang']['errheadernotexist']);
+}
+
 $str = "select * from ".$dbname.".sdm_5periodegaji where kodeorg = '".$dataH[0]['kodeorg']."' and periode='".substr($dataH[0]['tanggal'],0,7)."' and sudahproses='1'";
 $res = fetchData($str);
 if(count($res)>0){
@@ -1473,11 +1477,14 @@ if($isJ[0]['jurnal']==1) {
 }
 
 #hapus header yg tidak ada detailnya
+#= guard: jangan jalankan cleanup ini kalau notransaksi kosong, supaya tidak menyapu jurnal modul lain yang noreferensi-nya kebetulan juga kosong
+if (!empty($dataH[0]['notransaksi'])) {
 $str="delete from ".$dbname.".keu_jurnalht where noreferensi='".$dataH[0]['notransaksi']."' and totaldebet='0' and totalkredit='0' and nojurnal not in (select nojurnal from ".$dbname.".keu_jurnaldt)";
 try{$owlPDO->exec($str); }catch (PDOException $e) {print " Gagal  !: " . $e->getMessage() . "\n"; die(); }
 
 #ada jurnal yg isinya kosong
 $str="delete from ".$dbname.".keu_jurnaldt where noreferensi='".$dataH[0]['notransaksi']."' and jumlah=0";
 try{$owlPDO->exec($str); }catch (PDOException $e) {print " Gagal  !: " . $e->getMessage() . "\n"; die(); }
+}
 
 ?>
