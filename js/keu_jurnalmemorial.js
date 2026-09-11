@@ -28,6 +28,8 @@ function displaylist() {
   document.getElementById("listdata").style.display = "block";
   document.getElementById("header").style.display = "none";
   document.getElementById("detail").style.display = "none";
+  document.getElementById("inputdata").style.display = "none";
+  document.getElementById("contdetail").style.display = "none";
   document.getElementById("nojurnalsch").value = "";
   document.getElementById("tanggalmulaisch").value = "";
   document.getElementById("tanggalselesaisch").value = "";
@@ -1026,11 +1028,48 @@ function savedetail(currRow, maxRow) {
       if (con.status == 200) {
         busy_off();
         if (!isSaveResponse(con.responseText)) {
-          alertify.alert("Info", con.responseText);
+          var pesanGagal = con.responseText;
+          var nojurnalGagal =
+            currRow != undefined
+              ? document.getElementById("nojurnal_" + currRow).innerHTML
+              : "";
           if (currRow != undefined) {
             document.getElementById(
               "validasi_" + currRow
             ).style.backgroundColor = "red";
+          }
+          if (nojurnalGagal != "") {
+            var paramRollback =
+              "method=rollbackupload&nojurnal=" + nojurnalGagal;
+            post_response_text(tujuan, paramRollback, resprollback);
+          } else {
+            alertify.alert("Info", pesanGagal);
+          }
+          function resprollback() {
+            if (con.readyState == 4) {
+              busy_off();
+              if (con.status != 200) {
+                error_catch(con.status);
+              } else if (!isSaveResponse(con.responseText)) {
+                alertify.alert(
+                  "Info",
+                  pesanGagal +
+                    "<br><br>Selain itu, gagal membatalkan data yang sudah tersimpan untuk jurnal " +
+                    nojurnalGagal +
+                    ": " +
+                    con.responseText +
+                    ". Silakan hubungi admin."
+                );
+              } else {
+                alertify.alert(
+                  "Info",
+                  pesanGagal +
+                    "<br><br>Data yang sudah tersimpan untuk jurnal " +
+                    nojurnalGagal +
+                    " sudah dibatalkan. Silakan upload ulang."
+                );
+              }
+            }
           }
         } else {
           if (currRow != undefined) {

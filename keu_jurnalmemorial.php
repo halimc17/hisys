@@ -336,8 +336,7 @@ echo"</div>";
 
 #list data
 echo"<div id=listData style=display:block>";
-echo"<div id=contain>
-			<script>loaddataupload(0)</script>";
+echo"<div id=containupload>";
 echo "</div>";
 echo "</div>";
 

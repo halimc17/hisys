@@ -246,7 +246,9 @@ switch($proses) {
             echo "Warning : Please delete detail transaction in the first place";
             exit;
         }
-        case 'loadHeader':
+        break;
+
+    case 'loadHeader':
                 #== Get Journal Header
                 $period = $_SESSION['org']['period'];
 				if($data['unitcr']==''){

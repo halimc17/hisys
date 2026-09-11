@@ -13954,6 +13954,7 @@ switch ($method) {
 
                                     $owlPDO->rollback();
                                     echo "Warning: Gagal melakukan approval \n" . addslashes($e->getMessage());
+                                    die();
                                 }
                             } catch (PDOException $e) {
                                 print " Gagal Update JM !: " . $e->getMessage() . "\n";

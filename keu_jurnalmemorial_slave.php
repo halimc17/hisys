@@ -840,6 +840,11 @@ switch ($method) {
 
 
 	case 'deleteht':
+		$strcekposting = "select posting from " . $dbname . "." . $table . " where nojurnal='" . $param['nojurnal'] . "' ";
+		$rescekposting = fetchdata($strcekposting);
+		if ($rescekposting[0]['posting'] == '1') {
+			exit("Warning: Jurnal " . $param['nojurnal'] . " sudah posting, tidak bisa dihapus. Lakukan unposting terlebih dahulu.");
+		}
 		$str = "delete from " . $dbname . "." . $table . " where nojurnal='" . $param['nojurnal'] . "' ";
 		try {
 			$owlPDO->exec($str);
@@ -1989,6 +1994,21 @@ switch ($method) {
 							$validasi .= "No. Referensi tidak boleh Kosong.<br>";
 							$err++;
 						}
+						if ($noakun == '' || $noakun == '0') {
+							$validasi .= "No. Akun tidak boleh Kosong.<br>";
+							$err++;
+						} elseif (!isset($nmakun[$noakun])) {
+							$validasi .= "No. Akun " . $noakun . " tidak terdaftar.<br>";
+							$err++;
+						}
+						if ($rupiah == '' || $rupiah == '0') {
+							$validasi .= "Jumlah tidak boleh Kosong/Nol.<br>";
+							$err++;
+						}
+						if ($keterangan == '') {
+							$validasi .= "Keterangan tidak boleh Kosong.<br>";
+							$err++;
+						}
 						// if($kodekeg==''){$validasi.="Kode kegiatan tidak boleh kosong.<br>";$err++;}
 						// if(strlen($kodekeg)!=9){$validasi.="Panjang kode kegiatan tidak sesuai.<br>";$err++;}
 						// if($namakeg==''){$validasi.="Nama kegiatan tidak terdaftar.<br>";$err++;}
@@ -2184,6 +2204,15 @@ switch ($method) {
 
 				$query = insertQuery($dbname, 'keu_jurnalmemorial', $data, $cols);
 				$owlPDO->exec($query);
+
+				#= update counter jurnal, supaya nomor jurnal tidak dobel dipakai di upload berikutnya
+				$partsnojurnal = explode('/', $param['nojurnal']);
+				$konterupload = end($partsnojurnal);
+				$periodeupload = substr($param['tanggalupload'], 0, 7);
+				#= pakai "<" supaya counter tidak pernah mundur kalau ada urutan request yang tidak terduga
+				$strkonter = "update " . $dbname . ".keu_5kelompokjurnal set nokounter='" . $konterupload . "' where
+					kodeunit='" . $param['kodeorg'] . "' and kodekelompok='" . $param['kodejurnal'] . "' and periode='" . $periodeupload . "' and nokounter < '" . $konterupload . "'";
+				$owlPDO->exec($strkonter);
 			}
 
 			$datadetail = array(
@@ -2220,6 +2249,30 @@ switch ($method) {
 
 			$query = insertQuery($dbname, 'keu_jurnalmemorialdt', $datadetail, $colsdetail);
 			$owlPDO->exec($query);
+
+			$owlPDO->commit();
+		} catch (PDOException $e) {
+			$owlPDO->rollback();
+			echo "Error, " . addslashes($e->getMessage());
+			die();
+		}
+		break;
+
+	case 'rollbackupload':
+		#= dipanggil dari JS kalau ada baris upload yang gagal, supaya header+detail yang sudah kepalang
+		#= tersimpan untuk nojurnal ini tidak nyangkut setengah jadi (tidak balance selamanya)
+		try {
+			$owlPDO->beginTransaction();
+
+			$strcekrb = "select posting from " . $dbname . ".keu_jurnalmemorial where nojurnal='" . $param['nojurnal'] . "'";
+			$rescekrb = fetchdata($strcekrb);
+			if (isset($rescekrb[0]) && $rescekrb[0]['posting'] != '1') {
+				$str = "delete from " . $dbname . ".keu_jurnalmemorialdt where nojurnal='" . $param['nojurnal'] . "'";
+				$owlPDO->exec($str);
+
+				$str = "delete from " . $dbname . ".keu_jurnalmemorial where nojurnal='" . $param['nojurnal'] . "'";
+				$owlPDO->exec($str);
+			}
 
 			$owlPDO->commit();
 		} catch (PDOException $e) {
