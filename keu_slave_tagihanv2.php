@@ -5663,8 +5663,8 @@ switch ($proses) {
 
 			case 'pon':
 
-				$str = "select notransaksi,sum(hargasatuan*jumlah) as hartot,tanggal,left(kodebarang,3) as kelompokbarang,kodebarang,noakun,termin from " . $dbname . ".log_noninventorydt_vw 
-				where nopo='" . $param['nodok'] . "' and posting=1 group by notransaksi order by tanggal asc";
+				$str = "select notransaksi,sum(hargasatuan*jumlah) as hartot,tanggal,left(kodebarang,3) as kelompokbarang,kodebarang,noakun,termin from " . $dbname . ".log_noninventorydt_vw
+				where nopo='" . $param['nodok'] . "' and posting=1 and jumlah>0 group by notransaksi order by tanggal asc";
 				$res = fetchdata($str);
 				foreach ($res as $bar) {
 					$strso = "select SUM(harga*jumlah) as total from " . $dbname . ".log_somaterial where nopo='" . $param['nodok'] . "' order by nopo asc";
@@ -5698,8 +5698,8 @@ switch ($proses) {
 				}
 
 				# Cek apakah pakai termin
-				$sql = "select a.notransaksi,sum(a.hargasatuan*a.jumlah) as hartot,a.tanggal,left(a.kodebarang,3) as kelompokbarang,a.kodebarang,a.noakun,b.termin,b.rupiah as rupiahtermin,b.bayar from " . $dbname . ".log_noninventorydt_vw a left join " . $dbname . ".log_potermin b on a.nopo=b.nopo 
-				where a.nopo='" . $param['nodok'] . "' and a.posting=1 group by notransaksi,b.termin";
+				$sql = "select a.notransaksi,sum(a.hargasatuan*a.jumlah) as hartot,a.tanggal,left(a.kodebarang,3) as kelompokbarang,a.kodebarang,a.noakun,b.termin,b.rupiah as rupiahtermin,b.bayar from " . $dbname . ".log_noninventorydt_vw a left join " . $dbname . ".log_potermin b on a.nopo=b.nopo
+				where a.nopo='" . $param['nodok'] . "' and a.posting=1 and a.jumlah>0 group by notransaksi,b.termin";
 
 				$res = fetchdata($str);
 				$res = fetchData($sql);

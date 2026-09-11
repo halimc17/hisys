@@ -942,7 +942,9 @@ switch($method){
 			// exit("warning:".$str);
 			$res=fetchdata($str);
 			foreach($res as $bar){
-				
+				if($bar['jumlah']==0){
+					continue;
+				}
 
 				$kodeblok='';
 				$kodevhc='';
