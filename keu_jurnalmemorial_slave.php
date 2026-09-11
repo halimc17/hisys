@@ -1985,6 +1985,10 @@ switch ($method) {
 							$validasi .= "Panjang Karakter Kode Organisasi tidak sesuai.<br>";
 							$err++;
 						}
+						if ($noreferensi == '') {
+							$validasi .= "No. Referensi tidak boleh Kosong.<br>";
+							$err++;
+						}
 						// if($kodekeg==''){$validasi.="Kode kegiatan tidak boleh kosong.<br>";$err++;}
 						// if(strlen($kodekeg)!=9){$validasi.="Panjang kode kegiatan tidak sesuai.<br>";$err++;}
 						// if($namakeg==''){$validasi.="Nama kegiatan tidak terdaftar.<br>";$err++;}

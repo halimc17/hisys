@@ -1316,6 +1316,9 @@ switch ($method) {
                 break;
 
             case 'PHP':
+
+                $nmprjct        = makeOption($dbname,'project','kode,nama');
+
                 #ambil sisa persetujuan
                 $strjlhper = "select max(level) as jumlah from " . $dbname . ".approval where jenispersetujuan='PHP'";
                 $resjlhper = $owlPDO->query($strjlhper) or die(print " Gagal: " . PDOException::getMessage());
@@ -13912,15 +13915,21 @@ switch ($method) {
                                     $tabledt = 'keu_jurnalmemorialdt';
 
                                     #= ht
+                                    #= hitung total debet/kredit dari detail, supaya header keu_jurnalht tidak selalu 0/0
+                                    $strsumjm = "select sum(if(jumlah>0,jumlah,0)) as totdebet, sum(if(jumlah<0,jumlah,0))*-1 as totkredit from " . $dbname . "." . $tabledt . " where nojurnal='" . $notransaksi . "'";
+                                    $ressumjm = fetchdata($strsumjm);
+                                    $totdebetjm = $ressumjm[0]['totdebet'];
+                                    $totkreditjm = $ressumjm[0]['totkredit'];
+
                                     $str = "select * from " . $dbname . "." . $table . " where nojurnal='" . $notransaksi . "'";
                                     $res = fetchdata($str);
                                     foreach ($res as $bar) {
                                         $strins = "insert into " . $dbname . ".keu_jurnalht
 										(nojurnal,kodejurnal,tanggal,tanggalentry,noreferensi,
-										 matauang,kurs,autojurnal)
+										 matauang,kurs,autojurnal,totaldebet,totalkredit)
 										values
 										('" . $bar['nojurnal'] . "','M','" . $bar['tanggal'] . "','" . date('Ymd') . "','" . $bar['noreferensi'] . "',
-										'" . $bar['matauang'] . "','" . $bar['kurs'] . "','1')";
+										'" . $bar['matauang'] . "','" . $bar['kurs'] . "','1','" . $totdebetjm . "','" . $totkreditjm . "')";
                                         $owlPDO->exec($strins);
                                     }
                                     #= dt

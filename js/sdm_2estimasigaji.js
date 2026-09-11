@@ -1,14 +1,23 @@
   function preview(tipeprint, ev) {
     kodeorg = document.getElementById("kodeorg").value;
     periodegaji = document.getElementById("periodegaji").value;
-  
+    tipekar = document.getElementById("tipekar").value;
+    subbagian = document.getElementById("subbagian").value;
+    jabatan = document.getElementById("jabatan").value;
+
     param =
       "method=preview&tipeprint=" +
       tipeprint +
       "&kodeorg=" +
       kodeorg +
       "&periodegaji=" +
-      periodegaji;
+      periodegaji +
+      "&tipekar=" +
+      tipekar +
+      "&subbagian=" +
+      subbagian +
+      "&jabatan=" +
+      jabatan;
     tujuan = "sdm_slave_2estimasigaji.php";
     
     if (tipeprint != "html") {
@@ -28,6 +37,15 @@
           } else {
             document.getElementById("printContainer").innerHTML = con.responseText;
             leftFixedTable();
+
+            var infoSrc = document.getElementById("infoDinamisSrc");
+            var infoTarget = document.getElementById("infoDinamis");
+            if (infoTarget) {
+              infoTarget.innerHTML = infoSrc ? infoSrc.innerHTML : "";
+            }
+            if (infoSrc) {
+              infoSrc.parentNode.removeChild(infoSrc);
+            }
           }
         } else {
           busy_off();
