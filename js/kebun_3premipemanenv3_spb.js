@@ -30,7 +30,22 @@ function displayList() {
 	document.getElementById('detail').style.display = 'none';
 	batallist();
 	loaddata(0);
+	resizeListBox();
 }
+
+function resizeListBox() {
+	var el = document.getElementById('listDataBox');
+	if (!el || el.offsetParent === null) return;
+	var inner = el.getElementsByClassName('x-box-mc')[0];
+	if (!inner) return;
+	var top = el.getBoundingClientRect().top;
+	var minH = window.innerHeight - top - 25;
+	if (minH > 0) {
+		inner.style.minHeight = minH + 'px';
+	}
+}
+window.addEventListener('load', resizeListBox);
+window.addEventListener('resize', resizeListBox);
 
 function prevdata(afd,tgl1,jenis,unit) {
 	// title = "Preview Detail";
@@ -256,6 +271,8 @@ function loaddata(page) {
 	prdlist = document.getElementById('prdlist').value;
 	unitlist = document.getElementById('unitlist').value;
 	afdlist = document.getElementById('afdlist').value;
+	tgl1list = document.getElementById('tgl1list').value;
+	tgl2list = document.getElementById('tgl2list').value;
 	param = 'proses=loaddata&page=' + page;
 	if (prdlist != '') {
 		param += '&prdlist=' + prdlist;
@@ -265,6 +282,12 @@ function loaddata(page) {
 	}
 	if (afdlist != '') {
 		param += '&afdlist=' + afdlist;
+	}
+	if (tgl1list != '') {
+		param += '&tgl1list=' + tgl1list;
+	}
+	if (tgl2list != '') {
+		param += '&tgl2list=' + tgl2list;
 	}
 	tujuan = 'kebun_slave_save_3premipemanenv3_spb.php';
 	post_response_text(tujuan, param, respog);
@@ -281,6 +304,7 @@ function loaddata(page) {
 					
 					document.getElementById('contpivot').style.display="none";
 					leftFixedTable();
+					resizeListBox();
 				}
 			} else {
 				busy_off();
@@ -299,6 +323,8 @@ function batallist() {
 	//document.getElementById('prdlist').value = '';
 	document.getElementById('unitlist').value = '';
 	document.getElementById('afdlist').value = '';
+	document.getElementById('tgl1list').value = '';
+	document.getElementById('tgl2list').value = '';
 	document.getElementById('contloaddata').style.display="";
 	document.getElementById('contpivot').style.display="none";
 	loaddata();
@@ -321,7 +347,22 @@ function loaddataexcel(ev,tujuan,passParam,pros = 'loaddataexcel')
     }
 	param+='&proses='+pros;
 	
-	printFile(param,tujuan,judul,ev)	
+	printFile(param,tujuan,judul,ev)
+}
+
+function loaddatapdf()
+{
+	prdlist = document.getElementById('prdlist').value;
+	unitlist = document.getElementById('unitlist').value;
+	afdlist = document.getElementById('afdlist').value;
+	tgl1list = document.getElementById('tgl1list').value;
+	tgl2list = document.getElementById('tgl2list').value;
+	param = 'prdlist=' + prdlist;
+	param += '&unitlist=' + unitlist;
+	param += '&afdlist=' + afdlist;
+	param += '&tgl1list=' + tgl1list;
+	param += '&tgl2list=' + tgl2list;
+	window.open('kebun_slave_3premipemanenv3_spb_pdf.php?' + param, '_blank');
 }
 
 function numberFormat(number, digit) {

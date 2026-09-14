@@ -19,6 +19,10 @@ if(count($param)==0){
 $prdlist    =checkPostGet('prdlist','');
 $unitlist   =checkPostGet('unitlist','');
 $afdlist    =checkPostGet('afdlist','');
+$tgl1list   =checkPostGet('tgl1list','');
+$tgl2list   =checkPostGet('tgl2list','');
+$tgl1list   =($tgl1list!='') ? tanggalsystemn($tgl1list) : '';
+$tgl2list   =($tgl2list!='') ? tanggalsystemn($tgl2list) : '';
 $divisi     =checkPostGet('divisi','');
 $tipe       =checkPostGet('tipe','');
 $proses     =checkPostGet('proses','');
@@ -756,9 +760,9 @@ switch($proses){
 	// }else{
 	// 		$stream.="<button onclick='postingdata()' class='mybutton' name='posting' id='posting'>Posting Data</button>";
 	// }
-	$stream.="<table><td colspan=2><b>".$_SESSION['lang']['notransaksi']." &nbsp;:</b></td>
+	$stream.="<table><tr><td colspan=2><b>".$_SESSION['lang']['notransaksi']." &nbsp;:</b></td>
 					 <td colspan=2><b>".$notransaksi."</b></td>
-			  </table>";
+			  </tr></table>";
 	if ($tipe == 'excel') {
 		$stream.="<table class=sortable cellspacing=1 border=1>";
 	} else 	{
@@ -793,16 +797,9 @@ switch($proses){
 	$datakgblokkecil=array();
 	$datakgblokinduk=array();
 
-	if($jumlahkaryhist > 0) {
-		$str="select * from ".$dbname.".kebun_spbdt_detail a 
-		left join datakaryawan_hist b on a.pemanen=b.karyawanid 
-		where a.tanggalpanen like '".substr($notransaksi,0,4)."-".substr($notransaksi,4,2)."%' and b.version_type='B'";
-	} else {
-		$str="select * from ".$dbname.".kebun_spbdt_detail a 
-		left join datakaryawan b on a.pemanen=b.karyawanid 
-		where a.tanggalpanen like '".substr($notransaksi,0,4)."-".substr($notransaksi,4,2)."%'";
-	}
-	
+	$str="select * from ".$dbname.".kebun_spbdt_detail a
+	where a.tanggalpanen like '".substr($notransaksi,0,4)."-".substr($notransaksi,4,2)."%'";
+
 	$res=$owlPDO->query($str) or die(print " Gagal: ".PDOException::getMessage());
 	$res->setFetchMode(PDO::FETCH_ASSOC);
 	while($bar=$res->fetch()){
@@ -811,18 +808,17 @@ switch($proses){
 	}
 
 	# ambil data
-	if($jumlahkaryhist > 0) {
-		$str="select a.*, b.namakaryawan,b.nik from ".$dbname.".kebun_3premipemanen a 
-		left join datakaryawan_hist b on a.karyawanid=b.karyawanid 
-		where a.notransaksi ='".$notransaksi."' and b.version_type='B' order by a.mandor asc, a.tahuntanam asc, b.namakaryawan asc";
-	} else {
-		$str="select a.*, b.namakaryawan,b.nik from ".$dbname.".kebun_3premipemanen a 
-		left join datakaryawan b on a.karyawanid=b.karyawanid 
-		where a.notransaksi ='".$notransaksi."' order by a.mandor asc, a.tahuntanam asc, b.namakaryawan asc";
-	}
+	$str="select a.*,
+		COALESCE(bh.namakaryawan, bd.namakaryawan) as namakaryawan,
+		COALESCE(bh.nik, bd.nik) as nik
+		from ".$dbname.".kebun_3premipemanen a
+		left join ".$dbname.".datakaryawan_hist bh on a.karyawanid=bh.karyawanid and bh.version_type='B' and bh.periodegaji=a.periode
+		left join ".$dbname.".datakaryawan bd on a.karyawanid=bd.karyawanid
+		where a.notransaksi ='".$notransaksi."' order by a.mandor asc, a.tahuntanam asc, namakaryawan asc";
 	$res=$owlPDO->query($str) or die(print " Gagal: ".PDOException::getMessage());
 	$res->setFetchMode(PDO::FETCH_ASSOC);
 	$no=0;
+	$gttlhapanen=$gttljjg=$gttlkg=$gttlhk=$gttlupah=$gttlhkpot=$gttlupahpot=$gttllbbs=$gttlrplbs=$gttlbrdl=$gttlrpbrd=$gttldenda=0;
 	while($bar=$res->fetch()){
 		$no++;
 		$stream.="<tr class=rowcontent>";
@@ -838,31 +834,35 @@ switch($proses){
 			$sbttlkg=0;
 			$sbttlhk=0;
 			$sbttlupah=0;
+			$sbttlhkpot=0;
+			$sbttlupahpot=0;
 			$sbttllbbs=0;
 			$sbttlrplbs=0;
 			$sbttlbrdl=0;
 			$sbttlrpbrd=0;
-			$sbttldendal=0;
+			$sbttldenda=0;
+			$countBlokKecil=count($datakgblokkecil[$bar['nospb']][$bar['tanggalpanen']][$bar['blok']]);
 		foreach ($datakgblokkecil[$bar['nospb']][$bar['tanggalpanen']][$bar['blok']] as $blokkecil => $kgwbnetto) {
 			$datatotalkg=$datakgblokinduk[$bar['nospb']][$bar['tanggalpanen']][$bar['blok']];
-			$persentasekg=$kgwbnetto/$datatotalkg;
+			$persentasekg=($datatotalkg!=0) ? $kgwbnetto/$datatotalkg : (1/$countBlokKecil);
 			$nox++;
 			if($nox==1){
 				$stream.="<td align=right>".$blokkecil."</td>";
 				$stream.="<td align=right>".getBlok($blokkecil,'tahuntanam')."</td>";
-				$stream.="<td align=right>".$persentasekg*$bar['hapanen']."</td>";
-				$stream.="<td align=right>".$persentasekg*($bar['jjgbuahbesar']+$bar['jjgbuahkecil'])."</td>";
-				$stream.="<td align=right>".$persentasekg*($bar['kgbuahbesar']+$bar['kgbuahkecil'])."</td>";
-				$stream.="<td align=right>".$persentasekg*($bar['hkbuahbesar']+$bar['hkbuahkecil'])."</td>";
-				$stream.="<td align=right>".$persentasekg*($bar['rphkbuahkecil']+$bar['rphkbuahbesar'])."</td>";
-				$stream.="<td align=right>".$persentasekg*($bar['hkbuahbesarpot']+$bar['hkbuahkecilpot'])."</td>";
-				$stream.="<td align=right>".$persentasekg*($bar['rphkbuahkecilpot']+$bar['rphkbuahbesarpot'])."</td>";
-				$stream.="<td align=right>".$persentasekg*($bar['lbbuahkecil']+$bar['lbbuahbesar'])."</td>";
-				$stream.="<td align=right>".$persentasekg*($bar['rplbbuahkecil']+$bar['rplbbuahbesar'])."</td>";
-				$stream.="<td align=right>".$persentasekg*$bar['brondolan']."</td>";
-				$stream.="<td align=right>".$persentasekg*$bar['rpbrondolan']."</td>";
-				$stream.="<td align=right>".$persentasekg*$bar['dendapanen']."</td>";
+				$stream.="<td align=right>".@hidezerodecimal($persentasekg*$bar['hapanen'],2)."</td>";
+				$stream.="<td align=right>".@hidezerodecimal($persentasekg*($bar['jjgbuahbesar']+$bar['jjgbuahkecil']),2)."</td>";
+				$stream.="<td align=right>".@hidezerodecimal($persentasekg*($bar['kgbuahbesar']+$bar['kgbuahkecil']),2)."</td>";
+				$stream.="<td align=right>".@hidezerodecimal($persentasekg*($bar['hkbuahbesar']+$bar['hkbuahkecil']),2)."</td>";
+				$stream.="<td align=right>".@hidezerodecimal($persentasekg*($bar['rphkbuahkecil']+$bar['rphkbuahbesar']),2)."</td>";
+				$stream.="<td align=right>".@hidezerodecimal($persentasekg*($bar['hkbuahbesarpot']+$bar['hkbuahkecilpot']),2)."</td>";
+				$stream.="<td align=right>".@hidezerodecimal($persentasekg*($bar['rphkbuahkecilpot']+$bar['rphkbuahbesarpot']),2)."</td>";
+				$stream.="<td align=right>".@hidezerodecimal($persentasekg*($bar['lbbuahkecil']+$bar['lbbuahbesar']),2)."</td>";
+				$stream.="<td align=right>".@hidezerodecimal($persentasekg*($bar['rplbbuahkecil']+$bar['rplbbuahbesar']),2)."</td>";
+				$stream.="<td align=right>".@hidezerodecimal($persentasekg*$bar['brondolan'],2)."</td>";
+				$stream.="<td align=right>".@hidezerodecimal($persentasekg*$bar['rpbrondolan'],2)."</td>";
+				$stream.="<td align=right>".@hidezerodecimal($persentasekg*$bar['dendapanen'],2)."</td>";
 			}else{
+				$stream.="</tr>";
 				$stream.="<tr class=rowcontent>";
 				$stream.="<td align=right></td>";
 				$stream.="<td align=left></td>";
@@ -872,18 +872,18 @@ switch($proses){
 				$stream.="<td align=left></td>";
 				$stream.="<td align=right>".$blokkecil."</td>";
 				$stream.="<td align=right>".getBlok($blokkecil,'tahuntanam')."</td>";
-				$stream.="<td align=right>".$persentasekg*$bar['hapanen']."</td>";
-				$stream.="<td align=right>".$persentasekg*($bar['jjgbuahbesar']+$bar['jjgbuahkecil'])."</td>";
-				$stream.="<td align=right>".$persentasekg*($bar['kgbuahbesar']+$bar['kgbuahkecil'])."</td>";
-				$stream.="<td align=right>".$persentasekg*($bar['hkbuahbesar']+$bar['hkbuahkecil'])."</td>";
-				$stream.="<td align=right>".$persentasekg*($bar['rphkbuahkecil']+$bar['rphkbuahbesar'])."</td>";
-				$stream.="<td align=right>".$persentasekg*($bar['hkbuahbesarpot']+$bar['hkbuahkecilpot'])."</td>";
-				$stream.="<td align=right>".$persentasekg*($bar['rphkbuahkecilpot']+$bar['rphkbuahbesarpot'])."</td>";
-				$stream.="<td align=right>".$persentasekg*($bar['lbbuahkecil']+$bar['lbbuahbesar'])."</td>";
-				$stream.="<td align=right>".$persentasekg*($bar['rplbbuahkecil']+$bar['rplbbuahbesar'])."</td>";
-				$stream.="<td align=right>".$persentasekg*$bar['brondolan']."</td>";
-				$stream.="<td align=right>".$persentasekg*$bar['rpbrondolan']."</td>";
-				$stream.="<td align=right>".$persentasekg*$bar['dendapanen']."</td>";
+				$stream.="<td align=right>".@hidezerodecimal($persentasekg*$bar['hapanen'],2)."</td>";
+				$stream.="<td align=right>".@hidezerodecimal($persentasekg*($bar['jjgbuahbesar']+$bar['jjgbuahkecil']),2)."</td>";
+				$stream.="<td align=right>".@hidezerodecimal($persentasekg*($bar['kgbuahbesar']+$bar['kgbuahkecil']),2)."</td>";
+				$stream.="<td align=right>".@hidezerodecimal($persentasekg*($bar['hkbuahbesar']+$bar['hkbuahkecil']),2)."</td>";
+				$stream.="<td align=right>".@hidezerodecimal($persentasekg*($bar['rphkbuahkecil']+$bar['rphkbuahbesar']),2)."</td>";
+				$stream.="<td align=right>".@hidezerodecimal($persentasekg*($bar['hkbuahbesarpot']+$bar['hkbuahkecilpot']),2)."</td>";
+				$stream.="<td align=right>".@hidezerodecimal($persentasekg*($bar['rphkbuahkecilpot']+$bar['rphkbuahbesarpot']),2)."</td>";
+				$stream.="<td align=right>".@hidezerodecimal($persentasekg*($bar['lbbuahkecil']+$bar['lbbuahbesar']),2)."</td>";
+				$stream.="<td align=right>".@hidezerodecimal($persentasekg*($bar['rplbbuahkecil']+$bar['rplbbuahbesar']),2)."</td>";
+				$stream.="<td align=right>".@hidezerodecimal($persentasekg*$bar['brondolan'],2)."</td>";
+				$stream.="<td align=right>".@hidezerodecimal($persentasekg*$bar['rpbrondolan'],2)."</td>";
+				$stream.="<td align=right>".@hidezerodecimal($persentasekg*$bar['dendapanen'],2)."</td>";
 			}
 			$sbttlhapanen+=$persentasekg*$bar['hapanen'];
 			$sbttljjg+=$persentasekg*($bar['jjgbuahbesar']+$bar['jjgbuahkecil']);
@@ -902,22 +902,50 @@ switch($proses){
 				$stream.="</tr>";
 				$stream.="<tr class=rowcontent>";
 				$stream.="<td align=right colspan=8 align=center bgcolor=#ADFF2F><b>SUB TOTAL</b></td>";
-				$stream.="<td align=right bgcolor=#ADFF2F>".$sbttlhapanen."</td>";
-				$stream.="<td align=right bgcolor=#ADFF2F>".$sbttljjg."</td>";
-				$stream.="<td align=right bgcolor=#ADFF2F>".$sbttlkg."</td>";
-				$stream.="<td align=right bgcolor=#ADFF2F>".$sbttlhk."</td>";
-				$stream.="<td align=right bgcolor=#ADFF2F>".$sbttlupah."</td>";
-				$stream.="<td align=right bgcolor=#ADFF2F>".$sbttlhkpot."</td>";
-				$stream.="<td align=right bgcolor=#ADFF2F>".$sbttlupahpot."</td>";
-				$stream.="<td align=right bgcolor=#ADFF2F>".$sbttllbbs."</td>";
-				$stream.="<td align=right bgcolor=#ADFF2F>".$sbttlrplbs."</td>";
-				$stream.="<td align=right bgcolor=#ADFF2F>".$sbttlbrdl."</td>";
-				$stream.="<td align=right bgcolor=#ADFF2F>".$sbttlrpbrd."</td>";
-				$stream.="<td align=right bgcolor=#ADFF2F>".$sbttldenda."</td>";
+				$stream.="<td align=right bgcolor=#ADFF2F>".@hidezerodecimal($sbttlhapanen,2)."</td>";
+				$stream.="<td align=right bgcolor=#ADFF2F>".@hidezerodecimal($sbttljjg,2)."</td>";
+				$stream.="<td align=right bgcolor=#ADFF2F>".@hidezerodecimal($sbttlkg,2)."</td>";
+				$stream.="<td align=right bgcolor=#ADFF2F>".@hidezerodecimal($sbttlhk,2)."</td>";
+				$stream.="<td align=right bgcolor=#ADFF2F>".@hidezerodecimal($sbttlupah,2)."</td>";
+				$stream.="<td align=right bgcolor=#ADFF2F>".@hidezerodecimal($sbttlhkpot,2)."</td>";
+				$stream.="<td align=right bgcolor=#ADFF2F>".@hidezerodecimal($sbttlupahpot,2)."</td>";
+				$stream.="<td align=right bgcolor=#ADFF2F>".@hidezerodecimal($sbttllbbs,2)."</td>";
+				$stream.="<td align=right bgcolor=#ADFF2F>".@hidezerodecimal($sbttlrplbs,2)."</td>";
+				$stream.="<td align=right bgcolor=#ADFF2F>".@hidezerodecimal($sbttlbrdl,2)."</td>";
+				$stream.="<td align=right bgcolor=#ADFF2F>".@hidezerodecimal($sbttlrpbrd,2)."</td>";
+				$stream.="<td align=right bgcolor=#ADFF2F>".@hidezerodecimal($sbttldenda,2)."</td>";
 				$stream.="</tr>";
 
+				$gttlhapanen+=$sbttlhapanen;
+				$gttljjg+=$sbttljjg;
+				$gttlkg+=$sbttlkg;
+				$gttlhk+=$sbttlhk;
+				$gttlupah+=$sbttlupah;
+				$gttlhkpot+=$sbttlhkpot;
+				$gttlupahpot+=$sbttlupahpot;
+				$gttllbbs+=$sbttllbbs;
+				$gttlrplbs+=$sbttlrplbs;
+				$gttlbrdl+=$sbttlbrdl;
+				$gttlrpbrd+=$sbttlrpbrd;
+				$gttldenda+=$sbttldenda;
+
 	}
-	
+	$stream.="<tr class=rowcontent>";
+	$stream.="<td align=right colspan=8 align=center bgcolor='cyan'><b>GRAND TOTAL</b></td>";
+	$stream.="<td align=right bgcolor='cyan'>".@hidezerodecimal($gttlhapanen,2)."</td>";
+	$stream.="<td align=right bgcolor='cyan'>".@hidezerodecimal($gttljjg,2)."</td>";
+	$stream.="<td align=right bgcolor='cyan'>".@hidezerodecimal($gttlkg,2)."</td>";
+	$stream.="<td align=right bgcolor='cyan'>".@hidezerodecimal($gttlhk,2)."</td>";
+	$stream.="<td align=right bgcolor='cyan'>".@hidezerodecimal($gttlupah,2)."</td>";
+	$stream.="<td align=right bgcolor='cyan'>".@hidezerodecimal($gttlhkpot,2)."</td>";
+	$stream.="<td align=right bgcolor='cyan'>".@hidezerodecimal($gttlupahpot,2)."</td>";
+	$stream.="<td align=right bgcolor='cyan'>".@hidezerodecimal($gttllbbs,2)."</td>";
+	$stream.="<td align=right bgcolor='cyan'>".@hidezerodecimal($gttlrplbs,2)."</td>";
+	$stream.="<td align=right bgcolor='cyan'>".@hidezerodecimal($gttlbrdl,2)."</td>";
+	$stream.="<td align=right bgcolor='cyan'>".@hidezerodecimal($gttlrpbrd,2)."</td>";
+	$stream.="<td align=right bgcolor='cyan'>".@hidezerodecimal($gttldenda,2)."</td>";
+	$stream.="</tr>";
+
 		$stream.="</tbody></table>";
 		
 		//echo 'xxxxxx';
@@ -1029,10 +1057,10 @@ switch($proses){
 		$stream.="<td align=right>".@hidezerodecimal($bar['kgwb']-$bar['potbrdkg'],2)."</td>";
 		$stream.="<td align=right>".@hidezerodecimal($bar['basiskg'],2)."</td>";
 		$stream.="<td align=right>".@hidezerodecimal($bar['kglb1'],2)."</td>";
-		$stream.="<td align=right>".@hidezerodecimal($bar['rplb1']/$bar['kglb1'],2)."</td>";
+		$stream.="<td align=right>".@hidezerodecimal($bar['kglb1']!=0 ? $bar['rplb1']/$bar['kglb1'] : 0,2)."</td>";
 		$stream.="<td align=right>".@hidezerodecimal($bar['rplb1'],2)."</td>";
 		$stream.="<td align=right>".@hidezerodecimal($bar['kgbrd'],2)."</td>";
-		$stream.="<td align=right>".@hidezerodecimal($bar['rpbrd']/$bar['kgbrd'],2)."</td>";
+		$stream.="<td align=right>".@hidezerodecimal($bar['kgbrd']!=0 ? $bar['rpbrd']/$bar['kgbrd'] : 0,2)."</td>";
 		$stream.="<td align=right>".@hidezerodecimal($bar['rpbrd'],2)."</td>";
 		$stream.="<td align=right>".@hidezerodecimal($bar['kehadiran'],2)."</td>";
 		$stream.="<td align=right>".@hidezerodecimal($bar['tambahan'],2)."</td>";
@@ -1063,10 +1091,10 @@ switch($proses){
 	$stream.="<td align=right bgcolor='cyan'>".@hidezerodecimal($tkgwb)."</td>";
 	$stream.="<td align=right bgcolor='cyan'>".@hidezerodecimal($tbasiskg)."</td>";
 	$stream.="<td align=right bgcolor='cyan'>".@hidezerodecimal($tkglb1)."</td>";
-	$stream.="<td align=right bgcolor='cyan'>".@hidezerodecimal($trplb1/$tkglb1)."</td>";
+	$stream.="<td align=right bgcolor='cyan'>".@hidezerodecimal($tkglb1!=0 ? $trplb1/$tkglb1 : 0)."</td>";
 	$stream.="<td align=right bgcolor='cyan'>".@hidezerodecimal($trplb1)."</td>";
 	$stream.="<td align=right bgcolor='cyan'>".@hidezerodecimal($tkgbrd)."</td>";
-	$stream.="<td align=right bgcolor='cyan'>".@hidezerodecimal($trpbrd/$tkgbrd)."</td>";
+	$stream.="<td align=right bgcolor='cyan'>".@hidezerodecimal($tkgbrd!=0 ? $trpbrd/$tkgbrd : 0)."</td>";
 	$stream.="<td align=right bgcolor='cyan'>".@hidezerodecimal($trpbrd)."</td>";
 	$stream.="<td align=right bgcolor='cyan'>".@hidezerodecimal($tkehadiran)."</td>";
 	$stream.="<td align=right bgcolor='cyan'>".@hidezerodecimal($ttambahan)."</td>";
@@ -1408,6 +1436,11 @@ switch($proses){
 		if ($afdlist != '') {
 			$where.=" and divisi='" . $afdlist . "' ";
 		}
+
+		if ($tgl1list != '' && $tgl2list != '') {
+			$where.=" and tanggalpanen between '" . $tgl1list . "' and '" . $tgl2list . "' ";
+			$wh.=" and b.tanggal between '" . $tgl1list . "' and '" . $tgl2list . "' ";
+		}
         $limit = 20;
         $page = 0;
         $_POST['page'] = isset($_POST['page']) ? $_POST['page'] : '0';
@@ -1430,45 +1463,41 @@ switch($proses){
 		    "kodeaplikasi='PNN' and jurnalid='PNN03'");
 		$resParam3 = fetchData($queryParam3);
 
-        $strx="select * from ".$dbname.".kebun_3premipemanen where 1=1 ".$where." group by notransaksi order by notransaksi asc, periode desc, kodeorg asc, divisi asc";
-        $resxx=fetchdata($strx);
-		$jlhbrs=count($resxx);
+        $strcount = "SELECT COUNT(DISTINCT notransaksi) as jlh FROM ".$dbname.".kebun_3premipemanen where 1=1 ".$where."";
+        $rescount = fetchdata($strcount);
+		$jlhbrs = $rescount[0]['jlh'];
 
         $offset = $page * $limit;
         $maxdisplay = ($page * $limit);
 		$tab = "";
         $no = $maxdisplay;
-		
-		$strx = "SELECT DISTINCT notransaksi FROM " . $dbname . ".kebun_3premipemanen where 1=1 ".$where."";
-				
-		#cek jurnal
-		$str = "select nojurnal, noreferensi, sum(debet-kredit) as rpj from ".$dbname.".keu_jurnaldt_vw where noreferensi in (". $strx . ") ".$whj." and noakun in ('".$resParam[0]['noakundebet']."','".$resParam2[0]['noakundebet']."','".$resParam3[0]['noakundebet']."','1261004') group by nojurnal, noreferensi";
-		$res    =fetchData($str);
-		foreach($res as $val){			
-			$rpjurnal[$val['noreferensi']]+=$val['rpj'];
-		}
-		
-		$str = "select b.noreferensi, sum(upahpremilebihbasis+premibrondol-rupiahpenalty+upahkerja-upahpenalty) as prelb from ".$dbname.".kebun_prestasi a left join ".$dbname.".kebun_aktifitas b on a.notransaksi=b.notransaksi where 1=1 ".$wh." group by noreferensi"; 
-		$res    =fetchData($str);
-		foreach($res as $val){			
-			$rppres[$val['noreferensi']]+=$val['prelb'];
-		}
-		
-		// $strmin="select notransaksi, min(tanggalpanen) as tglawal,max(tanggalpanen) as tglakhir from ".$dbname.".kebun_3premipemanen where 1=1 ".$whj." group by notransaksi"; 
-		// $barmin=fetchData($strmin);
-		// foreach($barmin as $valmin){			
-			// $tglmin[$valmin['notransaksi']]=$valmin['tglawal'];
-			// $tglmax[$valmin['notransaksi']]=$valmin['tglakhir'];
-		// }
 
-        $str = "SELECT tanggalpanen, tahap, kodeorg, notransaksi, divisi, periode, sum((hkbuahkecil+hkbuahbesar)) as hk, sum((jjgbuahbesar+jjgbuahkecil)) as jjgpanen, sum((kgbuahkecil+kgbuahbesar)) as kgwb, sum((lbbuahkecil+lbbuahbesar	)) as kglb1, sum((rplbbuahkecil+rplbbuahbesar)) as rplb1, sum(brondolan) as kgbrd, sum(rpbrondolan) as rpbrd, sum(dendapanen) as denda, sum((rplbbuahkecil+rplbbuahbesar)+(rphkbuahbesar+rphkbuahkecil)-(rphkbuahbesarpot+rphkbuahkecilpot)-dendapanen+rpbrondolan) as total, jurnal, posting, updateby FROM " . $dbname . ".kebun_3premipemanen
+        $str = "SELECT tanggalpanen, tahap, kodeorg, notransaksi, divisi, periode, sum((hkbuahkecil+hkbuahbesar)) as hk, sum((jjgbuahbesar+jjgbuahkecil)) as jjgpanen, sum((kgbuahkecil+kgbuahbesar)) as kgwb, sum((lbbuahkecil+lbbuahbesar	)) as kglb1, sum((rplbbuahkecil+rplbbuahbesar)) as rplb1, sum(brondolan) as kgbrd, sum(rpbrondolan) as rpbrd, sum(dendapanen) as denda, sum((rplbbuahkecil+rplbbuahbesar)+(rphkbuahbesar+rphkbuahkecil)-(rphkbuahbesarpot+rphkbuahkecilpot)-dendapanen+rpbrondolan) as total, jurnal, posting, updateby, postingby, max(lastupdate) as lastupdate FROM " . $dbname . ".kebun_3premipemanen
 		where 1=1 ".$where." group by notransaksi order by notransaksi desc, periode desc, kodeorg asc, divisi asc limit " . $offset . "," . $limit . "";
 		$resx=fetchdata($str);
-		// $jlhbrs=count($resx);
-        $res = $owlPDO->query($str) or die(print " Gagal: " . PDOException::getMessage());
-		$res->setFetchMode(PDO::FETCH_ASSOC);
+
+		#cek jurnal & cek prestasi, dibatasi hanya utk notransaksi yang tampil di halaman ini (bukan seluruh hasil filter)
+		$rpjurnal=array();
+		$rppres=array();
+		if(count($resx) > 0){
+			$notransaksiList = "'".implode("','", array_map(function($r){ return $r['notransaksi']; }, $resx))."'";
+
+			#cek jurnal
+			$str = "select nojurnal, noreferensi, sum(debet-kredit) as rpj from ".$dbname.".keu_jurnaldt_vw where noreferensi in (". $notransaksiList . ") ".$whj." and noakun in ('".$resParam[0]['noakundebet']."','".$resParam2[0]['noakundebet']."','".$resParam3[0]['noakundebet']."','1261004') group by nojurnal, noreferensi";
+			$res    =fetchData($str);
+			foreach($res as $val){
+				$rpjurnal[$val['noreferensi']]+=$val['rpj'];
+			}
+
+			$str = "select b.noreferensi, sum(upahpremilebihbasis+premibrondol-rupiahpenalty+upahkerja-upahpenalty) as prelb from ".$dbname.".kebun_prestasi a left join ".$dbname.".kebun_aktifitas b on a.notransaksi=b.notransaksi where b.noreferensi in (".$notransaksiList.") ".$wh." group by noreferensi";
+			$res    =fetchData($str);
+			foreach($res as $val){
+				$rppres[$val['noreferensi']]+=$val['prelb'];
+			}
+		}
+
         $no = 0;
-        while ($bar = $res->fetch()) {
+        foreach ($resx as $bar) {
 			$notofj=$color='';
 			if(strlen($bar['notransaksi'])=='23'){				
 				if($bar['tahap']=='1'){
@@ -1528,9 +1557,11 @@ switch($proses){
             $tab.="<td align=right>".@number_format($bar['denda'],2) . "</td>";
             $tab.="<td align=right>".@number_format($bar['total'],2) . "</td>";
 			
-            $tab.="<td>" . getNamaKaryawan($bar['updateby']) . "</td>";
-            $tab.="<td ".$color.">".$notofj."</td>";
-            $tab.="<td ".$color.">".$notofp."</td>";
+            $tab.="<td align=center>" . getNamaKaryawan($bar['updateby']) . "</td>";
+            $tab.="<td align=center>" . (@$bar['lastupdate'] ? date('d-m-Y H:i:s', strtotime($bar['lastupdate'])) : '') . "</td>";
+            $tab.="<td align=center>" . (@$bar['postingby'] ? getNamaKaryawan($bar['postingby']) : '') . "</td>";
+            $tab.="<td align=center ".$color.">".$notofj."</td>";
+            $tab.="<td align=center ".$color.">".$notofp."</td>";
 			if ($bar['posting'] == 0) {
                 $isi.="<td align=center width=20px><img src=images/application/application_delete.png class=zImgBtn  title='Delete' 
                     onclick=\"del('".$bar['notransaksi']."','".$bar['periode']."','".$bar['kodeorg']."','".tanggalnormal($tglmin)."','".tanggalnormal($tglmax)."');\" ></td>";
@@ -1636,6 +1667,10 @@ switch($proses){
 		if ($afdlist != '') {
 			$where.=" and divisi='" . $afdlist . "' ";
 		}
+		if ($tgl1list != '' && $tgl2list != '') {
+			$where.=" and tanggalpanen between '" . $tgl1list . "' and '" . $tgl2list . "' ";
+			$wh.=" and b.tanggal between '" . $tgl1list . "' and '" . $tgl2list . "' ";
+		}
 
 		$kodeJurnal = 'PNN01';
 		$queryParam = selectQuery($dbname,'keu_5parameterjurnal','noakunkredit,noakundebet',
@@ -1682,6 +1717,8 @@ switch($proses){
 					$couex.="<th align=center rowspan=2>".$_SESSION['lang']['denda']."</th>";
 					$couex.="<th align=center rowspan=2>".$_SESSION['lang']['total']."</th>";
 					$couex.="<th align=center rowspan=2>".$_SESSION['lang']['updateby'] . "</th>";
+					$couex.="<th align=center rowspan=2>Tgl Update</th>";
+					$couex.="<th align=center rowspan=2>Posting By</th>";
 					$couex.="<th align=center rowspan=2>".$_SESSION['lang']['status'] . " ".$_SESSION['lang']['jurnal'] . "</th>";
 					$couex.="<th align=center rowspan=2>".$_SESSION['lang']['status'] . " Keg Panen</th>";
 				$couex.="</tr>";
@@ -1698,7 +1735,7 @@ switch($proses){
 				sum((jjgbuahbesar+jjgbuahkecil)) as jjgpanen, sum((kgbuahkecil+kgbuahbesar)) as kgwb, sum((lbbuahkecil+lbbuahbesar	)) as kglb1, 
 				sum((rplbbuahkecil+rplbbuahbesar)) as rplb1, sum(brondolan) as kgbrd, sum(rpbrondolan) as rpbrd, sum(dendapanen) as denda, 
 				sum((rplbbuahkecil+rplbbuahbesar)+(rphkbuahbesar+rphkbuahkecil)-(rphkbuahbesarpot+rphkbuahkecilpot)-dendapanen+rpbrondolan) as total, 
-				jurnal, posting, updateby FROM " . $dbname . ".kebun_3premipemanen
+				jurnal, posting, updateby, postingby, max(lastupdate) as lastupdate FROM " . $dbname . ".kebun_3premipemanen
 				where 1=1 ".$where." group by notransaksi order by notransaksi desc, periode desc, kodeorg asc, divisi asc";
 				$resx=fetchdata($strx);
 
@@ -1763,6 +1800,8 @@ switch($proses){
 						$couex.="<td align=right>".@number_format($bar['total'],2) . "</td>";
 						
 						$couex.="<td>" . getNamaKaryawan($bar['updateby']) . "</td>";
+						$couex.="<td>" . (@$bar['lastupdate'] ? date('d-m-Y H:i:s', strtotime($bar['lastupdate'])) : '') . "</td>";
+						$couex.="<td>" . (@$bar['postingby'] ? getNamaKaryawan($bar['postingby']) : '') . "</td>";
 						$couex.="<td ".$color.">".$notofj."</td>";
 						$couex.="<td ".$color.">".$notofp."</td>";
 					$couex.="</tr>";

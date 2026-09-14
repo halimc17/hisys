@@ -77,9 +77,9 @@ $optpot.="<option value='2'>Pot Rp Denda</option>";
 
 OPEN_BOX('','<span class=judul>'.getMenu('kebun_3premipemanenv3_spb').'</span><br>');
 $arrlist="##tgl1list##tgl2list##unitlist##afdlist";
-$arrLoad = "##prdlist##unitlist##afdlist";
+$arrLoad = "##prdlist##unitlist##afdlist##tgl1list##tgl2list";
 
-echo"<table>
+echo"<table width=100%>
      <tr valign=middle>
 	 
 	 <td align=center style='width:100px;cursor:pointer;' onclick=add_new_data()>
@@ -92,17 +92,22 @@ echo"<table>
 		<fieldset><legend>" . $_SESSION['lang']['find'] . "</legend> 
          <table>
 			<tr>
-				<td>".$_SESSION['lang']['periode']."</td>
-				<td>:</td>
+				<td align=right style='width:90px;'>".$_SESSION['lang']['periode']." :</td>
 				<td><select id=prdlist onchange=loaddata(0) style='width:153px;'>".$optprd2."</select></td>
-			
-				<td>".$_SESSION['lang']['unitkerja']."</td>
-				<td>:</td>
+
+				<td align=right style='width:90px;'>".$_SESSION['lang']['unitkerja']." :</td>
 				<td><select id=unitlist onchange=getdivisi('cari') style='width:153px;'>".$optunit2."</select></td>
-			
-				<td>".$_SESSION['lang']['afdeling']."</td>
-				<td>:</td>
+
+				<td align=right style='width:90px;'>".$_SESSION['lang']['afdeling']." :</td>
 				<td><select id=afdlist onchange=loaddata(0) style='width:153px;'>".$optafd2."</select></td>
+			</tr>
+			<tr>
+				<td align=right style='width:90px;'>".$_SESSION['lang']['tanggal']." :</td>
+				<td colspan=5>
+				<input type='text' class='myinputtext' id='tgl1list' onmousemove='setCalendar(this.id)' onkeypress='return false;' maxlength='10' style='width:61px;' readonly>
+				s/d
+				<input type='text' class='myinputtext' id='tgl2list' onmousemove='setCalendar(this.id)' onkeypress='return false;' maxlength='10' style='width:61px;' readonly>
+				</td>
 			</tr>
 		";
 
@@ -112,10 +117,10 @@ echo"<table>
 // 		<button onclick=batallist() class=mybutton name=btnBatal id=btnBatal>".$_SESSION['lang']['cancel']."</button></td></td></tr></table>";
 echo "<tr>";
 echo "<td></td>";
-echo "<td></td>";
-echo "<td>
+echo "<td colspan=5>
 	<button class=mybutton onclick=loaddata(0)>".$_SESSION['lang']['find']."</button>
 	<button class=mybutton onclick=\"loaddataexcel(event,'kebun_slave_save_3premipemanenv3_spb.php','".$arrLoad."')\">".$_SESSION['lang']['excel']."</button>
+	<button class=mybutton onclick=loaddatapdf()>PDF</button>
 	<button class=mybutton onclick=pivot()>Pivot</button>
 	<button onclick=batallist() class=mybutton name=btnBatal id=btnBatal>".$_SESSION['lang']['cancel']."</button>
 </td>";
@@ -124,9 +129,9 @@ echo "</tr></td></tr></table>";
 echo"</fieldset></table><div style=clear:both></div>";
 CLOSE_BOX();
 echo"<div id=listData style=display:block>";
-OPEN_BOX();
-echo"<div class='table-scroll' id=contloaddata>    
-		<table cellpading=5 cellspacing=1 border=0 class=sortable>
+OPEN_BOX('','','listDataBox');
+echo"<div class='table-scroll' id=contloaddata style='height:auto;max-height:none;'>
+		<table cellpading=5 cellspacing=1 border=0 class=sortable width=100%>
 		<thead>
 			<tr class=rowheader>
 			<th align=center rowspan=2>".$_SESSION['lang']['nourut']."</th>
@@ -142,6 +147,8 @@ echo"<div class='table-scroll' id=contloaddata>
 			<th align=center rowspan=2>".$_SESSION['lang']['denda']."</th>
 			<th align=center rowspan=2>".$_SESSION['lang']['total']."</th>
 			<th align=center rowspan=2>".$_SESSION['lang']['updateby'] . "</th>
+			<th align=center rowspan=2>Tgl Update</th>
+			<th align=center rowspan=2>Posting By</th>
 			<th align=center rowspan=2>".$_SESSION['lang']['status'] . " ".$_SESSION['lang']['jurnal'] . "</th>
 			<th align=center rowspan=2>".$_SESSION['lang']['status'] . " Keg Panen</th>
 			<th align=center rowspan=2 colspan=5>" . $_SESSION['lang']['action'] . "</th>
