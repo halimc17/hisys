@@ -2646,6 +2646,17 @@ switch ($method) {
 					#noreff == nospk
 					#nodok == nobapp
 
+					#cek apakah sudah ada tagihan yang dibuat dari BAPP ini, per termin
+					$sTerminTgh = "select distinct termin from " . $dbname . ".log_baspk where notransaksi='" . $_POST['notransaksi'][0] . "' and keterangan='" . $_POST['nobapp'][0] . "'";
+					$rTerminTgh = fetchdata($sTerminTgh);
+					foreach ($rTerminTgh as $rt) {
+						$sTagihan = "select noinvoice from " . $dbname . ".keu_tagihanht where nopo='" . $_POST['notransaksi'][0] . "' and termin='" . $rt['termin'] . "'";
+						$rTagihan = fetchdata($sTagihan);
+						if (count($rTagihan) > 0) {
+							throw new PDOException("BAPP ini sudah memiliki tagihan (No. Invoice: " . $rTagihan[0]['noinvoice'] . "), silahkan batalkan tagihannya dulu sebelum unposting !");
+						}
+					}
+
 					$str = "select * from " . $dbname . ".keu_jurnaldt where noreferensi = '" . $_POST['notransaksi'][0] . "' and tanggal = '" . $_POST['tanggal'][0] . "' and nodok='" . $_POST['nobapp'][0] . "'"; #exit("error".$str);
 					$res = fetchdata($str);
 					foreach ($res as $val) {
@@ -2671,6 +2682,10 @@ switch ($method) {
 
 					$sUp = "update " . $dbname . ".log_baspk set statusjurnal=0,posting=0,statuspengajuan=0,nopengajuan='' where keterangan='" . $_POST['nobapp'][0] . "' and notransaksi='" . $_POST['notransaksi'][0] . "'";
 					$owlPDO->exec($sUp);
+
+					#sinkronkan status di Rekap Angkutan TBS supaya tidak tetap tampil "sudah posting"
+					$sUpRekap = "update " . $dbname . ".kebun_rekapangkutantbsht set posting=0,nobapp='' where spk='" . $_POST['notransaksi'][0] . "' and nobapp='" . $_POST['nobapp'][0] . "'";
+					$owlPDO->exec($sUpRekap);
 
 					$owlPDO->commit();
 				} catch (PDOException $e) {
@@ -2685,6 +2700,17 @@ switch ($method) {
 					#noreff == nospk
 					#nodok == nobapp
 
+					#cek apakah sudah ada tagihan yang dibuat dari BAPP ini, per termin
+					$sTerminTgh = "select distinct termin from " . $dbname . ".log_baspk where notransaksi='" . $_POST['notransaksi'][0] . "' and keterangan='" . $_POST['nobapp'][0] . "'";
+					$rTerminTgh = fetchdata($sTerminTgh);
+					foreach ($rTerminTgh as $rt) {
+						$sTagihan = "select noinvoice from " . $dbname . ".keu_tagihanht where nopo='" . $_POST['notransaksi'][0] . "' and termin='" . $rt['termin'] . "'";
+						$rTagihan = fetchdata($sTagihan);
+						if (count($rTagihan) > 0) {
+							throw new PDOException("BAPP ini sudah memiliki tagihan (No. Invoice: " . $rTagihan[0]['noinvoice'] . "), silahkan batalkan tagihannya dulu sebelum unposting !");
+						}
+					}
+
 					$str = "select * from " . $dbname . ".keu_jurnaldt where noreferensi = '" . $_POST['notransaksi'][0] . "' and tanggal = '" . $_POST['tanggal'][0] . "' and nodok='" . $_POST['nobapp'][0] . "'"; #exit("error".$str);
 					$res = fetchdata($str);
 					foreach ($res as $val) {
@@ -2710,6 +2736,10 @@ switch ($method) {
 
 					$sUp = "update " . $dbname . ".log_baspk set statusjurnal=0,posting=0,statuspengajuan=0,nopengajuan='' where keterangan='" . $_POST['nobapp'][0] . "' and notransaksi='" . $_POST['notransaksi'][0] . "'";
 					$owlPDO->exec($sUp);
+
+					#sinkronkan status di Rekap Angkutan TBS supaya tidak tetap tampil "sudah posting"
+					$sUpRekap = "update " . $dbname . ".kebun_rekapangkutantbsht set posting=0,nobapp='' where spk='" . $_POST['notransaksi'][0] . "' and nobapp='" . $_POST['nobapp'][0] . "'";
+					$owlPDO->exec($sUpRekap);
 
 					$owlPDO->commit();
 				} catch (PDOException $e) {
