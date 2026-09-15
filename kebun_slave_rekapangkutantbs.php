@@ -1787,7 +1787,7 @@ switch ($method) {
 							}
 
 							// cek berapa yang sudah diposting
-							$strdd = "select sum(jumlahrealisasi) as jumlahrealisasi, statusjurnal,nopengajuan,termin,tanggal,keterangan from " . $dbname . ".log_baspk where notransaksi = '" . $nospk . "' and keterangan = '" . $nobapp[$kdorg][$prd][$nospk][$prdbyr] . "' group by statusjurnal";
+							$strdd = "select sum(jumlahrealisasi) as jumlahrealisasi, statusjurnal,statuspengajuan,nopengajuan,termin,tanggal,keterangan from " . $dbname . ".log_baspk where notransaksi = '" . $nospk . "' and keterangan = '" . $nobapp[$kdorg][$prd][$nospk][$prdbyr] . "' group by statusjurnal";
 							// echo "</br>".$strdd;
 							$realdd = 0;
 							$resdd = $owlPDO->query($strdd) or die(print " Gagal: " . PDOException::getMessage());
@@ -1801,6 +1801,30 @@ switch ($method) {
 								$termin = $bardd['termin'];
 								$tglnya = $bardd['tanggal'];
 								$statusjurnal = $bardd['statusjurnal'];
+								$statuspengajuan = $bardd['statuspengajuan'];
+							}
+
+							switch ($statuspengajuan) {
+								case '0':
+									$statusbapp = 'Belum Diajukan';
+									break;
+								case '9':
+									$statusbapp = 'Menunggu Persetujuan';
+									break;
+								case '3':
+									$statusbapp = 'Ditolak';
+									break;
+								case '1':
+									if ($statusjurnal == 1) {
+										$sCekJurnal = "select 1 from " . $dbname . ".keu_jurnaldt where nodok='" . $nobapp[$kdorg][$prd][$nospk][$prdbyr] . "' limit 1";
+										$rCekJurnal = fetchdata($sCekJurnal);
+										$statusbapp = (count($rCekJurnal) > 0) ? 'Sudah Diposting' : 'Sudah Posting, Jurnal Tidak Ditemukan';
+									} else {
+										$statusbapp = 'Disetujui, Belum Diposting';
+									}
+									break;
+								default:
+									$statusbapp = '-';
 							}
 
 							$no += 1;
@@ -1834,6 +1858,7 @@ switch ($method) {
 							}
 							#$tab.="<td align=right>" . @number_format($rpfee[$kdorg][$prd][$nospk][$prdbyr]). "</td>";
 							$tab .= "<td align=left style=color:" . $warna . ";cursor:pointer; title=\"" . $judul . "\" onclick=viewdetailbapp('" . $nospk . "','" . $kdorg . "','viewhtml','event','" . $nobapp[$kdorg][$prd][$nospk][$prdbyr] . "')>" . ($nobapp[$kdorg][$prd][$nospk][$prdbyr]) . " <!--" . $realdd . "--></td>";
+							$tab .= "<td align=center >" . $statusbapp . "</td>";
 
 							#$tab.="<td align=center>";
 							if ($posting[$kdorg][$prd][$nospk][$prdbyr] == '0' || $posting[$kdorg][$prd][$nospk][$prdbyr] == '3') {

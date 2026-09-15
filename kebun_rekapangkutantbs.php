@@ -172,6 +172,7 @@ foreach ($arrjenis as $jenis) {
 echo "<th align=center rowspan='2'>" . $_SESSION['lang']['potongan'] . "</th>
             <th align=center rowspan='2'>" . $_SESSION['lang']['rupiah'] . "</th>
             <th align=center rowspan='2'>No BAPP</th>
+            <th align=center rowspan='2'>Status</th>
             <th align=center rowspan='2' colspan=7>" . $_SESSION['lang']['action'] . "</th>
         </tr>";
 echo "<tr>";
