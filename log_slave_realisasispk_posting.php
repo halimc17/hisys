@@ -33,7 +33,8 @@ $tglsystemn = tanggalsystemn($param['tanggal']);
 
 
 #periksa tanggal periode akuntansi===============
-if ($_SESSION['org']['period']['start'] > $tgl)
+#TEMPORARY: dikecualikan untuk PT Palma Prima Plantation (induk='PPP') - proses restore jurnal BAPP yang hilang
+if ($kodept[$param['kodeorg']] != 'PPP' && $_SESSION['org']['period']['start'] > $tgl)
 	exit('Error:Tanggal ' . $param['tanggal'] . ' diluar periode aktif ' . $_SESSION['org']['period']['start']);
 
 
