@@ -2333,17 +2333,36 @@ switch ($method) {
 			$owlPDO->beginTransaction();
 
 			#cek BAPP sudah diajukan atau belum
-			$statuspengajuan = $posting = '0';
+			$statuspengajuan = $posting = $statusjurnal = '0';
 			$str = "select * from " . $dbname . ".log_baspk where notransaksi='" . $spk . "' and keterangan ='" . $nobapp . "'";
 			$ttp = $owlPDO->query($str) or die(print " Gagal: " . PDOException::getMessage());
 			$ttp->setFetchMode(PDO::FETCH_ASSOC);
 			while ($bar = $ttp->fetch()) {
 				$statuspengajuan = $bar['statuspengajuan'];
 				$posting = $bar['posting'];
+				if ($bar['statusjurnal'] == '1') {
+					$statusjurnal = '1';
+				}
 			}
 			if ($posting == '1') {
 				#sudah posting
 				throw new PDOException("BAPP sudah diposting !");
+			}
+
+			if ($statusjurnal == '1') {
+				#sudah ada jurnal di ledger, jangan hapus log_baspk sebelum jurnalnya dibatalkan dulu
+				throw new PDOException("BAPP sudah memiliki jurnal (statusjurnal=1), silahkan batalkan posting jurnalnya dulu dari menu Keuangan sebelum unposting BAPP ini !");
+			}
+
+			#cek apakah sudah ada tagihan yang dibuat dari BAPP ini, per termin
+			$sTerminTgh = "select distinct termin from " . $dbname . ".log_baspk where notransaksi='" . $spk . "' and keterangan='" . $nobapp . "'";
+			$rTerminTgh = fetchdata($sTerminTgh);
+			foreach ($rTerminTgh as $rt) {
+				$sTagihan = "select noinvoice from " . $dbname . ".keu_tagihanht where nopo='" . $spk . "' and termin='" . $rt['termin'] . "'";
+				$rTagihan = fetchdata($sTagihan);
+				if (count($rTagihan) > 0) {
+					throw new PDOException("BAPP ini sudah memiliki tagihan (No. Invoice: " . $rTagihan[0]['noinvoice'] . "), silahkan batalkan tagihannya dulu sebelum unposting !");
+				}
 			}
 
 			if ($statuspengajuan != '3' and $statuspengajuan != '0') {
