@@ -81,7 +81,7 @@ foreach($arrposo as $row=>$lst){
 	$optposo.="<option value='".$row."'>".$lst."</option>";
 }
 
-$arr = "##periode##statId##ptId";
+$arr = "##periode##periode2##statId##ptId";
 $arr1 = "##tgl1##tgl2##status1##pt1##terima1##nmsigment1##stsposo1";
 
 //$arrKry="##kdeOrg##period##idKry##tgl_1##tgl_2";
@@ -95,6 +95,7 @@ $arr1 = "##tgl1##tgl2##status1##pt1##terima1##nmsigment1##stsposo1";
         document.getElementById('ptId').value = '';
         document.getElementById('statId').value = '';
         document.getElementById('periode').value = '';
+        document.getElementById('periode2').value = '';
     }
 </script>
 <script language=javascript1.2 src="js/zSelect2.js?ver=1"></script>
@@ -116,7 +117,9 @@ $frm[0] = "<div>
     </tr>
     <tr>
         <td><label>" . $_SESSION['lang']['periode'] . "</label></td><td>:</td>
-        <td><select class=select2 id=\"periode\" name=\"periode\" style=\"width:150px\">" . $optPeriode . "</select></td>
+        <td><span style=\"display:inline-block\"><select class=select2 id=\"periode\" name=\"periode\" style=\"width:150px\">" . $optPeriode . "</select></span>
+        " . $_SESSION['lang']['sd'] . "
+        <span style=\"display:inline-block\"><select class=select2 id=\"periode2\" name=\"periode2\" style=\"width:150px\">" . $optPeriode . "</select></span></td>
     </tr>
     <tr>
         <td><label>" . $_SESSION['lang']['lokasiBeli'] . "</label></td><td>:</td>

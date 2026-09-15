@@ -11,6 +11,7 @@ $proses = checkPostGet('proses', '');
 $statId = checkPostGet('statId', '');
 $ptId = checkPostGet('ptId', '');
 $periode = checkPostGet('periode', '');
+$periode2 = checkPostGet('periode2', '');
 
 $optNmBrg = makeOption($dbname, 'log_5masterbarang', 'kodebarang,namabarang');
 $optInduk = makeOption($dbname, 'organisasi', 'kodeorganisasi,induk');
@@ -29,8 +30,13 @@ if($statId != '') {
 }
 
 if($periode != '') {
-    $whr.=" and substr(tanggal,1,7)='" . $periode . "'";
-    $transdt.="and substr(tanggal,1,7)='" . $periode . "'";
+    if($periode2 != '') {
+        $whr.=" and substr(tanggal,1,7) between '" . $periode . "' and '" . $periode2 . "'";
+        $transdt.="and substr(tanggal,1,7) between '" . $periode . "' and '" . $periode2 . "'";
+    } else {
+        $whr.=" and substr(tanggal,1,7)='" . $periode . "'";
+        $transdt.="and substr(tanggal,1,7)='" . $periode . "'";
+    }
 }else{
     exit("Error:" . $_SESSION['lang']['periode'] . " Tidak boleh kosong");
 }
