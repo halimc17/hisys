@@ -314,8 +314,8 @@ switch ($method) {
 
 				<tr>
 					<td class=\"label\">PENYERAHAN</td>
-					<td style='width:5'></td>
-					<td class=\"content\">Franco " . $tempatpenyerahan . " " . $alamatpenyerahan . " </td>
+					<td style='width:5'>:</td>
+					<td class=\"content\">" . ucwords(strtolower($tipepenjualan)) . " " . $tempatpenyerahan . " " . $alamatpenyerahan . " </td>
 				</tr>
 				<tr>
 					<td class=\"label\">WAKTU PENYERAHAN</td>
@@ -800,7 +800,7 @@ switch ($method) {
 				if ($htg > 0) {
 					$tab .= ($bar['close'] == 0)? "<td align=center><img src='images/cadenas.png' class='zImgBtn' title='Close Kontrak' onclick='tutupkont(`" . $bar['nokontrak'] . "`)'></td>" : "<td style='text-align:center;vertical-align:middle'>1<label style='color:blue;cursor:pointer' onclick=\"gethistclose('" . $bar['nokontrak'] . "',event)\">Contract <br> Closed Manual</label></td>";
 				} else {
-					// $tab .= "<td align=center> </td>";
+					$tab .= "<td align=center> </td>";
 				}
 			}
 			$tab .= "<td align=center> <img src=images/pdf.jpg class=resicon  title='Print' onclick=\"pdfpanjang('" . $bar['nokontrak'] . "','1')\"> </td>";
