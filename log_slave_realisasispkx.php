@@ -1504,6 +1504,7 @@ switch ($method) {
 						<td align=center>Hasil Kerja</td>
 						<td align=center>" . $_SESSION['lang']['jumlah'] . " (Rp)</td>
 						<td align=center>No BAPP</td>
+						<td align=center>Status Jurnal</td>
 						<td align=center>No Persetujuan</td>
 						<td align=center colspan=2>Persetujuan</td>";
 			if ($tipeview == 'viewhtml') {
@@ -1520,6 +1521,7 @@ switch ($method) {
 						<td align=center>Hasil Kerja</td>
 						<td align=center>" . $_SESSION['lang']['jumlah'] . " (Rp)</td>
 						<td align=center>No BAPP</td>
+						<td align=center>Status Jurnal</td>
 						<td align=center>No Persetujuan</td>
 						<td align=center colspan=2>Persetujuan</td>";
 			if ($tipeview == 'viewhtml') {
@@ -1589,6 +1591,22 @@ switch ($method) {
 							$tab .= "<td align=right>" . number_format($hasilkerja[$termin][$tanggal][$bapp],2) . "</td>";
 							$tab .= "<td align=right>" . number_format($real[$termin][$tanggal][$bapp],2) . "</td>";
 							$tab .= "<td align=left>" . ($ket[$termin][$tanggal][$bapp]) . "</td>";
+
+							if ($stsjurnal[$termin][$tanggal][$bapp] == 1) {
+								$sCekJurnalX = "select 1 from " . $dbname . ".keu_jurnaldt where nodok='" . $ket[$termin][$tanggal][$bapp] . "' limit 1";
+								$rCekJurnalX = fetchdata($sCekJurnalX);
+								if (count($rCekJurnalX) > 0) {
+									$statusJurnalTxt = 'Sudah Ada Jurnal';
+									$warnaJurnal = 'green';
+								} else {
+									$statusJurnalTxt = 'Jurnal Tidak Ditemukan';
+									$warnaJurnal = 'red';
+								}
+							} else {
+								$statusJurnalTxt = 'Belum Diposting';
+								$warnaJurnal = 'gray';
+							}
+							$tab .= "<td align=center style=color:" . $warnaJurnal . ";font-weight:bold>" . $statusJurnalTxt . "</td>";
 
 							#persetujuan
 							$warna = '';
