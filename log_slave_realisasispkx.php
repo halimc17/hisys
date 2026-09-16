@@ -1205,23 +1205,45 @@ switch ($method) {
 
 				$optrekanan = makeOption($dbname, 'log_5supplier', 'supplierid,namasupplier', "supplierid='" . $val['koderekanan'] . "'");
 
-				##Jumlah Realisasi
+				##Jumlah Realisasi (hanya yang jurnalnya benar-benar ada di ledger)
 				$realisasi = 0;
-				$strx = "select sum(jumlahrealisasi) as jumlahrealisasi from " . $dbname . ".log_baspk where notransaksi='" . $val['notransaksi'] . "' and statusjurnal = '1'";
+				$strx = "select sum(b.jumlahrealisasi) as jumlahrealisasi from " . $dbname . ".log_baspk b where b.notransaksi='" . $val['notransaksi'] . "' and b.statusjurnal = '1' and exists (select 1 from " . $dbname . ".keu_jurnaldt d where d.nodok=b.keterangan)";
 				$resx = fetchdata($strx);
 				$realisasi = ($resx[0]['jumlahrealisasi'] == '' ? 0 : $resx[0]['jumlahrealisasi']);
 
-				##Status Posting
-				$statusposting = "";
-				$strx = "select statusjurnal from " . $dbname . ".log_baspk where notransaksi='" . $val['notransaksi'] . "' and statusjurnal=0";
-				$resx = fetchdata($strx);
-				if (count($resx) > 0) {
-					$statusposting = "?";
-				} else if ($realisasi == 0 and $statusposting == '') {
-					$statusposting = "?";
-				} else {
-					$statusposting = "Posted";
+				##Rincian status per kategori (dihitung per BAPP/keterangan, bukan per baris blok)
+				$strBelumAjuan = "select count(distinct keterangan) as jml from " . $dbname . ".log_baspk where notransaksi='" . $val['notransaksi'] . "' and statuspengajuan='0'";
+				$resBelumAjuan = fetchdata($strBelumAjuan);
+				$jmlBelumAjuan = ($resBelumAjuan[0]['jml'] == '' ? 0 : $resBelumAjuan[0]['jml']);
+
+				$strBelumPosting = "select count(distinct keterangan) as jml from " . $dbname . ".log_baspk where notransaksi='" . $val['notransaksi'] . "' and statuspengajuan='1' and statusjurnal='0'";
+				$resBelumPosting = fetchdata($strBelumPosting);
+				$jmlBelumPosting = ($resBelumPosting[0]['jml'] == '' ? 0 : $resBelumPosting[0]['jml']);
+
+				##Cek BAPP yang sudah disetujui & statusjurnal=1 tapi jurnalnya tidak ditemukan (anomali)
+				$strAnomali = "select count(distinct keterangan) as jml from " . $dbname . ".log_baspk b where b.notransaksi='" . $val['notransaksi'] . "' and b.statuspengajuan='1' and b.statusjurnal='1' and not exists (select 1 from " . $dbname . ".keu_jurnaldt d where d.nodok=b.keterangan)";
+				$resAnomali = fetchdata($strAnomali);
+				$jmlAnomali = ($resAnomali[0]['jml'] == '' ? 0 : $resAnomali[0]['jml']);
+
+				$strSudahPosting = "select count(distinct b.keterangan) as jml from " . $dbname . ".log_baspk b where b.notransaksi='" . $val['notransaksi'] . "' and b.statuspengajuan='1' and b.statusjurnal='1' and exists (select 1 from " . $dbname . ".keu_jurnaldt d where d.nodok=b.keterangan)";
+				$resSudahPosting = fetchdata($strSudahPosting);
+				$jmlSudahPosting = ($resSudahPosting[0]['jml'] == '' ? 0 : $resSudahPosting[0]['jml']);
+
+				##Status Posting - rincian per kategori, masing-masing berwarna
+				$baris = array();
+				if ($jmlAnomali > 0) {
+					$baris[] = "<span style='color:red;font-weight:bold' title='statusjurnal=1 tapi jurnal tidak ditemukan di ledger'>Jurnal Bermasalah (" . $jmlAnomali . ")</span>";
 				}
+				if ($jmlBelumAjuan > 0) {
+					$baris[] = "<span style='color:gray'>Belum Diajukan (" . $jmlBelumAjuan . ")</span>";
+				}
+				if ($jmlBelumPosting > 0) {
+					$baris[] = "<span style='color:orange'>Belum Diposting (" . $jmlBelumPosting . ")</span>";
+				}
+				if ($jmlSudahPosting > 0) {
+					$baris[] = "<span style='color:green'>Posted (" . $jmlSudahPosting . ")</span>";
+				}
+				$statusposting = (count($baris) > 0) ? implode("<br>", $baris) : "?";
 
 				##Status Tagihan & Lunas
 				$strTagihan = "select sum(nilaiinvoice) as totaltagihan from ".$dbname.".keu_tagihanht where nopo='".$val['notransaksi']."'";
@@ -1231,7 +1253,9 @@ switch ($method) {
 				$strBayar = "select sum(jumlah) as dibayar from ".$dbname.".keu_kasbankdtht_vw where nodok='".$val['notransaksi']."' and jumlah > 0";
 				$resBayar = fetchdata($strBayar);
 				$totalBayar = ($resBayar[0]['dibayar'] == '' ? 0 : $resBayar[0]['dibayar']);
-				
+
+				$persenTertagih = ($val['nilaikontrak'] > 0) ? min(($totalTagihan / $val['nilaikontrak']) * 100, 100) : 0;
+
 				$statusLunas = "";
 				if ($totalTagihan == 0) {
 
@@ -1239,8 +1263,7 @@ switch ($method) {
 
 					} else {
 
-							$persentase = ($totalBayar / $totalTagihan) * 100;
-							$persentase = min($persentase, 100);
+							$persenBayar = ($totalTagihan > 0) ? min(($totalBayar / $totalTagihan) * 100, 100) : 0;
 
 							if ($totalBayar >= $totalTagihan && $totalBayar >= $val['nilaikontrak']) {
 
@@ -1251,13 +1274,13 @@ switch ($method) {
 							} else if ($totalBayar > 0) {
 
 									$statusLunas = "<span style='color:orange; font-weight:bold;'>
-											Dibayar " . number_format($persentase, 0) . "%
+											SPK " . number_format($persenTertagih, 0) . "% &middot; Tagihan " . number_format($persenBayar, 0) . "%
 									</span>";
 
 							} else {
 
 									$statusLunas = "<span style='color:red; font-weight:bold;'>
-											Belum Lunas (0%)
+											SPK " . number_format($persenTertagih, 0) . "% &middot; Belum Dibayar
 									</span>";
 							}
 					}
