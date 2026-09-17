@@ -2683,10 +2683,6 @@ switch ($method) {
 					$sUp = "update " . $dbname . ".log_baspk set statusjurnal=0,posting=0,statuspengajuan=0,nopengajuan='' where keterangan='" . $_POST['nobapp'][0] . "' and notransaksi='" . $_POST['notransaksi'][0] . "'";
 					$owlPDO->exec($sUp);
 
-					#sinkronkan status di Rekap Angkutan TBS supaya tidak tetap tampil "sudah posting"
-					$sUpRekap = "update " . $dbname . ".kebun_rekapangkutantbsht set posting=0,nobapp='' where spk='" . $_POST['notransaksi'][0] . "' and nobapp='" . $_POST['nobapp'][0] . "'";
-					$owlPDO->exec($sUpRekap);
-
 					$owlPDO->commit();
 				} catch (PDOException $e) {
 					$owlPDO->rollback();
@@ -2736,10 +2732,6 @@ switch ($method) {
 
 					$sUp = "update " . $dbname . ".log_baspk set statusjurnal=0,posting=0,statuspengajuan=0,nopengajuan='' where keterangan='" . $_POST['nobapp'][0] . "' and notransaksi='" . $_POST['notransaksi'][0] . "'";
 					$owlPDO->exec($sUp);
-
-					#sinkronkan status di Rekap Angkutan TBS supaya tidak tetap tampil "sudah posting"
-					$sUpRekap = "update " . $dbname . ".kebun_rekapangkutantbsht set posting=0,nobapp='' where spk='" . $_POST['notransaksi'][0] . "' and nobapp='" . $_POST['nobapp'][0] . "'";
-					$owlPDO->exec($sUpRekap);
 
 					$owlPDO->commit();
 				} catch (PDOException $e) {

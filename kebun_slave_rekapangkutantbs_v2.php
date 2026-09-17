@@ -2379,6 +2379,17 @@ switch ($method) {
 				throw new PDOException("BAPP sudah dalam proses persetujuan dan atau sudah disetujui !");
 			}
 
+			#cek apakah periode akuntansi tanggal BAPP ini sudah tutup buku
+			$sTglBapp = "select distinct tanggal from " . $dbname . ".log_baspk where notransaksi='" . $spk . "' and keterangan='" . $nobapp . "'";
+			$rTglBapp = fetchdata($sTglBapp);
+			foreach ($rTglBapp as $rtgl) {
+				$stu = "select * from " . $dbname . ".setup_periodeakuntansi where tutupbuku=1 and kodeorg='" . $kodeorg . "' and periode='" . substr($rtgl['tanggal'], 0, 7) . "'";
+				$rus = fetchdata($stu);
+				if (count($rus) > 0) {
+					throw new PDOException($rus[0]['kodeorg'] . " periode " . $rus[0]['periode'] . " sudah tutup buku, tidak bisa unposting BAPP ini !");
+				}
+			}
+
 			#hapus log_baspk
 			$str = "delete from " . $dbname . ".log_baspk where notransaksi='" . $spk . "' and keterangan ='" . $nobapp . "'";
 			$owlPDO->exec($str);

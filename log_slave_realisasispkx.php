@@ -1443,10 +1443,12 @@ switch ($method) {
 							<td align=center>No Invoice</td>
 							<td align=center>Tipe</td>
 							<td align=center>Jumlah</td>
+							<td align=center>Status Tagihan</td>
 							<td style=background-color:gray;cellpadding:0;width:1px></td>
 							<td align=center>Tanggal</td>
 							<td align=center>No Kas Bank</td>
 							<td align=center>Jumlah</td>
+							<td align=center>Status Kas Bank</td>
 						</tr>
 						</thead>";
 			$datatagihan = array();
@@ -1458,6 +1460,7 @@ switch ($method) {
 				$tanggalinv[$val['noinvoice']] = $val['tanggal'];
 				$nilaiinvoice[$val['noinvoice']] = $val['nilaiinvoice'];
 				$nopo[$val['noinvoice']] = $val['nopo'];
+				$postingtagihan[$val['noinvoice']] = $val['posting'];
 			}
 
 			$no = '0';
@@ -1472,20 +1475,34 @@ switch ($method) {
 					$tab .= "<td align=center>" . $noinvoice . "</td>";
 					$tab .= "<td align=left>" . $nmtipe[$tipeinvoice[$noinvoice]] . "</td>";
 					$tab .= "<td align=right>" . number_format($nilaiinvoice[$noinvoice]) . "</td>";
+
+					if ($postingtagihan[$noinvoice] == '1') {
+						$statusTagihan = "<span style='color:green;font-weight:bold'>Sudah Diposting</span>";
+					} else {
+						$statusTagihan = "<span style='color:orange;font-weight:bold'>Belum Diposting</span>";
+					}
+					$tab .= "<td align=left>" . $statusTagihan . "</td>";
 					$tab .= "<td align=center  style=background-color:gray></td>";
 
 					#kas bank
-					$strKb = "select sum(jumlah) as jumlah, tanggal, notransaksi from " . $dbname . ".keu_kasbankdtht_vw where nodok='" . $nopo[$noinvoice] . "' and keterangan1='" . $noinvoice . "' and jumlah>'0'";
+					$strKb = "select sum(jumlah) as jumlah, tanggal, notransaksi, posting from " . $dbname . ".keu_kasbankdtht_vw where nodok='" . $nopo[$noinvoice] . "' and keterangan1='" . $noinvoice . "' and jumlah>'0'";
 					$resKb = $owlPDO->query($strKb) or die(print " Gagal: " . PDOException::getMessage());
 					$resKb->setFetchMode(PDO::FETCH_ASSOC);
 					$barKb = $resKb->fetch();
 					if ($barKb['tanggal'] == '0000-00-00' or $barKb['tanggal'] == '') {
 						$tab .= "<td></td>";
+						$statusKasbank = "<span style='color:gray'>Belum Diajukan</span>";
 					} else {
 						$tab .= "<td align=center>" . tanggalnormal($barKb['tanggal']) . "</td>";
+						if ($barKb['posting'] == '1') {
+							$statusKasbank = "<span style='color:green;font-weight:bold'>Sudah Diposting</span>";
+						} else {
+							$statusKasbank = "<span style='color:orange;font-weight:bold'>Sudah Diajukan, Belum Diposting</span>";
+						}
 					}
 					$tab .= "<td align=left>" . $barKb['notransaksi'] . "</td>";
 					$tab .= "<td align=right>" . number_format($barKb['jumlah']) . "</td>";
+					$tab .= "<td align=left>" . $statusKasbank . "</td>";
 
 					$tab .= "</tr>";
 					@$totaltagihan += $nilaiinvoice[$noinvoice];
@@ -1495,9 +1512,11 @@ switch ($method) {
 				$tab .= "<tr class=rowcontent>
 								<td align=center colspan=4>T O T A L</td>
 								<td align=right>" . number_format($totaltagihan) . "</td>
+								<td align=center></td>
 								<td align=center  style=background-color:gray></td>
 								<td align=center colspan=2></td>
 								<td align=right>" . number_format($totalkasbank) . "</td>
+								<td align=center></td>
 							</tr>";
 			}
 
