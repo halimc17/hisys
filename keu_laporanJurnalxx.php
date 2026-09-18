@@ -17,6 +17,9 @@ $ket        = checkPostGet('ket', '');
 $tipelaporan= checkPostGet('tipelaporan', '');
 $noakun = checkPostGet('noakun', '');
 $nodok = checkPostGet('nodok', '');
+$start      = checkPostGet('start', '');
+$length     = checkPostGet('length', '');
+$draw       = checkPostGet('draw', '');
 
 
 // $tipeorganisasi=makeOption($dbname,'organisasi','kodeorganisasi,tipe');
@@ -32,6 +35,17 @@ if($periode!=''){
 }
 if($periode1!=''){
 	$periode1 = tanggalsystemn($periode1);
+}
+
+if($tipelaporan=='excel'){
+	#= batasi rentang tanggal untuk export penuh (tanpa nyentuh database dulu, jadi instan).
+	#= untuk rentang lebar (berbulan-bulan), datanya bisa jutaan baris: query-nya sendiri sudah kepotong
+	#= timeout Apache (default 60 detik) sebelum sempat menghasilkan apa-apa, DAN Excel sendiri cuma
+	#= sanggup ~1 juta baris per sheet - jadi walau server dikuatkan pun hasilnya tetap tidak akan utuh.
+	$rentangHari = (strtotime($periode1) - strtotime($periode)) / 86400;
+	if($rentangHari > 45){
+		exit("Warning: Rentang tanggal terlalu lebar (".($rentangHari+1)." hari) untuk export Excel. Data sebanyak itu bisa jutaan baris - selain proses generate-nya berisiko timeout, Excel sendiri cuma sanggup menampilkan sekitar 1 juta baris per file. Silakan persempit rentang tanggal (disarankan maksimal 45 hari / sekitar 1.5 bulan), atau export bertahap per bulan.");
+	}
 }
 
 
@@ -114,42 +128,174 @@ $res->setFetchMode(PDO::FETCH_ASSOC);
 while($bar=$res->fetch()){
     $nmnik[$bar['karyawanid']]=$bar['nik'];
     $nkary[$bar['karyawanid']]=$bar['namakaryawan'];
-}   
+}
+
+#= namaorg (dulu dipanggil per-baris lewat getNamaOrg())
+$namaorg=array();
+$res=$owlPDO->query("SELECT kodeorganisasi, namaorganisasi FROM ".$dbname.".organisasi");
+$res->setFetchMode(PDO::FETCH_ASSOC);
+while($bar=$res->fetch()){
+    $namaorg[$bar['kodeorganisasi']]=$bar['namaorganisasi'];
+}
+
+#= namabarang (dulu dipanggil per-baris lewat getNamaBrg())
+$namabrg=array();
+$res=$owlPDO->query("SELECT kodebarang, namabarang FROM ".$dbname.".log_5masterbarang");
+$res->setFetchMode(PDO::FETCH_ASSOC);
+while($bar=$res->fetch()){
+    $namabrg[$bar['kodebarang']]=$bar['namabarang'];
+}
+
+#= nopol kendaraan (dulu dipanggil per-baris lewat getNopol())
+$nopolvhc=array();
+$res=$owlPDO->query("SELECT kodevhc, detailvhc FROM ".$dbname.".vhc_5master");
+$res->setFetchMode(PDO::FETCH_ASSOC);
+while($bar=$res->fetch()){
+    $nopolvhc[$bar['kodevhc']]=$bar['detailvhc'];
+}
 
 
 
+$usingLeanQuery = false;
 $sql="select a.*,b.namaakun,c.novoucher,c.cgttu from ".$dbname.".keu_jurnaldt_vw a
 left join ".$dbname.".keu_5akun b
 on a.noakun=b.noakun
-left join ".$dbname.".keu_kasbankht c on a.noreferensi=c.notransaksi 
+left join ".$dbname.".keu_kasbankht c on a.noreferensi=c.notransaksi
 where a.tanggal between '".$periode."' and '".$periode1."'
 ".$kdOrgSch."
 and a.nojurnal NOT LIKE '%CLSM%' ".$where."
-and a.revisi<='".$revisi."' 
-order by a.nojurnal, a.nourut"; 
+and a.revisi<='".$revisi."'";
 // if($_SESSION['standard']['userid']=='0000000003'){
 // echo $sql;
-// }	
+// }
 
+if($tipelaporan=='json' && $start!=='' && $length!==''){
+	#= server-side pagination untuk DataTables: hindari tarik+urutkan seluruh data sekaligus.
+	#= tanpa ORDER BY, MySQL bisa berhenti begitu dapat $length baris lewat index tanggal (jauh lebih cepat dari filesort atas seluruh hasil).
+	if($kdKel!=''){
+		$sqlCount="select count(*) as cnt from ".$dbname.".keu_jurnaldt a
+		left join ".$dbname.".keu_jurnalht b on a.nojurnal=b.nojurnal
+		where a.tanggal between '".$periode."' and '".$periode1."'
+		".$kdOrgSch."
+		and a.nojurnal NOT LIKE '%CLSM%' ".$where."
+		and a.revisi<='".$revisi."'";
+	}else{
+		$sqlCount="select count(*) as cnt from ".$dbname.".keu_jurnaldt a
+		where a.tanggal between '".$periode."' and '".$periode1."'
+		".$kdOrgSch."
+		and a.nojurnal NOT LIKE '%CLSM%' ".$where."
+		and a.revisi<='".$revisi."'";
+	}
 
-$str=$owlPDO->query($sql);
-$str->setFetchMode(PDO::FETCH_OBJ);
+	$countKey='jurnalxxcnt_'.md5($sqlCount);
+	if(isset($_SESSION[$countKey]) && $_SESSION[$countKey]['exp']>time()){
+		$totalCount=$_SESSION[$countKey]['val'];
+	}else{
+		$rcnt=$owlPDO->query($sqlCount);
+		$rcnt->setFetchMode(PDO::FETCH_ASSOC);
+		$totalCount=intval($rcnt->fetch()['cnt']);
+		$_SESSION[$countKey]=array('val'=>$totalCount,'exp'=>time()+300);
+	}
+
+	#= urut berdasarkan tanggal dulu (bukan nojurnal) - kolom ini sama dgn yg dipakai index filter di atas,
+	#= jadi MySQL bisa kasih hasil terurut TANPA filesort (tetap cepat) sekaligus data tampil urut tanggal.
+	$sqlPage=$sql." order by a.tanggal, a.nojurnal, a.nourut limit ".intval($start).",".intval($length);
+	$strp=$owlPDO->query($sqlPage);
+	$strp->setFetchMode(PDO::FETCH_ASSOC);
+	$data=array();
+	while($bar=$strp->fetch()){
+		if($nmnik[$bar['nik']]!=''){
+			$karya = $nmnik[$bar['nik']]." - ".$nkary[$bar['nik']];
+		}else{
+			$karya = "";
+		}
+		$debet=0;
+		$kredit=0;
+		if($bar['jumlah']>0){
+			$debet=$bar['jumlah'];
+		}else{
+			$kredit=$bar['jumlah']*-1;
+		}
+		$data[]=array(
+			clearSpecialChar($bar['nojurnal']),
+			clearSpecialChar($bar['kodejurnal']),
+			clearSpecialChar($namajurnal[$bar['kodejurnal']]),
+			clearSpecialChar($nmauto[$bar['autojurnal']]),
+			clearSpecialChar($bar['novoucher']),
+			clearSpecialChar($bar['tanggal']),
+			clearSpecialChar($bar['kodeorg']),
+			clearSpecialChar($bar['noakun']),
+			clearSpecialChar($bar['namaakun']),
+			clearSpecialChar($bar['cgttu']),
+			clearSpecialChar(htmlentities($bar['keterangan'])),
+			$debet,
+			$kredit,
+			clearSpecialChar($bar['noreferensi']),
+			clearSpecialChar($bar['nodok']),
+			clearSpecialChar((isset($namaorg[$bar['kodeblok']]) && $namaorg[$bar['kodeblok']]!='')? $namaorg[$bar['kodeblok']]: $bar['kodeblok']),
+			clearSpecialChar($tahuntanam[$bar['kodeblok']]),
+			clearSpecialChar($bar['kodekegiatan']),
+			clearSpecialChar($namakegiatan[$bar['kodekegiatan']]),
+			$karya,
+			clearSpecialChar($bar['kodevhc']),
+			clearSpecialChar(isset($nopolvhc[$bar['kodevhc']])? $nopolvhc[$bar['kodevhc']]: ''),
+			clearSpecialChar($bar['kodebarang']),
+			clearSpecialChar(isset($namabrg[$bar['kodebarang']])? $namabrg[$bar['kodebarang']]: ''),
+			clearSpecialChar($bar['revisi'])
+		);
+	}
+
+	header('Content-Type: application/json');
+	echo json_encode(array(
+		"draw"=>intval($draw),
+		"recordsTotal"=>$totalCount,
+		"recordsFiltered"=>$totalCount,
+		"data"=>$data
+	));
+	exit;
+}
+
+$sql.=" order by a.tanggal, a.nojurnal, a.nourut";
+
+if($tipelaporan!='json'){
+	$str=$owlPDO->query($sql);
+	$str->setFetchMode(PDO::FETCH_OBJ);
+}
 $no=0;
-if(!$str){
-    $stream."<tr class=rowcontent><td colspan=11>".$_SESSION['lang']['tidakditemukan']."</td></tr>";
-}else{
+{
 	$nmorg	= makeOption($dbname,'organisasi','kodeorganisasi,namaorganisasi',"kodeorganisasi='".$gudang."'");
 	$border=0;
+
+	#= untuk mode excel: tulis langsung ke file CSV+gzip per baris (streaming), jangan ditumpuk di variabel
+	#= string dulu - dataset besar (ratusan ribu baris) bisa menghabiskan memory_limit PHP dan bikin request gagal (500).
+	#= CSV dipakai (bukan tabel HTML dibungkus .xls) karena Excel jauh lebih cepat buka CSV murni -
+	#= tabel HTML ratusan ribu baris berat banget di-parse Excel walau file-nya sudah di tangan.
+	$gzExcel=null;
 	if($tipelaporan=='excel'){
-		$stream.="Laporan Jurnal<br>";
-		$stream.="".$gudang." - ".$nmorg[$gudang]."<br>";
-		$stream.="".tanggalnormal($periode)." s/d ".tanggalnormal($periode1)."<br><br>";
-		$border=1;
+		$qwe=date("YmdHms");
+		#= uniqid ditambahkan supaya nama file tidak bentrok kalau ada 2 request nyaris bersamaan (mis. double click) -
+		#= sejak file ditulis streaming (bukan sekali tulis di akhir), file yg sama akan corrupt kalau 2 proses menulis bareng.
+		$nop_="NeracaSaldo_".$gudang.$periode."rev".$revisi."___".$qwe."_".uniqid();
+		$gzExcel = gzopen("tempExcel/".$nop_.".csv.gz", "w9");
+		gzwrite($gzExcel, "Laporan Jurnal\r\n");
+		gzwrite($gzExcel, "".$gudang." - ".$nmorg[$gudang]."\r\n");
+		gzwrite($gzExcel, "".tanggalnormal($periode)." s/d ".tanggalnormal($periode1)."\r\n\r\n");
+		gzwrite($gzExcel, csvLine(array(
+			$_SESSION['lang']['nojurnal'],$_SESSION['lang']['kodejurnal'],$_SESSION['lang']['namajurnal'],
+			$_SESSION['lang']['tipe'],$_SESSION['lang']['novoucher'],$_SESSION['lang']['tanggal'],
+			$_SESSION['lang']['unit'],$_SESSION['lang']['noakun'],$_SESSION['lang']['namaakun'],
+			'Tipe Pembayaran',$_SESSION['lang']['keterangan'],$_SESSION['lang']['debet'],$_SESSION['lang']['kredit'],
+			$_SESSION['lang']['noreferensi'],$_SESSION['lang']['nodok'],$_SESSION['lang']['kodeblok'],
+			$_SESSION['lang']['tahuntanam'],$_SESSION['lang']['kodekegiatan'],$_SESSION['lang']['namakegiatan'],
+			$_SESSION['lang']['nik'],$_SESSION['lang']['kodevhc'],$_SESSION['lang']['nopol'],
+			$_SESSION['lang']['kodebarang'],$_SESSION['lang']['namabarang'],$_SESSION['lang']['revisi']
+		)));
 	}
-	$stream.="<table id=pvtTable cellpadding=1 cellspacing=1 border=".$border." class='sortable nowrap' width='100%' data-scroll-x='true' scroll-collapse='false'>
+
+	$header="<table id=pvtTable cellpadding=1 cellspacing=1 border=".$border." class='sortable nowrap' width='100%' data-scroll-x='true' scroll-collapse='false'>
 	 			<thead>
 					<tr>
-						
+
 						<th align=center >".$_SESSION['lang']['nojurnal']."</th>
 						<th align=center >".$_SESSION['lang']['kodejurnal']."</th>
 						<th align=center >".$_SESSION['lang']['namajurnal']."</th>
@@ -163,8 +309,8 @@ if(!$str){
 						<th align=center >".$_SESSION['lang']['keterangan']."</th>
 						<th align=center >".$_SESSION['lang']['debet']."</th>
 						<th align=center >".$_SESSION['lang']['kredit']."</th>
-						<th align=center >".$_SESSION['lang']['noreferensi']."</th>    
-						<th align=center >".$_SESSION['lang']['nodok']."</th>    
+						<th align=center >".$_SESSION['lang']['noreferensi']."</th>
+						<th align=center >".$_SESSION['lang']['nodok']."</th>
 						<th align=center >".$_SESSION['lang']['kodeblok']."</th>
 						<th align=center >".$_SESSION['lang']['tahuntanam']."</th>
 						<th align=center >".$_SESSION['lang']['kodekegiatan']."</th>
@@ -176,10 +322,13 @@ if(!$str){
 						<th align=center >".$_SESSION['lang']['namabarang']."</th>
 						<th align=center >".$_SESSION['lang']['revisi']."</th>
 					</tr>
-					
+
 				</thead>
 				<tbody>";
-				if($tipelaporan!='json'){					
+	if(!$gzExcel){
+		$stream.=$header;
+	}
+				if($tipelaporan!='json'){
 					$tdebet = $tkredit = 0;
 					while($bar=$str->fetch()){
 						$no+=1;
@@ -190,88 +339,66 @@ if(!$str){
 						else
 							$kredit=$bar->jumlah*-1;
 
-						$stream.="<tr class=rowcontent>
-							
+						#= samakan sumber data terlepas dari query mana yg dipakai (view lengkap, atau lean+preload)
+						if($usingLeanQuery){
+							$rowKodejurnal = isset($jurnalhtMap[$bar->nojurnal])? $jurnalhtMap[$bar->nojurnal][0]: '';
+							$rowAutojurnal = isset($jurnalhtMap[$bar->nojurnal])? $jurnalhtMap[$bar->nojurnal][1]: '';
+							$rowNovoucher  = isset($kasbankMap[$bar->noreferensi])? $kasbankMap[$bar->noreferensi][0]: '';
+							$rowCgttu      = isset($kasbankMap[$bar->noreferensi])? $kasbankMap[$bar->noreferensi][1]: '';
+							$rowNamaakun   = isset($namaakunMap[$bar->noakun])? $namaakunMap[$bar->noakun]: '';
+						}else{
+							$rowKodejurnal = $bar->kodejurnal;
+							$rowAutojurnal = $bar->autojurnal;
+							$rowNovoucher  = $bar->novoucher;
+							$rowCgttu      = $bar->cgttu;
+							$rowNamaakun   = $bar->namaakun;
+						}
+
+						if($gzExcel){
+							gzwrite($gzExcel, csvLine(array(
+								$bar->nojurnal,$rowKodejurnal,$namajurnal[$rowKodejurnal],$nmauto[$rowAutojurnal],
+								$rowNovoucher,tanggalnormal($bar->tanggal),$bar->kodeorg,$bar->noakun,$rowNamaakun,
+								$rowCgttu,$bar->keterangan,number_format($debet,2,'.',''),number_format($kredit,2,'.',''),$bar->noreferensi,$bar->nodok,$bar->kodeblok,
+								(isset($tahuntanam[$bar->kodeblok])? $tahuntanam[$bar->kodeblok]: ''),$bar->kodekegiatan,
+								@$namakegiatan[$bar->kodekegiatan],$nmnik[$bar->nik],$bar->kodevhc,
+								(isset($nopolvhc[$bar->kodevhc])? $nopolvhc[$bar->kodevhc]: ''),$bar->kodebarang,
+								(isset($namabrg[$bar->kodebarang])? $namabrg[$bar->kodebarang]: ''),$bar->revisi
+							)));
+						}else{
+							$stream.="<tr class=rowcontent>
+
 							<td>".$bar->nojurnal."</td>
-							<td>".$bar->kodejurnal."</td>
-							<td>".$namajurnal[$bar->kodejurnal]."</td>";
-							
-							$stream.="<td>".$nmauto[$bar->autojurnal]."</td>";
-							
-							
-							$stream.="   <td>".$bar->novoucher."</td>
+							<td>".$rowKodejurnal."</td>
+							<td>".$namajurnal[$rowKodejurnal]."</td>
+							<td>".$nmauto[$rowAutojurnal]."</td>
+							<td>".$rowNovoucher."</td>
 							<td >".tanggalnormal($bar->tanggal)."</td>
 							<td align=center >".$bar->kodeorg."</td>
 							<td>".$bar->noakun."</td>
-							<td>".$bar->namaakun."</td>
-							<td>".$bar->cgttu."</td>
+							<td>".$rowNamaakun."</td>
+							<td>".$rowCgttu."</td>
 							<td>".$bar->keterangan."</td>
 							<td align=right  >".number_format($debet,2)."</td>
 							<td align=right  >".number_format($kredit,2)."</td>
-							<td align=center>".$bar->noreferensi."</td>    
-							<td align=center>".$bar->nodok."</td>    
+							<td align=center>".$bar->noreferensi."</td>
+							<td align=center>".$bar->nodok."</td>
 							<td align=center>".$bar->kodeblok."</td>
 							<td align=center>".(isset($tahuntanam[$bar->kodeblok])? $tahuntanam[$bar->kodeblok]: '')."</td>
 							<td align=center>".$bar->kodekegiatan."</td>
 							<td align=center>".@$namakegiatan[$bar->kodekegiatan]."</td>
 							<td align=center >".$nmnik[$bar->nik]."</td>
 							<td align=center>".$bar->kodevhc."</td>
-							<td align=center>".getNopol($bar->kodevhc)."</td>
+							<td align=center>".(isset($nopolvhc[$bar->kodevhc])? $nopolvhc[$bar->kodevhc]: '')."</td>
 							<td align=center >".$bar->kodebarang."</td>
-							<td align=center >".getNamaBrg($bar->kodebarang)."</td>
+							<td align=center >".(isset($namabrg[$bar->kodebarang])? $namabrg[$bar->kodebarang]: '')."</td>
 							<td align=center >".$bar->revisi."</td>
-							</tr>"; 	
+							</tr>";
+						}
 						$tdebet+=$debet;
 						$tkredit+=$kredit;
-					}	
-				}elseif($tipelaporan=='json'){
-					$res = fetchdata($sql);
-					$adadata = count($res);
-					foreach($res as $bar){
-						if($nmnik[$bar['nik']]!=''){							
-							$karya = $nmnik[$bar['nik']]." - ".$nkary[$bar['nik']];
-						}else{
-							$karya = "";
-						}
-						
-						
-						$debet=0;
-						$kredit=0;
-						if($bar['jumlah']>0){
-							$debet=$bar['jumlah'];
-						}else{
-							$kredit=$bar['jumlah']*-1;
-						}
-						$data[]=array(
-							clearSpecialChar($bar['nojurnal']),
-							clearSpecialChar($bar['kodejurnal']),
-							clearSpecialChar($namajurnal[$bar['kodejurnal']]),
-							clearSpecialChar($nmauto[$bar['autojurnal']]),
-							clearSpecialChar($bar['novoucher']),
-							clearSpecialChar($bar['tanggal']),
-							clearSpecialChar($bar['kodeorg']),
-							clearSpecialChar($bar['noakun']),
-							clearSpecialChar($bar['namaakun']),
-							clearSpecialChar($bar['cgttu']),
-							clearSpecialChar(htmlentities($bar['keterangan'])),
-							$debet,
-							$kredit,
-							clearSpecialChar($bar['noreferensi']),
-							clearSpecialChar($bar['nodok']),
-							clearSpecialChar(getNamaOrg($bar['kodeblok'])),
-							clearSpecialChar($tahuntanam[$bar['kodeblok']]),
-							clearSpecialChar($bar['kodekegiatan']),
-							clearSpecialChar($namakegiatan[$bar['kodekegiatan']]),
-							$karya,
-							clearSpecialChar($bar['kodevhc']),
-							clearSpecialChar(getNopol($bar['kodevhc'])),
-							clearSpecialChar($bar['kodebarang']),
-							clearSpecialChar(getNamaBrg($bar['kodebarang'])),
-							clearSpecialChar($bar['revisi'])
-						);
 					}
-				}	
-				if($tipelaporan=='html' or $tipelaporan=='json'){	
+				}
+				if($tipelaporan=='html' or $tipelaporan=='json'){
 					$stream.="</tbody>";
 					/* $stream.="
 							<tfoot>
@@ -300,9 +427,11 @@ if(!$str){
 								</tr>  
 							</tfoot>"; */
 				}
-				
-		$stream.="</table>";		
-} 	
+
+		if(!$gzExcel){
+			$stream.="</table>";
+		}
+}
 
 
 
@@ -311,23 +440,26 @@ if(!$str){
 if($tipelaporan=='html'){
 	echo $stream;
 }else if ($tipelaporan=='json'){
-	if($adadata>0){		
-		echo $stream."####".json_encode($data);
-	}else{
-		exit("Warning: Data Kosong.");
-	}
+	#= shell tabel kosong; baris data ditarik terpisah oleh DataTables lewat server-side draw (blok di atas)
+	echo $stream;
 }else{
 	// exit("Error:A");
-	$stream.="Print Time:".date('Y-m-d H:i:s')."<br />By:".$_SESSION['empl']['name'];
-	$qwe=date("YmdHms");
-	$nop_="NeracaSaldo_".$gudang.$periode."rev".$revisi."___".$qwe;
-	if(strlen($stream)>0)
-	{
-		 $gztralala = gzopen("tempExcel/".$nop_.".xls.gz", "w9");
-		 gzwrite($gztralala, $stream);
-		 gzclose($gztralala);
-		 echo "<script language=javascript1.2>
-			window.location='tempExcel/".$nop_.".xls.gz';
+	#= file gzip sudah ditulis langsung (streaming) selama loop di atas, tinggal tutup & arahkan browser ke situ.
+	#= diarahkan lewat keu_download_excel.php supaya nama file yang di-download user rapi/manusiawi,
+	#= bukan nama penyimpanan internal yang sengaja dibikin unik (timestamp+uniqid).
+	if($gzExcel){
+		gzwrite($gzExcel, "\r\nPrint Time:".date('Y-m-d H:i:s')." By:".$_SESSION['empl']['name']."\r\n");
+		gzclose($gzExcel);
+		$niceName="Laporan_Jurnal_".$gudang."_".$periode."_sd_".$periode1.".csv";
+		#= sembunyikan loading indicator di jendela induk secara langsung di sini (bukan mengandalkan
+		#= event 'onload' iframe) - begitu redirect ke URL download (Content-Disposition:attachment),
+		#= iframe tidak dianggap browser sebagai "selesai loading" secara normal, jadi onload tidak reliable.
+		echo "<script language=javascript1.2>
+			try{
+				var elLoading = window.parent.document.getElementById('printFileLoading');
+				if(elLoading){ elLoading.style.display='none'; }
+			}catch(e){}
+			window.location='keu_download_excel.php?f=".urlencode($nop_.".csv.gz")."&name=".urlencode($niceName)."';
 			</script>";
 	}
 }
@@ -336,5 +468,24 @@ function clearSpecialChar($tulisan){
 	$hasil='';
 	$hasil=preg_replace('/[\x00-\x1F\x80-\xFF]/', '', $tulisan); //remove non-ascii chars
 	return $hasil;
+}
+
+#= escape 1 baris nilai jadi format CSV yang aman (kutip nilai yg mengandung koma/petik/baris baru)
+function csvLine($cols){
+	$out=array();
+	foreach($cols as $val){
+		$val=(string)$val;
+		#= kode seperti NIK/nomor akun/kode blok sering diawali angka 0 (mis. "0000010163") - tanpa penanda ini
+		#= Excel otomatis membacanya sebagai angka dan membuang nol di depannya, mengubah nilai aslinya.
+		#= Diawali kutip satu (') memaksa Excel memperlakukannya sebagai teks apa adanya.
+		if(preg_match('/^0\d+$/',$val) || preg_match('/^\d{12,}$/',$val)){
+			$val="'".$val;
+		}
+		if(strpos($val,',')!==false || strpos($val,'"')!==false || strpos($val,"\n")!==false || strpos($val,"\r")!==false){
+			$val='"'.str_replace('"','""',$val).'"';
+		}
+		$out[]=$val;
+	}
+	return implode(',',$out)."\r\n";
 }
 ?>
