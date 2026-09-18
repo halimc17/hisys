@@ -32,6 +32,12 @@
 		$optsupp.="<option value='".$bar['koderekanan']."'>".getNamaSupplier($bar['koderekanan'])."</option>";
 	}
 
+	$optjenis="<option value='%%'>".$_SESSION['lang']['all']."</option>";
+	$arrjenis=getEnum($dbname,'lgl_pengajuanspkht','jenis');
+	foreach ($arrjenis as $val) {
+		$optjenis.="<option value='".$val."'>".$val."</option>";
+	}
+
 	echo"<fieldset style=width:300px;float:left><legend><b>Form</b></legend>
 	<table>
 		<tr>	
@@ -48,6 +54,11 @@
 			<td>".$_SESSION['lang']['kontraktor']."</td>
 			<td>:</td>
 			<td><select id=kontraktor class=select2 style=\"width:180px;\" >".$optsupp."</select></td>
+		</tr>
+		<tr>
+			<td>".$_SESSION['lang']['jenis']."</td>
+			<td>:</td>
+			<td><select id=jenis class=select2 style=\"width:180px;\" >".$optjenis."</select></td>
 		</tr>
 		<tr>
 			<td>".$_SESSION['lang']['notransaksi']."</td>
