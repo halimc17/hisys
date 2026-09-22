@@ -136,10 +136,23 @@ echo "<table>
 		<td>:</td>
 		<td><input class=myinputtext id=kontrakcr onkeypress='enterkey(event,loaddata)' style=\"width:150px;\"></td>
 		
-		<td>" . $_SESSION['lang']['nobaspk'] . "</td> 
+		<td>" . $_SESSION['lang']['nobaspk'] . "</td>
 		<td>:</td>
 		<td><input class=myinputtext id=bappcr onkeypress='enterkey(event,loaddata)' style=\"width:150px;\"></td>
-		
+
+	</tr>
+	<tr>
+		<td>Status</td>
+		<td>:</td>
+		<td><select class=select2 id=statuscr style=\"width:150px;\">
+			<option value=''>" . $_SESSION['lang']['all'] . "</option>
+			<option value='0'>Belum Diajukan</option>
+			<option value='9'>Menunggu Persetujuan</option>
+			<option value='3'>Ditolak</option>
+			<option value='1_belum'>Disetujui, Belum Diposting</option>
+			<option value='1_ada'>Sudah Diposting</option>
+			<option value='1_kosong'>Sudah Posting, Jurnal Tidak Ditemukan</option>
+		</select></td>
 	</tr>";
 echo "<tr><td><td><td><button class=mybutton onclick=loaddata(0)>" . $_SESSION['lang']['find'] . "</button></td></td></tr></table>";
 echo "</fieldset></td>
@@ -172,6 +185,7 @@ foreach ($arrjenis as $jenis) {
 echo "<th align=center rowspan='2'>" . $_SESSION['lang']['potongan'] . "</th>
             <th align=center rowspan='2'>" . $_SESSION['lang']['rupiah'] . "</th>
             <th align=center rowspan='2'>No BAPP</th>
+            <th align=center rowspan='2'>Status</th>
             <th align=center rowspan='2' colspan=7>" . $_SESSION['lang']['action'] . "</th>
         </tr>";
 echo "<tr>";

@@ -1808,6 +1808,7 @@ function loaddata(page) {
   kontrakcr = document.getElementById("kontrakcr").value;
   nospb = document.getElementById("nospbcr").value;
   bapp = document.getElementById("bappcr").value;
+  statuscr = document.getElementById("statuscr").value;
   param = "method=loaddata&page=" + page;
   param += "&nospb=" + nospb;
   if (divsch != "") {
@@ -1819,6 +1820,7 @@ function loaddata(page) {
   param += "&bapp=" + bapp;
   param += "&nospkcr=" + nospkcr;
   param += "&kontrakcr=" + kontrakcr;
+  param += "&statuscr=" + statuscr;
   tujuan = "kebun_slave_rekapangkutantbs.php";
   post_response_text(tujuan, param, respog);
   function respog() {

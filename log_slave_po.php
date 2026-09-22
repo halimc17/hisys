@@ -1244,6 +1244,7 @@ switch ($method) {
 
 		// $str = "update ".$dbname.".log_poht set statuspo='1',tanggal='".date('Y-m-d')."' where nopo='".$nopo."'";
 		$str = "update " . $dbname . ".log_poht set statuspo='1' where nopo='" . $nopo . "'";
+		$owlPDO->beginTransaction();
 		try {
 			$owlPDO->exec($str);
 
@@ -1264,7 +1265,9 @@ switch ($method) {
 					}
 				}
 			}
+			$owlPDO->commit();
 		} catch (PDOException $e) {
+			$owlPDO->rollBack();
 			print " Gagal  !: " . $e->getMessage() . "\n";
 			die();
 		}

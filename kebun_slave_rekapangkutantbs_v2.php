@@ -56,6 +56,7 @@ $potonganrp  = checkPostGet('potonganrp', '');
 $ttlrowfee   = checkPostGet('ttlrowfee', '');
 $nospkcr     = checkPostGet('nospkcr', '');
 $kontrakcr   = checkPostGet('kontrakcr', '');
+$statuscr    = checkPostGet('statuscr', '');
 $jenistampil = checkPostGet('jenis', '');
 $tglmulai 	 = tanggalsystemn(checkPostGet('tglmulai', ''));
 $tglselesai  = tanggalsystemn(checkPostGet('tglselesai', ''));
@@ -1681,6 +1682,29 @@ switch ($method) {
 		if ($nospkcr != '') {
 			$where .= " and a.spk like '%" . $nospkcr . "%' ";
 		}
+
+		if ($statuscr != '') {
+			switch ($statuscr) {
+				case '0':
+					$where .= " and exists (select 1 from " . $dbname . ".log_baspk lb where lb.notransaksi=a.spk and lb.keterangan=a.nobapp and lb.statuspengajuan='0')";
+					break;
+				case '9':
+					$where .= " and exists (select 1 from " . $dbname . ".log_baspk lb where lb.notransaksi=a.spk and lb.keterangan=a.nobapp and lb.statuspengajuan='9')";
+					break;
+				case '3':
+					$where .= " and exists (select 1 from " . $dbname . ".log_baspk lb where lb.notransaksi=a.spk and lb.keterangan=a.nobapp and lb.statuspengajuan='3')";
+					break;
+				case '1_belum':
+					$where .= " and exists (select 1 from " . $dbname . ".log_baspk lb where lb.notransaksi=a.spk and lb.keterangan=a.nobapp and lb.statuspengajuan='1' and lb.statusjurnal='0')";
+					break;
+				case '1_ada':
+					$where .= " and exists (select 1 from " . $dbname . ".log_baspk lb where lb.notransaksi=a.spk and lb.keterangan=a.nobapp and lb.statuspengajuan='1' and lb.statusjurnal='1' and exists (select 1 from " . $dbname . ".keu_jurnaldt jd where jd.nodok=lb.keterangan))";
+					break;
+				case '1_kosong':
+					$where .= " and exists (select 1 from " . $dbname . ".log_baspk lb where lb.notransaksi=a.spk and lb.keterangan=a.nobapp and lb.statuspengajuan='1' and lb.statusjurnal='1' and not exists (select 1 from " . $dbname . ".keu_jurnaldt jd where jd.nodok=lb.keterangan))";
+					break;
+			}
+		}
 		$limit = 20;
 		$page = 0;
 		$_POST['page'] = isset($_POST['page']) ? $_POST['page'] : '0';
@@ -1790,7 +1814,7 @@ switch ($method) {
 							}
 
 							// cek berapa yang sudah diposting
-							$strdd = "select sum(jumlahrealisasi) as jumlahrealisasi, statusjurnal,nopengajuan,termin,tanggal,keterangan from " . $dbname . ".log_baspk where notransaksi = '" . $nospk . "' and keterangan = '" . $nobapp[$kdorg][$prd][$nospk][$prdbyr] . "' group by statusjurnal";
+							$strdd = "select sum(jumlahrealisasi) as jumlahrealisasi, statusjurnal,statuspengajuan,nopengajuan,termin,tanggal,keterangan from " . $dbname . ".log_baspk where notransaksi = '" . $nospk . "' and keterangan = '" . $nobapp[$kdorg][$prd][$nospk][$prdbyr] . "' group by statusjurnal";
 							$realdd = 0;
 							$resdd = $owlPDO->query($strdd) or die(print " Gagal: " . PDOException::getMessage());
 							$resdd->setFetchMode(PDO::FETCH_ASSOC);
@@ -1803,6 +1827,41 @@ switch ($method) {
 								$termin = $bardd['termin'];
 								$tglnya = $bardd['tanggal'];
 								$statusjurnal = $bardd['statusjurnal'];
+								$statuspengajuan = $bardd['statuspengajuan'];
+							}
+
+							switch ($statuspengajuan) {
+								case '0':
+									$statusbapp = 'Belum Diajukan';
+									$warnaStatus = 'gray';
+									break;
+								case '9':
+									$statusbapp = 'Menunggu Persetujuan';
+									$warnaStatus = 'orange';
+									break;
+								case '3':
+									$statusbapp = 'Ditolak';
+									$warnaStatus = 'red';
+									break;
+								case '1':
+									if ($statusjurnal == 1) {
+										$sCekJurnal = "select 1 from " . $dbname . ".keu_jurnaldt where nodok='" . $nobapp[$kdorg][$prd][$nospk][$prdbyr] . "' limit 1";
+										$rCekJurnal = fetchdata($sCekJurnal);
+										if (count($rCekJurnal) > 0) {
+											$statusbapp = 'Sudah Diposting';
+											$warnaStatus = 'green';
+										} else {
+											$statusbapp = 'Sudah Posting, Jurnal Tidak Ditemukan';
+											$warnaStatus = 'red';
+										}
+									} else {
+										$statusbapp = 'Disetujui, Belum Diposting';
+										$warnaStatus = 'orange';
+									}
+									break;
+								default:
+									$statusbapp = '-';
+									$warnaStatus = 'gray';
 							}
 
 							$no += 1;
@@ -1836,6 +1895,7 @@ switch ($method) {
 							}
 							#$tab.="<td align=right>" . @number_format($rpfee[$kdorg][$prd][$nospk][$prdbyr]). "</td>";
 							$tab .= "<td align=left style=color:" . $warna . ";cursor:pointer; title=\"" . $judul . "\" onclick=viewdetailbapp('" . $nospk . "','" . $kdorg . "','viewhtml','event','" . $nobapp[$kdorg][$prd][$nospk][$prdbyr] . "')>" . ($nobapp[$kdorg][$prd][$nospk][$prdbyr]) . " <!--" . $realdd . "--></td>";
+							$tab .= "<td align=center style=color:" . $warnaStatus . ";font-weight:bold>" . $statusbapp . "</td>";
 
 							#$tab.="<td align=center>";
 							if ($posting[$kdorg][$prd][$nospk][$prdbyr] == '0' || $posting[$kdorg][$prd][$nospk][$prdbyr] == '3') {
@@ -2317,6 +2377,17 @@ switch ($method) {
 			if ($statuspengajuan != '3' and $statuspengajuan != '0') {
 				#jika status BUKAN ditolak atau sudah diajukan
 				throw new PDOException("BAPP sudah dalam proses persetujuan dan atau sudah disetujui !");
+			}
+
+			#cek apakah periode akuntansi tanggal BAPP ini sudah tutup buku
+			$sTglBapp = "select distinct tanggal from " . $dbname . ".log_baspk where notransaksi='" . $spk . "' and keterangan='" . $nobapp . "'";
+			$rTglBapp = fetchdata($sTglBapp);
+			foreach ($rTglBapp as $rtgl) {
+				$stu = "select * from " . $dbname . ".setup_periodeakuntansi where tutupbuku=1 and kodeorg='" . $kodeorg . "' and periode='" . substr($rtgl['tanggal'], 0, 7) . "'";
+				$rus = fetchdata($stu);
+				if (count($rus) > 0) {
+					throw new PDOException($rus[0]['kodeorg'] . " periode " . $rus[0]['periode'] . " sudah tutup buku, tidak bisa unposting BAPP ini !");
+				}
 			}
 
 			#hapus log_baspk

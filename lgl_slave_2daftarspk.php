@@ -10,6 +10,7 @@ $method		=checkPostGet('method','');
 $pt			=checkPostGet('pt','');
 $unit		=checkPostGet('unit','');
 $kontraktor	=checkPostGet('kontraktor','');
+$jenis		=checkPostGet('jenis','');
 $notransaksi=checkPostGet('notransaksi','');
 $tgl1		=tanggalsystemn(checkPostGet('tgl1',''));
 $tgl2		=tanggalsystemn(checkPostGet('tgl2',''));
@@ -42,13 +43,17 @@ switch($method){
 		if($kontraktor != '%%'){
 			$whrsupp = "and koderekanan = '".$kontraktor."'";
 		}
+		$whrjenis ='';
+		if($jenis != '%%' && $jenis != ''){
+			$whrjenis = "and jenis = '".$jenis."'";
+		}
 		if($notransaksi != ''){
 			$whrnot = "and notransaksi like '%".$notransaksi."%'";
 		}
 
 		$gtestimasi=$gtrealisasi=$gtppn=$gtpph=0;
-		$str="select * from ".$dbname.".lgl_pengajuanspkht 
-              where 1=1 ".$whrunt." ".$whrsupp." ".$whrnot." and tanggal between '".$tgl1."' and '".$tgl2."' ";
+		$str="select * from ".$dbname.".lgl_pengajuanspkht
+              where 1=1 ".$whrunt." ".$whrsupp." ".$whrjenis." ".$whrnot." and tanggal between '".$tgl1."' and '".$tgl2."' ";
 		$res=fetchData($str);
 		
 		if(count($res) < 1){
@@ -60,6 +65,7 @@ switch($method){
 				$stream.="<th align=center style='border: 0.5 px solid black;".$bgColor."'>".$_SESSION['lang']['nourut']."</th>";
 				$stream.="<th align=center style='border: 0.5 px solid black;".$bgColor."'>".$_SESSION['lang']['unit']."</th>";
 				$stream.="<th align=center style='border: 0.5 px solid black;".$bgColor."'>".$_SESSION['lang']['notransaksi']."</th>";
+				$stream.="<th align=center style='border: 0.5 px solid black;".$bgColor."'>".$_SESSION['lang']['jenis']."</th>";
 				$stream.="<th align=center style='border: 0.5 px solid black;".$bgColor."'>".$_SESSION['lang']['tanggal']."</th>";
 				$stream.="<th align=center style='border: 0.5 px solid black;".$bgColor."'>".$_SESSION['lang']['divisi']."</th>";
 				$stream.="<th align=center style='border: 0.5 px solid black;".$bgColor."'>".$_SESSION['lang']['kontraktor']."</th>";
@@ -78,8 +84,19 @@ switch($method){
 					$stream.="<td style='border: 0.5 px solid black;' align=center>".$no."</td>";
 					$stream.="<td style='border: 0.5 px solid black;' align=left>".$b['unit']." - ".getNamaOrg($b['unit'])."</td>";
 					$stream.="<td style='border: 0.5 px solid black;' align=left>".$b['notransaksi']."</td>";
+					$stream.="<td style='border: 0.5 px solid black;' align=center>".$b['jenis']."</td>";
 					$stream.="<td style='border: 0.5 px solid black;' align=left>".tanggalnormal($b['tanggal'])."</td>";
-					$stream.="<td style='border: 0.5 px solid black;' align=center>".$b['divisi']." - ".getNamaOrg($b['divisi'])."</td>";
+					if($b['jenis']=='PROJECT'){
+						$strproject="select nama from ".$dbname.".project where kode='".$b['divisi']."'";
+						$resproject=fetchData($strproject)[0];
+						$namadivisi = $resproject['nama'] != '' ? $resproject['nama'] : $b['divisi'];
+						$stream.="<td style='border: 0.5 px solid black;' align=center>".$b['divisi']." - ".$namadivisi."</td>";
+					}else if($b['jenis']=='PO/SO'){
+						$stream.="<td style='border: 0.5 px solid black;' align=center>".$b['divisi']."</td>";
+					}else{
+						$namadivisi = getNamaOrg($b['divisi']);
+						$stream.="<td style='border: 0.5 px solid black;' align=center>".$b['divisi']." - ".$namadivisi."</td>";
+					}
 					$stream.="<td style='border: 0.5 px solid black;' align=left>".getNamaSupplier($b['koderekanan'])."</td>";
 	
 					#ambil total dari pengajuan
@@ -116,7 +133,7 @@ switch($method){
 			}
 	
 				$stream.="<tr class=rowcontent>";	
-					$stream.="<td style='border: 0.5 px solid black;background-color:#ccc;font-weight:bold' align=center colspan=6>".$_SESSION['lang']['grnd_total']."</td>";
+					$stream.="<td style='border: 0.5 px solid black;background-color:#ccc;font-weight:bold' align=center colspan=7>".$_SESSION['lang']['grnd_total']."</td>";
 					$stream.="<td style='border: 0.5 px solid black;background-color:#ccc;font-weight:bold' align=right>".number_format($gtestimasi)."</td>";
 					$stream.="<td style='border: 0.5 px solid black;background-color:#ccc;font-weight:bold' align=right>".number_format($gtppn)."</td>";
 					$stream.="<td style='border: 0.5 px solid black;background-color:#ccc;font-weight:bold' align=right>".number_format($gtpph)."</td>";

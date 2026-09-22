@@ -1680,6 +1680,18 @@ switch ($method) {
 				try {
 					$owlPDO->beginTransaction();
 					foreach ($_POST['notransaksi'] as $dtList => $bsdlis) {
+						#= cek tutup buku
+						$sJurCek = "select * from " . $dbname . ".keu_jurnalht where noreferensi='" . $bsdlis . "'";
+						$rJurCek = fetchdata($sJurCek);
+						foreach ($rJurCek as $valjur) {
+							$unitjur = explode("/", $valjur['nojurnal']);
+							$stu = "select * from " . $dbname . ".setup_periodeakuntansi where tutupbuku=1 and kodeorg='" . $unitjur[1] . "' and periode='" . substr($valjur['tanggal'], 0, 7) . "'";
+							$rus = fetchdata($stu);
+							if (count($rus) > 0) {
+								throw new PDOException($rus[0]['kodeorg'] . " periode " . $rus[0]['periode'] . " sudah tutup buku, tidak bisa unposting !");
+							}
+						}
+
 						#= hapus jurnal
 						$str = "delete from " . $dbname . ".keu_jurnalht where noreferensi='" . $bsdlis . "'";
 						$owlPDO->exec($str);
@@ -2319,6 +2331,18 @@ switch ($method) {
 				try {
 					$owlPDO->beginTransaction();
 					foreach ($_POST['notransaksi'] as $dtList => $bsdlis) {
+						#= cek tutup buku
+						$sJurCek = "select * from " . $dbname . ".keu_jurnalht where noreferensi='" . $bsdlis . "'";
+						$rJurCek = fetchdata($sJurCek);
+						foreach ($rJurCek as $valjur) {
+							$unitjur = explode("/", $valjur['nojurnal']);
+							$stu = "select * from " . $dbname . ".setup_periodeakuntansi where tutupbuku=1 and kodeorg='" . $unitjur[1] . "' and periode='" . substr($valjur['tanggal'], 0, 7) . "'";
+							$rus = fetchdata($stu);
+							if (count($rus) > 0) {
+								throw new PDOException($rus[0]['kodeorg'] . " periode " . $rus[0]['periode'] . " sudah tutup buku, tidak bisa unposting !");
+							}
+						}
+
 						#= hapus jurnal
 						$str = "delete from " . $dbname . ".keu_jurnalht where noreferensi='" . $bsdlis . "'";
 						$owlPDO->exec($str);
@@ -2339,6 +2363,18 @@ switch ($method) {
 				try {
 					$owlPDO->beginTransaction();
 					foreach ($_POST['notransaksi'] as $dtList => $bsdlis) {
+						#= cek tutup buku
+						$sJurCek = "select * from " . $dbname . ".keu_jurnalht where noreferensi='" . $bsdlis . "'";
+						$rJurCek = fetchdata($sJurCek);
+						foreach ($rJurCek as $valjur) {
+							$unitjur = explode("/", $valjur['nojurnal']);
+							$stu = "select * from " . $dbname . ".setup_periodeakuntansi where tutupbuku=1 and kodeorg='" . $unitjur[1] . "' and periode='" . substr($valjur['tanggal'], 0, 7) . "'";
+							$rus = fetchdata($stu);
+							if (count($rus) > 0) {
+								throw new PDOException($rus[0]['kodeorg'] . " periode " . $rus[0]['periode'] . " sudah tutup buku, tidak bisa unposting !");
+							}
+						}
+
 						#= hapus jurnal
 						$str = "delete from " . $dbname . ".keu_jurnalht where noreferensi='" . $bsdlis . "'";
 						$owlPDO->exec($str);
@@ -2367,6 +2403,18 @@ switch ($method) {
 				try {
 					$owlPDO->beginTransaction();
 					foreach ($_POST['notransaksi'] as $dtList => $bsdlis) {
+						#= cek tutup buku
+						$sJurCek = "select * from " . $dbname . ".keu_jurnalht where noreferensi='" . $bsdlis . "'";
+						$rJurCek = fetchdata($sJurCek);
+						foreach ($rJurCek as $valjur) {
+							$unitjur = explode("/", $valjur['nojurnal']);
+							$stu = "select * from " . $dbname . ".setup_periodeakuntansi where tutupbuku=1 and kodeorg='" . $unitjur[1] . "' and periode='" . substr($valjur['tanggal'], 0, 7) . "'";
+							$rus = fetchdata($stu);
+							if (count($rus) > 0) {
+								throw new PDOException($rus[0]['kodeorg'] . " periode " . $rus[0]['periode'] . " sudah tutup buku, tidak bisa unposting !");
+							}
+						}
+
 						#= hapus jurnal
 						$str = "delete from " . $dbname . ".keu_jurnalht where noreferensi='" . $bsdlis . "'";
 						$owlPDO->exec($str);
@@ -2388,6 +2436,18 @@ switch ($method) {
 				try {
 					$owlPDO->beginTransaction();
 					foreach ($_POST['notransaksi'] as $dtList => $bsdlis) {
+						#= cek tutup buku
+						$sJurCek = "select * from " . $dbname . ".keu_jurnalht where noreferensi='" . $bsdlis . "'";
+						$rJurCek = fetchdata($sJurCek);
+						foreach ($rJurCek as $valjur) {
+							$unitjur = explode("/", $valjur['nojurnal']);
+							$stu = "select * from " . $dbname . ".setup_periodeakuntansi where tutupbuku=1 and kodeorg='" . $unitjur[1] . "' and periode='" . substr($valjur['tanggal'], 0, 7) . "'";
+							$rus = fetchdata($stu);
+							if (count($rus) > 0) {
+								throw new PDOException($rus[0]['kodeorg'] . " periode " . $rus[0]['periode'] . " sudah tutup buku, tidak bisa unposting !");
+							}
+						}
+
 						#= hapus jurnal
 						$str = "delete from " . $dbname . ".keu_jurnalht where noreferensi='" . $bsdlis . "'";
 						$owlPDO->exec($str);
@@ -2683,10 +2743,6 @@ switch ($method) {
 					$sUp = "update " . $dbname . ".log_baspk set statusjurnal=0,posting=0,statuspengajuan=0,nopengajuan='' where keterangan='" . $_POST['nobapp'][0] . "' and notransaksi='" . $_POST['notransaksi'][0] . "'";
 					$owlPDO->exec($sUp);
 
-					#sinkronkan status di Rekap Angkutan TBS supaya tidak tetap tampil "sudah posting"
-					$sUpRekap = "update " . $dbname . ".kebun_rekapangkutantbsht set posting=0,nobapp='' where spk='" . $_POST['notransaksi'][0] . "' and nobapp='" . $_POST['nobapp'][0] . "'";
-					$owlPDO->exec($sUpRekap);
-
 					$owlPDO->commit();
 				} catch (PDOException $e) {
 					$owlPDO->rollback();
@@ -2736,10 +2792,6 @@ switch ($method) {
 
 					$sUp = "update " . $dbname . ".log_baspk set statusjurnal=0,posting=0,statuspengajuan=0,nopengajuan='' where keterangan='" . $_POST['nobapp'][0] . "' and notransaksi='" . $_POST['notransaksi'][0] . "'";
 					$owlPDO->exec($sUp);
-
-					#sinkronkan status di Rekap Angkutan TBS supaya tidak tetap tampil "sudah posting"
-					$sUpRekap = "update " . $dbname . ".kebun_rekapangkutantbsht set posting=0,nobapp='' where spk='" . $_POST['notransaksi'][0] . "' and nobapp='" . $_POST['nobapp'][0] . "'";
-					$owlPDO->exec($sUpRekap);
 
 					$owlPDO->commit();
 				} catch (PDOException $e) {

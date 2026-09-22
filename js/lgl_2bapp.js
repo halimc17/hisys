@@ -2,6 +2,7 @@ function preview(tipe){
     pt	=document.getElementById('pt').value;
     unit=document.getElementById('unit').value;
     supp=document.getElementById('kontraktor').value;
+    jenis=document.getElementById('jenis').value;
     notr=document.getElementById('notransaksi').value;
     tgl1=document.getElementById('tgl1').value;
     tgl2=document.getElementById('tgl2').value;
@@ -13,7 +14,7 @@ function preview(tipe){
 		alertify.alert('Informasi','Tanggal harus dipilih');return;
 	}
 	
-	param='method=preview'+'&unit='+unit+'&tgl1='+tgl1+'&tgl2='+tgl2+'&pt='+pt+'&kontraktor='+supp+'&notransaksi='+notr.trim()+'&tipe='+tipe;
+	param='method=preview'+'&unit='+unit+'&tgl1='+tgl1+'&tgl2='+tgl2+'&pt='+pt+'&kontraktor='+supp+'&jenis='+jenis+'&notransaksi='+notr.trim()+'&tipe='+tipe;
 	tujuan='lgl_slave_2bapp.php';
 	if(tipe == 'excel'){
 		printnopopup(tujuan+'?'+param);
@@ -74,7 +75,8 @@ function batal(){
     setValue2('unit','%%');
     setValue2('kontraktor','%%');
     setValue2('kontraktor','');
-    setValue2('tgl1','');	
+    setValue2('jenis','%%');
+    setValue2('tgl1','');
     setValue2('tgl2','');
     document.getElementById('printContainer').innerHTML='';	
 }

@@ -9,7 +9,7 @@ require_once('lib/zDatatables.php');
 require_once('lib/zSelect2Lite.php');
 
 ?>
-<script language=javascript src='js/keu_laporanxx.js?v=<?php echo time(); ?>'></script>
+<script language=javascript src='js/keu_2jurnalxx.js?v=<?php echo time(); ?>'></script>
 <script language="javascript" src="js/zSelect2.js?ver=1"></script>
 <!--
 <script type=text/javascript src=pivottable-master/dist/jquery.min.js></script>
