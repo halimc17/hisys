@@ -279,7 +279,31 @@ if (trim($_SESSION['empl']['tipelokasitugas']) == 'HOLDING' || trim($_SESSION['e
 		<td colspan=6><hr></td>
 	</tr><tr>
 		<td colspan=6>ID : Copy upah dari konfigurasi periode gaji tertentu ke periode tertentu</td>
-    </tr></table></fieldset></td></table>";
+    </tr></table></fieldset>
+	
+	<fieldset style='float:left;margin-top:10px;width:100%;'>
+    <legend>Template & Upload Excel</legend>
+    <table border=0>
+    <tr>
+        <td>File (.xlsx)</td><td>:</td>
+        <td><input type=file id=filex name=filex class=mybutton></td>
+    </tr>
+    <tr>
+        <td colspan=3>
+            <b>Format Kolom Excel:</b><br/>
+			A: Periode | B: Unit Kerja | C: NIK | D: Nama Karyawan | E: Tipe Karyawan | F: Golongan | G: Jabatan | H: ID Komponen | I: Jumlah Upah
+        </td>
+    </tr>
+    <tr>
+        <td colspan=3>
+            <button class=mybutton onclick=downloadTemplate()>Download Template (Sesuai Form)</button>
+            <button class=mybutton onclick=submitUpload()>Upload File</button>
+        </td>
+    </tr>
+    </table>
+	</fieldset>
+	
+	</td></table>";
 } else {
 
 	echo "<td  valign=top><fieldset style='float:left;height:150px'><legend>Copy</legend>";
@@ -296,9 +320,34 @@ if (trim($_SESSION['empl']['tipelokasitugas']) == 'HOLDING' || trim($_SESSION['e
 	</tr><tr>
 		<td colspan=6><hr></td>
 	</tr><tr>
+	</tr><tr>
 		<td colspan=6>Info : Copy gaji dari konfigurasi gaji periode tertentu ke periode tertentu dan data yang tidak tercopy merupakan data yang berbeda dengan data karyawan , silahkan input manual</td>
 	</tr><tr>
-    </tr></table></fieldset></td></table>";
+    </tr></table></fieldset>
+	
+	<fieldset style='float:left;margin-top:10px;width:100%;'>
+    <legend>Template & Upload Excel</legend>
+    <table border=0>
+    <tr>
+        <td>File (.xlsx)</td><td>:</td>
+        <td><input type=file id=filex name=filex class=mybutton></td>
+    </tr>
+    <tr>
+        <td colspan=3>
+            <b>Format Kolom Excel:</b><br/>
+			A: Periode | B: Unit Kerja | C: NIK | D: Nama Karyawan | E: Tipe Karyawan | F: Golongan | G: Jabatan | H: ID Komponen | I: Jumlah Upah
+        </td>
+    </tr>
+    <tr>
+        <td colspan=3>
+            <button class=mybutton onclick=downloadTemplate()>Download Template (Sesuai Form)</button>
+            <button class=mybutton onclick=submitUpload()>Upload File</button>
+        </td>
+    </tr>
+    </table>
+	</fieldset>
+	
+	</td></table>";
 }
 
 CLOSE_BOX();
@@ -372,7 +421,6 @@ echo "<div style=clear:both;></div>";
 
 echo "<div id=containerupdate></div>";
 echo "</div>";
-
 
 
 ##LIST DATA

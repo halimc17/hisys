@@ -71,18 +71,21 @@ function updatetrans() {
   document.getElementById("listdata").style.display = "none";
   document.getElementById("inputdata").style.display = "none";
   document.getElementById("updatedata").style.display = "block";
+  document.getElementById("uploadData").style.display = "none";
 }
 
 function add_new_data() {
   document.getElementById("listdata").style.display = "block";
   document.getElementById("inputdata").style.display = "block";
   document.getElementById("updatedata").style.display = "none";
+  document.getElementById("uploadData").style.display = "none";
 }
 
 function displayList() {
   document.getElementById("listdata").style.display = "block";
   document.getElementById("inputdata").style.display = "none";
   document.getElementById("updatedata").style.display = "none";
+  document.getElementById("uploadData").style.display = "none";
   loadData(0);
 }
 
@@ -304,6 +307,7 @@ function fillField(
   document.getElementById("listdata").style.display = "block";
   document.getElementById("inputdata").style.display = "block";
   document.getElementById("updatedata").style.display = "none";
+  document.getElementById("uploadData").style.display = "none";
 
   document.getElementById("karyawanId").innerHTML =
     "<option value='" + karywnid + "'>" + namakar + "</option>";
@@ -486,4 +490,66 @@ function dataKeExcel(ev) {
   tujuan = "sdm_slave_5gajipokok.php";
   judul = "List Data";
   printFile(param, tujuan, judul, ev);
+}
+
+function downloadTemplate() {
+  thn = document.getElementById("thn").value;
+  kdUnit = document.getElementById("kdUnit").value;
+  tpKar = document.getElementById("tpKary").value;
+  golongan = document.getElementById("golongan").value;
+  jabatan = document.getElementById("jabatan").value;
+  idkomp = document.getElementById("idKomponen").value;
+  karyawanId = document.getElementById("karyawanId").value;
+  
+  if (kdUnit == "") {
+      alert("Unit Kerja harus dipilih!");
+      return;
+  }
+  if (idkomp == "") {
+      alert("ID Komponen harus dipilih!");
+      return;
+  }
+
+  param = "method=downloadTemplate" + "&thn=" + encodeURIComponent(thn);
+  param += "&kdUnit=" + encodeURIComponent(kdUnit);
+  if (tpKar != "") param += "&tpKary=" + encodeURIComponent(tpKar);
+  if (golongan != "") param += "&golongan=" + encodeURIComponent(golongan);
+  if (jabatan != "") param += "&jabatan=" + encodeURIComponent(jabatan);
+  if (idkomp != "") param += "&idKomponen=" + encodeURIComponent(idkomp);
+  if (karyawanId != "") param += "&karyawanId=" + encodeURIComponent(karyawanId);
+
+  window.location.href = "sdm_slave_5gajipokok.php?" + param;
+}
+
+function submitUpload() {
+  var file = document.getElementById('filex').files[0];
+  if(getValue('filex') == "") {
+    alert("Warning : Silakan pilih file terlebih dahulu!");
+    return false;
+  }
+  
+  var formdata = new FormData();
+  formdata.append("file", file);
+  formdata.append("method", "uploadData");
+  
+  busy_on();
+  var con = createXMLHttpRequest();
+  con.open("POST", "sdm_slave_5gajipokok.php?method=uploadData", true);
+  con.onreadystatechange = function() {
+    if (con.readyState == 4) {
+      if (con.status == 200) {
+        busy_off();
+        if (!isSaveResponse(con.responseText)) {
+          alert(con.responseText);
+        } else {
+          alert("Berhasil diupload!");
+          displayList();
+        }
+      } else {
+        busy_off();
+        error_catch(con.status);
+      }
+    }
+  };
+  con.send(formdata);
 }

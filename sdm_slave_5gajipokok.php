@@ -43,6 +43,146 @@ $optJbtn     = makeOption($dbname, 'sdm_5jabatan', 'kodejabatan,namajabatan');
 $optKomponen = makeOption($dbname, 'sdm_ho_component', 'id,name');
 
 switch ($method) {
+	case 'uploadData':
+		if ($_FILES['file']['error'] == 0) {
+			$filetype = strtolower('.' . substr($_FILES['file']['name'], strripos($_FILES['file']['name'], '.') + 1));
+			$file = $_FILES['file']['tmp_name'];
+			if ($filetype == '.xlsx') {
+				require_once 'dompdf/PHPExcel.php';
+				require_once 'dompdf/PHPExcel/IOFactory.php';
+				
+				$load = PHPExcel_IOFactory::load($file);
+				$sheets = $load->getActiveSheet()->toArray(null, true, true, true);
+				$firsturut1 = 1;
+				$i = 1;
+				$berhasil = 0;
+				$gagal = 0;
+				
+				try {
+					$owlPDO->beginTransaction();
+					
+					foreach ($sheets as $sheet) {
+						if ($i > $firsturut1) {
+							// A: Periode, B: Unit Kerja, C: NIK, D: Nama, E: Tipe, F: Gol, G: Jabatan, H: ID Komp, I: Jumlah Upah
+							$periode = trim($sheet['A']);
+							$kdOrg = trim($sheet['B']);
+							$nik = trim($sheet['C']);
+							// Extract ID from format "ID - Name"
+							$idKompRaw = trim($sheet['H']);
+							$idKompArr = explode(' - ', $idKompRaw);
+							$idKomp = $idKompArr[0];
+							$jumlah = trim($sheet['I']);
+							
+							if ($periode != '' && $nik != '') {
+								$strc = "select karyawanid from " . $dbname . ".datakaryawan where nik='" . $nik . "' and lokasitugas='".$kdOrg."'";
+								$resc = fetchdata($strc);
+								if (count($resc) > 0) {
+									$karyawanid = $resc[0]['karyawanid'];
+									// Delete existing if any
+									$id = "delete from " . $dbname . ".sdm_5gajipokok where tahun='" . $periode . "' and karyawanid='" . $karyawanid . "' and idkomponen='" . $idKomp . "'";
+									$owlPDO->exec($id);
+									
+									if ($jumlah > 0) {
+										$in = "insert into " . $dbname . ".sdm_5gajipokok (`tahun`, `karyawanid`, `idkomponen`, `jumlah`, `kodeorg`, `updateby`) 
+										values ('" . $periode . "','" . $karyawanid . "','" . $idKomp . "','" . $jumlah . "','" . $kdOrg . "','" . $_SESSION['standard']['userid'] . "')";
+										$owlPDO->exec($in);
+									}
+									$berhasil++;
+								} else {
+									$gagal++;
+								}
+							} else {
+								break;
+							}
+						}
+						$i++;
+					}
+					$owlPDO->commit();
+					if($gagal > 0){
+						exit("Warning : Berhasil diupload: ".$berhasil." data. Gagal: ".$gagal." data (NIK tidak ditemukan di unit tsb).");
+					}
+				} catch (PDOException $e) {
+					$owlPDO->rollback();
+					echo "Gagal, " . addslashes($e->getMessage());
+				}
+			} else {
+				exit("Warning : Format file upload harus .xlsx");
+			}
+		} else {
+			exit("Warning : Terjadi error pada file upload.");
+		}
+	break;
+
+	case 'downloadTemplate':
+		require_once 'dompdf/PHPExcel.php';
+		$objPHPExcel = new PHPExcel();
+		$objPHPExcel->setActiveSheetIndex(0)
+					->setCellValue('A1', 'Periode (YYYY-MM)')
+					->setCellValue('B1', 'Unit Kerja')
+					->setCellValue('C1', 'NIK')
+					->setCellValue('D1', 'Nama Karyawan')
+					->setCellValue('E1', 'Tipe Karyawan')
+					->setCellValue('F1', 'Golongan')
+					->setCellValue('G1', 'Jabatan')
+					->setCellValue('H1', 'ID Komponen')
+					->setCellValue('I1', 'Jumlah Upah');
+
+		$thn = checkPostGet('thn', '');
+		$kdUnit = checkPostGet('kdUnit', '');
+		$tpKary = checkPostGet('tpKary', '');
+		$golongan = checkPostGet('golongan', '');
+		$jabatan = checkPostGet('jabatan', '');
+		$idKomponen = checkPostGet('idKomponen', '');
+		$karyawanId = checkPostGet('karyawanId', '');
+
+		$whrd = " and lokasitugas='" . $kdUnit . "'";
+		if ($tpKary != '') $whrd .= " and tipekaryawan='" . $tpKary . "'";
+		if ($golongan != '') $whrd .= " and kodegolongan='" . $golongan . "'";
+		if ($jabatan != '') $whrd .= " and kodejabatan='" . $jabatan . "'";
+		if ($karyawanId != '') $whrd .= " and karyawanid='" . $karyawanId . "'";
+		
+		// Query active employees
+		$s = "select nik, namakaryawan, tipekaryawan, kodegolongan, kodejabatan, karyawanid from " . $dbname . ".datakaryawan 
+			  where tanggalkeluar='0000-00-00' " . $whrd . " order by namakaryawan asc";
+		$r = fetchdata($s);
+		
+		$optGolName = makeOption($dbname, 'sdm_5golongan', 'kodegolongan,namagolongan');
+		
+		$row = 2;
+		foreach ($r as $baris) {
+			// Find existing upah
+			$upah = 0;
+			if ($idKomponen != '') {
+				$sUpah = "select jumlah from " . $dbname . ".sdm_5gajipokok where tahun='" . $thn . "' and karyawanid='" . $baris['karyawanid'] . "' and idkomponen='" . $idKomponen . "'";
+				$rUpah = fetchdata($sUpah);
+				if (count($rUpah) > 0) $upah = $rUpah[0]['jumlah'];
+			}
+			
+			$tipeKaryawan = isset($optTip[$baris['tipekaryawan']]) ? $baris['tipekaryawan'] . ' - ' . $optTip[$baris['tipekaryawan']] : $baris['tipekaryawan'];
+			$jabatanName = isset($optJbtn[$baris['kodejabatan']]) ? $baris['kodejabatan'] . ' - ' . $optJbtn[$baris['kodejabatan']] : $baris['kodejabatan'];
+			$komponenName = isset($optKomponen[$idKomponen]) ? $idKomponen . ' - ' . $optKomponen[$idKomponen] : $idKomponen;
+			$golonganName = isset($optGolName[$baris['kodegolongan']]) ? $baris['kodegolongan'] . ' - ' . $optGolName[$baris['kodegolongan']] : $baris['kodegolongan'];
+			
+			$objPHPExcel->getActiveSheet()->setCellValueExplicit('A' . $row, $thn, PHPExcel_Cell_DataType::TYPE_STRING);
+			$objPHPExcel->getActiveSheet()->setCellValueExplicit('B' . $row, $kdUnit, PHPExcel_Cell_DataType::TYPE_STRING);
+			$objPHPExcel->getActiveSheet()->setCellValueExplicit('C' . $row, $baris['nik'], PHPExcel_Cell_DataType::TYPE_STRING);
+			$objPHPExcel->getActiveSheet()->setCellValueExplicit('D' . $row, $baris['namakaryawan'], PHPExcel_Cell_DataType::TYPE_STRING);
+			$objPHPExcel->getActiveSheet()->setCellValueExplicit('E' . $row, $tipeKaryawan, PHPExcel_Cell_DataType::TYPE_STRING);
+			$objPHPExcel->getActiveSheet()->setCellValueExplicit('F' . $row, $golonganName, PHPExcel_Cell_DataType::TYPE_STRING);
+			$objPHPExcel->getActiveSheet()->setCellValueExplicit('G' . $row, $jabatanName, PHPExcel_Cell_DataType::TYPE_STRING);
+			$objPHPExcel->getActiveSheet()->setCellValueExplicit('H' . $row, $komponenName, PHPExcel_Cell_DataType::TYPE_STRING);
+			$objPHPExcel->getActiveSheet()->setCellValueExplicit('I' . $row, $upah, PHPExcel_Cell_DataType::TYPE_NUMERIC);
+			$row++;
+		}
+		
+		header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+		header('Content-Disposition: attachment;filename="template_gajipokok.xlsx"');
+		header('Cache-Control: max-age=0');
+		
+		$objWriter = PHPExcel_IOFactory::createWriter($objPHPExcel, 'Excel2007');
+		$objWriter->save('php://output');
+		exit;
+
 	case 'getKar':
 		$karyPdf = "karyawanid in (";
 		$optTipe2 = "<option value=''>" . $_SESSION['lang']['pilihdata'] . "</option>";
