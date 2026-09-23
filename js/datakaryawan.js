@@ -1753,8 +1753,15 @@ function getPage(){
 }
 
 function listpostingdata(page) {
+	unitfilterposting = document.getElementById('unitfilterposting');
+	periodefilterposting = document.getElementById('periodefilterposting');
+	unitfilterposting = unitfilterposting.options[unitfilterposting.selectedIndex].value;
+	periodefilterposting = periodefilterposting.options[periodefilterposting.selectedIndex].value;
+
 	param = '';
 	param += '&method=listpostingdata&page=' + page;
+	param += '&unitfilter=' + unitfilterposting;
+	param += '&periodefilter=' + periodefilterposting;
 	tujuan = 'sdm_slave_load_employee_list.php';
 	post_response_text(tujuan, param, respog);
 	function respog() {
@@ -1776,12 +1783,19 @@ function listpostingdata(page) {
 }
 
 function closedatakary(kodeorg, periode) {
-	param = '';
-	param += '&kodeorg='+kodeorg;
-	param += '&periode='+periode;
-	param += '&method=closedatakary';
-	tujuan = 'sdm_slave_load_employee_list.php';
-	post_response_text(tujuan, param, respog);
+	alertify.confirm("Posting","Proses ini akan menyimpan snapshot data seluruh karyawan unit <b>"+kodeorg+"</b> untuk periode <b>"+periode+"</b>. Anda yakin?",
+		function(){
+			param = '';
+			param += '&kodeorg='+kodeorg;
+			param += '&periode='+periode;
+			param += '&method=closedatakary';
+			tujuan = 'sdm_slave_load_employee_list.php';
+			post_response_text(tujuan, param, respog);
+		},
+		function(){
+			return;
+		}
+	);
 	function respog() {
 		if (con.readyState == 4) {
 			if (con.status == 200) {
@@ -1800,10 +1814,41 @@ function closedatakary(kodeorg, periode) {
 }
 
 function unclosedatakary(kodeorg, periode) {
+	alertify.confirm("Warning","Proses ini akan menghapus histori data karyawan (hasil posting) unit <b>"+kodeorg+"</b> periode <b>"+periode+"</b> yang sudah tersimpan. Anda yakin?",
+		function(){
+			param = '';
+			param += '&kodeorg='+kodeorg;
+			param += '&periode='+periode;
+			param += '&method=unclosedatakary';
+			tujuan = 'sdm_slave_load_employee_list.php';
+			post_response_text(tujuan, param, respog);
+		},
+		function(){
+			return;
+		}
+	);
+	function respog() {
+		if (con.readyState == 4) {
+			if (con.status == 200) {
+				busy_off();
+				if (!isSaveResponse(con.responseText)) {
+					alertify.alert(con.responseText);
+				} else {
+					listpostingdata();
+				}
+			} else {
+				busy_off();
+				error_catch(con.status);
+			}
+		}
+	}
+}
+
+function lihatKaryawanPindah(kodeorg, periode) {
 	param = '';
 	param += '&kodeorg='+kodeorg;
 	param += '&periode='+periode;
-	param += '&method=unclosedatakary';
+	param += '&method=listkaryawanpindah';
 	tujuan = 'sdm_slave_load_employee_list.php';
 	post_response_text(tujuan, param, respog);
 	function respog() {
@@ -1813,7 +1858,7 @@ function unclosedatakary(kodeorg, periode) {
 				if (!isSaveResponse(con.responseText)) {
 					alertify.alert(con.responseText);
 				} else {
-					listpostingdata();
+					alertify.popup("Karyawan Pindah - "+kodeorg+" "+periode,con.responseText).set({'resizable':true,'maximizable':true}).resizeTo('60%','60%');
 				}
 			} else {
 				busy_off();
@@ -1864,20 +1909,23 @@ function cariKaryawan(page) {
 	displayList();
 	txtsearch = trim(document.getElementById('txtsearch').value);
 	schorg = document.getElementById('schorg');
+	schjabatan = document.getElementById('schjabatan');
 	schtipe = document.getElementById('schtipe');
 	schstatus = document.getElementById('schstatus');
 	schjk = document.getElementById('schjk');
 	noktp = document.getElementById('noktpsch').value;
-	
-	
+
+
 	//schjk=schjk.options[schjk.selectedIndex].value;
 	schorg = schorg.options[schorg.selectedIndex].value;
+	schjabatan = schjabatan.options[schjabatan.selectedIndex].value;
 	schtipe = schtipe.options[schtipe.selectedIndex].value;
 	schstatus = schstatus.options[schstatus.selectedIndex].value;
 
 	param = 'txtsearch=' + txtsearch;
 	param += '&method=loaddata';
 	param += '&orgsearch=' + schorg;
+	param += '&jabatansearch=' + schjabatan;
 	param += '&tipesearch=' + schtipe;
 	param += '&statussearch=' + schstatus;
 	//patam+='&schjk='+schjk;

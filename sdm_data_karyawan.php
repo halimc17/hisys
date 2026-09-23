@@ -265,8 +265,17 @@ $str = "select * from ".$dbname.".sdm_5tipekaryawan a where aktif=1 and id in (s
 $res=$owlPDO->query($str) or die(print " Gagal: ".PDOException::getMessage());
 $res->setFetchMode(PDO::FETCH_OBJ);
 while($bar=$res->fetch()){
-	$opttipekaryawan.="<option value='".$bar->id."'>".$bar->tipe."</option>";	
-}	
+	$opttipekaryawan.="<option value='".$bar->id."'>".$bar->tipe."</option>";
+}
+
+$optjabatansch="<option value=''>".$_SESSION['lang']['pilihdata']."</option>";
+$str = "select * from ".$dbname.".sdm_5jabatan a left join ".$dbname.".sdm_5jabatan_detail b on a.kodejabatan=b.kodejabatan where (b.unittipe='".$_SESSION['empl']['tipelokasitugas']."' or b.unittipe='GLOBAL') and aktif=1 and namajabatan not like '%available' order by namajabatan";
+$res=$owlPDO->query($str) or die(print " Gagal: ".PDOException::getMessage());
+$res->setFetchMode(PDO::FETCH_OBJ);
+while($bar=$res->fetch()){
+	$optjabatansch.="<option value='".$bar->kodejabatan."'>".$bar->namajabatan."</option>";
+}
+
 echo"<table>
 		<tr valign=middle>
 			<td align=center style='width:75px;cursor:pointer;' onclick=displayFormInput()>
@@ -284,9 +293,10 @@ echo"<table>
 				<fieldset><legend>".$_SESSION['lang']['find']."</legend>"; 
 				echo $_SESSION['lang']['nama']." : <input type=text id=txtsearch onkeyup=cariKaryawan(1); size=20 maxlength=30 class=myinputtext> ";
 				echo $_SESSION['lang']['noktp']." : <input type=text id=noktpsch onkeyup=cariKaryawan(1); size=15 maxlength=30 class=myinputtext> ";
-				echo $_SESSION['lang']['lokasitugas']." : <select id=schorg style='width:100px' onchange=cariKaryawan(1);><option value='' >".$_SESSION['lang']['all']."</option>".$optAll."</select> ";
-				echo $_SESSION['lang']['tipekaryawan']." : <select id=schtipe  style='width:75px' onchange=cariKaryawan(1);><option value=''>".$_SESSION['lang']['all']."</option>".$opttipekaryawan."</select> ";
-				echo $_SESSION['lang']['status']." : <select id=schstatus  style='width:75px' onchange=cariKaryawan(1);><option value=''>".$_SESSION['lang']['all']."</option><option value='0000-00-00'>".$_SESSION['lang']['aktif']."</option><option value='*'>".$_SESSION['lang']['tidakaktif']."</select> ";
+				echo $_SESSION['lang']['lokasitugas']." : <select id=schorg style='width:150px' onchange=cariKaryawan(1);><option value='' >".$_SESSION['lang']['all']."</option>".$optAll."</select> ";
+				echo $_SESSION['lang']['jabatan']." : <select id=schjabatan style='width:150px' onchange=cariKaryawan(1);><option value=''>".$_SESSION['lang']['all']."</option>".$optjabatansch."</select> ";
+				echo $_SESSION['lang']['tipekaryawan']." : <select id=schtipe  style='width:150px' onchange=cariKaryawan(1);><option value=''>".$_SESSION['lang']['all']."</option>".$opttipekaryawan."</select> ";
+				echo $_SESSION['lang']['status']." : <select id=schstatus  style='width:150px' onchange=cariKaryawan(1);><option value=''>".$_SESSION['lang']['all']."</option><option value='0000-00-00'>".$_SESSION['lang']['aktif']."</option><option value='*'>".$_SESSION['lang']['tidakaktif']."</select> ";
 				echo"<button class=mybutton onclick=cariKaryawan(1)>".$_SESSION['lang']['find']."</button>";
 				echo"</fieldset>
 			</td>
@@ -1412,6 +1422,7 @@ echo"
          <thead>
            <tr class=rowheader>
              <th align=center>No.</th>
+                 <th align=center>Foto</th>
                  <th align=center>".$_SESSION['lang']['nik']."</th>
                  <th align=center>".$_SESSION['lang']['nama']."</th>
                  <th align=center>".$_SESSION['lang']['functionname']."</th>
@@ -1425,9 +1436,9 @@ echo"
                  <th align=center>".str_replace(" ","<br>",$_SESSION['lang']['statusperkawinan'])."</th>
                  <th align=center>".str_replace(" ","<br>",$_SESSION['lang']['jumlahanak'])."</th>
                  <th align=center>".$_SESSION['lang']['tanggalmasuk']."</th>
-                 <th align=center>".$_SESSION['lang']['tanggalkeluar']."</th>
                  <th align=center>".str_replace(" ","<br>",$_SESSION['lang']['tipekaryawan'])."</th>
                  <th align=center>".$_SESSION['lang']['status']." ".$_SESSION['lang']['karyawan']."</th>
+                 <th align=center>".$_SESSION['lang']['tanggalkeluar']."</th>
                  <th align=center colspan=3>Action</th>
            </tr>
          </thead>
@@ -1442,16 +1453,33 @@ echo"
          </tfoot>
 		</table>
      </div>";
+$optPeriodePosting = "<option value=''>".$_SESSION['lang']['all']."</option>";
+$strPeriodePosting = "select distinct periode from ".$dbname.".sdm_5periodegaji where kodeorg in (".getOrgDetail(2).") order by periode desc";
+$resPeriodePosting = fetchdata($strPeriodePosting);
+foreach($resPeriodePosting as $bar){
+	$optPeriodePosting .= "<option value='".$bar['periode']."'>".$bar['periode']."</option>";
+}
+
 echo"<div id='postingdata' style='display:none;height:450px;'>";
+echo"<fieldset style='width:400px;'><legend>".$_SESSION['lang']['find']."</legend>
+		".$_SESSION['lang']['lokasitugas']." : <select id=unitfilterposting style='width:150px' onchange=listpostingdata(0);><option value=''>".$_SESSION['lang']['all']."</option>".$optAll."</select>
+		".$_SESSION['lang']['periode']." : <select id=periodefilterposting style='width:100px' onchange=listpostingdata(0);>".$optPeriodePosting."</select>
+	</fieldset>";
 echo"
-		<table class=sortable border=0 cellspacing=1 cellpadding=2>
+		<table class=sortable border=0 cellspacing=1 cellpadding=2 width=100%>
          <thead>
            <tr class=rowheader>
              <th align=center width=50px>No.</th>
                  <th align=center width=100px>".$_SESSION['lang']['periode']."</th>
                  <th align=center>".$_SESSION['lang']['kodeorganisasi']."</th>
                  <th align=center>".$_SESSION['lang']['namaorganisasi']."</th>
+                 <th align=center>Karyawan Hist<br>Tersimpan</th>
+                 <th align=center>Karyawan Aktif<br>Saat Ini</th>
+                 <th align=center>Karyawan Keluar<br>Periode Ini</th>
                  <th align=center>".$_SESSION['lang']['status']."</th>
+                 <th align=center>Keterangan</th>
+                 <th align=center>Diposting Oleh</th>
+                 <th align=center>Tanggal Posting</th>
                  <th align=center>Action</th>
            </tr>
          </thead>
