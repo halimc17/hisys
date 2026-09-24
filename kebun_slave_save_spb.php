@@ -1191,14 +1191,9 @@ switch($proses){
 			<img src=images/skyblue/zoom.png class=zImgBtn  title='Preview' onclick=\"previewdata('".$rlvhc['nospb']."',event)\">
 		</td>";
 
-		#ikon foto SPB (redup bila belum ada foto)
-		$adafoto=false;
-		if($rlvhc['noreferensi']!=''){
-			$mf=fetchdata("select ffbdocument from ".$dbname2.".kebun_spbht_mobile where nospb='".$rlvhc['noreferensi']."'");
-			$adafoto=(count($mf)>0 and $mf[0]['ffbdocument']!='');
-		}
+		#ikon foto SPB
 		$tab.="<td valign=top align=center width=30px>
-			<img src=images/application/application_view_gallery.png class=zImgBtn title='".($adafoto ? 'Foto SPB' : 'Foto SPB (belum ada foto)')."' style='opacity:".($adafoto ? '1' : '0.3')."' onclick=\"fotospb('".$rlvhc['nospb']."')\">
+			<img src=images/application/application_view_gallery.png class=zImgBtn title='Foto SPB' onclick=\"fotospb('".$rlvhc['nospb']."')\">
 		</td>";
 
 		## Proporsi Tahun Tanam (HANYA UNTUK DMA DAN TEMAN - TEMAN NYA, PALMA GAK BOLEH IKUT)
@@ -2298,19 +2293,23 @@ switch($proses){
 		}
 		echo "<div style='text-align:center'>";
 		echo $kotak($arrTujuan[$tujuanspb],$noSpb.'<br>'.tanggalnormal($rShwData2['tanggal']),$fotoini);
+		if($fotoini==''){
+			echo "<div style='font-size:11px;margin-top:4px'>SPB ini dibuat di timbangan atau manual, jadi tidak ada fotonya.</div>";
+		}
 		if(count($anak)>0){
 			echo "<div style='width:0;height:16px;border-left:1px solid #6aa0c7;margin:0 auto'></div>";
 			echo "<div style='border-top:1px solid #6aa0c7;margin:0 100px 10px 100px'></div>";
 			echo implode('',$anak);
 		}else{
+			$ketasal="";
 			if(count($mob)>0){
-				$ketasal="SPB ini tidak merujuk SPB lain.";
+				$ketasal="SPB ini tidak berasal dari SPB lain.";
 			}elseif($noref!=''){
-				$ketasal="No. Referensi mobile ada, tetapi data SPB-nya tidak ditemukan di data mobile.";
-			}else{
-				$ketasal="SPB diinput manual (tanpa referensi mobile), jadi tidak ada foto dan rujukan.";
+				$ketasal="Data SPB ini tidak ditemukan di mobile.";
 			}
-			echo "<div style='font-size:11px;margin-top:8px'>".$ketasal."</div>";
+			if($ketasal!=''){
+				echo "<div style='font-size:11px;margin-top:8px'>".$ketasal."</div>";
+			}
 		}
 		echo "</div>";
 	}
