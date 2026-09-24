@@ -43,7 +43,6 @@ function loaddata(num)
 					alert(con.responseText);
 				}else{
 					document.getElementById('container').innerHTML=con.responseText;
-					batal();
 				}
 			}else{
 				busy_off();
@@ -99,7 +98,12 @@ function simpan(){
 		alert('Warning : Lengkapi Pengisian.');
 		return;
 	}
-	
+
+	if(maxstok!='' && parseFloat(maxstok)>0 && parseFloat(minstok||0)>parseFloat(maxstok)){
+		alert('Warning : Stok minimum tidak boleh lebih besar dari stok maksimum.');
+		return;
+	}
+
 	if(confirm('Anda yakin simpan data ini?')){
 		post_response_text(tujuan, param, respog);			
 	}	
@@ -112,6 +116,7 @@ function simpan(){
 					alert(con.responseText);
 				}else{
 					alert("Success");
+					batal();
 					loaddata(0);
 				}
 			}else{
@@ -243,4 +248,50 @@ function getsatuan(){
 			}
 		}	
 	}
+}
+
+function downloadTemplate(){
+	crpt=document.getElementById('crpt').value;
+	crgudang=document.getElementById('crgudang').value;
+	crklbarang=document.getElementById('crklbarang').value;
+	crbarang=document.getElementById('crbarang').value;
+
+	param='method=downloadTemplate&crpt='+encodeURIComponent(crpt)+'&crgudang='+encodeURIComponent(crgudang)+'&crklbarang='+encodeURIComponent(crklbarang)+'&crbarang='+encodeURIComponent(crbarang);
+	window.location.href='log_slave_5minstock.php?'+param;
+}
+
+function submitUpload(){
+	var file=document.getElementById('filex').files[0];
+	if(!file){
+		alert('Warning : Silakan pilih file terlebih dahulu!');
+		return;
+	}
+	if(!confirm('Data pada file akan disimpan: barang yang sudah ada diperbarui, yang belum ada ditambahkan. Anda yakin?')){
+		return;
+	}
+
+	var formdata=new FormData();
+	formdata.append('file',file);
+	formdata.append('method','uploadData');
+
+	busy_on();
+	var xhr=createXMLHttpRequest();
+	xhr.open('POST','log_slave_5minstock.php?method=uploadData',true);
+	xhr.onreadystatechange=function(){
+		if(xhr.readyState==4){
+			busy_off();
+			if(xhr.status==200){
+				if(!isSaveResponse(xhr.responseText)){
+					alert(xhr.responseText);
+				}else{
+					alert(xhr.responseText);
+					document.getElementById('filex').value='';
+					loaddata(0);
+				}
+			}else{
+				error_catch(xhr.status);
+			}
+		}
+	};
+	xhr.send(formdata);
 }
