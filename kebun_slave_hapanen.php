@@ -23,19 +23,102 @@ $mode         = checkPostGet('mode', '');
 $totaljjg = checkPostGet('totaljjg', '');
 $karyawansch = checkPostGet('karyawansch', '');
 $tglsch    = tanggalsystem(checkPostGet('tglsch', ''));
+$unitsch   = checkPostGet('unitsch', '');
+$periodesch = checkPostGet('periodesch', '');
 $nmorg     = makeOption($dbname, 'organisasi', 'kodeorganisasi,namaorganisasi');
 $nmindk     = makeOption($dbname, 'organisasi', 'indukblok,namaindukblok');
 $nmkar     = makeOption($dbname, 'datakaryawan', 'karyawanid,namakaryawan');
 $jab   = getPostingJabatan('panen');
+
+function hapanenFilterWhere($karyawansch, $tglsch, $unitsch, $periodesch)
+{
+    $where = "";
+    if ($karyawansch != '') {
+        $where .= " and namamandor like '%" . $karyawansch . "%' ";
+    }
+    if ($tglsch != '') {
+        $where .= " and tanggal='" . $tglsch . "' ";
+    }
+    if ($unitsch != '') {
+        $where .= " and left(kodeorg,4)='" . $unitsch . "' ";
+    }
+    if (preg_match('/^\d{4}-\d{2}$/', $periodesch)) {
+        $where .= " and tanggal between '" . $periodesch . "-01' and '" . date('Y-m-t', strtotime($periodesch . '-01')) . "' ";
+    }
+    return $where;
+}
+
+function hapanenUnitScope()
+{
+    global $dbname;
+    $petaInduk = array('CAR' => "'CAR','LAN'", 'LAN' => "'CAR','LAN'", 'DMA' => "'DMA','MHA'", 'MHA' => "'DMA','MHA'", 'PPP' => "'PPP'");
+    $pt = getindukPT($_SESSION['empl']['lokasitugas']);
+    if (!isset($petaInduk[$pt])) {
+        return "''";
+    }
+    $res = fetchdata("select kodeorganisasi from " . $dbname . ".organisasi where induk in (" . $petaInduk[$pt] . ")");
+    $list = array();
+    foreach ($res as $v) {
+        $list[] = "'" . $v['kodeorganisasi'] . "'";
+    }
+    return count($list) ? implode(',', $list) : "''";
+}
+
+function hapanenExportRows($where)
+{
+    global $dbname;
+    $sql = "select g.nikmandor, g.tanggal, g.namamandor, g.hapanen, g.posting, g.postingby, k.subbagian, p.namakaryawan as namaposting
+        from (select nikmandor,tanggal,max(namamandor) as namamandor,sum(hapanen) as hapanen,min(posting) as posting,max(postingby) as postingby
+            from " . $dbname . ".kebun_rekaphancakpanen_vw
+            where 1=1 and nik in (select karyawanid from " . $dbname . ".datakaryawan where lokasitugas in (" . hapanenUnitScope() . ")) " . $where . "
+            group by tanggal,nikmandor) g
+        left join " . $dbname . ".datakaryawan k on k.karyawanid=g.nikmandor
+        left join " . $dbname . ".datakaryawan p on p.karyawanid=g.postingby
+        order by g.tanggal desc, g.namamandor asc, g.nikmandor asc";
+    return fetchdata($sql);
+}
+
+function hapanenFilterInfo($nmorg, $karyawansch, $tglsch, $unitsch, $periodesch)
+{
+    $info = array();
+    $info[] = "Unit: " . ($unitsch != '' ? $unitsch . " - " . $nmorg[$unitsch] : "Semua");
+    $info[] = "Periode: " . ($periodesch != '' ? $periodesch : "Semua");
+    if ($tglsch != '') {
+        $info[] = "Tanggal: " . tanggalnormal($tglsch);
+    }
+    if ($karyawansch != '') {
+        $info[] = "Mandor: " . $karyawansch;
+    }
+    return implode("   |   ", $info);
+}
+
+function hapanenPeriodeTertutup($tanggal, $nikmandor)
+{
+    global $dbname;
+    $resU = fetchdata("select distinct left(kodeorg,4) as unit from " . $dbname . ".kebun_rekaphancakpanen where tanggal='" . $tanggal . "' and nikmandor='" . $nikmandor . "'");
+    $units = array();
+    foreach ($resU as $v) {
+        $units[] = "'" . $v['unit'] . "'";
+    }
+    if (count($units) == 0) {
+        return '';
+    }
+    $in = implode(',', $units);
+    $akt = fetchdata("select count(*) as c from " . $dbname . ".setup_periodeakuntansi where kodeorg in (" . $in . ") and tutupbuku='1' and '" . $tanggal . "' between tanggalmulai and tanggalsampai");
+    $gaji = fetchdata("select count(*) as c from " . $dbname . ".sdm_5periodegaji where kodeorg in (" . $in . ") and sudahproses<>0 and '" . $tanggal . "' between tanggalmulai and tanggalsampai");
+    $alasan = array();
+    if ($akt[0]['c'] > 0) {
+        $alasan[] = 'Periode Akuntansi';
+    }
+    if ($gaji[0]['c'] > 0) {
+        $alasan[] = 'Periode Gaji';
+    }
+    return count($alasan) ? implode(' & ', $alasan) . ' sudah ditutup' : '';
+}
+
 switch ($method) {
     case 'loaddata':
-        $where = "";
-        if ($karyawansch != '') {
-            $where .= " and namamandor like '%" . $karyawansch . "%' ";
-        }
-        if ($tglsch != '') {
-            $where .= " and tanggal='" . $tglsch . "' ";
-        }
+        $where = hapanenFilterWhere($karyawansch, $tglsch, $unitsch, $periodesch);
         $limit = 10;
         $page = 0;
         $_POST['page'] = isset($_POST['page']) ? $_POST['page'] : '0';
@@ -107,14 +190,14 @@ switch ($method) {
 
         $offset = $page * $limit;
         $maxdisplay = ($page * $limit);
-        $sql = "select count(*) as jmlhrow from " . $dbname . ".kebun_rekaphancakpanen_vw where 1=1 and nik in (select karyawanid from " . $dbname . ".datakaryawan where lokasitugas in (" . $dataunitx . "))  " . $where . " order by tanggal desc, namamandor asc";
-        $res = $owlPDO->query($sql) or die(print " Gagal: " . PDOException::getMessage());
-        $jlhbrs = owlBaris($res);
+        $sql = "select count(*) as jmlhrow from (select 1 from " . $dbname . ".kebun_rekaphancakpanen_vw where 1=1 and nik in (select karyawanid from " . $dbname . ".datakaryawan where lokasitugas in (" . $dataunitx . "))  " . $where . " group by tanggal,nikmandor) t";
+        $resc = fetchdata($sql);
+        $jlhbrs = (int)$resc[0]['jmlhrow'];
 
         $no = 0;
-        $str = "SELECT nik,tanggal,nikmandor,namamandor,sum(hapanen) as hapanen,posting,postingby,kodeorg FROM " . $dbname . ".kebun_rekaphancakpanen_vw
-		where 1=1 and nik in (select karyawanid from " . $dbname . ".datakaryawan where lokasitugas in (" . $dataunitx . ")) " . $where . " group by tanggal,namamandor 
-        order by tanggal desc, namamandor asc limit " . $offset . "," . $limit . "";
+        $str = "SELECT nikmandor,tanggal,max(namamandor) as namamandor,sum(hapanen) as hapanen,min(posting) as posting,max(postingby) as postingby FROM " . $dbname . ".kebun_rekaphancakpanen_vw
+		where 1=1 and nik in (select karyawanid from " . $dbname . ".datakaryawan where lokasitugas in (" . $dataunitx . ")) " . $where . " group by tanggal,nikmandor
+        order by tanggal desc, namamandor asc, nikmandor asc limit " . $offset . "," . $limit . "";
         $tab = "";
         $no = $maxdisplay;
         $res = $owlPDO->query($str) or die(print " Gagal: " . PDOException::getMessage());
@@ -130,7 +213,8 @@ switch ($method) {
                 $tab .= "<tr class=rowcontent  id=tr_$no>";
                 $tab .= "<td align=center>" . $no . "</td>";
                 $tab .= "<td align=center>" . tanggalnormal($bar['tanggal']) . "</td>";
-                $tab .= "<td align=center>" . getKary($bar['nikmandor'], "subbagian") . " {$bar['nikmandor']}</td>";
+                $divmandor = getKary($bar['nikmandor'], "subbagian");
+                $tab .= "<td align=left>" . ($divmandor != '' ? $divmandor . " - " . getNamaOrg($divmandor) : "-") . "</td>";
                 // $tab.="<td>" . $bar['kodeorg'] . " - " .  $nmindk[$bar['kodeorg']] . "</td>";
                 $tab .= "<td>" . $bar['namamandor'] . "</td>";
                 $tab .= "<td  align=right>" . @number_format($bar['hapanen'], 2) . "</td>";
@@ -143,10 +227,15 @@ switch ($method) {
                     $isi .= "<td align=center><img src=images/icons/04/16/01.png class=zImgBtn class=zImgBtn height='30'  title='Posting' 
                         onclick=\"posting('" . $bar['tanggal'] . "', '" . $bar['nikmandor'] . "','" . $page . "');\" ></td>";
                 } else {
-                    if (in_array($_SESSION['empl']['jabatan'], $jab)) {
+                    $tertutup = hapanenPeriodeTertutup($bar['tanggal'], $bar['nikmandor']);
+                    if ($tertutup != '') {
+                        $icon = "images/icons/04/16/02.png";
+                        $title = "Closed - " . $tertutup;
+                        $unpost = '';
+                    } elseif (in_array($_SESSION['empl']['jabatan'], $jab)) {
                         $icon = "images/icons/04/16/04.png";
                         $title = "Unposting";
-                        $unpost = " onclick=\"unposting('" . $bar['nikmandor'] . "','" . $bar['tanggal'] . "','" . $bar['nik'] . "','" . $bar['kodeorg'] . "','" . $page . "');\" ";
+                        $unpost = " onclick=\"unposting('" . $bar['nikmandor'] . "','" . $bar['tanggal'] . "','" . $page . "');\" ";
                     } else {
                         $icon = "images/icons/04/16/02.png";
                         $title = "Posted";
@@ -156,7 +245,7 @@ switch ($method) {
                     $isi .= "<td align=center><img src=" . $icon . " class=zImgBtn class=zImgBtn height='30'  title='" . $title . "' " . $unpost . " ></td>";
                 }
                 $isi .= "<td align=center><img src=images/skyblue/zoom.png class=zImgBtn class=zImgBtn height='30'  title='View HTML' 
-                        onclick=\"html('" . $bar['nikmandor'] . "','" . $bar['tanggal'] . "','" . $bar['kodeorg'] . "');\" ></td>";
+                        onclick=\"html('" . $bar['nikmandor'] . "','" . $bar['tanggal'] . "');\" ></td>";
                 $tab .= $isi;
                 $tab .= "</tr>";
             }
@@ -173,6 +262,122 @@ switch ($method) {
         }
         $footd = createpaging($jlhbrs, $limit, $page, '15', 'loaddata', 'getPage');
         echo $tab . "####" . $footd;
+        break;
+
+    case 'excel':
+        require_once 'dompdf/PHPExcel.php';
+        require_once 'dompdf/PHPExcel/IOFactory.php';
+        $rows = hapanenExportRows(hapanenFilterWhere($karyawansch, $tglsch, $unitsch, $periodesch));
+
+        $objPHPExcel = new PHPExcel();
+        $ws = $objPHPExcel->setActiveSheetIndex(0);
+        $ws->setTitle('Ha Panen');
+        $ws->setCellValue('A1', 'REKAP HA PANEN');
+        $ws->setCellValue('A2', hapanenFilterInfo($nmorg, $karyawansch, $tglsch, $unitsch, $periodesch));
+        $ws->getStyle('A1')->getFont()->setBold(true)->setSize(13);
+
+        $judul = array('A' => 'No', 'B' => 'Tanggal', 'C' => 'Divisi', 'D' => 'Mandor Panen', 'E' => 'Total Luas Panen (Ha)', 'F' => 'Status', 'G' => 'Diposting Oleh');
+        $lebar = array('A' => 6, 'B' => 12, 'C' => 38, 'D' => 28, 'E' => 20, 'F' => 14, 'G' => 26);
+        foreach ($judul as $col => $txt) {
+            $ws->setCellValue($col . '4', $txt);
+            $ws->getColumnDimension($col)->setWidth($lebar[$col]);
+        }
+        $ws->getStyle('A4:G4')->getFont()->setBold(true);
+        $ws->getStyle('A4:G4')->getFill()->setFillType(PHPExcel_Style_Fill::FILL_SOLID)->getStartColor()->setRGB('DEDEDE');
+
+        $row = 5;
+        $no = 0;
+        $total = 0;
+        foreach ($rows as $bar) {
+            $no++;
+            $total += $bar['hapanen'];
+            $div = $bar['subbagian'] != '' ? $bar['subbagian'] . " - " . $nmorg[$bar['subbagian']] : "-";
+            $ws->setCellValueExplicit('A' . $row, $no, PHPExcel_Cell_DataType::TYPE_NUMERIC);
+            $ws->setCellValueExplicit('B' . $row, tanggalnormal($bar['tanggal']), PHPExcel_Cell_DataType::TYPE_STRING);
+            $ws->setCellValueExplicit('C' . $row, $div, PHPExcel_Cell_DataType::TYPE_STRING);
+            $ws->setCellValueExplicit('D' . $row, $bar['namamandor'], PHPExcel_Cell_DataType::TYPE_STRING);
+            $ws->setCellValueExplicit('E' . $row, $bar['hapanen'], PHPExcel_Cell_DataType::TYPE_NUMERIC);
+            $ws->setCellValueExplicit('F' . $row, $bar['posting'] == 1 ? 'Posted' : 'Belum Posting', PHPExcel_Cell_DataType::TYPE_STRING);
+            $ws->setCellValueExplicit('G' . $row, $bar['posting'] == 1 ? (string)$bar['namaposting'] : '', PHPExcel_Cell_DataType::TYPE_STRING);
+            $row++;
+        }
+        $ws->setCellValue('A' . $row, 'Total');
+        $ws->setCellValueExplicit('E' . $row, $total, PHPExcel_Cell_DataType::TYPE_NUMERIC);
+        $ws->getStyle('A' . $row . ':G' . $row)->getFont()->setBold(true);
+        $ws->getStyle('E5:E' . $row)->getNumberFormat()->setFormatCode('#,##0.00');
+
+        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        header('Content-Disposition: attachment;filename="HaPanen_' . date('YmdHis') . '.xlsx"');
+        header('Cache-Control: max-age=0');
+        $objWriter = PHPExcel_IOFactory::createWriter($objPHPExcel, 'Excel2007');
+        $objWriter->save('php://output');
+        exit;
+        break;
+
+    case 'pdf':
+        require_once('lib/fpdf.php');
+        $rows = hapanenExportRows(hapanenFilterWhere($karyawansch, $tglsch, $unitsch, $periodesch));
+
+        class PDFHapanen extends FPDF
+        {
+            public $judul = '';
+            public $info = '';
+            public $lebar = array(10, 24, 72, 54, 30, 24, 46);
+            public $kolom = array('No', 'Tanggal', 'Divisi', 'Mandor Panen', 'Total Luas (Ha)', 'Status', 'Diposting Oleh');
+
+            function Header()
+            {
+                $this->SetFont('Arial', 'B', 12);
+                $this->Cell(0, 6, $this->judul, 0, 1, 'L');
+                $this->SetFont('Arial', '', 8);
+                $this->Cell(0, 5, $this->info, 0, 1, 'L');
+                $this->Ln(1);
+                $this->SetFont('Arial', 'B', 8);
+                $this->SetFillColor(222, 222, 222);
+                foreach ($this->kolom as $i => $txt) {
+                    $this->Cell($this->lebar[$i], 6, $txt, 1, 0, 'C', true);
+                }
+                $this->Ln();
+            }
+
+            function Footer()
+            {
+                $this->SetY(-12);
+                $this->SetFont('Arial', 'I', 7);
+                $this->Cell(0, 5, 'Print Time: ' . date('d-m-Y H:i:s') . '   By: ' . $_SESSION['empl']['name'] . '   Page ' . $this->PageNo() . '/{nb}', 0, 0, 'L');
+            }
+        }
+
+        $pdf = new PDFHapanen('L', 'mm', 'A4');
+        $pdf->judul = 'REKAP HA PANEN';
+        $pdf->info = hapanenFilterInfo($nmorg, $karyawansch, $tglsch, $unitsch, $periodesch);
+        $pdf->AliasNbPages();
+        $pdf->SetMargins(10, 10, 10);
+        $pdf->SetAutoPageBreak(true, 15);
+        $pdf->AddPage();
+        $pdf->SetFont('Arial', '', 8);
+
+        $w = $pdf->lebar;
+        $no = 0;
+        $total = 0;
+        foreach ($rows as $bar) {
+            $no++;
+            $total += $bar['hapanen'];
+            $div = $bar['subbagian'] != '' ? $bar['subbagian'] . " - " . $nmorg[$bar['subbagian']] : "-";
+            $pdf->Cell($w[0], 5, $no, 1, 0, 'C');
+            $pdf->Cell($w[1], 5, tanggalnormal($bar['tanggal']), 1, 0, 'C');
+            $pdf->Cell($w[2], 5, substr($div, 0, 44), 1, 0, 'L');
+            $pdf->Cell($w[3], 5, substr($bar['namamandor'], 0, 34), 1, 0, 'L');
+            $pdf->Cell($w[4], 5, number_format($bar['hapanen'], 2), 1, 0, 'R');
+            $pdf->Cell($w[5], 5, $bar['posting'] == 1 ? 'Posted' : 'Belum Posting', 1, 0, 'C');
+            $pdf->Cell($w[6], 5, $bar['posting'] == 1 ? substr((string)$bar['namaposting'], 0, 28) : '', 1, 1, 'L');
+        }
+        $pdf->SetFont('Arial', 'B', 8);
+        $pdf->Cell($w[0] + $w[1] + $w[2] + $w[3], 6, 'Total', 1, 0, 'C');
+        $pdf->Cell($w[4], 6, number_format($total, 2), 1, 0, 'R');
+        $pdf->Cell($w[5] + $w[6], 6, '', 1, 1);
+        $pdf->Output('HaPanen_' . date('YmdHis') . '.pdf', 'I');
+        exit;
         break;
 
     case 'html':
@@ -589,8 +794,12 @@ switch ($method) {
         break;
 
     case 'unposting':
+        $tertutup = hapanenPeriodeTertutup($tgl2, $nikmandor);
+        if ($tertutup != '') {
+            exit("Warning : Unposting ditolak, " . $tertutup . " (tanggal " . tanggalnormal($tgl2) . ").");
+        }
         $str = "UPDATE $dbname.kebun_rekaphancakpanen SET posting='0', postingby='0' 
-                WHERE tanggal='" . $tgl2 . "' AND nikmandor='" . $nikmandor . "' AND nik='" . $nik . "' AND kodeorg='" . $kodeorg . "' ";
+                WHERE tanggal='" . $tgl2 . "' AND nikmandor='" . $nikmandor . "'";
         try {
             $owlPDO->exec($str);
         } catch (PDOException $e) {

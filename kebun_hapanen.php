@@ -100,6 +100,28 @@ while ($bar = $qry->fetch()) {
     }
 }
 
+##FILTER UNIT & PERIODE UNTUK LIST (data umumnya hasil download dari mobile)
+$optUnitSch = "<option value=''>" . $_SESSION['lang']['all'] . "</option>";
+if (isset($dataunitx) && $dataunitx != '') {
+    $resUnit = fetchdata("select kodeorganisasi,namaorganisasi from " . $dbname . ".organisasi where tipe='KEBUN' and kodeorganisasi in (" . $dataunitx . ") order by kodeorganisasi");
+    foreach ($resUnit as $vu) {
+        $optUnitSch .= "<option value='" . $vu['kodeorganisasi'] . "'>" . $vu['kodeorganisasi'] . " - " . $vu['namaorganisasi'] . "</option>";
+    }
+}
+$periodeNow = date('Y-m');
+$listPeriode = array();
+$resPeriode = fetchdata("select distinct date_format(tanggal,'%Y-%m') as periode from " . $dbname . ".kebun_rekaphancakpanen order by periode desc");
+foreach ($resPeriode as $vp) {
+    $listPeriode[$vp['periode']] = $vp['periode'];
+}
+$listPeriode[$periodeNow] = $periodeNow;
+krsort($listPeriode);
+$optPeriodeSch = "<option value=''>" . $_SESSION['lang']['all'] . "</option>";
+foreach ($listPeriode as $vp) {
+    $sel = ($vp == $periodeNow) ? " selected" : "";
+    $optPeriodeSch .= "<option value='" . $vp . "'" . $sel . ">" . $vp . "</option>";
+}
+
 ##HEADER UNTUK BUAT BARU SAMA LIST-->
 OPEN_BOX('', '<span class=judul>' . getMenu('kebun_hapanen') . '</span>');
 echo "<div id=action_list>"; //buka div
@@ -116,21 +138,30 @@ echo "<table>
             <fieldset><legend>" . $_SESSION['lang']['find'] . "</legend> 
 	
          <table>
-				<tr>
-					<td>" . $_SESSION['lang']['mandorpanen'] . "</td> 
-					<td>:</td>
-					<td>
-                        <input type=text class=myinputtext id=karyawansch onkeypress='return tanpa_kutip(event)' style=\"width:115px;\"/>
-                    </td>
-				</tr>
-				<tr>
-                    <td>" . $_SESSION['lang']['tanggal'] . "</td> 
-                    <td>:</td>
-                    <td><input type=text class=myinputtext  id=tglsch onmousemove=setCalendar(this.id) onkeypress=return false;   style=\"width:115px;\" readonly/></td>
-            </tr>
-                ";
-
-echo "<tr><td><td><td><button class=mybutton onclick=loaddata(0)>" . $_SESSION['lang']['find'] . "</button></td></td></tr></table>";
+					<tr>
+						<td>" . $_SESSION['lang']['mandorpanen'] . "</td>
+						<td>:</td>
+						<td><input type=text class=myinputtext id=karyawansch onkeypress='return tanpa_kutip(event)' style=\"width:194px;\"/></td>
+						<td style='padding-left:20px;'>" . $_SESSION['lang']['tanggal'] . "</td>
+						<td>:</td>
+						<td><input type=text class=myinputtext id=tglsch onmousemove=setCalendar(this.id) onkeypress=return false; style=\"width:194px;\" readonly/></td>
+					</tr>
+					<tr>
+						<td>Unit</td>
+						<td>:</td>
+						<td><select id=unitsch style=\"width:200px;\" onchange=loaddata(0)>" . $optUnitSch . "</select></td>
+						<td style='padding-left:20px;'>" . $_SESSION['lang']['periode'] . "</td>
+						<td>:</td>
+						<td><select id=periodesch data-default='" . $periodeNow . "' style=\"width:200px;\" onchange=loaddata(0)>" . $optPeriodeSch . "</select></td>
+					</tr>
+					<tr>
+						<td colspan=2></td>
+						<td colspan=4>
+							<button class=mybutton onclick=loaddata(0)>" . $_SESSION['lang']['find'] . "</button>
+							<button class=mybutton onclick=exportPdf()>PDF</button>
+							<button class=mybutton onclick=exportExcel()>Excel</button>
+						</td>
+					</tr></table>";
 echo "</fieldset></td>";
 echo "</tr>
 </table> ";
