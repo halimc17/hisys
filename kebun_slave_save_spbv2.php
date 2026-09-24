@@ -1183,6 +1183,16 @@ switch ($proses) {
 			<img hidden src=images/skyblue/zoom.png class=zImgBtn  title='Preview detail' onclick=\"previewdata2('" . $rlvhc['nospb'] . "','html',event)\">
 			<img src=images/excel.jpg class=zImgBtn title='MS.Excel'onclick=\"previewdata2('" . $rlvhc['nospb'] . "','excel',event)\">
 		</td>";
+
+		#ikon foto SPB (redup bila belum ada foto)
+		$adafoto = false;
+		if ($rlvhc['noreferensi'] != '') {
+			$mf = fetchdata("select ffbdocument from " . $dbname2 . ".kebun_spbht_mobile where nospb='" . $rlvhc['noreferensi'] . "'");
+			$adafoto = (count($mf) > 0 and $mf[0]['ffbdocument'] != '');
+		}
+		$tab .= "<td valign=top align=center width=30px>
+			<img src=images/application/application_view_gallery.png class=zImgBtn title='" . ($adafoto ? 'Foto SPB' : 'Foto SPB (belum ada foto)') . "' style='opacity:" . ($adafoto ? '1' : '0.3') . "' onclick=\"fotospb('" . $rlvhc['nospb'] . "')\">
+		</td>";
 		}
 
 		$totrows = ceil($jlhbrs / $limit);
@@ -1196,7 +1206,7 @@ switch ($proses) {
 		}
 		$footd = "";
 		$footd .= "</tr>
-                     <tr><td colspan=22 align=center>";
+                     <tr><td colspan=23 align=center>";
 
 		if ($page == '0') {
 			$footd .= "<button class=mybutton disabled=true>Prev</button>";
@@ -2363,6 +2373,105 @@ switch ($proses) {
 		}
 		break;
 
+	case'fotospb':
+		$qf=fetchdata("select * from ".$dbname.".kebun_spbht where nospb='".$noSpb."'");
+		if(count($qf)==0){
+			echo "Data SPB tidak ditemukan";
+			break;
+		}
+		$rShwData2=$qf[0];
+	#foto SPB: TPH Besar tampil fotonya sendiri; Internal/Afiliasi/External tampil bagan TPH Besar asalnya
+	$noref=$rShwData2['noreferensi'];
+	$tujuanspb=$rShwData2['tujuan'];
+	$arrTujuan=array('0'=>'Internal','1'=>'Afiliasi','3'=>'External','4'=>'TPH Besar');
+	$kotak=function($judul,$sub,$foto){
+		$h="<div style='display:inline-block;vertical-align:top;width:176px;margin:0 6px;padding:6px;border:1px solid #6aa0c7;background:#fff;text-align:center'>";
+		$h.="<div style='font-weight:bold'>".$judul."</div>";
+		$h.="<div style='font-size:11px;margin-bottom:4px'>".$sub."</div>";
+		if($foto!=''){
+			$h.="<a href='".$foto."' target=_blank title='Klik untuk memperbesar'><img src='".$foto."' alt='Foto tidak dapat dimuat' style='width:164px;height:124px;object-fit:cover;border:1px solid #ccc;font-size:11px'></a>";
+		}else{
+			$h.="<div style='padding:40px 0;font-size:11px'>Tidak ada foto</div>";
+		}
+		return $h."</div>";
+	};
+	$mob=array();
+	if($noref!=''){
+		$mob=fetchdata("select nospb,tujuan,tanggal,ffbdocument from ".$dbname2.".kebun_spbht_mobile where nospb='".$noref."'");
+	}
+	$fotoini=(count($mob)>0) ? $mob[0]['ffbdocument'] : '';
+	echo "<div style='text-align:center'><b>Foto SPB</b><br>".$noSpb." | ".tanggalnormal($rShwData2['tanggal'])."</div><br>";
+	if($tujuanspb=='4'){
+		echo "<div style='text-align:center'>".$kotak('TPH Besar',$noSpb.'<br>'.tanggalnormal($rShwData2['tanggal']),$fotoini)."</div>";
+	}else{
+		#SPB rujukan (asal): nospbref di data mobile, atau No Referensi pada detail SPB; ditelusuri berjenjang
+		$arrTujuanMob=array('0'=>'Internal','1'=>'Afiliasi','2'=>'TPH Besar','3'=>'External');
+		$dilihat=array();
+		$pohon=function($ref,$depth) use (&$pohon,$kotak,$dbname,$dbname2,$arrTujuanMob,&$dilihat){
+			$m2=fetchdata("select nospb,tujuan,tanggal,ffbdocument from ".$dbname2.".kebun_spbht_mobile where nospb='".$ref."'");
+			if(count($m2)==0){
+				return '';
+			}
+			$dilihat[$ref]=1;
+			$h2=fetchdata("select nospb from ".$dbname.".kebun_spbht where noreferensi='".$ref."'");
+			$j2=fetchdata("select sum(jjg) as jjg from ".$dbname2.".kebun_spbdt_mobile where nospb='".$ref."'");
+			$node=$kotak($arrTujuanMob[$m2[0]['tujuan']],((isset($h2[0]['nospb']) and $h2[0]['nospb']!='') ? $h2[0]['nospb'] : $ref).'<br>'.tanggalnormal(substr($m2[0]['tanggal'],0,10)).' | '.number_format(isset($j2[0]['jjg']) ? $j2[0]['jjg'] : 0).' jjg',$m2[0]['ffbdocument']);
+			$anak=array();
+			if($depth<4){
+				foreach(fetchdata("select distinct nospbref from ".$dbname2.".kebun_spbdt_mobile where nospb='".$ref."' and nospbref<>''") as $v){
+					if(!isset($dilihat[$v['nospbref']])){
+						$c=$pohon($v['nospbref'],$depth+1);
+						if($c!=''){
+							$anak[]=$c;
+						}
+					}
+				}
+			}
+			$h="<div style='display:inline-block;vertical-align:top;text-align:center'>".$node;
+			if(count($anak)>0){
+				$h.="<div style='width:0;height:14px;border-left:1px solid #6aa0c7;margin:0 auto'></div>";
+				$h.="<div style='border-top:1px solid #6aa0c7;margin:0 40px 8px 40px'></div>".implode('',$anak);
+			}
+			return $h."</div>";
+		};
+		$asal=array();
+		if($noref!=''){
+			$dilihat[$noref]=1;
+			foreach(fetchdata("select distinct nospbref from ".$dbname2.".kebun_spbdt_mobile where nospb='".$noref."' and nospbref<>''") as $v){
+				$asal[$v['nospbref']]=$v['nospbref'];
+			}
+		}
+		foreach(fetchdata("select distinct qrcode from ".$dbname.".kebun_spbdt where nospb='".$noSpb."' and qrcode<>''") as $v){
+			$asal[$v['qrcode']]=$v['qrcode'];
+		}
+		$anak=array();
+		foreach($asal as $ref){
+			if(!isset($dilihat[$ref])){
+				$c=$pohon($ref,1);
+				if($c!=''){
+					$anak[]=$c;
+				}
+			}
+		}
+		echo "<div style='text-align:center'>";
+		echo $kotak($arrTujuan[$tujuanspb],$noSpb.'<br>'.tanggalnormal($rShwData2['tanggal']),$fotoini);
+		if(count($anak)>0){
+			echo "<div style='width:0;height:16px;border-left:1px solid #6aa0c7;margin:0 auto'></div>";
+			echo "<div style='border-top:1px solid #6aa0c7;margin:0 100px 10px 100px'></div>";
+			echo implode('',$anak);
+		}else{
+			if(count($mob)>0){
+				$ketasal="SPB ini tidak merujuk SPB lain.";
+			}elseif($noref!=''){
+				$ketasal="No. Referensi mobile ada, tetapi data SPB-nya tidak ditemukan di data mobile.";
+			}else{
+				$ketasal="SPB diinput manual (tanpa referensi mobile), jadi tidak ada foto dan rujukan.";
+			}
+			echo "<div style='font-size:11px;margin-top:8px'>".$ketasal."</div>";
+		}
+		echo "</div>";
+	}
+	break;
 	default:
 		break;
 }

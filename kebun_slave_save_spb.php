@@ -56,6 +56,9 @@ $jjgpetani    =checkPostGet('jjgpetani','');
 $brdpetani    =checkPostGet('brdpetani','');
 $referensimb    =checkPostGet('referensimb','');
 $referensisearch    =checkPostGet('referensisearch','');
+$prdsch       =checkPostGet('prdsch','');
+$unitsch      =checkPostGet('unitsch','');
+$postsch      =checkPostGet('postsch','');
 
 $txtSearch    =checkPostGet('txtSearch','');
 $txtDiv       =checkPostGet('txtDiv','');
@@ -469,13 +472,13 @@ switch($proses){
 			$tab.="<td align=right>".number_format($bar['brondolan_angkut'])."</td>";
 			$tab.="<td align=right>".$bar['kontanan']."</td>";
 			
-			if($posting==1){
-				$tab.="<td></td>";
-			}
-
 			$totalJJG += $bar['jjg_angkut'];
 			$totalBRD += $bar['brondolan_angkut'];
-			$tab.="<td align=center><img src=images/application/application_delete.png class=zImgBtn  title='Delete' onclick=\"deletebm('".$bar['karyawanid']."','".$bar['kegiatan']."','".tanggalnormal($bar['tanggal'])."','".$bar['sesi']."','".$notransaksi."');\"></td>";
+			if($posting==1){
+				$tab.="<td></td>";
+			}else{
+				$tab.="<td align=center><img src=images/application/application_delete.png class=zImgBtn  title='Delete' onclick=\"deletebm('".$bar['karyawanid']."','".$bar['kegiatan']."','".tanggalnormal($bar['tanggal'])."','".$bar['sesi']."','".$notransaksi."');\"></td>";
+			}
 			$tab.="</tr>";
 		}
 			$tab.="<tr class=rowcontent align=center>";
@@ -517,11 +520,12 @@ switch($proses){
 			$total['brondolan']+=$bar['brondolan'];
 			if($posting==1){
 				$tab.="<td></td>";
-			} 
-			$tab.="<td align=center>
+			}else{
+				$tab.="<td align=center>
 				<img src=images/application/application_edit.png class=zImgBtn  title='Edit' onclick=\"editpetani('".$notransaksi."','".$bar['id_kavling']."','".$bar['janjang']."','".$bar['brondolan']."');\">
 				<img src=images/application/application_delete.png class=zImgBtn  title='Delete' onclick=\"deletepetani('".$bar['id_kavling']."','".$notransaksi."');\">
 			</td>";
+			}
 			$tab.="</tr>";
 		}
 			$tab.="<tr class=rowcontent style=\"background-color:#CACFD2;font-weight:bold\">";
@@ -855,7 +859,7 @@ switch($proses){
 
 	}else{
 		$dataspb1=array();
-		$str = "select a.nospb,a.kodeorg,a.tanggal,a.penerimatbs,b.blok,b.nik,b.nospbref,b.tph,b.sesi,b.jjg,b.brondolan,b.tanggalpanen from " . $dbname2 . ".kebun_spbht_mobile a 
+		$str = "select a.nospb,a.kodeorg,a.tanggal,a.penerimatbs,b.blok,b.nik,b.nospbref,b.tph,b.sesi,b.jjg,b.brondolan,b.tanggalpanen,a.tujuan from " . $dbname2 . ".kebun_spbht_mobile a
 		left join " . $dbname2 . ".kebun_spbdt_mobile b on a.nospb=b.nospb
 		where a.tujuan='2' and a.syn='1' and a.flag='0' ";
 		$res = fetchdata($str);
@@ -874,12 +878,13 @@ switch($proses){
 		}
 
 		$dataspb2=array();
-		$str = "select a.nospb,b.karyawanid,b.jjg,b.sesi,b.kegiatan from " . $dbname2 . ".kebun_spbht_mobile a 
+		$str = "select a.nospb,b.karyawanid,b.jjg,b.brondolan,b.sesi,b.kegiatan from " . $dbname2 . ".kebun_spbht_mobile a 
 		left join " . $dbname2 . ".kebun_spbtkbm_mobile b on a.nospb=b.nospb
 		where a.tujuan='2' and a.syn='1' and a.flag='0' ";
 		$res = fetchdata($str);
 		foreach($res as $val){
 			$dataspb2[$val['nospb']][$val['karyawanid']][$val['sesi']][$val['kegiatan']]['jjg']=$val['jjg'];
+			$dataspb2[$val['nospb']][$val['karyawanid']][$val['sesi']][$val['kegiatan']]['brondolan']=$val['brondolan'];
 		}
 	}
 	
@@ -920,7 +925,14 @@ switch($proses){
 						$nospbbaru=$counter."/".$lokasi."/".$bln."/".$thn;
 
 					if(!isset($databelumsingkronfull[$nospbx])){
-						$sIns="insert into ".$dbname.".kebun_spbht (`nospb`,`noreferensi`, `kodeorg`, `tanggal`,`updateby`,`tujuan`,`penerimatbs`,`kerani`,`kontanan`,`tahuntanam`) values ('".$nospbbaru."','".$nospbx."','".$unitkodeorg."','".$tanggal."','".$user_online."','".$datatujuan[$nospbx]."','".$penerimatbs."','','KERJA','0')"; 
+						#TPH Besar (tujuan 4) langsung diposting saat download
+						$kolposting='';
+						$nilposting='';
+						if($datatujuan[$nospbx]=='4'){
+							$kolposting=",`posting`,`postingby`";
+							$nilposting=",'1',''";
+						}
+						$sIns="insert into ".$dbname.".kebun_spbht (`nospb`,`noreferensi`, `kodeorg`, `tanggal`,`updateby`,`tujuan`,`penerimatbs`,`kerani`,`kontanan`,`tahuntanam`".$kolposting.") values ('".$nospbbaru."','".$nospbx."','".$unitkodeorg."','".$tanggal."','".$user_online."','".$datatujuan[$nospbx]."','".$penerimatbs."','','KERJA','0'".$nilposting.")"; 
 						$owlPDO->exec($sIns);  
 						$nospbbaruxx[$nospbx]=$nospbbaru;
 						$str = "update ".$dbname2.".kebun_spbht_mobile set flag='1' where nospb ='".$nospbx. "'";
@@ -977,6 +989,17 @@ switch($proses){
 	$maxdisplay = @($page * $limit);
 	
 	$wherenew='';
+	if($prdsch!=''){
+		$wherenew.=" and tanggal like '".$prdsch."-%' ";
+	}
+	if($unitsch!=''){
+		$wherenew.=" and kodeorg='".$unitsch."' ";
+	}
+	if($postsch=='1'){
+		$wherenew.=" and posting='1' ";
+	}elseif($postsch=='0'){
+		$wherenew.=" and posting<>'1' ";
+	}
 	if($txtTgl!=''){
 		$wherenew.=" and tanggal='".$txtTgl."' ";
 	}
@@ -1133,6 +1156,11 @@ switch($proses){
 			$adapetani+=$barv['id'];
 		}
 		
+		$iconpetani="";
+		if($adapetani>0){
+			$iconpetani=" <img src=images/pdf_gray.jpg class=zImgBtn  title='Print SPTBS' onclick=\"masterPDF('kebun_spbht','".$rlvhc['nospb']."','','kebun_spbPdfPetani',event)\">";
+		}
+
 		if($rlvhc['posting']==0){
 
 			$tab.="
@@ -1148,21 +1176,29 @@ switch($proses){
 
 			$tab.="
 			<td valign=top align=center width=30px>
-				<img src=images/pdf.jpg class=zImgBtn  title='Print SPB' onclick=\"masterPDF('kebun_spbht','".$rlvhc['nospb']."','','kebun_spbPdf',event)\">
+				<img src=images/pdf.jpg class=zImgBtn  title='Print SPB' onclick=\"masterPDF('kebun_spbht','".$rlvhc['nospb']."','','kebun_spbPdfv1',event)\">".$iconpetani."
 			</td>";
 
 		}else{
-			$tab.="<td></td>";
-			$tab.="<td></td>";
-			$tab.="<td></td>";
+			$tab.="<td colspan=2></td>";
+			$tab.="
+			<td valign=top align=center width=30px>
+				<img src=images/pdf.jpg class=zImgBtn  title='Print SPB' onclick=\"masterPDF('kebun_spbht','".$rlvhc['nospb']."','','kebun_spbPdfv1',event)\">".$iconpetani."
+			</td>";
 		}
 
-
-		if($adapetani>0){
-			$tab.=" <img src=images/pdf_gray.jpg class=zImgBtn  title='Print SPTBS' onclick=\"masterPDF('kebun_spbht','".$rlvhc['nospb']."','','kebun_spbPdfPetani',event)\">";
-		}
-		$tab.="</td><td valign=top align=center width=30px>
+		$tab.="<td valign=top align=center width=30px>
 			<img src=images/skyblue/zoom.png class=zImgBtn  title='Preview' onclick=\"previewdata('".$rlvhc['nospb']."',event)\">
+		</td>";
+
+		#ikon foto SPB (redup bila belum ada foto)
+		$adafoto=false;
+		if($rlvhc['noreferensi']!=''){
+			$mf=fetchdata("select ffbdocument from ".$dbname2.".kebun_spbht_mobile where nospb='".$rlvhc['noreferensi']."'");
+			$adafoto=(count($mf)>0 and $mf[0]['ffbdocument']!='');
+		}
+		$tab.="<td valign=top align=center width=30px>
+			<img src=images/application/application_view_gallery.png class=zImgBtn title='".($adafoto ? 'Foto SPB' : 'Foto SPB (belum ada foto)')."' style='opacity:".($adafoto ? '1' : '0.3')."' onclick=\"fotospb('".$rlvhc['nospb']."')\">
 		</td>";
 
 		## Proporsi Tahun Tanam (HANYA UNTUK DMA DAN TEMAN - TEMAN NYA, PALMA GAK BOLEH IKUT)
@@ -1180,12 +1216,9 @@ switch($proses){
 
 
 			$tab.="<td ".$stylex." valign=top align=center><img src='images/plus.png' class=zImgBtn class=zImgBtn height='30'  title='Proporsi JJG' onclick=\"proporsitahuntanam('".$rlvhc['nospb']."');\" > <br> <span > <b> ".$st." </b> </span></td>";
-		}else{
-			$isi.="<td></td>";
 		}
 
-		$tab.="</td><td valign=top align=center width=30px>
-			<img src=images/skyblue/zoom.png class=zImgBtn  title='Preview detail' onclick=\"previewdata2('".$rlvhc['nospb']."','html',event)\">
+		$tab.="<td valign=top align=center width=30px nowrap>
 			<img src=images/excel.jpg class=zImgBtn title='MS.Excel'onclick=\"previewdata2('".$rlvhc['nospb']."','excel',event)\">
 		</td>";
 
@@ -1201,9 +1234,10 @@ switch($proses){
             $sel = ($page == $er - 1) ? 'selected' : '';
             $isiRow.="<option value='" . $er . "' " . $sel . ">" . $er . "</option>";
         }
+        $jmlaksi = (getindukPT($_SESSION['empl']['lokasitugas']) != 'PPP') ? 8 : 7;
         $footd = "";
         $footd.="</tr>
-                     <tr><td colspan=20 align=center>";
+                     <tr><td colspan=".(15+$jmlaksi)." align=center>";
 
         if ($page == '0') {
             $footd.="<button class=mybutton disabled=true>Prev</button>";
@@ -1996,7 +2030,7 @@ switch($proses){
 	</table><br />
 	";
 	echo"
-	<table cellspacing=1 cellpadding=5 border=0 class=sortable>
+	<table cellspacing=1 cellpadding=5 border=0 class=sortable style='width:950px'>
 	<thead>
 	<tr class=rowheader>
 	<th align=center>No</th>
@@ -2014,7 +2048,13 @@ switch($proses){
 	<tbody>
 	";
 	
-	$sShwData="select a.*,b.* from ".$dbname.".kebun_spbht a inner join ".$dbname.".kebun_spbdt b on a.nospb=b.nospb where a.nospb='".$noSpb."' ";
+	#hasil timbang per blok ada di kebun_spbdt_detail (terisi saat posting lewat Ambil Kg Timbangan); kalau belum ada pakai kebun_spbdt
+	$tbldt="kebun_spbdt";
+	$cekdet=fetchdata("select count(*) as jml from ".$dbname.".kebun_spbdt_detail where nospb='".$noSpb."'");
+	if($cekdet[0]['jml']>0){
+		$tbldt="kebun_spbdt_detail";
+	}
+	$sShwData="select a.*,b.* from ".$dbname.".kebun_spbht a inner join ".$dbname.".".$tbldt." b on a.nospb=b.nospb where a.nospb='".$noSpb."' ";
 	
 	$qDet=$owlPDO->query($sShwData) or die(print " Gagal: ".PDOException::getMessage());
 	$qDet->setFetchMode(PDO::FETCH_ASSOC);
@@ -2024,8 +2064,8 @@ switch($proses){
 		$bjrx[$rDet['blok']]=$rDet['bjr'];
 		@$jjg[$rDet['blok']][$rDet['tanggalpanen']]+=$rDet['jjg'];
 		@$brondolan[$rDet['blok']][$rDet['tanggalpanen']]+=$rDet['brondolan'];
-		$kgwbx[$rDet['blok']][$rDet['tanggalpanen']]=$rDet['kgwb'];
-		$kgwbnet[$rDet['blok']][$rDet['tanggalpanen']]=$rDet['kgwbnetto'];
+		@$kgwbx[$rDet['blok']][$rDet['tanggalpanen']]+=$rDet['kgwb'];
+		@$kgwbnet[$rDet['blok']][$rDet['tanggalpanen']]+=$rDet['kgwbnetto'];
 		$mentah[$rDet['blok']][$rDet['tanggalpanen']]=$rDet['mentah'];
 		$busuk[$rDet['blok']][$rDet['tanggalpanen']]=$rDet['busuk'];
 		$matang[$rDet['blok']][$rDet['tanggalpanen']]=$rDet['matang'];
@@ -2041,14 +2081,14 @@ switch($proses){
 			echo"<tr class=rowcontent>
 			<td align=center >".$no."</td>
 			<td align=center >".tanggalnormal($tglpanen)."</td>
-			<td align=center >".$nmorg[$blok]."</td>
+			<td align=center >".($nmorg[$blok]!='' ? $nmorg[$blok] : $blok)."</td>
 			<td align=right >".$jjg[$blok][$tglpanen]."</td>
 			<td align=right >".$bjr[$blok][$tglpanen]."</td>
 			<td align=right >".$brondolan[$blok][$tglpanen]."</td>
 			<td align=right >".@number_format($kgwbx[$blok][$tglpanen],2)."</td>
-			<td align=right >".@number_format($kgwbx[$blok][$tglpanen]/$jjg[$blok][$tglpanen],2)."</td>
+			<td align=right >".@number_format(fixnan($kgwbx[$blok][$tglpanen] / $jjg[$blok][$tglpanen]),2)."</td>
 			<td align=right >".@number_format($kgwbnet[$blok][$tglpanen],2)."</td>
-			<td align=right >".@number_format($kgwbnet[$blok][$tglpanen]/$jjg[$blok][$tglpanen],2)."</td>
+			<td align=right >".@number_format(fixnan($kgwbnet[$blok][$tglpanen] / $jjg[$blok][$tglpanen]),2)."</td>
 			</tr>
 			";
 			
@@ -2064,14 +2104,14 @@ switch($proses){
 		}
 		echo"<tr class=rowcontent style=background-color:#FEF5E7;font-weight:bold>
 			<td align=center colspan=2>SUB TOTAL</td>
-			<td align=center >".$nmorg[$blok]."</td>
+			<td align=center >".($nmorg[$blok]!='' ? $nmorg[$blok] : $blok)."</td>
 			<td align=right >".$tjjg[$blok]."</td>
 			<td align=right >".$bjrx[$blok]."</td>
 			<td align=right >".$tbrondolan[$blok]."</td>
 			<td align=right >".@number_format($tkgwbx[$blok],2)."</td>
-			<td align=right >".@number_format($tkgwbx[$blok]/$tjjg[$blok],2)."</td>
+			<td align=right >".@number_format(fixnan($tkgwbx[$blok] / $tjjg[$blok]),2)."</td>
 			<td align=right >".@number_format($tkgwbnet[$blok],2)."</td>
-			<td align=right >".@number_format($tkgwbnet[$blok]/$tjjg[$blok],2)."</td>
+			<td align=right >".@number_format(fixnan($tkgwbnet[$blok] / $tjjg[$blok]),2)."</td>
 			
 			</tr>
 			";	
@@ -2083,9 +2123,9 @@ switch($proses){
 			<td align=right ></td>
 			<td align=right >".$gtbrondolan."</td>
 			<td align=right >".@number_format($gtkgwbx,2)."</td>
-			<td align=right >".@number_format($gtkgwbx/$gtjjg,2)."</td>
+			<td align=right >".@number_format(fixnan($gtkgwbx / $gtjjg),2)."</td>
 			<td align=right >".@number_format($gtkgwbnet,2)."</td>
-			<td align=right >".@number_format($gtkgwbnet/$gtjjg,2)."</td>
+			<td align=right >".@number_format(fixnan($gtkgwbnet / $gtjjg),2)."</td>
 			
 			</tr>
 			";
@@ -2093,7 +2133,7 @@ switch($proses){
 	echo"</tbody></table><br>";
 	
 	echo"
-	<table cellspacing=1 cellpadding=5 border=0 class=sortable>
+	<table cellspacing=1 cellpadding=5 border=0 class=sortable style='width:950px'>
 	<thead>
 	<tr class=rowheader>
 	<th align='center' width=40px>No.</th>
@@ -2123,7 +2163,7 @@ switch($proses){
 	echo"</table><br>";
 
 	echo"
-	<table cellspacing=1 border=0 cellpadding=5 class=sortable>
+	<table cellspacing=1 border=0 cellpadding=5 class=sortable style='width:950px'>
 	<thead>
 	<tr class=rowheader>
 	<th align='center'>No.</th>
@@ -2174,6 +2214,106 @@ switch($proses){
 	}
 	echo $tabp;
 	echo"</table>";
+
+	break;
+	case'fotospb':
+		$qf=fetchdata("select * from ".$dbname.".kebun_spbht where nospb='".$noSpb."'");
+		if(count($qf)==0){
+			echo "Data SPB tidak ditemukan";
+			break;
+		}
+		$rShwData2=$qf[0];
+	#foto SPB: TPH Besar tampil fotonya sendiri; Internal/Afiliasi/External tampil bagan TPH Besar asalnya
+	$noref=$rShwData2['noreferensi'];
+	$tujuanspb=$rShwData2['tujuan'];
+	$arrTujuan=array('0'=>'Internal','1'=>'Afiliasi','3'=>'External','4'=>'TPH Besar');
+	$kotak=function($judul,$sub,$foto){
+		$h="<div style='display:inline-block;vertical-align:top;width:176px;margin:0 6px;padding:6px;border:1px solid #6aa0c7;background:#fff;text-align:center'>";
+		$h.="<div style='font-weight:bold'>".$judul."</div>";
+		$h.="<div style='font-size:11px;margin-bottom:4px'>".$sub."</div>";
+		if($foto!=''){
+			$h.="<a href='".$foto."' target=_blank title='Klik untuk memperbesar'><img src='".$foto."' alt='Foto tidak dapat dimuat' style='width:164px;height:124px;object-fit:cover;border:1px solid #ccc;font-size:11px'></a>";
+		}else{
+			$h.="<div style='padding:40px 0;font-size:11px'>Tidak ada foto</div>";
+		}
+		return $h."</div>";
+	};
+	$mob=array();
+	if($noref!=''){
+		$mob=fetchdata("select nospb,tujuan,tanggal,ffbdocument from ".$dbname2.".kebun_spbht_mobile where nospb='".$noref."'");
+	}
+	$fotoini=(count($mob)>0) ? $mob[0]['ffbdocument'] : '';
+	echo "<div style='text-align:center'><b>Foto SPB</b><br>".$noSpb." | ".tanggalnormal($rShwData2['tanggal'])."</div><br>";
+	if($tujuanspb=='4'){
+		echo "<div style='text-align:center'>".$kotak('TPH Besar',$noSpb.'<br>'.tanggalnormal($rShwData2['tanggal']),$fotoini)."</div>";
+	}else{
+		#SPB rujukan (asal): nospbref di data mobile, atau No Referensi pada detail SPB; ditelusuri berjenjang
+		$arrTujuanMob=array('0'=>'Internal','1'=>'Afiliasi','2'=>'TPH Besar','3'=>'External');
+		$dilihat=array();
+		$pohon=function($ref,$depth) use (&$pohon,$kotak,$dbname,$dbname2,$arrTujuanMob,&$dilihat){
+			$m2=fetchdata("select nospb,tujuan,tanggal,ffbdocument from ".$dbname2.".kebun_spbht_mobile where nospb='".$ref."'");
+			if(count($m2)==0){
+				return '';
+			}
+			$dilihat[$ref]=1;
+			$h2=fetchdata("select nospb from ".$dbname.".kebun_spbht where noreferensi='".$ref."'");
+			$j2=fetchdata("select sum(jjg) as jjg from ".$dbname2.".kebun_spbdt_mobile where nospb='".$ref."'");
+			$node=$kotak($arrTujuanMob[$m2[0]['tujuan']],(($h2[0]['nospb']!='') ? $h2[0]['nospb'] : $ref).'<br>'.tanggalnormal(substr($m2[0]['tanggal'],0,10)).' | '.number_format($j2[0]['jjg']).' jjg',$m2[0]['ffbdocument']);
+			$anak=array();
+			if($depth<4){
+				foreach(fetchdata("select distinct nospbref from ".$dbname2.".kebun_spbdt_mobile where nospb='".$ref."' and nospbref<>''") as $v){
+					if(!isset($dilihat[$v['nospbref']])){
+						$c=$pohon($v['nospbref'],$depth+1);
+						if($c!=''){
+							$anak[]=$c;
+						}
+					}
+				}
+			}
+			$h="<div style='display:inline-block;vertical-align:top;text-align:center'>".$node;
+			if(count($anak)>0){
+				$h.="<div style='width:0;height:14px;border-left:1px solid #6aa0c7;margin:0 auto'></div>";
+				$h.="<div style='border-top:1px solid #6aa0c7;margin:0 40px 8px 40px'></div>".implode('',$anak);
+			}
+			return $h."</div>";
+		};
+		$asal=array();
+		if($noref!=''){
+			$dilihat[$noref]=1;
+			foreach(fetchdata("select distinct nospbref from ".$dbname2.".kebun_spbdt_mobile where nospb='".$noref."' and nospbref<>''") as $v){
+				$asal[$v['nospbref']]=$v['nospbref'];
+			}
+		}
+		foreach(fetchdata("select distinct qrcode from ".$dbname.".kebun_spbdt where nospb='".$noSpb."' and qrcode<>''") as $v){
+			$asal[$v['qrcode']]=$v['qrcode'];
+		}
+		$anak=array();
+		foreach($asal as $ref){
+			if(!isset($dilihat[$ref])){
+				$c=$pohon($ref,1);
+				if($c!=''){
+					$anak[]=$c;
+				}
+			}
+		}
+		echo "<div style='text-align:center'>";
+		echo $kotak($arrTujuan[$tujuanspb],$noSpb.'<br>'.tanggalnormal($rShwData2['tanggal']),$fotoini);
+		if(count($anak)>0){
+			echo "<div style='width:0;height:16px;border-left:1px solid #6aa0c7;margin:0 auto'></div>";
+			echo "<div style='border-top:1px solid #6aa0c7;margin:0 100px 10px 100px'></div>";
+			echo implode('',$anak);
+		}else{
+			if(count($mob)>0){
+				$ketasal="SPB ini tidak merujuk SPB lain.";
+			}elseif($noref!=''){
+				$ketasal="No. Referensi mobile ada, tetapi data SPB-nya tidak ditemukan di data mobile.";
+			}else{
+				$ketasal="SPB diinput manual (tanpa referensi mobile), jadi tidak ada foto dan rujukan.";
+			}
+			echo "<div style='font-size:11px;margin-top:8px'>".$ketasal."</div>";
+		}
+		echo "</div>";
+	}
 	break;
 	case'previewdata2':
 
@@ -2185,22 +2325,25 @@ switch($proses){
 	$stat=$arrStat[$rShwData2['posting']];
 	$nmkeg=makeOption($dbname,'setup_kegiatan','kodekegiatan,namakegiatan',"kodekegiatan='".$rShwData2['kerani']."'");
 
-	$tab="
+	$tab="";
+	if(checkPostGet('tanpajudul','')!='1'){
+		$tab="
 	<table cellspacing=1 cellpadding=1 border=0>
 	<tr><td>".$_SESSION['lang']['nospb']."</td><td>:</td><td>".$rShwData2['nospb']."</td></tr>
 	<tr><td>".$_SESSION['lang']['tglNospb']."</td><td>:</td><td>".tanggalnormal($rShwData2['tanggal'])."</td></tr>
 	<tr><td>".$_SESSION['lang']['kodeorg']."</td><td>:</td><td>".$rShwData2['kodeorg']." - ".getNamaOrg($rShwData2['kodeorg'])."</td></tr>
 	</table><br />
 	";
+	}
 	
 	$tab.="
-	<table cellspacing=1 cellpadding=5 border=0 class=sortable>
+	<table cellspacing=1 cellpadding=5 border=0 class=sortable".($tipe=='html' ? " style='width:950px'" : "").">
 	<thead>
 	<tr class='rowheader'>
 	<td align=center >No</td>
 	<td align=center >".$_SESSION['lang']['noreferensi']."</td>
 	<td align=center >".$_SESSION['lang']['tanggal']." ".$_SESSION['lang']['panen']."</td>
-	<td align=center>".$_SESSION['	lang']['pemanen']."</td>
+	<td align=center>".$_SESSION['lang']['pemanen']."</td>
 	<td align=center>".$_SESSION['lang']['blok']."</td>
 	<td align=center>".$_SESSION['lang']['tph']."</td>
 	<td align=center>Sesi</td>
@@ -2271,7 +2414,22 @@ switch($proses){
 		// $tab.="</div>";
 		echo $tab;
 	} else {
-		$tab.="Print Time : " .date('Y-m-d H:i:s')." <br> By : ".$_SESSION['empl']['name'];	
+		#kop: logo PT, judul, dan informasi cetak
+		$ptkode=getindukPT($rShwData2['kodeorg']);
+		$hd=setheadreport($ptkode,$ptkode);
+		$logourl='';
+		if(file_exists($hd['logo'])){
+			$skema=(isset($_SERVER['HTTPS']) and $_SERVER['HTTPS']!='off') ? 'https' : 'http';
+			$logourl=$skema."://".@$_SERVER['HTTP_HOST'].rtrim(dirname(@$_SERVER['SCRIPT_NAME']),'/')."/".$hd['logo'];
+		}
+		$kop="<table>
+			<tr><td colspan=10 height='70' style='height:52pt'>".($logourl!='' ? "<img src='".$logourl."' height='60'>" : "")."</td></tr>
+			<tr><td colspan=10><b>".$hd['nama']."</b></td></tr>
+			<tr><td colspan=10><b>DETAIL SURAT PENGANTAR BUAH</b></td></tr>
+			<tr><td colspan=10>Dicetak: ".date('d-m-Y H:i:s')." oleh ".$_SESSION['empl']['name']."</td></tr>
+			<tr><td colspan=10>&nbsp;</td></tr>
+			</table>";
+		$tab=$kop.$tab;
 		$nop_ ="Laporan SPB DETAIL ".$noSpb." ";
 		$css="";
 		$dte=date("YmdHis");

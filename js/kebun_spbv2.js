@@ -2003,3 +2003,25 @@ function previewdata2(noSpb,tipe='html', ev) {
 		}
 	}
 }
+
+function fotospb(noSpb) {
+	param = 'proses=fotospb&noSpb=' + noSpb;
+	tujuan = 'kebun_slave_save_spbv2.php';
+	post_response_text(tujuan, param, respon);
+
+	function respon() {
+		if (con.readyState == 4) {
+			if (con.status == 200) {
+				busy_off();
+				if (!isSaveResponse(con.responseText)) {
+					alertify.alert(con.responseText);
+				} else {
+					alertify.popup("Foto SPB",con.responseText).set({'resizable':true,'maximizable':true}).resizeTo('60%','80%');
+				}
+			} else {
+				busy_off();
+				error_catch(con.status);
+			}
+		}
+	}
+}

@@ -760,6 +760,9 @@ function loadData(num) {
 	txtTgl = document.getElementById('tgl_cari').value;
 	status_spb = document.getElementById('status_spb').value;
 	referensisearch = document.getElementById('referensisearch').value;
+	prdsch = document.getElementById('periode').value;
+	unitsch = document.getElementById('unitOrg').value;
+	postsch = document.getElementById('postsch').value;
 
 	param = 'proses=loadNewData';
 	param += '&page=' + num;
@@ -768,6 +771,9 @@ function loadData(num) {
 	param += '&txtTgl=' + txtTgl;
 	param += '&status_spb='+status_spb;
 	param += '&referensisearch='+referensisearch;
+	param += '&prdsch='+prdsch;
+	param += '&unitsch='+unitsch;
+	param += '&postsch='+postsch;
 	tujuan = 'kebun_slave_save_spb.php';
 	post_response_text(tujuan, param, respog);
 	function respog() {
@@ -1142,15 +1148,29 @@ function reset_data() {
 		document.getElementById('tgl_ganti').value = '';
 	}
 }
+function paramFilterExport() {
+	var p = '';
+	p += '&txtSearch=' + encodeURIComponent(document.getElementById('txtsearch').value);
+	p += '&referensisearch=' + encodeURIComponent(document.getElementById('referensisearch').value);
+	p += '&txtDiv=' + encodeURIComponent(document.getElementById('divsch').value);
+	p += '&txtTgl=' + encodeURIComponent(document.getElementById('tgl_cari').value);
+	p += '&status_spb=' + encodeURIComponent(document.getElementById('status_spb').value);
+	p += '&postsch=' + encodeURIComponent(document.getElementById('postsch').value);
+	return p;
+}
 function dataKePDF(ev) {
 	pt = document.getElementById('unitOrg');
 	periode = document.getElementById('periode');
 	pt = pt.options[pt.selectedIndex].value;
 	//gudang	=gudang.options[gudang.selectedIndex].value;
 	periode = periode.options[periode.selectedIndex].value;
-	tujuan = 'kebun_spb_pdf.php';
+	if (periode == '') {
+		alertify.alert('Pilih periode terlebih dahulu');
+		return;
+	}
+	tujuan = 'kebun_spb_pdflist.php';
 	judul = 'List Data SPB PDF';
-	param = 'pt=' + pt + '&periode=' + periode;
+	param = 'pt=' + pt + '&periode=' + periode + paramFilterExport();
 	//alert(param);
 	printFile(param, tujuan, judul, ev)
 }
@@ -1170,9 +1190,13 @@ function dataKeExcel(ev, tujuan) {
 	pt = pt.options[pt.selectedIndex].value;
 	//gudang	=gudang.options[gudang.selectedIndex].value;
 	periode = periode.options[periode.selectedIndex].value;
+	if (periode == '') {
+		alertify.alert('Pilih periode terlebih dahulu');
+		return;
+	}
 	//tujuan='kebun_spb_pdf.php';
 	judul = 'Download Daftar SPB';
-	param = 'pt=' + pt + '&periode=' + periode;
+	param = 'pt=' + pt + '&periode=' + periode + paramFilterExport();
 	//alert(param);
 	printFile(param, tujuan, judul, ev)
 }
@@ -1802,12 +1826,6 @@ function deletepetani(petani, notransaksi) {
 }
 
 function previewdata(noSpb, ev) {
-	// title = "";
-	// width = '';
-	// height = '';
-	// content = "<fieldset><legend>Form</legend><div id=prev style='overflow:auto;width:550px;height:auto;' ></div></fieldset>";
-	// showDialog2(title, content, width, height, ev);
-
 	param = 'proses=previewdata&noSpb=' + noSpb;
 	tujuan = 'kebun_slave_save_spb.php';
 	post_response_text(tujuan, param, respon);
@@ -1819,9 +1837,9 @@ function previewdata(noSpb, ev) {
 				if (!isSaveResponse(con.responseText)) {
 					alertify.alert(con.responseText);
 				} else {
-					//alertify.alert(con.responseText);
-					// document.getElementById('prev').innerHTML = con.responseText;
-					alertify.popup("Detail",con.responseText).set({'resizable':true,'maximizable':true}).resizeTo('60%','80%');
+					isiDetail = con.responseText;
+					param2 = 'proses=previewdata2&tipe=html&tanpajudul=1&noSpb=' + noSpb;
+					post_response_text(tujuan, param2, respon2);
 				}
 			} else {
 				busy_off();
@@ -1829,8 +1847,22 @@ function previewdata(noSpb, ev) {
 			}
 		}
 	}
-}
 
+	function respon2() {
+		if (con.readyState == 4) {
+			if (con.status == 200) {
+				busy_off();
+				if (isSaveResponse(con.responseText)) {
+					isiDetail += "<br><b>Rincian Panen</b><br><br>" + con.responseText;
+				}
+				alertify.popup("Detail",isiDetail).set({'resizable':true,'maximizable':true}).resizeTo('60%','80%');
+			} else {
+				busy_off();
+				error_catch(con.status);
+			}
+		}
+	}
+}
 
 function proporsitahuntanam(nospb,ev){
 	param = 'proses=proporsitahuntanam&notransaksi=' + nospb;
@@ -1993,6 +2025,28 @@ function previewdata2(noSpb,tipe='html', ev) {
 					//alertify.alert(con.responseText);
 					// document.getElementById('prev').innerHTML = con.responseText;
 					alertify.popup("Detail",con.responseText).set({'resizable':true,'maximizable':true}).resizeTo('60%','80%');
+				}
+			} else {
+				busy_off();
+				error_catch(con.status);
+			}
+		}
+	}
+}
+
+function fotospb(noSpb) {
+	param = 'proses=fotospb&noSpb=' + noSpb;
+	tujuan = 'kebun_slave_save_spb.php';
+	post_response_text(tujuan, param, respon);
+
+	function respon() {
+		if (con.readyState == 4) {
+			if (con.status == 200) {
+				busy_off();
+				if (!isSaveResponse(con.responseText)) {
+					alertify.alert(con.responseText);
+				} else {
+					alertify.popup("Foto SPB",con.responseText).set({'resizable':true,'maximizable':true}).resizeTo('60%','80%');
 				}
 			} else {
 				busy_off();
