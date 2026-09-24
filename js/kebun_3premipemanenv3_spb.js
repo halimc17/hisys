@@ -273,6 +273,8 @@ function loaddata(page) {
 	afdlist = document.getElementById('afdlist').value;
 	tgl1list = document.getElementById('tgl1list').value;
 	tgl2list = document.getElementById('tgl2list').value;
+	notranslist = document.getElementById('notranslist').value;
+	statuslist = document.getElementById('statuslist').value;
 	param = 'proses=loaddata&page=' + page;
 	if (prdlist != '') {
 		param += '&prdlist=' + prdlist;
@@ -288,6 +290,12 @@ function loaddata(page) {
 	}
 	if (tgl2list != '') {
 		param += '&tgl2list=' + tgl2list;
+	}
+	if (notranslist != '') {
+		param += '&notranslist=' + encodeURIComponent(notranslist);
+	}
+	if (statuslist != '') {
+		param += '&statuslist=' + statuslist;
 	}
 	tujuan = 'kebun_slave_save_3premipemanenv3_spb.php';
 	post_response_text(tujuan, param, respog);
@@ -325,6 +333,8 @@ function batallist() {
 	document.getElementById('afdlist').value = '';
 	document.getElementById('tgl1list').value = '';
 	document.getElementById('tgl2list').value = '';
+	document.getElementById('notranslist').value = '';
+	document.getElementById('statuslist').value = '';
 	document.getElementById('contloaddata').style.display="";
 	document.getElementById('contpivot').style.display="none";
 	loaddata();
@@ -362,6 +372,8 @@ function loaddatapdf()
 	param += '&afdlist=' + afdlist;
 	param += '&tgl1list=' + tgl1list;
 	param += '&tgl2list=' + tgl2list;
+	param += '&notranslist=' + encodeURIComponent(document.getElementById('notranslist').value);
+	param += '&statuslist=' + document.getElementById('statuslist').value;
 	window.open('kebun_slave_3premipemanenv3_spb_pdf.php?' + param, '_blank');
 }
 
@@ -991,6 +1003,8 @@ function pivot() {
 	param += '&kodeorg=' + kodeorg;
 	param += '&periode=' + periode;
 	param += '&divisi=' + divisi;
+	param += '&notranslist=' + encodeURIComponent(document.getElementById('notranslist').value);
+	param += '&statuslist=' + document.getElementById('statuslist').value;
 	param += '&proses=pivot';
 	
 	tujuan = 'kebun_slave_save_3premipemanenv3_spb.php';
@@ -1034,7 +1048,7 @@ function pivot() {
 								}
 							},
 							inclusions: {"JENIS":["RP"]},
-							sorters: {"DATA": $.pivotUtilities.sortAs(["JJG","KG","POT BRD (Kg)","KG LB","RP LB","RP BRD","KEHADIRAN","TAMBAHAN","DENDA"])}
+							sorters: {"DATA": $.pivotUtilities.sortAs(["JJG","KG","BRD (Kg)","KG LB","RP LB","RP BRD","KEHADIRAN","DENDA"])}
 						});
 					});
 					document.getElementById('contpivot').style.display="";
@@ -1080,4 +1094,14 @@ function getdivisi(tipe='html')
 		}
 	}	
 		
+}
+
+function premiPdf(passParam) {
+	var passP = passParam.split('##');
+	var param = '';
+	for (var i = 1; i < passP.length; i++) {
+		param += (i == 1 ? '' : '&') + passP[i] + '=' + encodeURIComponent(getValue(passP[i]));
+	}
+	param += '&proses=pdf';
+	window.open('kebun_slave_3premipemanenv3_spb.php?' + param, '_blank');
 }

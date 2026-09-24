@@ -8,7 +8,14 @@ require_once('lib/zLib.php');
 require_once('lib/fpdf.php');
 require_once('lib/terbilang.php');
 
+$notes=array('spb'=>array(),'panen'=>array(),'spbblok'=>array(),'basisblok'=>array(),'basis'=>array(),'nan'=>array(),'hapost'=>array(),'mutupost'=>array(),'total0'=>array(),'status'=>array());
+
 $proses   =checkPostGet('proses','');
+$modepdf  =0;
+if($proses=='pdf'){
+	$proses='excel';
+	$modepdf=1;
+}
 $unit     =checkPostGet('unit','');
 $afd      =checkPostGet('afd','');
 $prd      =checkPostGet('prd','');
@@ -111,7 +118,7 @@ $res=$owlPDO->query($str) or die(print " Gagal: ".PDOException::getMessage());
 $res->setFetchMode(PDO::FETCH_ASSOC);
 while($bar=$res->fetch()){
 	if($datablokbasis[$bar['blok']]=='' and $bar['kgwbnetto']>1){
-		echo 'Data Basis Pada Blok '.$bar['blok'].' Belum Ada, Silahkan Setup di Setup Blok';
+		$notes['basisblok'][$bar['blok']]=$bar['blok'];
 		$databasisbloktidakada=1;
 	}else{
 		if(($bar['kgwbnetto']-$bar['brondolan'])<0){
@@ -300,64 +307,75 @@ foreach($list as $tglpnn => $key ){
 		}
 if ($proses == 'excel') {$brd="border=1";}else{$brd='';}
 
-$tab.="<table class=sortable cellspacing=1 cellpadding=5 $brd>";
-	$tab.="<thead><tr class=rowheader><td align='center' colspan='5'>HA Panen Yang Tidak Memiliki Janjang dan Brondolan Dalam Keseluruhan Tanggal</td></tr>
-	<tr class=rowheader>";
-	$tab.="<td align=center width=100px>Tanggal Panen</td>
-			  <td align=center width=120px>NIK</td>
-			  <td align=center width=120px>Nama Karyawan</td>
-			  <td align=center width=75px>HA</td>";
-	// $jt=0;
-	// foreach($arrtopo as $topografi){
-	// 	$jt++;
-	// 	$tab.="<td align=center colspan=4>".$optTopografi[$topografi]."</td>";
-	// }
-
-	$tab.="</tr>";
-	$tab.="</thead>";
+$tabval='';
+$rowsx1='';
 $dataxx=0;
 foreach($Hektarpanen as $tglpnn => $key ){
-		foreach ($key as $kary => $val) {
-								if($datapanentgl[$tglpnn][$kary]==0 or !isset($datapanentgl[$tglpnn][$kary])){
-									$tab.="<tr class=rowcontent>";
-									$tab.="<td align=center>".tanggalnormal($tglpnn)."</td>";
-									$tab.="<td align=center>".$nikkar[$kary]."</td>";
-									$tab.="<td align=center>".$nmkar[$kary]."</td>";
-									$tab.="<td align=center>".@number_format($val,2)."</td>";
-									$tab.="</tr>";		
-										$dataxx+=1;
-								}
-			}
-		}
-$tab.="</table><div style=clear:both></div><hr>";
-
-
-$tab.="<table class=sortable cellspacing=1 cellpadding=5 $brd>";
-	$tab.="<thead><tr class=rowheader><td align='center' colspan='5'>HA Panen Jajang 0 dan Brondolan 0 Tapi Memiliki Janjang dan Brondolan di Blok Lain</td></tr>
-	<tr class=rowheader>";
-	$tab.="<td align=center width=100px>Tanggal Panen</td>
-			  <td align=center width=120px>NIK</td>
-			  <td align=center width=120px>Nama Karyawan</td>
-			  <td align=center width=120px>BLOK</td>
-			  <td align=center width=75px>HA</td>";
-	$tab.="</tr>";
-	$tab.="</thead>";
-foreach($Hektarpanenx as $tglpnn => $key ){
-		foreach($key as $kdblok => $key2 ){
-				foreach ($key2 as $kary => $val) {
-						if($datapanentgl[$tglpnn][$kary]>0 and !isset($datapanentglxz[$tglpnn][$kary][$kdblok])){
-							$tab.="<tr class=rowcontent>";
-							$tab.="<td align=center>".tanggalnormal($tglpnn)."</td>";
-							$tab.="<td align=center>".$nikkar[$kary]."</td>";
-							$tab.="<td align=center>".$nmkar[$kary]."</td>";
-							$tab.="<td align=center>".$nmorg[$kdblok]."</td>";
-							$tab.="<td align=center>".@number_format($val,2)."</td>";
-							$tab.="</tr>";		
-						}
+	foreach ($key as $kary => $val) {
+		if($datapanentgl[$tglpnn][$kary]==0 or !isset($datapanentgl[$tglpnn][$kary])){
+			$rowsx1.="<tr class=rowcontent>";
+			$rowsx1.="<td align=center nowrap>".tanggalnormal($tglpnn)."</td>";
+			$rowsx1.="<td align=center>".$nikkar[$kary]."</td>";
+			$rowsx1.="<td align=left>".$nmkar[$kary]."</td>";
+			$blokx1=array();
+			if(isset($Hektarpanenx[$tglpnn])){
+				foreach($Hektarpanenx[$tglpnn] as $kdblokx => $lstx){
+					if(isset($lstx[$kary])){
+						$blokx1[]=$nmorg[$kdblokx];
+					}
 				}
+			}
+			$rowsx1.="<td align=center>".(count($blokx1)>0 ? implode(", ",$blokx1) : "-")."</td>";
+			$rowsx1.="<td align=right>".@number_format($val,2)."</td>";
+			$rowsx1.="</tr>";
+			$dataxx+=1;
 		}
 	}
-	
+}
+
+$rowsx2='';
+$cntx2=0;
+foreach($Hektarpanenx as $tglpnn => $key ){
+	foreach($key as $kdblok => $key2 ){
+		foreach ($key2 as $kary => $val) {
+			if($datapanentgl[$tglpnn][$kary]>0 and !isset($datapanentglxz[$tglpnn][$kary][$kdblok])){
+				$rowsx2.="<tr class=rowcontent>";
+				$rowsx2.="<td align=center nowrap>".tanggalnormal($tglpnn)."</td>";
+				$rowsx2.="<td align=center>".$nikkar[$kary]."</td>";
+				$rowsx2.="<td align=left>".$nmkar[$kary]."</td>";
+				$rowsx2.="<td align=center>".$nmorg[$kdblok]."</td>";
+				$rowsx2.="<td align=right>".@number_format($val,2)."</td>";
+				$rowsx2.="</tr>";
+				$cntx2+=1;
+			}
+		}
+	}
+}
+
+if($dataxx>0){
+	$tabval.="<table class=sortable width=700px cellspacing=1 cellpadding=3 $brd>";
+	$tabval.="<thead><tr class=rowheader><td align='center' colspan='5'>HA Panen Yang Tidak Memiliki Janjang dan Brondolan Dalam Keseluruhan Tanggal (".$dataxx." data)</td></tr>
+		<tr class=rowheader>";
+	$tabval.="<td align=center width=100px>Tanggal Panen</td>
+		<td align=center width=120px>NIK</td>
+		<td align=center width=200px>Nama Karyawan</td>
+		<td align=center width=140px>Blok</td>
+		<td align=center width=75px>HA</td>";
+	$tabval.="</tr></thead><tbody>".$rowsx1."</tbody></table><div style=clear:both></div><hr>";
+}
+
+
+if($cntx2>0){
+	$tab.="<table class=sortable width=700px cellspacing=1 cellpadding=3 $brd>";
+	$tab.="<thead><tr class=rowheader><td align='center' colspan='5'>HA Panen Janjang 0 dan Brondolan 0 Tapi Memiliki Janjang dan Brondolan di Blok Lain (".$cntx2." data)</td></tr>
+		<tr class=rowheader>";
+	$tab.="<td align=center width=100px>Tanggal Panen</td>
+		<td align=center width=120px>NIK</td>
+		<td align=center width=200px>Nama Karyawan</td>
+		<td align=center width=120px>BLOK</td>
+		<td align=center width=75px>HA</td>";
+	$tab.="</tr></thead><tbody>".$rowsx2."</tbody></table><div style=clear:both></div><hr>";
+}
 
 // $tab.="</table><div style=clear:both></div><hr>";
 
@@ -458,7 +476,7 @@ $ttp->setFetchMode(PDO::FETCH_ASSOC);
 while ($dspb = $ttp->fetch()) {
 	$tglx[substr($dspb['tanggal'],8,2)]=substr($dspb['tanggal'],8,2);
 	if (!empty($dspb['nospb'])) {
-		echo 'NOSPB YANG BELUM DIPOSTING: '.$dspb['nospb']."<br>";
+		$notes['spb'][$dspb['nospb']]=$dspb['nospb'];
 		$cek = 1;
 	}
 }
@@ -473,10 +491,27 @@ $rowp=count($res);
 $ttp=$owlPDO->query($str) or die(print " Gagal: ".PDOException::getMessage());
 $ttp->setFetchMode(PDO::FETCH_ASSOC);
 while ($dspbx = $ttp->fetch()) {
+		$notes['panen'][$dspbx['notransaksi']]=$dspbx['tanggal'];
 	$tglxp[substr($dspbx['tanggal'],8,2)]=substr($dspbx['tanggal'],8,2);
 	if (!empty($dspb['notransaksi'])) {
-		echo 'NOTRANSAKSI PANEN YANG BELUM DIPOSTING: '.$dspb['notransaksi']."<br>";
+
 		$cek = 1;
+	}
+}
+
+#cek HA panen dan mutu hancak panen sudah diposting
+$cekhapost=0;
+$cekmutupost=0;
+$qh="select tanggal, nikmandor from ".$dbname.".kebun_rekaphancakpanen where tanggal between '".$tgl1."' and '".$tgl2."' and kodeorg like '".$afd."%' and posting<>'1' group by tanggal, nikmandor order by tanggal asc, nikmandor asc";
+foreach(fetchdata($qh) as $v){
+	$notes['hapost'][$v['tanggal'].'|'.$v['nikmandor']]=array($v['tanggal'],$v['nikmandor']);
+	$cekhapost=1;
+}
+if(isset($karyawanid) and count($karyawanid)>0){
+	$qm="select tanggal, nikmandor from ".$dbname.".kebun_rekapmutuhancakpanen where tanggal between '".$tgl1."' and '".$tgl2."' and kodeorg like '".$unit."%' and nik in ('".implode("','",array_keys($karyawanid))."') and posting<>'1' group by tanggal, nikmandor order by tanggal asc, nikmandor asc";
+	foreach(fetchdata($qm) as $v){
+		$notes['mutupost'][$v['tanggal'].'|'.$v['nikmandor']]=array($v['tanggal'],$v['nikmandor']);
+		$cekmutupost=1;
 	}
 }
 
@@ -495,15 +530,15 @@ if(count($kgwbnetto)==0){
 // if($proses != 'excel'){
 	
 	
-	$tab.="<table class=sortable cellspacing=1 cellpadding=5 $brd>";
-	$tab.="<thead><tr class=rowheader>";
-	$tab.="<td align=center width=50px>No.SPB</td>
-			  <td align=center width=50px>Tanggal Panen</td>
-			  <td align=center width=75px>BLOK</td>
-			  <td align=center width=75px>BASIS</td>
-			  <td align=center width=75px>JJG</td>
-			  <td align=center width=75px>BJR</td>
-			  <td align=center width=75px>Kg PKS Setelah Pot Brondol</td>";
+	$tab.="<table class=sortable width=700px cellspacing=1 cellpadding=3 $brd>";
+	$tab.="<thead><tr class=rowheader><td align=center colspan=7>Rekap BJR per SPB</td></tr><tr class=rowheader>";
+	$tab.="<td align=center width=150px>No.SPB</td>
+			  <td align=center width=95px>Tanggal Panen</td>
+			  <td align=center width=80px>BLOK</td>
+			  <td align=center width=70px>BASIS</td>
+			  <td align=center width=80px>JJG</td>
+			  <td align=center width=70px>BJR</td>
+			  <td align=center width=140px>Kg PKS Setelah Pot Brondol</td>";
 	// $jt=0;
 	// foreach($arrtopo as $topografi){
 	// 	$jt++;
@@ -524,8 +559,8 @@ if(count($kgwbnetto)==0){
 					}
 
 					$tab.="<tr class=rowcontent>";
-					$tab.="<td align=center>".$nospb."</td>";
-					$tab.="<td align=center>".tanggalnormal($tglpanen)."</td>";
+					$tab.="<td align=center nowrap>".$nospb."</td>";
+					$tab.="<td align=center nowrap>".tanggalnormal($tglpanen)."</td>";
 					$tab.="<td align=center>".$nmorg[$blok]."</td>";
 					$tab.="<td align=center>".$basisx."</td>";
 					$tab.="<td align=right>".@number_format($jjgkirim[$nospb][$tglpanen][$blok][$basisx],2)."</td>";
@@ -537,16 +572,18 @@ if(count($kgwbnetto)==0){
 		}
 	}
 		//print_r($bjrspb);
-	$tab.="</table><div style=clear:both></div><hr>";
+		$tab.="</table><div style=clear:both></div><hr>";
 		
 		
 // }#tutup if proses != excel
 	
 	if ($proses == 'excel') {
+		$mainStart=strlen($tab);
 		$tab.="<table class=sortable cellspacing=1 border=1>";
 	} else 	{
-		$tab.="<label>Pada saat buah pemanen sudah dikirimkan seluruhnya maka Tombol proses akan muncul di bawah dan yang muncul hanya yang memiliki janjang , untuk yang hanya brondolan tidak muncul , inputkan di bkm rawat untuk rupiah nya</label>";
-		$tab.="<div class=table-scroll><table class=sortable cellspacing=1>";
+			$tab.="<label>Pada saat buah pemanen sudah dikirimkan seluruhnya maka Tombol proses akan muncul di bawah dan yang muncul hanya yang memiliki janjang , untuk yang hanya brondolan tidak muncul , inputkan di bkm rawat untuk rupiah nya</label>";
+		$tab.="<style>#tblpremi td{white-space:nowrap;padding:2px 5px}#tblpremi th{white-space:normal;padding:3px 5px;vertical-align:middle}</style>";
+			$tab.="<div class=table-scroll><table class=sortable id=tblpremi cellspacing=1>";
 	}
 	$tab.="<thead>";
 	$tab.="<tr class=rowheader>";
@@ -630,7 +667,7 @@ if(count($kgwbnetto)==0){
 							foreach($key5 as $kdblok => $jjgbuahbesar){
 									$datamasukke2[$tglpnn][$kary][$nospb][$mdr][$krn][$kdblok]=0;
 									if(!isset($kgwbnetto[$nospb][$tglpnn][$kdblok])){
-										echo 'NOSPB : '.$nospb.' BLOK'.$kdblok.' TANGGAL PANEN :'.$tglpnn.'<br>';
+										$notes['spbblok'][$nospb.'|'.$kdblok.'|'.$tglpnn.'|'.$kary]=array($nospb,$kdblok,$tglpnn,$kary);
 										$cek=1;
 									}
 									$counthkpanen[$tglpnn][$kary]+=1;
@@ -754,6 +791,10 @@ if(count($kgwbnetto)==0){
 //exit('error');
 		
 	$cekbasis=0;
+	$tglTot=array();
+	$tglNan=array();
+	#urutan kolom angka pada baris sub total (null = kolom kosong)
+	$totCols=array('sbtthektarpanenkary','sbttjjgbuahbesar',null,'sbttkgbuahbesar','sbttkgbrondbuahbesar',null,null,'sbtthkkaryawanbesar','sbtthkkupaharyawanbesar','sbtthkkaryawanbesarpot','sbtthkkupaharyawanbesarpot','sbttkglbbuahbesar','sbttrplbbssbesar','sbttjjgbuahkecil',null,'sbttkgbuahkecil','sbttkgbrondbuahkecil',null,null,'sbtthkkaryawankecil','sbtthkkupaharyawankecil','sbtthkkaryawankecilpot','sbtthkkupaharyawankecilpot','sbttkglbbuahkecil','sbttrplbbsskecil','sbttbrondolkg','sbttrpbrondolkg','sbttdendapanenkary','sbtthtotaldapatpanenkary');
 	$cekbasisblok=$basisbaru=array();
 	foreach($list2 as $tglpnn => $key ){
 			$jenispremi = getjenisharikerja($unit,$tglpnn);
@@ -897,7 +938,7 @@ if(count($kgwbnetto)==0){
 													// }
 
 										if(is_nan($HKbesar) and !isset($cekbasisblok[$kdblok]['BESAR'][$tglpnn][$kary])){
-											echo "Terdapat basis panen yang belum terdaftar : Basis panen blok ".$kdblok." jenis basis Besar atau SPB belum diposting <br>";
+											$notes['basis'][$kdblok.'|Besar|'.$tglpnn.'|'.$kary]=array($kdblok,'Besar',$tglpnn,$kary,$jenispremi);
 											$cekbasis=1;
 											$cekbasisblok[$kdblok]['BESAR'][$tglpnn][$kary]=1;
 										}
@@ -980,7 +1021,7 @@ if(count($kgwbnetto)==0){
 									}
 
 										if(is_nan($HKkecil) and !isset($cekbasisblok[$kdblok]['KECIL'][$tglpnn][$kary])){
-											echo "Terdapat basis panen yang belum terdaftar : Basis panen blok ".$kdblok." jenis basis kecil atau spb belum diposting  <br>";
+											$notes['basis'][$kdblok.'|Kecil|'.$tglpnn.'|'.$kary]=array($kdblok,'Kecil',$tglpnn,$kary,$jenispremi);
 											$cekbasis=1;
 											$cekbasisblok[$kdblok]['KECIL'][$tglpnn][$kary]=1;
 
@@ -1077,6 +1118,10 @@ if(count($kgwbnetto)==0){
 										$tab.="<td id=dendapanen_".$no." align=right>".nb_format($dendaproporsi,2)."</td>";
 										$totaldapat=0;
 										$totaldapat=(($HKbesar*$upah1hk)+($HKkecil*$upah1hk)+$rplbbssbesar+$rplbbsskecil+($listbrondol[$tglpnn][$kary][$nospb][$mdr][$krn][$kdblok]*$rpbrd[$kdblok][$jenispremi]['BESAR'])-$dendaproporsi-($HKbesarpot*$upah1hk)-($HKkecilpot*$upah1hk));
+										if(is_nan($totaldapat)){
+											$cekbasis=1;
+											$notes['nan'][$nospb.'|'.$kdblok]=array($nospb,$kdblok);
+										}
 										$tab.="<td id=total_".$no." ".$n." align=right>".nb_format($totaldapat,2)."</td>";
 										
 										
@@ -1117,66 +1162,115 @@ if(count($kgwbnetto)==0){
 					
 				}
 			}
+							$vtot=(float)@$sbtthtotaldapatpanenkary[$tglpnn][$kary];
+							$bgsub=(!is_nan($vtot) and round($vtot,2)<=0) ? "background:#f8d0d0;color:#a94442" : "background:#eaf3d0";
+							foreach($totCols as $ci=>$nm){
+								if($nm!==null){
+									$nv=@${$nm}[$tglpnn][$kary];
+									if(is_float($nv) and is_nan($nv)){
+										@$tglNan[$tglpnn]+=1;
+									}else{
+										@$tglTot[$tglpnn][$ci]+=$nv;
+									}
+								}
+							}
 							$tab.="<tr class=rowcontent>";
-							$tab.="<td colspan=8 align=center bgcolor=#ADFF2F><b>SUB TOTAL  TANGGAL ".tanggalnormal($tglpnn)." Karyawan : ".$nmkar[$kary]."</b></td>";
-							$tab.="<td bgcolor=#ADFF2F align=right><b>".@number_format($sbtthektarpanenkary[$tglpnn][$kary],2)."</b></td>";
-							$tab.="<td bgcolor=#ADFF2F align=right><b>".@number_format($sbttjjgbuahbesar[$tglpnn][$kary],2)."</b></td>";
-							$tab.="<td bgcolor=#ADFF2F align=right><b></b></td>";
-							$tab.="<td bgcolor=#ADFF2F align=right><b>".@number_format($sbttkgbuahbesar[$tglpnn][$kary],2)."</b></td>";
-							$tab.="<td bgcolor=#ADFF2F align=right><b>".@number_format($sbttkgbrondbuahbesar[$tglpnn][$kary],2)."</b></td>";
-							$tab.="<td bgcolor=#ADFF2F align=right><b></b></td>";
-							$tab.="<td bgcolor=#ADFF2F align=right><b></b></td>";
-							$tab.="<td bgcolor=#ADFF2F align=right><b>".@number_format($sbtthkkaryawanbesar[$tglpnn][$kary],2)."</b></td>";
-							$tab.="<td bgcolor=#ADFF2F align=right><b>".@number_format($sbtthkkupaharyawanbesar[$tglpnn][$kary],2)."</b></td>";
-							$tab.="<td bgcolor=#ADFF2F align=right><b>".@number_format($sbtthkkaryawanbesarpot[$tglpnn][$kary],2)."</b></td>";
-							$tab.="<td bgcolor=#ADFF2F align=right><b>".@number_format($sbtthkkupaharyawanbesarpot[$tglpnn][$kary],2)."</b></td>";
-							$tab.="<td bgcolor=#ADFF2F align=right><b>".@number_format($sbttkglbbuahbesar[$tglpnn][$kary],2)."</b></td>";
-							$tab.="<td bgcolor=#ADFF2F align=right><b>".@number_format($sbttrplbbssbesar[$tglpnn][$kary],2)."</b></td>";
-							$tab.="<td bgcolor=#ADFF2F align=right><b>".@number_format($sbttjjgbuahkecil[$tglpnn][$kary],2)."</b></td>";
-							$tab.="<td bgcolor=#ADFF2F align=right><b></b></td>";
-							$tab.="<td bgcolor=#ADFF2F align=right><b>".@number_format($sbttkgbuahkecil[$tglpnn][$kary],2)."</b></td>";
-							$tab.="<td bgcolor=#ADFF2F align=right><b>".@number_format($sbttkgbrondbuahkecil[$tglpnn][$kary],2)."</b></td>";
-							$tab.="<td bgcolor=#ADFF2F align=right><b></b></td>";
-							$tab.="<td bgcolor=#ADFF2F align=right><b></b></td>";
-							$tab.="<td bgcolor=#ADFF2F align=right><b>".@number_format($sbtthkkaryawankecil[$tglpnn][$kary],2)."</b></td>";
-							$tab.="<td bgcolor=#ADFF2F align=right><b>".@number_format($sbtthkkupaharyawankecil[$tglpnn][$kary],2)."</b></td>";
-							$tab.="<td bgcolor=#ADFF2F align=right><b>".@number_format($sbtthkkaryawankecilpot[$tglpnn][$kary],2)."</b></td>";
-							$tab.="<td bgcolor=#ADFF2F align=right><b>".@number_format($sbtthkkupaharyawankecilpot[$tglpnn][$kary],2)."</b></td>";
-							$tab.="<td bgcolor=#ADFF2F align=right><b>".@number_format($sbttkglbbuahkecil[$tglpnn][$kary],2)."</b></td>";
-							$tab.="<td bgcolor=#ADFF2F align=right><b>".@number_format($sbttrplbbsskecil[$tglpnn][$kary],2)."</b></td>";
-							$tab.="<td bgcolor=#ADFF2F align=right><b>".@number_format($sbttbrondolkg[$tglpnn][$kary],2)."</b></td>";
-							$tab.="<td bgcolor=#ADFF2F align=right><b>".@number_format($sbttrpbrondolkg[$tglpnn][$kary],2)."</b></td>";
-							$tab.="<td bgcolor=#ADFF2F align=right><b>".@number_format($sbttdendapanenkary[$tglpnn][$kary],2)."</b></td>";
-							$tab.="<td bgcolor=#ADFF2F align=right><b>".@number_format($sbtthtotaldapatpanenkary[$tglpnn][$kary],2)."</b></td>";
+							$tab.="<td colspan=8 align=left style='".$bgsub.";padding-left:8px'><b>SUB TOTAL  TANGGAL ".tanggalnormal($tglpnn)." Karyawan : ".$nmkar[$kary]."</b></td>";
+							$tab.="<td style='".$bgsub."' align=right><b>".@number_format($sbtthektarpanenkary[$tglpnn][$kary],2)."</b></td>";
+							$tab.="<td style='".$bgsub."' align=right><b>".@number_format($sbttjjgbuahbesar[$tglpnn][$kary],2)."</b></td>";
+							$tab.="<td style='".$bgsub."' align=right><b></b></td>";
+							$tab.="<td style='".$bgsub."' align=right><b>".@number_format($sbttkgbuahbesar[$tglpnn][$kary],2)."</b></td>";
+							$tab.="<td style='".$bgsub."' align=right><b>".@number_format($sbttkgbrondbuahbesar[$tglpnn][$kary],2)."</b></td>";
+							$tab.="<td style='".$bgsub."' align=right><b></b></td>";
+							$tab.="<td style='".$bgsub."' align=right><b></b></td>";
+							$tab.="<td style='".$bgsub."' align=right><b>".@number_format($sbtthkkaryawanbesar[$tglpnn][$kary],2)."</b></td>";
+							$tab.="<td style='".$bgsub."' align=right><b>".@number_format($sbtthkkupaharyawanbesar[$tglpnn][$kary],2)."</b></td>";
+							$tab.="<td style='".$bgsub."' align=right><b>".@number_format($sbtthkkaryawanbesarpot[$tglpnn][$kary],2)."</b></td>";
+							$tab.="<td style='".$bgsub."' align=right><b>".@number_format($sbtthkkupaharyawanbesarpot[$tglpnn][$kary],2)."</b></td>";
+							$tab.="<td style='".$bgsub."' align=right><b>".@number_format($sbttkglbbuahbesar[$tglpnn][$kary],2)."</b></td>";
+							$tab.="<td style='".$bgsub."' align=right><b>".@number_format($sbttrplbbssbesar[$tglpnn][$kary],2)."</b></td>";
+							$tab.="<td style='".$bgsub."' align=right><b>".@number_format($sbttjjgbuahkecil[$tglpnn][$kary],2)."</b></td>";
+							$tab.="<td style='".$bgsub."' align=right><b></b></td>";
+							$tab.="<td style='".$bgsub."' align=right><b>".@number_format($sbttkgbuahkecil[$tglpnn][$kary],2)."</b></td>";
+							$tab.="<td style='".$bgsub."' align=right><b>".@number_format($sbttkgbrondbuahkecil[$tglpnn][$kary],2)."</b></td>";
+							$tab.="<td style='".$bgsub."' align=right><b></b></td>";
+							$tab.="<td style='".$bgsub."' align=right><b></b></td>";
+							$tab.="<td style='".$bgsub."' align=right><b>".@number_format($sbtthkkaryawankecil[$tglpnn][$kary],2)."</b></td>";
+							$tab.="<td style='".$bgsub."' align=right><b>".@number_format($sbtthkkupaharyawankecil[$tglpnn][$kary],2)."</b></td>";
+							$tab.="<td style='".$bgsub."' align=right><b>".@number_format($sbtthkkaryawankecilpot[$tglpnn][$kary],2)."</b></td>";
+							$tab.="<td style='".$bgsub."' align=right><b>".@number_format($sbtthkkupaharyawankecilpot[$tglpnn][$kary],2)."</b></td>";
+							$tab.="<td style='".$bgsub."' align=right><b>".@number_format($sbttkglbbuahkecil[$tglpnn][$kary],2)."</b></td>";
+							$tab.="<td style='".$bgsub."' align=right><b>".@number_format($sbttrplbbsskecil[$tglpnn][$kary],2)."</b></td>";
+							$tab.="<td style='".$bgsub."' align=right><b>".@number_format($sbttbrondolkg[$tglpnn][$kary],2)."</b></td>";
+							$tab.="<td style='".$bgsub."' align=right><b>".@number_format($sbttrpbrondolkg[$tglpnn][$kary],2)."</b></td>";
+							$tab.="<td style='".$bgsub."' align=right><b>".@number_format($sbttdendapanenkary[$tglpnn][$kary],2)."</b></td>";
+							$tab.="<td style='".$bgsub."' align=right><b>".@number_format($sbtthtotaldapatpanenkary[$tglpnn][$kary],2)."</b></td>";
 							
 							$tab.="</tr>";
 		}
+			if(count($list2)>1){
+				$tab.="<tr class=rowcontent>";
+				$tab.="<td colspan=8 align=left style='background:#d3e4a5;padding-left:8px'><b>TOTAL TANGGAL ".tanggalnormal($tglpnn)."</b></td>";
+				foreach($totCols as $ci=>$nm){
+					$tab.="<td style='background:#d3e4a5' align=right><b>".($nm===null ? "" : number_format((float)@$tglTot[$tglpnn][$ci],2))."</b></td>";
+				}
+				$tab.="</tr>";
+			}
 	}
 	
 	
 		// $tab.="<tr class=rowcontent>";
 		// $tab.="<input hidden id=totalbaris value=".$no.">";
-		// $tab.="<td colspan=10 align=center bgcolor=#ADFF2F><b>GRAND TOTAL</b></td>";
-		// $tab.="<td bgcolor=#ADFF2F align=right><b>".@number_format($ttljjg)."</b></td>";
-		// $tab.="<td bgcolor=#ADFF2F align=right><b>".@number_format($ttlkgkirim,2)."</b></td>";
-		// $tab.="<td bgcolor=#ADFF2F align=right><b></b></td>";
-		// $tab.="<td bgcolor=#ADFF2F align=right><b>".@number_format($ttlkgkirimnet,2)."</b></td>";
-		// $tab.="<td bgcolor=#ADFF2F align=right><b></b></td>";
-		// $tab.="<td bgcolor=#ADFF2F align=right><b>".@number_format($ttlkglb,2)."</b></td>";
-		// $tab.="<td bgcolor=#ADFF2F align=right><b></b></td>";
-		// $tab.="<td bgcolor=#ADFF2F align=right><b>".@number_format($ttlrplb)."</b></td>";
-		// $tab.="<td bgcolor=#ADFF2F align=right><b>".@number_format($gtbrd)."</b></td>";
-		// $tab.="<td bgcolor=#ADFF2F align=right><b></b></td>";
-		// $tab.="<td bgcolor=#ADFF2F align=right><b>".@number_format($gtrpbrd)."</b></td>";
-		// $tab.="<td bgcolor=#ADFF2F align=right><b>".@number_format($gttopo)."</b></td>";
-		// $tab.="<td bgcolor=#ADFF2F align=right><b>".@number_format($gttambah)."</b></td>";
-		// $tab.="<td bgcolor=#ADFF2F align=right><b>".@number_format($gtdenda)."</b></td>";
-		// $tab.="<td bgcolor=#ADFF2F align=right><b>".@number_format($ttlrpall)."</b></td>";
+		// $tab.="<td colspan=10 align=center style='".$bgsub."'><b>GRAND TOTAL</b></td>";
+		// $tab.="<td style='".$bgsub."' align=right><b>".@number_format($ttljjg)."</b></td>";
+		// $tab.="<td style='".$bgsub."' align=right><b>".@number_format($ttlkgkirim,2)."</b></td>";
+		// $tab.="<td style='".$bgsub."' align=right><b></b></td>";
+		// $tab.="<td style='".$bgsub."' align=right><b>".@number_format($ttlkgkirimnet,2)."</b></td>";
+		// $tab.="<td style='".$bgsub."' align=right><b></b></td>";
+		// $tab.="<td style='".$bgsub."' align=right><b>".@number_format($ttlkglb,2)."</b></td>";
+		// $tab.="<td style='".$bgsub."' align=right><b></b></td>";
+		// $tab.="<td style='".$bgsub."' align=right><b>".@number_format($ttlrplb)."</b></td>";
+		// $tab.="<td style='".$bgsub."' align=right><b>".@number_format($gtbrd)."</b></td>";
+		// $tab.="<td style='".$bgsub."' align=right><b></b></td>";
+		// $tab.="<td style='".$bgsub."' align=right><b>".@number_format($gtrpbrd)."</b></td>";
+		// $tab.="<td style='".$bgsub."' align=right><b>".@number_format($gttopo)."</b></td>";
+		// $tab.="<td style='".$bgsub."' align=right><b>".@number_format($gttambah)."</b></td>";
+		// $tab.="<td style='".$bgsub."' align=right><b>".@number_format($gtdenda)."</b></td>";
+		// $tab.="<td style='".$bgsub."' align=right><b>".@number_format($ttlrpall)."</b></td>";
 		// $tab.="</tr>";
+		$gt=array();
+		foreach($tglTot as $tgx=>$colx){
+			foreach($colx as $ci=>$vx){
+				@$gt[$ci]+=$vx;
+			}
+		}
+		reset($list2);
+		$tab.="<tr class=rowcontent>";
+		$tab.="<td colspan=8 align=left style='background:#b7d27a;padding-left:8px'><b>GRAND TOTAL".(count($list2)>1 ? "" : " TANGGAL ".tanggalnormal(key($list2)))."</b></td>";
+		foreach($totCols as $ci=>$nm){
+			$tab.="<td style='background:#b7d27a' align=right><b>".($nm===null ? "" : number_format((float)@$gt[$ci],2))."</b></td>";
+		}
+		$tab.="</tr>";
 		$tab.="</tbody></table></div><br>";
+		if(isset($mainStart)){
+			$mainHtml=substr($tab,$mainStart);
+		}
 		
 	//echo $cek.'xxxx'.$rowp.'xxxxx'.$row;
-if ($proses != 'excel' and $row==0 and $rowp==0 and $afd!='%%' and $cek==0 and $cekbasis==0 and $dataxx==0 and $databasisbloktidakada==0 and @$prdgaji=='0' and @$prdakt=='0') {
+#cek total pendapatan karyawan per tanggal: 0 atau kurang dari 0 tidak boleh diproses
+$cektotal0=0;
+if(isset($sbtthtotaldapatpanenkary)){
+	foreach($sbtthtotaldapatpanenkary as $tgx=>$lstx){
+		foreach($lstx as $kyx=>$valx){
+			if(!is_nan($valx) and round($valx,2)<=0){
+				$notes['total0'][$tgx.'|'.$kyx]=array($tgx,$kyx,$valx);
+				$cektotal0=1;
+			}
+		}
+	}
+}
+
+if ($proses != 'excel' and $row==0 and $rowp==0 and $afd!='%%' and $cek==0 and $cekbasis==0 and $dataxx==0 and $databasisbloktidakada==0 and @$prdgaji=='0' and @$prdakt=='0' and $cekhapost==0 and $cekmutupost==0 and $cektotal0==0) {
 	
 	$arr="##prd##unit##afd##tahap##tgl1##tgl2##kgbrondol##perpot";
 	//$r="style=display:none";
@@ -1187,40 +1281,40 @@ else{
 	// echo $proses.'{}'.$row.'{}'.$rowp.'{}'.$afd.'{}'.$cek.'<br>';
 	// echo $cekbasis.'{}'.$dataxx.'{}'.$prdgaji.'{}'.$prdakt.'<br>';
 	if($row!=0){
-		echo "Data SPB Ada Yang Belum Diposting<br>";
+		$notes['status'][]="Data SPB ada yang belum diposting";
 	}
 	if($rowp!=0){
-		echo "Data Panen Ada Yang Belum Diposting<br>";
+		$notes['status'][]="Data panen ada yang belum diposting";
 	}
 	if($afd=='%%'){
-		echo "Divisi tidak boleh kosong<br>";
+		$notes['status'][]="Divisi tidak boleh kosong";
 	}
 	if($databasisbloktidakada==1){
-		echo "Ada Data Basis Blok Yang Tidak Ada<br>";
+		$notes['status'][]="Ada data basis blok yang tidak ada";
 	}
 	if($cek==1){
-		echo "Ada Data Panen Dan SPB Belum Diposting<br>";
+		$notes['status'][]="Ada data panen dan SPB belum diposting";
 	}
 	if($dataxx==1){
-		echo "Ada Data Panen Yang Memiliki Hektar Dan Janjang Kosong Keseluruhan<br>";
+		$notes['status'][]="Ada data panen yang memiliki hektar dan janjang kosong keseluruhan";
 	}
 	if($cekbasis==1){
-		echo "Ada Basis Panen Belum Terdaftar Atau SPB Belum Diposting<br>";
+		$notes['status'][]="Ada basis panen belum terdaftar atau SPB belum diposting";
 	}
 	if($prdgaji=='1'){
-		echo "Sudah Proses Gaji Transaksi Tidak Bisa Diproses<br>";
+		$notes['status'][]="Sudah proses gaji, transaksi tidak bisa diproses";
 	}
 
 	if($prdgaji==''){
-		echo "Periode gaji tidak ada, Transaksi Tidak Bisa Diproses<br>";
+		$notes['status'][]="Periode gaji tidak ada, transaksi tidak bisa diproses";
 	}
 
 	if($prdakt=='1'){
-		echo "Sudah Tutup Buku Transaksi Tidak Bisa Diproses<br>";
+		$notes['status'][]="Sudah tutup buku, transaksi tidak bisa diproses";
 	}
 
 	if($prdakt==''){
-		echo "Periode akutansi tidak ada, Transaksi Tidak Bisa Diproses<br>";
+		$notes['status'][]="Periode akuntansi tidak ada, transaksi tidak bisa diproses";
 	}
 }
 
@@ -1232,13 +1326,353 @@ function nb_format($e,$i=0,$proses='preview'){
 	}
 	return $n;
 }
+$infoHtml='';
+if($proses!='excel'){
+	#tabel validasi: yang ditampilkan adalah nomor transaksi yang harus diselesaikan
+	$vr=array();
+
+	#peta No. Transaksi panen (BKM) per tanggal, blok, dan pemanen
+	$mapTrx=array();
+	if(count($notes['spbblok'])>0 or count($notes['basis'])>0){
+		$qi="select b.notransaksi, b.tanggal, a.kodeorg, a.nik from ".$dbname.".kebun_prestasi a left join ".$dbname.".kebun_aktifitas b on a.notransaksi=b.notransaksi
+			where b.kodeorg='".$unit."' and a.kodeorg like '".$afd."%' and b.tipetransaksi='PNN' and b.tanggal between '".$tgl1."' and '".$tgl2."'
+			group by b.notransaksi, a.kodeorg, a.nik";
+		foreach(fetchdata($qi) as $v){
+			$mapTrx[$v['tanggal']][$v['kodeorg']][$v['nik']][$v['notransaksi']]=$v['notransaksi'];
+		}
+	}
+
+	#transaksi panen (BKM) yang belum diposting
+	if(count($notes['panen'])>0){
+		$qi="select distinct a.notransaksi from ".$dbname.".kebun_prestasi_vs_hk a where 1=1 and a.tanggal between '".$tgl1."' and '".$tgl2."' and unit='".$unit."' and kodeorg like '".$afd."%' and jurnal='0' and notransaksi like '%/PNN/%'
+			order by a.notransaksi asc";
+		$li=array();
+		foreach(fetchdata($qi) as $v){
+			$li[$v['notransaksi']]=$v['notransaksi'];
+		}
+		if(count($li)>0){
+			$vr[]=array("Transaksi panen belum diposting (".count($li).")",implode(", ",$li));
+		}
+	}
+
+	#SPB yang belum diposting
+	if(count($notes['spb'])>0){
+		$qi="select distinct a.nospb from ".$dbname.".kebun_spbht a left join ".$dbname.".kebun_spbdt b on a.nospb=b.nospb
+			where 1=1 and b.tanggalpanen between '".$tgl1."' and '".$tgl2."' and a.nospb like '%".$unit."%' and a.kodeorg='".$unit."' and a.posting='0' and a.tujuan!='4'
+			order by a.nospb asc";
+		$lsp=array();
+		foreach(fetchdata($qi) as $v){
+			$lsp[$v['nospb']]=$v['nospb'];
+		}
+		if(count($lsp)>0){
+			$vr[]=array("SPB belum diposting (".count($lsp).")",implode(", ",$lsp));
+		}
+	}
+
+	#HA panen dan mutu hancak panen yang belum diposting, per tanggal dan mandor
+	if(count($notes['hapost'])>0){
+		$li=array();
+		foreach($notes['hapost'] as $v){
+			$li[]=tanggalnormal($v[0])." ".@$nmkar[$v[1]];
+		}
+		$vr[]=array("HA panen belum diposting (".count($li).")",implode("; ",$li)." <span style='color:#666'>(posting di menu Rekap Ha Panen)</span>");
+	}
+	if(count($notes['mutupost'])>0){
+		$li=array();
+		foreach($notes['mutupost'] as $v){
+			$li[]=tanggalnormal($v[0])." ".@$nmkar[$v[1]];
+		}
+		$vr[]=array("Mutu hancak panen belum diposting (".count($li).")",implode("; ",$li)." <span style='color:#666'>(posting di menu Mutu Hancak Panen)</span>");
+	}
+
+	#data panen yang SPB-nya belum diposting / belum ada
+	if(count($notes['spbblok'])>0){
+		$lsp=array();
+		$ltr=array();
+		foreach($notes['spbblok'] as $v){
+			$lsp[$v[0]]=$v[0];
+			if(isset($mapTrx[$v[2]][$v[1]][$v[3]])){
+				foreach($mapTrx[$v[2]][$v[1]][$v[3]] as $trx){
+					$ltr[$trx]=$trx;
+				}
+			}
+		}
+		ksort($lsp);
+		ksort($ltr);
+		$vr[]=array("Data panen belum punya SPB terposting","No. Transaksi Panen: ".(count($ltr)>0 ? implode(", ",$ltr) : "-")."<br>No. SPB: ".implode(", ",$lsp));
+	}
+
+	#basis panen belum terdaftar
+	if(count($notes['basis'])>0){
+		$bl=array();
+		$ltr=array();
+		foreach($notes['basis'] as $v){
+			$bl[$v[0]]=$v[0];
+			if(isset($mapTrx[$v[2]][$v[0]][$v[3]])){
+				foreach($mapTrx[$v[2]][$v[0]][$v[3]] as $trx){
+					$ltr[$trx]=$trx;
+				}
+			}
+		}
+		ksort($bl);
+		ksort($ltr);
+		$vr[]=array("Basis panen belum terdaftar (atau SPB belum diposting)","Blok: ".implode(", ",$bl)."<br>No. Transaksi Panen: ".(count($ltr)>0 ? implode(", ",$ltr) : "-"));
+	}
+
+	#baris yang hasilnya belum bisa dihitung (NaN): sebutkan No. SPB dan blok
+	if(count($notes['nan'])>0){
+		$ls=array();
+		$lb=array();
+		foreach($notes['nan'] as $v){
+			$ls[$v[0]]=$v[0];
+			$lb[$v[1]]=$v[1];
+		}
+		ksort($ls);
+		ksort($lb);
+		$vr[]=array("Data belum bisa dihitung (".count($ls)." SPB)","No. SPB: ".implode(", ",$ls)."<br>Blok: ".implode(", ",$lb)." <span style='color:#666'>(SPB belum diposting atau basis / BJR belum ada)</span>");
+	}
+
+	#karyawan dengan total pendapatan 0 atau kurang dari 0
+	if(count($notes['total0'])>0){
+		$li=array();
+		foreach($notes['total0'] as $v){
+			$li[]="<span style='color:#a94442;font-weight:bold'>".tanggalnormal($v[0])." ".@$nmkar[$v[1]]." (".number_format($v[2],2).")</span>";
+		}
+		$vr[]=array("Total pendapatan karyawan 0 atau kurang (".count($li).")",implode("; ",$li)." <span style='color:#666'>(tidak bisa diproses)</span>");
+	}
+
+	#blok tanpa data basis
+	if(count($notes['basisblok'])>0){
+		$vr[]=array("Blok belum punya data basis (setup di Setup Blok)",implode(", ",$notes['basisblok']));
+	}
+
+	#pesan status yang belum terwakili baris di atas (periode gaji/akuntansi, divisi, dll.)
+	$dupmap=array(
+		'Data SPB ada yang belum diposting'=>count($notes['spb'])>0,
+		'Data panen ada yang belum diposting'=>count($notes['panen'])>0,
+		'Ada data basis blok yang tidak ada'=>count($notes['basisblok'])>0,
+		'Ada data panen dan SPB belum diposting'=>count($notes['spbblok'])>0,
+		'Ada basis panen belum terdaftar atau SPB belum diposting'=>(count($notes['basis'])>0 or count($notes['nan'])>0),
+		'Ada data panen yang memiliki hektar dan janjang kosong keseluruhan'=>$dataxx>0
+	);
+	foreach($notes['status'] as $v){
+		if(isset($dupmap[$v]) and $dupmap[$v]){
+			continue;
+		}
+		$vr[]=array("Status",$v);
+	}
+
+	if(count($vr)>0){
+		$infoHtml="<table class=sortable cellspacing=1 cellpadding=4 width=700px><thead><tr class=rowheader><td align=center width=200px>Validasi</td><td align=center>Keterangan</td></tr></thead><tbody>";
+		foreach($vr as $r){
+			$infoHtml.="<tr class=rowcontent><td valign=top style='color:#a94442;font-weight:bold'>".$r[0]."</td><td align=left>".$r[1]."</td></tr>";
+		}
+		$infoHtml.="</tbody></table><div style=clear:both></div><hr>";
+	}
+	$valContent=$infoHtml.$tabval;
+	if($valContent!=''){
+		$infoHtml="<div style='background:#fdeaea;border:1px solid #d9534f;color:#a94442;padding:6px 10px;margin:4px 0 8px 0;font-weight:bold;width:700px'>PERHATIAN - VALIDASI HARUS DISELESAIKAN<div style='font-weight:normal;margin-top:2px'>Tombol Proses tidak akan muncul sebelum semua data di bawah ini diselesaikan (diposting / dilengkapi), lalu klik Preview lagi.</div></div>".$valContent;
+	}else{
+		$infoHtml="<div style='background:#eaf6ea;border:1px solid #5cb85c;color:#3c763d;padding:6px 10px;margin:4px 0 8px 0;font-weight:bold;width:700px'>VALIDASI - semua data sudah lengkap</div>";
+	}
+}
+
+#sel angka yang tidak bisa dihitung (NaN) ditampilkan '-'; hanya tampilan, tombol Proses sudah diblokir bila ada NaN
+$tab=preg_replace('/(<td[^>]*align=right[^>]*>)(<b>)?(NAN|nan)(<\/b>)?(<\/td>)/','$1$2-$4$5',$tab);
+
+#header cetak: logo PT, judul, parameter, dan waktu cetak (dipakai Excel dan PDF)
+$ptkode=getindukPT($unit);
+$hd=setheadreport($ptkode,$ptkode);
+$waktucetak=date('d-m-Y H:i:s');
+$judulcetak="DAFTAR PREMI PEMANEN";
+$infocetak="Unit: ".$unit." - ".@$nmorg2[$unit]." | Divisi: ".$afd." - ".@$nmorg2[$afd]." | Periode: ".$prd." | Tahap: ".$tahap." | Tanggal: ".tanggalnormal($tgl1)." s/d ".tanggalnormal($tgl2);
+
 switch($proses){
     case'preview':
-         echo $tab;
+         echo $infoHtml.$tab;
 	break;
     ######EXCEL
 	case 'excel':
-		$stream=$tab;;
+			if($modepdf==1){
+				@ini_set('memory_limit','512M');
+				@set_time_limit(300);
+				#ambil isi tabel utama (mode excel: tanpa sel tersembunyi), lalu gambar dengan FPDF (hemat memori untuk periode panjang)
+				$mh=isset($mainHtml) ? $mainHtml : '';
+				$mh=preg_replace('/(<td[^>]*align=right[^>]*>)(<b>)?(NAN|nan)(<\/b>)?(<\/td>)/','$1$2-$4$5',$mh);
+				$mh=preg_replace('/<\/td>\s*<tr/','</td></tr><tr',$mh);
+				$hdrcells=array();
+				if(preg_match('/<thead>.*?<\/thead>/s',$mh,$mth)){
+					preg_match_all('/<th[^>]*>(.*?)<\/th>/s',$mth[0],$mhc);
+					foreach($mhc[1] as $c){
+						$hdrcells[]=trim(html_entity_decode(strip_tags($c)));
+					}
+				}
+				$rowsp=array();
+				preg_match_all('/<tr class=rowcontent.*?<\/tr>/s',$mh,$mrows);
+				foreach($mrows[0] as $mr){
+					preg_match_all('/<td([^>]*)>(.*?)<\/td>/s',$mr,$mc,PREG_SET_ORDER);
+					$cells=array();
+					foreach($mc as $c){
+						$txt=trim(html_entity_decode(strip_tags($c[2])));
+						$span=(preg_match('/colspan=(\d+)/',$c[1],$ms)) ? (int)$ms[1] : 1;
+						$bg=null;
+						if(preg_match('/background:#([0-9a-fA-F]{6})/',$c[1],$mb)){
+							$bg=$mb[1];
+						}
+						$red=(strpos($c[1],'color:#a94442')!==false);
+						$al=(strpos($c[1],'align=right')!==false) ? 'R' : ((strpos($c[1],'align=left')!==false) ? 'L' : 'C');
+						$cells[]=array(utf8_decode($txt),$span,$bg,$red,$al);
+					}
+					$rowsp[]=$cells;
+				}
+				$ncol=count($hdrcells);
+
+				class PDFPremi extends FPDF
+				{
+					public $judul='';
+					public $info='';
+					public $namapt='';
+					public $logo='';
+					public $hcells=array();
+					public $colw=array();
+					public $fs=5;
+					public $hh=9.6;
+					public $waktu='';
+					public $oleh='';
+
+					function Header()
+					{
+						if($this->logo!='' and file_exists($this->logo)){
+							$this->Image($this->logo,8,6,22);
+						}
+						$this->SetXY(34,6);
+						$this->SetFont('Arial','B',11);
+						$this->Cell(0,5,utf8_decode($this->namapt),0,2,'L');
+						$this->SetFont('Arial','B',13);
+						$this->Cell(0,6,$this->judul,0,2,'L');
+						$this->SetFont('Arial','',7);
+						$this->Cell(0,4,utf8_decode($this->info),0,2,'L');
+						$this->SetXY(8,26);
+						$this->SetFont('Arial','B',$this->fs-0.7);
+						$this->SetFillColor(222,222,222);
+						$this->SetDrawColor(80,80,80);
+						$y=$this->GetY();
+						$x=8;
+						foreach($this->hcells as $i=>$t){
+							$w=$this->colw[$i];
+							$this->Rect($x,$y,$w,$this->hh,'DF');
+							$this->SetXY($x,$y+0.4);
+							$this->MultiCell($w,($this->fs*0.4)+0.4,utf8_decode($t),0,'C');
+							$x+=$w;
+						}
+						$this->SetXY(8,$y+$this->hh);
+					}
+
+					function Footer()
+					{
+						$this->SetY(-9);
+						$this->SetFont('Arial','I',7);
+						$this->Cell(0,4,'Dicetak: '.$this->waktu.' oleh '.utf8_decode($this->oleh).'     Halaman '.$this->PageNo().' / {nb}',0,0,'L');
+					}
+
+					function clip($t,$w)
+					{
+						while($t!='' and $this->GetStringWidth($t)>($w-1.2)){
+							$t=substr($t,0,-1);
+						}
+						return $t;
+					}
+				}
+
+				$pdf=new PDFPremi('L','mm','A3');
+				$pdf->AliasNbPages();
+				$pdf->SetMargins(8,8,8);
+				$usable=420-16;
+				#pilih ukuran huruf terbesar yang masih muat 37 kolom dalam satu halaman A3
+				$colw=array();
+				foreach(array(6,5.5,5,4.5,4) as $fs){
+					$pdf->SetFont('Arial','B',$fs);
+					$nat=array_fill(0,$ncol,0);
+					$pdf->SetFont('Arial','B',$fs-0.7);
+					foreach($hdrcells as $i=>$t){
+						foreach(preg_split('/\s+/',$t) as $wd){
+							$nat[$i]=max($nat[$i],$pdf->GetStringWidth(utf8_decode($wd))+2.4);
+						}
+					}
+					$pdf->SetFont('Arial','B',$fs);
+					foreach($rowsp as $cells){
+						$ci=0;
+						foreach($cells as $c){
+							if($c[1]==1 and $ci<$ncol){
+								$nat[$ci]=max($nat[$ci],$pdf->GetStringWidth($c[0])+1.6);
+							}
+							$ci+=$c[1];
+						}
+					}
+					$colw=$nat;
+					if(array_sum($nat)<=$usable){
+						break;
+					}
+				}
+				$tot=array_sum($colw);
+				if($tot>0){
+					foreach($colw as $i=>$w){
+						$colw[$i]=$w*$usable/$tot;
+					}
+				}
+				$pdf->judul=$judulcetak;
+				$pdf->namapt=$hd['nama'];
+				$pdf->info=$infocetak;
+				$pdf->logo=$hd['logo'];
+				$pdf->hcells=$hdrcells;
+				$pdf->colw=$colw;
+				$pdf->fs=$fs;
+				$pdf->waktu=$waktucetak;
+				$pdf->oleh=$_SESSION['empl']['name'];
+				$pdf->SetAutoPageBreak(true,12);
+				$pdf->AddPage();
+				$pdf->SetFont('Arial','',$fs);
+				$pdf->SetDrawColor(80,80,80);
+				$rh=($fs*0.4)+1;
+				foreach($rowsp as $cells){
+					$ci=0;
+					foreach($cells as $c){
+						$w=0;
+						for($k=$ci;$k<$ci+$c[1] and $k<$ncol;$k++){
+							$w+=$colw[$k];
+						}
+						$isbold=($c[2]!==null);
+						$pdf->SetFont('Arial',$isbold ? 'B' : '',$fs);
+						if($c[2]!==null){
+							$pdf->SetFillColor(hexdec(substr($c[2],0,2)),hexdec(substr($c[2],2,2)),hexdec(substr($c[2],4,2)));
+						}
+						if($c[3]){
+							$pdf->SetTextColor(169,68,66);
+						}else{
+							$pdf->SetTextColor(0,0,0);
+						}
+						$pdf->Cell($w,$rh,$pdf->clip($c[0],$w),1,0,$c[4],$c[2]!==null);
+						$ci+=$c[1];
+					}
+					$pdf->Ln($rh);
+				}
+				$pdf->SetTextColor(0,0,0);
+				$pdf->Output('Premi_Pemanen_'.date('YmdHis').'.pdf','I');
+				exit;
+			}
+			$logourl='';
+			if(file_exists($hd['logo'])){
+				$skema=(isset($_SERVER['HTTPS']) and $_SERVER['HTTPS']!='off') ? 'https' : 'http';
+				$logourl=$skema."://".@$_SERVER['HTTP_HOST'].rtrim(dirname(@$_SERVER['SCRIPT_NAME']),'/\\')."/".$hd['logo'];
+			}
+			$hdrexcel="<table>
+				<tr><td colspan='10' height='70' style='height:52pt'>".($logourl!='' ? "<img src='".$logourl."' height='60'>" : "")."</td></tr>
+			<tr><td colspan='10'><b>".$hd['nama']."</b></td></tr>
+				<tr><td colspan='10'><b>".$judulcetak."</b></td></tr>
+				<tr><td colspan='10'>".$infocetak."</td></tr>
+				<tr><td colspan='10'>Dicetak: ".$waktucetak." oleh ".$_SESSION['empl']['name']."</td></tr>
+			</table><br>";
+			$stream=$hdrexcel.$tabval.$tab;;
 		$stream.="Print Time : ".date('H:i:s, d/m/Y')."<br>By : ".$_SESSION['empl']['name'];
 		$tglSkrg=date("Ymd");
 		$nop_="daftar_premi_pemanen";

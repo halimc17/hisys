@@ -77,7 +77,7 @@ $optpot.="<option value='2'>Pot Rp Denda</option>";
 
 OPEN_BOX('','<span class=judul>'.getMenu('kebun_3premipemanenv3_spb').'</span><br>');
 $arrlist="##tgl1list##tgl2list##unitlist##afdlist";
-$arrLoad = "##prdlist##unitlist##afdlist##tgl1list##tgl2list";
+$arrLoad = "##prdlist##unitlist##afdlist##tgl1list##tgl2list##notranslist##statuslist";
 
 echo"<table width=100%>
      <tr valign=middle>
@@ -103,11 +103,17 @@ echo"<table width=100%>
 			</tr>
 			<tr>
 				<td align=right style='width:90px;'>".$_SESSION['lang']['tanggal']." :</td>
-				<td colspan=5>
+				<td>
 				<input type='text' class='myinputtext' id='tgl1list' onmousemove='setCalendar(this.id)' onkeypress='return false;' maxlength='10' style='width:61px;' readonly>
 				s/d
 				<input type='text' class='myinputtext' id='tgl2list' onmousemove='setCalendar(this.id)' onkeypress='return false;' maxlength='10' style='width:61px;' readonly>
 				</td>
+
+				<td align=right style='width:90px;'>No Transaksi :</td>
+				<td><input type='text' class='myinputtext' id='notranslist' style='width:147px;' onkeypress=\"if(getKey(event)==13){loaddata(0);} return tanpa_kutip(event);\"></td>
+
+				<td align=right style='width:90px;'>Status Posting :</td>
+				<td><select id=statuslist onchange=loaddata(0) style='width:153px;'><option value=''>Seluruhnya</option><option value='1'>Posted</option><option value='0'>Belum Posting</option></select></td>
 			</tr>
 		";
 
@@ -222,6 +228,7 @@ echo"<tr>
 		<td colspan=6 align=right>
 		<button onclick=zpreviewdata('".$arr."','baru') class=mybutton name=preview id=preview>".$_SESSION['lang']['preview']."</button>
 		<button onclick=zExcel(event,'kebun_slave_3premipemanenv3_spb.php','".$arr."') class=mybutton name=preview id=preview>".$_SESSION['lang']['excel']."</button>
+		<button onclick=premiPdf('".$arr."') class=mybutton>PDF</button>
 		<button onclick=batal() class=mybutton name=btnBatal id=btnBatal>".$_SESSION['lang']['cancel']."</button>
 		</td>
 	</tr>
