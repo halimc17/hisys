@@ -6,11 +6,12 @@ require_once('config/connection.php');
 require_once('lib/zLib.php');
 require_once('dompdfv2/autoload.inc.php');
 require_once('lib/HtmlExcel.php');
+require_once('kebun_timbangke_eksternal_filter.php');
 
 use Dompdf\Dompdf;
 
 $proses = checkPostGet('proses', '');
-$id = checkPostGet('id', '');
+$id = (int)checkPostGet('id', '');
 $namafile = checkPostGet('namafile', '');
 $nokontrak = checkPostGet('nokontrak', '');
 $notiket = checkPostGet('notiket', '');
@@ -43,8 +44,63 @@ $strap = "select nilai from " . $dbname . ".setup_parameterappl where kodeaplika
 @$resap = fetchData($strap);
 //print_r ($proses);
 
+#escape seluruh isi parameter (string maupun array) sebelum dipakai di SQL
+function tkeEscape($p)
+{
+	if (is_array($p)) {
+		return array_map('tkeEscape', $p);
+	}
+	return addslashes($p);
+}
+#kunci transaksi hanya huruf/angka (maks 12); selain itu ditolak supaya tidak bisa melebar ke baris lain
+function tkeNoTrans($v)
+{
+	if (!is_string($v) || !preg_match('/^[A-Za-z0-9]{1,12}$/', $v)) {
+		exit('Error : No. transaksi tidak valid.');
+	}
+	return $v;
+}
+#unit SPB harus termasuk unit yang bisa diakses user (lokasi tugas + detail akses)
+function tkeUnitBoleh($kodeorg)
+{
+	return strpos(getOrgDetail(2), "'" . $kodeorg . "'") !== false;
+}
+#cek periode akuntansi (setup_periodeakuntansi.tutupbuku=1) untuk unit dan periode YYYY-MM
+function tkeTutupBuku($kodeorg, $periode)
+{
+	global $dbname;
+	$r = fetchData("select tutupbuku from " . $dbname . ".setup_periodeakuntansi where periode='" . addslashes($periode) . "' and kodeorg='" . addslashes($kodeorg) . "'");
+	return (count($r) > 0 && $r[0]['tutupbuku'] == '1');
+}
+#tiket yang sudah ada berada di periode yang sudah ditutup
+function tkeTiketTutup($notransaksi)
+{
+	global $dbname;
+	$r = fetchData("select kodeorg,tanggal from " . $dbname . ".pabrik_timbangan where notransaksi='" . addslashes($notransaksi) . "' and millcode='EXTM'");
+	return (count($r) > 0 && tkeTutupBuku($r[0]['kodeorg'], substr($r[0]['tanggal'], 0, 7)));
+}
+#SPB yang sudah punya tiket External di periode yang sudah ditutup (untuk lampiran)
+function tkeSpbTutup($nospb)
+{
+	global $dbname;
+	if ($nospb == '') {
+		return false;
+	}
+	$r = fetchData("select kodeorg,tanggal from " . $dbname . ".pabrik_timbangan where nospb='" . addslashes($nospb) . "' and millcode='EXTM'");
+	foreach ($r as $t) {
+		if (tkeTutupBuku($t['kodeorg'], substr($t['tanggal'], 0, 7))) {
+			return true;
+		}
+	}
+	return false;
+}
+
 switch ($proses) {
 	case 'submitfile':
+		$param = tkeEscape($param);
+		if (tkeSpbTutup(@$_POST['nospb'])) {
+			exit('Error : Periode Akuntansi Sudah di Tutup.');
+		}
 		@$tgl = date("YmdHis");
 		@$his = date("His");
 		$data = $_POST;
@@ -53,7 +109,10 @@ switch ($proses) {
 				$filetype = strtolower('.' . substr($_FILES['file']['name'], strripos($_FILES['file']['name'], '.') + 1));
 				$nmfile = substr($_FILES['file']['name'], 0, strripos($_FILES['file']['name'], '.'));
 				$nama = preg_replace("/[^a-zA-Z0-9]/", "", $nmfile);
-				$filename = $nama . "" . $filetype;
+				if (!in_array($filetype, array('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.csv', '.txt', '.zip', '.rar'))) {
+					exit("Warning : Tipe file tidak diizinkan !!!");
+				}
+				$filename = preg_replace("/[^a-zA-Z0-9]/", "", $param['nospb']) . "_" . $nama . $filetype;
 				$str = " select * from " . $dbname . ".listfile_kebun_spb where  nospb='" . $param['nospb'] . "' and namafile='" . $filename . "'";
 				$bar = fetchdata($str);
 				if (count($bar) > 0) {
@@ -78,6 +137,7 @@ switch ($proses) {
 		}
 		break;
 	case 'loadfiles':
+		$param = tkeEscape($param);
 		$no = 0;
 		$tab = $icon = "";
 		$str = "select * from " . $dbname . ".listfile_kebun_spb where nospb='" . $param['nospb'] . "'";
@@ -87,25 +147,35 @@ switch ($proses) {
 			$tab .= "<tr class=rowcontent>
 				<td style='text-align:center'>" . $no . "</td>";
 			$icon = seticonfile($val['formaticon']);
+			$namatampil = (strpos($val['namafile'], '_') !== false) ? substr($val['namafile'], strpos($val['namafile'], '_') + 1) : $val['namafile'];
 			$tab .= "<td align=left>
-				<a href='" . $path . $val['namafile'] . "' download>" . (strlen($val['namafile']) > 35 ? substr($val['namafile'], 0, 35) . "..." : $val['namafile']) . "</a></td>";
+				<a href='" . $path . $val['namafile'] . "' download>" . (strlen($namatampil) > 35 ? substr($namatampil, 0, 35) . "..." : $namatampil) . "</a></td>";
 			$tab .= "<td align=center><img src=images/application/application_delete.png class=resicon  title='Delete' onclick=\"deletefile('" . $val['id'] . "','" . $val['namafile'] . "');\" >";
-			$tab . "	</td>
+			$tab .= "	</td>
 			</tr>";
 		}
 		echo $tab;
 		break;
 	case 'deletefile':
+		$rfile = fetchdata("select namafile,nospb from " . $dbname . ".listfile_kebun_spb where id='" . $id . "'");
+		if (count($rfile) > 0 && tkeSpbTutup($rfile[0]['nospb'])) {
+			exit('Error : Periode Akuntansi Sudah di Tutup.');
+		}
+		$namafile = (count($rfile) > 0) ? basename($rfile[0]['namafile']) : '';
 		$str = "delete from " . $dbname . ".listfile_kebun_spb where id='" . $id . "'"; //exit('error'.$str);
 		try {
 			$owlPDO->exec($str);
 			$pathx = $path . $namafile;
-			unlink($pathx);
+			if (is_file($pathx)) { unlink($pathx); }
 		} catch (PDOException $e) {
 			echo " Gagal," . addslashes($e->getMessage());
 		}
 		break;
 	case 'deletefileall':
+		$param = tkeEscape($param);
+		if (tkeSpbTutup(@$param['nospb'])) {
+			exit('Error : Periode Akuntansi Sudah di Tutup.');
+		}
 		# delete file
 		$sql = "select * from " . $dbname . ".listfile_kebun_spb where nospb='" . $param['nospb'] . "'"; //exit('error'.$sql);
 		$res = $owlPDO->query($sql) or die(print " Gagal: " . PDOException::getMessage());
@@ -115,7 +185,7 @@ switch ($proses) {
 			try {
 				$owlPDO->exec($str);
 				$pathx = $path . $bar['namafile'];
-				unlink($pathx);
+				if (is_file($pathx)) { unlink($pathx); }
 			} catch (PDOException $e) {
 				print " Gagal  !: " . $e->getMessage() . "\n";
 				die();
@@ -134,8 +204,10 @@ switch ($proses) {
 		$res1->setFetchMode(PDO::FETCH_ASSOC);
 		$bar1 = $res1->fetch();
 
-		// ambil fraksi atau potongan
-		$str2 = "select * from " . $dbname . ".pabrik_5fraksi2 where pt = '" . getindukPT($bar1['kodeorg']) . "'";
+		// ambil fraksi atau potongan (PT dari unit SPB; tiket kebun tidak selalu ada)
+		$rOrgSpb = fetchdata("select kodeorg from " . $dbname . ".kebun_spbht where nospb='" . $param['nospb'] . "'");
+		$orgSpb = (count($rOrgSpb) > 0) ? $rOrgSpb[0]['kodeorg'] : $bar1['kodeorg'];
+		$str2 = "select * from " . $dbname . ".pabrik_5fraksi2 where pt = '" . getindukPT($orgSpb) . "'";
 		$res2 = fetchData($str2);
 		$trpotongan = "";
 		$no_dt = 0;
@@ -146,7 +218,7 @@ switch ($proses) {
 				<td>" . $bar2['keterangan'] . " (" . $bar2['type'] . ")</td>
 				<td>:</td>
 				<td>
-				<input type='text' onblur='getPotongan()' class='myinputtextnumber' onkeypress='return angka_doang(event)' id='dt_potongan_" . $no_dt . "' name='dt_potongan_" . $no_dt . "' style='width:150px;' />
+				<input type='text' onblur='getPotongan()' onkeyup='z.numberFormat(this.id,2);getPotongan()' class='myinputtextnumber' onkeypress='return angka_doang(event)' id='dt_potongan_" . $no_dt . "' name='dt_potongan_" . $no_dt . "' style='width:150px;' />
 				<input type='hidden' value='" . $bar2['kode'] . "'  id='kode_potongan_" . $no_dt . "' />
 				</td>
 				</tr>
@@ -162,7 +234,7 @@ switch ($proses) {
 			$optDtSpb .= "<option value='" . $param['nospb'] . "' selected>" . $param['nospb'] . "</option>";
 		}
 
-		$sDtSpb = "select nospb,kodeorg from " . $dbname . ".kebun_spbht where left(tanggal,7)='" . $tglpr[2] . "-" . $tglpr[1] . "' and tanggal = '" . tanggalsystemn($param['tgl']) . "' and kodeorg='" . $_SESSION['empl']['lokasitugas'] . "' and tujuan=3 and posting='0'"; //exit('error'.$sDtSpb);
+		$sDtSpb = "select nospb,kodeorg from " . $dbname . ".kebun_spbht where left(tanggal,7)='" . $tglpr[2] . "-" . $tglpr[1] . "' and tanggal = '" . tanggalsystemn($param['tgl']) . "' and kodeorg IN (" . getOrgDetail(2) . ") and tujuan=3 and posting='0'"; //exit('error'.$sDtSpb);
 		$qDtSpb = $owlPDO->query($sDtSpb) or die(print " Gagal: " . PDOException::getMessage());
 		$qDtSpb->setFetchMode(PDO::FETCH_ASSOC);
 		while ($rDtSpb = $qDtSpb->fetch()) {
@@ -198,7 +270,7 @@ switch ($proses) {
 						<td>" . $bar2['keterangan'] . " (" . $bar2['type'] . ")</td>
 						<td>:</td>
 						<td>
-						<input type='text' onblur='getPotongan()' value='" . $nilai . "' class='myinputtextnumber' onkeypress='return angka_doang(event)' id='dt_edit_potongan_" . $no_dt . "' name='dt_edit_potongan_" . $no_dt . "' style='width:150px;' />
+						<input type='text' onblur='getPotongan()' onkeyup='z.numberFormat(this.id,2);getPotongan()' value='" . number_format((float)$nilai, 0) . "' class='myinputtextnumber' onkeypress='return angka_doang(event)' id='dt_edit_potongan_" . $no_dt . "' name='dt_edit_potongan_" . $no_dt . "' style='width:150px;' />
 						<input type='hidden' value='" . $bar2['kode'] . "'  id='kode_potongan_" . $no_dt . "' />
 						</td>
 						</tr>
@@ -221,13 +293,16 @@ switch ($proses) {
 		break;
 
 	case 'insert':
+		$param = tkeEscape($param);
 
 		$owlPDO->beginTransaction();
+		$kodeorgspb = $_SESSION['empl']['lokasitugas'];
 		$str = "select * from " . $dbname . ".kebun_spbht where nospb = '" . $param['spbId'] . "'";
 		$res = fetchData($str);
 		foreach ($res as $bar) {
 			$optpks = $bar['penerimatbs'];
 			$kodeorg = $bar['kodeorg'];
+			$kodeorgspb = $bar['kodeorg'];
 			$notransMobile = $bar['noreferensi'];
 		}
 
@@ -247,7 +322,18 @@ switch ($proses) {
 		if (($param['tgl'] == '') || ($param['kdKend'] == '') || ($param['nmSupir'] == '') || ($param['jmlhJjg'] == '') || ($param['brtMsk'] == '') || ($param['brtKlr'] == '')) {
 			exit("warning: Seluruh field tidak boleh kosong");
 		}
-		//||($param['spbId']=='')
+		if ($param['spbId'] == '') {
+			exit("warning: No. SPB harus dipilih");
+		}
+		foreach (array('jmlhJjg', 'brtMsk', 'brtKlr', 'potKg', 'buahdikembalikan') as $kNum) {
+			if (isset($param[$kNum])) {
+				$param[$kNum] = str_replace(',', '', $param[$kNum]);
+			}
+		}
+		$param['brtBrsh'] = (float)$param['brtMsk'] - (float)$param['brtKlr'] - (float)@$param['potKg'];
+		if ($param['brtBrsh'] < 0) {
+			exit("warning: Berat Bersih tidak boleh kurang dari 0");
+		}
 
 		// if($optCust[$param['spbId']]==''){
 		// $optCust[$param['spbId']]='EBL';
@@ -261,22 +347,37 @@ switch ($proses) {
 		$res3 = fetchdata($str3);
 
 		$kode_cus = $res3[0]['kodecustomer'];
-		$pabrik_tujuan = $res3[0]['pabriktujuan'];
+		$pabrik_tujuan = (@$param['pabriktujuan'] != '') ? $param['pabriktujuan'] : @$res3[0]['pabriktujuan'];
+		if ($pabrik_tujuan == '') {
+			exit("warning: Tujuan Pabrik harus dipilih");
+		}
+		if (!tkeUnitBoleh($kodeorgspb)) {
+			exit("warning: SPB bukan milik unit yang bisa Anda akses");
+		}
+		if (tkeTutupBuku($kodeorgspb, substr(tanggalsystemn($param['tgl']), 0, 7))) {
+			exit('Error : Periode Akuntansi Sudah di Tutup.');
+		}
 
 
 		$sins = "insert into " . $dbname . ".pabrik_timbangan (notransaksi, tanggal, kodeorg, kodecustomer, jumlahtandan1, kodebarang,jammasuk, beratmasuk, jamkeluar, beratkeluar, nokendaraan, supir, nospb, timbangonoff, intex, millcode, beratbersih, jjgsortasi,kgpotsortasi, username, norefrensi, nokontrak, nodo, beratmasukpmks, beratkeluarpmks, beratbersihpmks, divcode,tanggalpks,kgpembeli,buahdikembalikan,spbpabrik,tahuntanam,pabriktujuan,nospbmobile) values ";
 		// $sins.="('".$notrans."','".tanggalsystemn($param['tgl'])."','".$_SESSION['empl']['lokasitugas']."','".$optCust[$param['spbId']]."','".$param['jmlhJjg']."','40000003','".$param['jamMasuk']."','".$param['brtMsk']."','".$param['jamKeluar']."','".$param['brtKlr']."','".$param['kdKend']."','".$param['nmSupir']."','".$param['spbId']."','1','0','EXTM','".$param['brtBrsh']."','".$param['JjgSortasi']."','".$param['potKg']."','".$_SESSION['standard']['username']."','".$param['notiket']."','".$param['nokontrak']."','".$param['nodo']."','".$param['brtMskpmks']."','".$param['brtKlrpmks']."','".$param['brtBrshpmks']."','".$kodediv."','".tanggalsystem($param['tanggalpks'])."','".$param['kgJual']."','".$param['buahdikembalikan']."','".$param['spbpabrik']."','".$param['tahuntanam2']."')";
-		$sins .= "('" . $notrans . "','" . tanggalsystemn($param['tgl']) . "','" . $_SESSION['empl']['lokasitugas'] . "','" . $kode_cus . "','" . $param['jmlhJjg'] . "','40000003','" . $param['jamMasuk'] . "','" . $param['brtMsk'] . "','" . $param['jamKeluar'] . "','" . $param['brtKlr'] . "','" . $param['kdKend'] . "','" . $param['nmSupir'] . "','" . $param['spbId'] . "','1','0','EXTM','" . $param['brtBrsh'] . "','" . $param['JjgSortasi'] . "','" . $param['potKg'] . "','" . $_SESSION['standard']['username'] . "','" . $param['notiket'] . "','" . $param['nokontrak'] . "','" . $param['nodo'] . "','" . $param['brtMskpmks'] . "','" . $param['brtKlrpmks'] . "','" . $param['brtBrshpmks'] . "','" . $kodediv . "','" . tanggalsystem($param['tanggalpks']) . "','" . $param['kgJual'] . "','" . $param['buahdikembalikan'] . "','" . $param['spbpabrik'] . "','" . $param['tahuntanam2'] . "','" . $pabrik_tujuan . "','" . $notransMobile . "')";
+		$sins .= "('" . $notrans . "','" . tanggalsystemn($param['tgl']) . "','" . $kodeorgspb . "','" . $kode_cus . "','" . $param['jmlhJjg'] . "','40000003','" . $param['jamMasuk'] . "','" . $param['brtMsk'] . "','" . $param['jamKeluar'] . "','" . $param['brtKlr'] . "','" . $param['kdKend'] . "','" . $param['nmSupir'] . "','" . $param['spbId'] . "','1','0','EXTM','" . $param['brtBrsh'] . "','" . $param['JjgSortasi'] . "','" . $param['potKg'] . "','" . $_SESSION['standard']['username'] . "','" . $param['notiket'] . "','" . $param['nokontrak'] . "','" . $param['nodo'] . "','" . $param['brtMskpmks'] . "','" . $param['brtKlrpmks'] . "','" . $param['brtBrshpmks'] . "','" . $kodediv . "','" . tanggalsystem($param['tanggalpks']) . "','" . $param['kgJual'] . "','" . $param['buahdikembalikan'] . "','" . $param['spbpabrik'] . "','" . $param['tahuntanam2'] . "','" . $pabrik_tujuan . "','" . $notransMobile . "')";
 		// exit("error: ".$sins);
 		try {
 			$owlPDO->exec($sins);
 
 			// insert sortasi
 			$kodePotonganAll = checkPostGet('kode_potongan', '');
+			if (is_array($kodePotonganAll)) {
+				$kodePotonganAll = array_map('addslashes', $kodePotonganAll);
+			}
 			$nilaiPotonganAll = checkPostGet('nilai_potongan', '');
-			$t_dataa = count($kodePotonganAll) - 1;
+			if (is_array($nilaiPotonganAll)) {
+				$nilaiPotonganAll = array_map('floatval', str_replace(',', '', $nilaiPotonganAll));
+			}
+			$t_dataa = is_array($kodePotonganAll) ? count($kodePotonganAll) - 1 : -1;
 
-			if ($t_dataa > 0) {
+			if ($t_dataa >= 0) {
 				for ($i = 0; $i <= $t_dataa; $i++) {
 
 					$sDel = "delete from " . $dbname . ".pabrik_sortasi where notiket='" . $notrans . "' and kodefraksi = '" . $kodePotonganAll[$i] . "' ";
@@ -298,10 +399,36 @@ switch ($proses) {
 		}
 		break;
 	case 'update':
+		$param = tkeEscape($param);
+		$param['notransaksi'] = tkeNoTrans(@$param['notransaksi']);
 
 		$owlPDO->beginTransaction();
 		if (($param['tgl'] == '') || ($param['kdKend'] == '') || ($param['nmSupir'] == '') || ($param['jmlhJjg'] == '') || ($param['brtMsk'] == '') || ($param['brtKlr'] == '')) {
 			exit("error: Seluruh field tidak boleh kosong");
+		}
+		if ($param['spbId'] == '') {
+			exit("error: No. SPB harus dipilih");
+		}
+		$rSpb = fetchData("select kodeorg from " . $dbname . ".kebun_spbht where nospb='" . $param['spbId'] . "'");
+		$kodeorgspb = (count($rSpb) > 0) ? $rSpb[0]['kodeorg'] : $_SESSION['empl']['lokasitugas'];
+		$setTujuan = (@$param['pabriktujuan'] != '') ? ",pabriktujuan='" . $param['pabriktujuan'] . "'" : '';
+		if (@$param['pabriktujuan'] == '') {
+			exit("error: Tujuan Pabrik harus dipilih");
+		}
+		if (!tkeUnitBoleh($kodeorgspb)) {
+			exit("error: SPB bukan milik unit yang bisa Anda akses");
+		}
+		if (tkeTiketTutup($param['notransaksi']) || tkeTutupBuku($kodeorgspb, substr(tanggalsystemn($param['tgl']), 0, 7))) {
+			exit('Error : Periode Akuntansi Sudah di Tutup.');
+		}
+		foreach (array('jmlhJjg', 'brtMsk', 'brtKlr', 'potKg', 'buahdikembalikan') as $kNum) {
+			if (isset($param[$kNum])) {
+				$param[$kNum] = str_replace(',', '', $param[$kNum]);
+			}
+		}
+		$param['brtBrsh'] = (float)$param['brtMsk'] - (float)$param['brtKlr'] - (float)@$param['potKg'];
+		if ($param['brtBrsh'] < 0) {
+			exit("warning: Berat Bersih tidak boleh kurang dari 0");
 		}
 
 		// untuk numeric
@@ -326,7 +453,7 @@ switch ($proses) {
 		$whr = "nospb='" . $param['spbId'] . "'";
 		$optCust = makeOption($dbname, 'kebun_spbht', 'nospb,penerimatbs', $whr);
 		$sins = "update " . $dbname . ".pabrik_timbangan set tanggal='" . tanggalsystem($param['tgl']) . "',
-					kodeorg='" . $_SESSION['empl']['lokasitugas'] . "',
+					kodeorg='" . $kodeorgspb . "',
 					jumlahtandan1='" . $param['jmlhJjg'] . "',jammasuk='" . $param['jamMasuk'] . "',
 					beratmasuk='" . $param['brtMsk'] . "',jamkeluar='" . $param['jamKeluar'] . "',
 					beratkeluar='" . $param['brtKlr'] . "',nokendaraan='" . $param['kdKend'] . "',
@@ -336,9 +463,9 @@ switch ($proses) {
 					norefrensi='" . $param['notiket'] . "',nokontrak='" . $param['nokontrak'] . "',nodo='" . $param['nodo'] . "',
 					beratmasukpmks='" . $param['brtMskpmks'] . "',beratkeluarpmks='" . $param['brtKlrpmks'] . "',
 					beratbersihpmks='" . $param['brtBrshpmks'] . "',divcode='" . $kodediv . "', tanggalpks='" . tanggalsystem($param['tanggalpks']) . "',kgpembeli='" . $param['kgJual'] . "',
-					tahuntanam='" . $param['tahuntanam2'] . "',spbpabrik='" . $param['spbpabrik'] . "',buahdikembalikan='" . $param['buahdikembalikan'] . "'
+					tahuntanam='" . $param['tahuntanam2'] . "',spbpabrik='" . $param['spbpabrik'] . "',buahdikembalikan='" . $param['buahdikembalikan'] . "'" . $setTujuan . "
 					
-					where notransaksi='" . $param['notransaksi'] . "'";
+					where notransaksi='" . $param['notransaksi'] . "' and millcode='EXTM' and kodeorg IN (" . getOrgDetail(2) . ") limit 1";
 		// exit("Error:$sins");
 		try {
 			$owlPDO->exec($sins);
@@ -346,10 +473,16 @@ switch ($proses) {
 
 			// insert sortasi
 			$kodePotonganAll = checkPostGet('kode_potongan', '');
+			if (is_array($kodePotonganAll)) {
+				$kodePotonganAll = array_map('addslashes', $kodePotonganAll);
+			}
 			$nilaiPotonganAll = checkPostGet('nilai_potongan', '');
-			$t_dataa = count($kodePotonganAll) - 1;
+			if (is_array($nilaiPotonganAll)) {
+				$nilaiPotonganAll = array_map('floatval', str_replace(',', '', $nilaiPotonganAll));
+			}
+			$t_dataa = is_array($kodePotonganAll) ? count($kodePotonganAll) - 1 : -1;
 
-			if ($t_dataa > 0) {
+			if ($t_dataa >= 0) {
 				for ($i = 0; $i <= $t_dataa; $i++) {
 
 					$sDel = "delete from " . $dbname . ".pabrik_sortasi where notiket='" . $param['notransaksi'] . "' and kodefraksi = '" . $kodePotonganAll[$i] . "' ";
@@ -373,7 +506,7 @@ switch ($proses) {
 	case 'loadNewData':
 
 		// ambil fraksi atau potongan
-		$str2 = "select * from " . $dbname . ".pabrik_5fraksi2 where pt ='" . getindukPT($_SESSION['empl']['lokasitugas']) . "'";
+		$str2 = "select kode,max(keterangan) as keterangan,max(type) as type from " . $dbname . ".pabrik_5fraksi2 where pt in (" . getOrgDetail(4) . ") group by kode order by kode";
 		$res2 = fetchData($str2);
 		$total_a = count($res2);
 
@@ -385,6 +518,7 @@ switch ($proses) {
 			 <th rowspan='2' align=center>" . $_SESSION['lang']['tanggal'] . "</th>
 			 <th rowspan='2' align=center>" . $_SESSION['lang']['nospb'] . "</th>
 			 <th rowspan='2' align=center>SPB Pabrik</th>
+			 <th rowspan='2' align=center>Tujuan Pabrik</th>
 			 <th rowspan='2' align=center>" . $_SESSION['lang']['nomor'] . " " . $_SESSION['lang']['ticket'] . "</th>
 			 <th rowspan='2' hidden align=center>" . $_SESSION['lang']['kontrak'] . "</th>
 			 <th rowspan='2' hidden align=center>" . $_SESSION['lang']['nodo'] . "</th>
@@ -402,6 +536,7 @@ switch ($proses) {
 
 		$tab .= "<th rowspan='2' align=center width=50px>Total " . $_SESSION['lang']['potongan'] . "</th>
 			 <th rowspan='2' align=center width=50px>" . $_SESSION['lang']['beratBersih'] . "</th>
+			 <th rowspan='2' align=center>User</th>
 			 <th rowspan='2' hidden align=center width=50px>" . $_SESSION['lang']['jjgpenalty'] . "</th>
 			 <th rowspan='2' align=center colspan=3>Action</th>
 			 </tr>";
@@ -416,30 +551,11 @@ switch ($proses) {
 
 		$tab .= "</thead><tbody>";
 
-		$whrCr = "";
-		if ($param['nosbpCr'] != '') {
-			$whrCr .= " and nospb like '%" . $param['nosbpCr'] . "%'";
+		$flt = tkeFilter($param);
+		if ($flt['error'] != '') {
+			exit($flt['error']);
 		}
-
-		if ($param['tahuntanamsrc'] != '') {
-			if ($param['tahuntanamsrc'] != 'Kosong') {
-				$whrCr .= " and tahuntanam like '%" . $param['tahuntanamsrc'] . "%'";
-			} else {
-				$whrCr .= " and tahuntanam=''";
-			}
-		}
-
-		if ($param['tgl_cari'] != '' &&  $param['tgl_cari_sampai'] == '') {
-			// $whrCr.=" and tanggal like '%".tanggalsystemn($param['tgl_cari'])."%'";
-			$whrCr .= " and tanggal = '" . tanggalsystemn($param['tgl_cari']) . "'";
-		} else if ($param['tgl_cari_sampai'] != '') {
-			$whrCr .= " and tanggal>='" . tanggalsystemn($param['tgl_cari']) . "' and tanggal<='" . tanggalsystemn($param['tgl_cari_sampai']) . "' ";
-		}
-
-		if ($param['tgl_cari_sampai'] != '' and $param['tgl_cari'] == '') {
-			exit("warning : Jika tanggal sampai terisi maka tanggal dari nya harus terisi!!! ");
-		}
-
+		$whrCr = $flt['where'];
 
 		$limit = 20;
 		$page = 0;
@@ -450,16 +566,16 @@ switch ($proses) {
 		$offset = $page * $limit;
 		$maxdisplay = ($page * $limit);
 		$ql2 = "select count(*) as jmlhrow from " . $dbname . ".pabrik_timbangan 
-			  where kodeorg='" . $_SESSION['empl']['lokasitugas'] . "' and char_length(notransaksi)>7  " . $whrCr . " order by left(`tanggal`,10) desc";
+			  where kodeorg IN (" . getOrgDetail(2) . ") and millcode='EXTM' and char_length(notransaksi)>7  " . $whrCr . " order by left(`tanggal`,10) desc";
 
 		if ($tipe == 'html') {
 			$slvhc = "select * from " . $dbname . ".pabrik_timbangan 
-					where kodeorg='" . $_SESSION['empl']['lokasitugas'] . "' and char_length(notransaksi)>7 " . $whrCr . "
-					order by left(`tanggal`,10) desc limit " . $offset . "," . $limit . "";
+					where kodeorg IN (" . getOrgDetail(2) . ") and millcode='EXTM' and char_length(notransaksi)>7 " . $whrCr . "
+					order by left(`tanggal`,10) desc, notransaksi desc limit " . $offset . "," . $limit . "";
 		} else {
 			$slvhc = "select * from " . $dbname . ".pabrik_timbangan 
-					where kodeorg='" . $_SESSION['empl']['lokasitugas'] . "' and char_length(notransaksi)>7 " . $whrCr . "
-					order by left(`tanggal`,10) desc";
+					where kodeorg IN (" . getOrgDetail(2) . ") and millcode='EXTM' and char_length(notransaksi)>7 " . $whrCr . "
+					order by left(`tanggal`,10) desc, notransaksi desc";
 		}
 
 		$query2 = $owlPDO->query($ql2) or die(print " Gagal: " . PDOException::getMessage());
@@ -473,8 +589,18 @@ switch ($proses) {
 		$user_online = $_SESSION['standard']['userid'];
 		$no = 0;
 		$no = $maxdisplay;
+		$totFraksi = array();
+		$tutupMap = array();
+		foreach (fetchData("select kodeorg,periode from " . $dbname . ".setup_periodeakuntansi where tutupbuku='1' and kodeorg IN (" . getOrgDetail(2) . ")") as $rTutup) {
+			$tutupMap[$rTutup['kodeorg'] . '|' . $rTutup['periode']] = 1;
+		}
+		$mapTujuan = array();
+		foreach (fetchData("select distinct kodecustomer,namacustomer from " . $dbname . ".pmn_4customer") as $rCus) {
+			$mapTujuan[$rCus['kodecustomer']] = $rCus['namacustomer'];
+		}
 		while ($rData = $qlvhc->fetch()) {
 			$no += 1;
+			$namaTujuan = isset($mapTujuan[$rData['pabriktujuan']]) ? $mapTujuan[$rData['pabriktujuan']] : $rData['pabriktujuan'];
 
 			$tab .= "
 			<tr class=rowcontent>
@@ -483,6 +609,7 @@ switch ($proses) {
 			<td align='center'>" . tanggalnormal(substr($rData['tanggal'], 0, 10)) . "</td>
 			<td align='center'>" . $rData['nospb'] . "</td>
 			<td align='center'>" . $rData['spbpabrik'] . "</td>
+			<td align='center'>" . $namaTujuan . "</td>
 			<td align='center'>" . $rData['norefrensi'] . "</td>
 			<td hidden>" . $rData['nokontrak'] . "</td>
 			<td hidden>" . $rData['nodo'] . "</td>
@@ -494,42 +621,15 @@ switch ($proses) {
 			<td align='right'>" . @number_format(@$rData['beratkeluar'], 0) . "</td>
 			<td align='right'>" . @number_format((@$rData['beratmasuk'] - @$rData['beratkeluar']), 0) . "</td>";
 
-			$str3 = "select * from " . $dbname . ".pabrik_5fraksi2 where pt = '" . getindukPT($rData['kodeorg']) . "'";
-			$res3 = fetchData($str3);
+			$mapFraksi = array();
+			foreach (fetchData("select kodefraksi,kg from " . $dbname . ".pabrik_sortasi where notiket = '" . $rData['notransaksi'] . "'") as $rSrt) {
+				$mapFraksi[$rSrt['kodefraksi']] = $rSrt['kg'];
+			}
 			$trpotongan_nilai = "";
-			foreach ($res3 as $bar2) {
-				$nilai = 0;
-				$str3 = "select * from " . $dbname . ".pabrik_sortasi WHERE notiket = '" . $rData['notransaksi'] . "' and kodefraksi = '" . $bar2['kode'] . "' ";
-				$res3 = fetchdata($str3);
-				if (count($res3) > 0) {
-					$nilai = $res3[0]['kg'];
-					$trpotongan_nilai .= "
-						<td align=center width=50px>" . number_format($nilai, 0) . "</td>
-					";
-
-					# Denda
-					if ($bar2['kode'] == 'BL') {
-						$tpbl += $nilai;
-					}
-
-					if ($bar2['kode'] == 'KM') {
-						$tpkm += $nilai;
-					}
-
-					if ($bar2['kode'] == 'SPH') {
-						$tpss += $nilai;
-					}
-
-					if ($bar2['kode'] == 'TP') {
-						$tptp += $nilai;
-					}
-					# End Denda
-
-				} else {
-					$trpotongan_nilai .= "
-						<td align=center width=50px>0</td>
-					";
-				}
+			foreach ($res2 as $bar2) {
+				$nilai = isset($mapFraksi[$bar2['kode']]) ? $mapFraksi[$bar2['kode']] : 0;
+				$trpotongan_nilai .= "<td align=center width=50px>" . number_format($nilai, 0) . "</td>";
+				$totFraksi[$bar2['kode']] = (isset($totFraksi[$bar2['kode']]) ? $totFraksi[$bar2['kode']] : 0) + $nilai;
 			}
 			$tab .= $trpotongan_nilai;
 
@@ -537,6 +637,7 @@ switch ($proses) {
 			$tab .= "
 			<td align='right'>" . number_format($rData['kgpotsortasi'], 0) . "</td>
 			<td align='right'>" . @number_format(@$rData['beratbersih'], 0) . "</td>
+			<td align='center'>" . $rData['username'] . "</td>
 			<td hidden align='right'>" . $rData['jjgsortasi'] . "</td>
 			";
 
@@ -554,23 +655,27 @@ switch ($proses) {
 			$optStat = makeOption($dbname, 'kebun_spbht', 'nospb,posting', $whr);
 
 			if ($tipe == 'html') {
-				if (($_SESSION['standard']['username'] == @$rData['username']) || ($optStat[$rData['nospb']] == '0')) {
+				if (isset($tutupMap[$rData['kodeorg'] . '|' . substr($rData['tanggal'], 0, 7)])) {
+					$tab .= "<td align=center width=25px><img src=images/application/application_edit_gray.png class=resicon  title='Periode akuntansi sudah ditutup'></td>";
+					$tab .= "<td align=center width=25px></td>";
+					$tab .= "<td align=center width=25px><img src=images/pdf.jpg class=resicon  title='Print' onclick=\"masterPDF('pabrik_timbangan','" . $rData['notransaksi'] . "','','kebun_timbangke_eksternalPdf',event)\"></td>";
+				} elseif (($_SESSION['standard']['username'] == @$rData['username']) || ($optStat[$rData['nospb']] == '0')) {
 					$tab .= "<td align=center width=25px><img src=images/application/application_edit.png class=resicon  title='Edit' onclick=\"fillField('" . $rData['tahuntanam'] . "','" . $rData['spbpabrik'] . "','" . $rData['notransaksi'] . "',
 					'" . $rData['jammasuk'] . "','" . $rData['jamkeluar'] . "','" . $rData['nokendaraan'] . "','" . $rData['supir'] . "',
 					'" . $rData['norefrensi'] . "','" . $rData['jumlahtandan1'] . "','" . $rData['beratmasuk'] . "','" . $rData['beratkeluar'] . "',
 					'" . $rData['beratbersih'] . "','" . $rData['jjgsortasi'] . "','" . $rData['kgpotsortasi'] . "','" . $rData['nospb'] . "',
-					'" . @tanggalnormal(substr($rData['tanggal'], 0, 10)) . "','" . $rData['nokontrak'] . "','" . $rData['nodo'] . "','" . $rData['pabriktujuan'] . "');\"></td>";
+					'" . @tanggalnormal(substr($rData['tanggal'], 0, 10)) . "','" . $rData['nokontrak'] . "','" . $rData['nodo'] . "','" . $rData['pabriktujuan'] . "','" . $rData['buahdikembalikan'] . "');\"></td>";
 					$tab .= "<td align=center width=25px><img src=images/application/application_delete.png class=resicon  title='Delete' onclick=\"deleteData('" . $rData['notransaksi'] . "','" . $rData['nospb'] . "');\"></td>";
-					$tab .= "<td align=center width=25px><img src=images/pdf.jpg class=resicon  title='Print' onclick=\"masterPDF('pabrik_timbangan','" . $rData['notransaksi'] . "','','pabrik_timbanganPdf',event)\"></td>";
+					$tab .= "<td align=center width=25px><img src=images/pdf.jpg class=resicon  title='Print' onclick=\"masterPDF('pabrik_timbangan','" . $rData['notransaksi'] . "','','kebun_timbangke_eksternalPdf',event)\"></td>";
 				} else {
 					// $tab.="<td align=center width=25px></td>";
 					$tab .= "<td align=center width=25px><img src=images/application/application_edit_gray.png class=resicon  title='Edit Tahun Tanam' onclick=\"fillFieldTahunTanam('" . $rData['tahuntanam'] . "','" . $rData['spbpabrik'] . "','" . $rData['notransaksi'] . "',
 					'" . $rData['jammasuk'] . "','" . $rData['jamkeluar'] . "','" . $rData['nokendaraan'] . "','" . $rData['supir'] . "',
 					'" . $rData['norefrensi'] . "','" . $rData['jumlahtandan1'] . "','" . $rData['beratmasuk'] . "','" . $rData['beratkeluar'] . "',
 					'" . $rData['beratbersih'] . "','" . $rData['jjgsortasi'] . "','" . $rData['kgpotsortasi'] . "','" . $rData['nospb'] . "',
-					'" . @tanggalnormal(substr($rData['tanggal'], 0, 10)) . "','" . $rData['nokontrak'] . "','" . $rData['nodo'] . "','" . $rData['pabriktujuan'] . "');\"></td>";
+					'" . @tanggalnormal(substr($rData['tanggal'], 0, 10)) . "','" . $rData['nokontrak'] . "','" . $rData['nodo'] . "','" . $rData['pabriktujuan'] . "','" . $rData['buahdikembalikan'] . "');\"></td>";
 					$tab .= "<td align=center width=25px></td>";
-					$tab .= "<td align=center width=25px><img src=images/pdf.jpg class=resicon  title='Print' onclick=\"masterPDF('pabrik_timbangan','" . $rData['notransaksi'] . "','','pabrik_timbanganPdf',event)\"></td>";
+					$tab .= "<td align=center width=25px><img src=images/pdf.jpg class=resicon  title='Print' onclick=\"masterPDF('pabrik_timbangan','" . $rData['notransaksi'] . "','','kebun_timbangke_eksternalPdf',event)\"></td>";
 				}
 			} else {
 				$tab .= "<td align=center width=25px></td>";
@@ -583,18 +688,17 @@ switch ($proses) {
 
 		# Total 1 Page
 		$tab .= "<tr class=rowcontent>";
-		$tab .= "<td colspan=" . ($tipe == 'html' ? '9' : '11') . " align=center><b>TOTAL</b></td>";
+		$tab .= "<td colspan=" . ($tipe == 'html' ? '10' : '12') . " align=center><b>TOTAL</b></td>";
 		$tab .= "<td align=right style='font-weight:800;'>" . number_format($tjjg) . "</td>";
 		$tab .= "<td align=right style='font-weight:800;'>" . number_format($tbm) . "</td>";
 		$tab .= "<td align=right style='font-weight:800;'>" . number_format($tbk) . "</td>";
 		$tab .= "<td align=right style='font-weight:800;'>" . number_format($tbb) . " </td>";
-		$tab .= "<td align=right style='font-weight:800;'>" . number_format($tpbl) . "</td>";
-		$tab .= "<td hidden align=right style='font-weight:800;'>" . number_format($tpkm) . "</td>";
-		$tab .= "<td hidden align=right style='font-weight:800;'>" . number_format($tpss) . "</td>";
-		$tab .= "<td hidden align=right style='font-weight:800;'>" . number_format($tptp) . "</td>";
-		$tab .= "<td hidden align=right style='font-weight:800;'>" . number_format($tp) . "</td>";
+		foreach ($res2 as $bar2) {
+			$tab .= "<td align=right style='font-weight:800;'>" . number_format(isset($totFraksi[$bar2['kode']]) ? $totFraksi[$bar2['kode']] : 0) . "</td>";
+		}
+		$tab .= "<td align=right style='font-weight:800;'>" . number_format($tp) . "</td>";
 		$tab .= "<td align=right style='font-weight:800;'>" . number_format($tpbn) . "</td>";
-		$tab .= "<td colspan=5></td>";
+		$tab .= "<td colspan=" . ($tipe == 'html' ? '4' : '5') . "></td>";
 		$tab .= "</tr>";
 
 		if ($tipe == 'html') {
@@ -615,7 +719,23 @@ switch ($proses) {
 		if ($tipe == 'html') {
 			echo $tab;
 		} else {
-			$nop = "Laporan_Pendapatan_" . $param['tgl_cari'] . "_" . $param['tgl_cari_sampai'] . ".xls";
+			$nop = "Timbangan_Eksternal_" . date('Ymd_His') . ".xls";
+			$ptkode = getindukPT($_SESSION['empl']['lokasitugas']);
+			$hd = setheadreport($ptkode, $ptkode);
+			$logourl = '';
+			if (file_exists($hd['logo'])) {
+				$skema = (isset($_SERVER['HTTPS']) and $_SERVER['HTTPS'] != 'off') ? 'https' : 'http';
+				$logourl = $skema . "://" . @$_SERVER['HTTP_HOST'] . rtrim(dirname(@$_SERVER['SCRIPT_NAME']), '/') . "/" . $hd['logo'];
+			}
+			$kop = "<table>
+			<tr><td colspan=10 height='70' style='height:52pt'>" . ($logourl != '' ? "<img src='" . $logourl . "' height='60'>" : "") . "</td></tr>
+			<tr><td colspan=10><b>" . $hd['nama'] . "</b></td></tr>
+			<tr><td colspan=10><b>HASIL TIMBANG TBS KE EKSTERNAL</b></td></tr>
+			<tr><td colspan=10>" . ($flt['info'] != '' ? $flt['info'] : 'Seluruh data') . "</td></tr>
+			<tr><td colspan=10>Ditarik oleh " . $_SESSION['empl']['name'] . " (" . $_SESSION['standard']['username'] . ") pada " . date('d-m-Y H:i:s') . "</td></tr>
+			<tr><td colspan=10>&nbsp;</td></tr>
+			</table>";
+			$tab = $kop . $tab;
 			$xls = new HtmlExcel();
 			$xls->setCss($css);
 			$xls->addSheet("lap_timbangexternal", $tab);
@@ -662,7 +782,16 @@ switch ($proses) {
 		echo "</table>";
 		break;
 	case 'saveaddkgpks':
-		$str = "update " . $dbname . ".pabrik_timbangan set tanggalpks='" . $tanggalpks . "', beratmasukpmks='" . $kgin . "', beratkeluarpmks='" . $kgout . "',buahdikembalikan='" . $buahdikembalikan . "',spbpabrik='" . $spbpabrik . "',tahuntanam='" . $tahuntanam2 . "', beratbersihpmks='" . $kgnet . "',kgpotsortasi='" . $potongx . "' where notransaksi='" . $notiket . "'";
+		$notiket = tkeNoTrans($notiket);
+		if (tkeTiketTutup($notiket)) {
+			exit('Error : Periode Akuntansi Sudah di Tutup.');
+		}
+		$spbpabrik = addslashes($spbpabrik);
+		$tahuntanam2 = addslashes($tahuntanam2);
+		foreach (array('kgin', 'kgout', 'buahdikembalikan', 'kgnet', 'potongx') as $kNum) {
+			$$kNum = (float)$$kNum;
+		}
+		$str = "update " . $dbname . ".pabrik_timbangan set tanggalpks='" . $tanggalpks . "', beratmasukpmks='" . $kgin . "', beratkeluarpmks='" . $kgout . "',buahdikembalikan='" . $buahdikembalikan . "',spbpabrik='" . $spbpabrik . "',tahuntanam='" . $tahuntanam2 . "', beratbersihpmks='" . $kgnet . "',kgpotsortasi='" . $potongx . "' where notransaksi='" . $notiket . "' and millcode='EXTM' and kodeorg IN (" . getOrgDetail(2) . ") limit 1";
 		try {
 			$owlPDO->exec($str);
 		} catch (PDOException $e) {
@@ -671,12 +800,19 @@ switch ($proses) {
 		}
 		break;
 	case 'deleteData':
-		$sDel = "delete from " . $dbname . ".pabrik_timbangan where notransaksi='" . $param['notransaksi'] . "'";
+		$param = tkeEscape($param);
+		$param['notransaksi'] = tkeNoTrans(@$param['notransaksi']);
+		if (tkeTiketTutup($param['notransaksi'])) {
+			exit('Error : Periode Akuntansi Sudah di Tutup.');
+		}
+		$sDel = "delete from " . $dbname . ".pabrik_timbangan where notransaksi='" . $param['notransaksi'] . "' and millcode='EXTM' and kodeorg IN (" . getOrgDetail(2) . ") limit 1";
 		try {
-			$owlPDO->exec($sDel);
+			$jmlhapus = $owlPDO->exec($sDel);
 
-			$sDel = "delete from " . $dbname . ".pabrik_sortasi where notiket='" . $param['notransaksi'] . "'";
-			$owlPDO->exec($sDel);
+			if ($jmlhapus > 0) {
+				$sDel = "delete from " . $dbname . ".pabrik_sortasi where notiket='" . $param['notransaksi'] . "'";
+				$owlPDO->exec($sDel);
+			}
 		} catch (PDOException $e) {
 			echo "DB Error : " . $e->getMessage();
 			die();
@@ -684,11 +820,16 @@ switch ($proses) {
 		break;
 
 	case 'updThnTnm':
+		$param = tkeEscape($param);
+		$param['notransaksi'] = tkeNoTrans(@$param['notransaksi']);
+		if (tkeTiketTutup($param['notransaksi'])) {
+			exit('Error : Periode Akuntansi Sudah di Tutup.');
+		}
 		$optStat = makeOption($dbname, 'kebun_spbht', 'nospb,posting', "nospb='" . $param['spbId'] . "'");
 		if ($optStat[$param['spbId']] == 0) {
 			exit("Warning: Untuk Melakukan aksi ini hanya untuk SPB yang sudah diposting !");
 		}
-		$str = "update " . $dbname . ".pabrik_timbangan set tahuntanam='" . $param['tahuntanam2'] . "' where notransaksi='" . $param['notransaksi'] . "'";
+		$str = "update " . $dbname . ".pabrik_timbangan set tahuntanam='" . $param['tahuntanam2'] . "' where notransaksi='" . $param['notransaksi'] . "' and millcode='EXTM' and kodeorg IN (" . getOrgDetail(2) . ") limit 1";
 		// exit("Warning: ".$str);
 		try {
 			$owlPDO->exec($str);
@@ -698,6 +839,44 @@ switch ($proses) {
 		}
 		break;
 
+	case 'countBelumTimbang':
+	case 'listBelumTimbang':
+		#SPB External (tujuan 3) periode berjalan yang belum punya tiket timbang External
+		$perBerjalan = date('Y-m');
+		$sqlBelum = "from " . $dbname . ".kebun_spbht h where h.tujuan='3' and h.kodeorg IN (" . getOrgDetail(2) . ") and left(h.tanggal,7)='" . $perBerjalan . "' and not exists (select 1 from " . $dbname . ".pabrik_timbangan t where t.nospb=h.nospb and t.millcode='EXTM')";
+		if ($proses == 'countBelumTimbang') {
+			$rc = fetchData("select count(*) as jml " . $sqlBelum);
+			echo (int)$rc[0]['jml'];
+			break;
+		}
+		$rows = fetchData("select h.nospb,h.tanggal,h.kodeorg,h.posting,(select sum(d.jjg) from " . $dbname . ".kebun_spbdt d where d.nospb=h.nospb) as jjg " . $sqlBelum . " order by h.tanggal desc,h.nospb");
+		if (count($rows) == 0) {
+			echo "<div>Periode <b>" . $perBerjalan . "</b>: semua SPB External sudah ada hasil timbangnya.</div>";
+			break;
+		}
+		$tab = "<div style='margin-bottom:6px'>Periode <b>" . $perBerjalan . "</b> : <b>" . count($rows) . "</b> SPB External belum ada hasil timbang</div>";
+		$tab .= "<div style='max-height:60vh;overflow:auto'><table cellspacing=1 border=0 style='width:100%'>
+			<thead><tr class=rowheader>
+			<td align=center width=40px>No.</td><td align=center>SPB No.</td><td align=center>Tanggal</td><td align=center>Unit</td><td align=center>Jjg</td><td align=center>Status Posting</td>
+			</tr></thead><tbody>";
+		$no = 0;
+		$totJjg = 0;
+		foreach ($rows as $r) {
+			$no++;
+			$totJjg += $r['jjg'];
+			$tab .= "<tr class=rowcontent>
+			<td align=center>" . $no . "</td>
+			<td align=center>" . $r['nospb'] . "</td>
+			<td align=center>" . tanggalnormal($r['tanggal']) . "</td>
+			<td align=center>" . $r['kodeorg'] . "</td>
+			<td align=right>" . number_format($r['jjg'], 0) . "</td>
+			<td align=center>" . ($r['posting'] == '1' ? 'Posted' : 'Belum Posting') . "</td>
+			</tr>";
+		}
+		$tab .= "<tr class=rowcontent><td colspan=4 align=center><b>TOTAL</b></td><td align=right><b>" . number_format($totJjg, 0) . "</b></td><td></td></tr>";
+		$tab .= "</tbody></table></div>";
+		echo $tab;
+		break;
 	case 'getFormNosipb':
 		$optSupplierCr = "<option value=''>" . $_SESSION['lang']['pilihdata'] . "</option>";
 		$sSuplier = $owlPDO->query("select distinct kodecustomer,namacustomer from " . $dbname . ".pmn_4customer order by namacustomer asc");
