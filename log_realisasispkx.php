@@ -5,8 +5,11 @@ include_once('lib/zLib.php');
 include_once('lib/rTable.php');
 
 echo open_body();
+require_once('lib/zSelect2.php');
+require_once('log_realisasispkx_filter.php');
 include('master_mainMenu.php');
 ?>
+<script language="javascript" src="js/zSelect2.js?ver=1"></script>
 <script language=javascript src=js/zMaster.js></script>
 <script language=javascript src=js/zSearch.js></script>
 <script language=javascript src=js/zTools.js></script>
@@ -33,39 +36,54 @@ foreach($res as $val){
 	$optunit.="<option value='".$val['kodeorg']."'>".$val['kodeorg']." - ".getNamaOrg($val['kodeorg'])."</option>";
 }
 
+#pilihan periode (bulan) dari tanggal SPK pada unit yang bisa diakses
+$optperiode="<option value=''>".$_SESSION['lang']['all']."</option>";
+foreach(fetchdata("select distinct left(tanggal,7) as periode from ".$dbname.".log_spkht where 1=1 ".spkScope()." order by periode desc") as $val){
+	$optperiode.="<option value='".$val['periode']."'>".$val['periode']."</option>";
+}
+$optstatuspos="<option value=''>".$_SESSION['lang']['all']."</option>";
+foreach(spkOpsiStatusPosting() as $kode=>$teks){
+	$optstatuspos.="<option value='".$kode."'>".$teks."</option>";
+}
+$optstatustag="<option value=''>".$_SESSION['lang']['all']."</option>";
+foreach(spkOpsiStatusTagihan() as $kode=>$teks){
+	$optstatustag.="<option value='".$kode."'>".$teks."</option>";
+}
+
 echo"<div id=action_list>
 	<table>
 		<tr valign=middle>
 			<td align=center style='width:100px;cursor:pointer;' onclick=getpage()>
 				<img class=delliconBig src=images/skyblue/list.png title='" . $_SESSION['lang']['list'] . "'><br>" . $_SESSION['lang']['list'] . "
 			</td>
-			
+
 			<td>
-			<fieldset><legend>" . $_SESSION['lang']['find'] . "</legend> 
-			<table>
+			<fieldset><legend>" . $_SESSION['lang']['find'] . "</legend>
+			<table cellspacing=1 border=0>
+				<colgroup>
+					<col style='width:95px'><col style='width:10px'><col style='width:170px'><col style='width:22px'>
+					<col style='width:95px'><col style='width:10px'><col style='width:170px'><col style='width:22px'>
+					<col style='width:95px'><col style='width:10px'><col style='width:170px'><col style='width:22px'>
+					<col style='width:95px'><col style='width:10px'><col style='width:170px'>
+				</colgroup>
 				<tr>
-					<td>" . $_SESSION['lang']['notransaksi'] . "</td> 
-					<td>:</td>
-					<td><input type='text' id=notransaksicr class='myinputtext' style=\"width:150px;\"></td>
-					
-					<td style='padding-left:20px'>" . $_SESSION['lang']['unit'] . "</td> 
-					<td>:</td>
-					<td><select id='unitcr'>".$optunit."</select></td>
-					
-					<td style='padding-left:20px'>" . $_SESSION['lang']['koderekanan'] . "</td> 
-					<td>:</td>
-					<td><input type='text' id=koderekanancr class='myinputtext' style=\"width:150px;\"></td>
-					
-					<td style='padding-left:20px'>" . $_SESSION['lang']['tanggal'] . "</td> 
-					<td>:</td>
-					<td>
-						<input id='tglcr' class='myinputtext' type='text' onmousemove='setCalendar(this.id)' style='width:80px' readonly>
-					</td>
+					<td nowrap>" . $_SESSION['lang']['notransaksi'] . "</td><td>:</td><td><input type='text' id=notransaksicr class='myinputtext' onkeypress='return tanpa_kutip(event)' style='width:170px;height:22px;box-sizing:border-box'></td><td></td>
+					<td nowrap>" . $_SESSION['lang']['unit'] . "</td><td>:</td><td><select class='select2' id='unitcr' style='width:170px;'>".$optunit."</select></td><td></td>
+					<td nowrap>" . $_SESSION['lang']['koderekanan'] . "</td><td>:</td><td><input type='text' id=koderekanancr class='myinputtext' onkeypress='return tanpa_kutip(event)' style='width:170px;height:22px;box-sizing:border-box'></td><td></td>
+					<td nowrap>" . $_SESSION['lang']['subunit'] . "</td><td>:</td><td><input type='text' id=subunitcr class='myinputtext' onkeypress='return tanpa_kutip(event)' style='width:170px;height:22px;box-sizing:border-box'></td>
 				</tr>
 				<tr>
-					<td colspan=2></td>
-					<td style='text-align:left'>
+					<td nowrap>Periode</td><td>:</td><td><select class='select2' id='periodecr' style='width:170px;'>".$optperiode."</select></td><td></td>
+					<td nowrap>" . $_SESSION['lang']['tanggal'] . "</td><td>:</td>
+					<td nowrap><input id='tglcr' class='myinputtext' type='text' onmousemove='setCalendar(this.id)' onkeypress='return false;' style='width:69px;height:22px;box-sizing:border-box' readonly> s/d <input id='tglsampaicr' class='myinputtext' type='text' onmousemove='setCalendar(this.id)' onkeypress='return false;' style='width:69px;height:22px;box-sizing:border-box' readonly></td><td></td>
+					<td nowrap>Status Posting</td><td>:</td><td><select class='select2' id='statusposcr' style='width:170px;'>".$optstatuspos."</select></td><td></td>
+					<td nowrap>Status Tagihan</td><td>:</td><td><select class='select2' id='statustagcr' style='width:170px;'>".$optstatustag."</select></td>
+				</tr>
+				<tr>
+					<td colspan=15 style='padding-top:4px'>
 						<button class=mybutton onclick=loaddata(0)>" . $_SESSION['lang']['find'] . "</button>
+						<button class=mybutton onclick=loaddata('0','excel')>" . $_SESSION['lang']['excel'] . "</button>
+						<button class=mybutton onclick=dataKePDF(event)>PDF</button>
 					</td>
 				</tr>
 			</table>
@@ -90,6 +108,8 @@ echo "
 				<td align=center>" . $_SESSION['lang']['tanggal'] . "</td>
 				<td align=center>" . $_SESSION['lang']['subunit'] . "</td>
 				<td align=center>" . $_SESSION['lang']['koderekanan'] . "</td>
+				<td align=center>Pekerjaan</td>
+				<td align=center>Periode SPK</td>
 				<td align=center>" . $_SESSION['lang']['nilaikontrak'] . "</td>
 				<td align=center>" . $_SESSION['lang']['matauang'] . "</td>
 				<td align=center>" . $_SESSION['lang']['jumlahrealisasi'] . "</td>
@@ -100,6 +120,7 @@ echo "
 			<tbody id=container>
 				<script>loaddata(0)</script>
 			</tbody>
+			<tfoot id=footerdata></tfoot>
 		</table>
 	</div>
 </div>

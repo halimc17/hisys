@@ -59,36 +59,44 @@ function batal(){
 	
 }
 
-function loaddata(pg){
+//parameter filter (sama untuk list, Excel, dan PDF)
+function paramFilter(){
+	var ids = ['notransaksicr','unitcr','koderekanancr','subunitcr','periodecr','tglcr','tglsampaicr','statusposcr','statustagcr'];
+	var p = '';
+	for (var i = 0; i < ids.length; i++) {
+		p += '&' + ids[i] + '=' + encodeURIComponent(document.getElementById(ids[i]).value);
+	}
+	return p;
+}
+function tglFilterValid(){
+	if (document.getElementById('tglsampaicr').value != '' && document.getElementById('tglcr').value == '') {
+		alert('Warning : Jika tanggal sampai terisi maka tanggal dari nya harus terisi!!!');
+		return false;
+	}
+	return true;
+}
+
+function loaddata(pg, tipe){
+	if (!tglFilterValid()) {
+		return;
+	}
+	if (tipe == 'excel') {
+		printnopopup('log_realisasispkx_excel.php?' + paramFilter().substring(1));
+		return;
+	}
 	document.getElementById('listData').style.display = "";
 	var myworkField = document.getElementById('workField');
 	if (myworkField !== null) {
 		myworkField.style.display = "none";
 	}
-	
-	notransaksicr = document.getElementById('notransaksicr').value;
-	unitcr = document.getElementById('unitcr').value;
-	koderekanancr = document.getElementById('koderekanancr').value;
-	tglcr = document.getElementById('tglcr').value;
-	
+
 	param = 'method=loaddata';
 	param += '&page='+ pg;
-	if (notransaksicr != '') {
-		param += '&notransaksicr=' + notransaksicr;
-	}
-	if(unitcr!=''){
-		param += '&unitcr=' + unitcr;
-	}
-	if(koderekanancr!=''){
-		param += '&koderekanancr=' + koderekanancr;
-	}
-	if(tglcr!=''){
-		param += '&tglcr=' + tglcr;
-	}
-	
+	param += paramFilter();
+
 	tujuan = 'log_slave_realisasispkx.php';
 	post_response_text(tujuan, param, respog);
-	
+
 	function respog(){
 		if(con.readyState == 4){
 			if(con.status == 200){
@@ -96,7 +104,10 @@ function loaddata(pg){
 				if(!isSaveResponse(con.responseText)){
 					alert(con.responseText);
 				}else{
-					document.getElementById('container').innerHTML = con.responseText;
+					//baris data ke tbody, total halaman dan pager ke tfoot (tidak ikut terurut)
+					var bagian = con.responseText.split('<!--PAGER-->');
+					document.getElementById('container').innerHTML = bagian[0];
+					document.getElementById('footerdata').innerHTML = (bagian.length > 1) ? bagian[1] : '';
 					batal();
 				}
 			}else{
@@ -105,6 +116,23 @@ function loaddata(pg){
 			}
 		}
 	}
+}
+
+function dataKePDF(ev){
+	if (!tglFilterValid()) {
+		return;
+	}
+	var tujuan = 'log_realisasispkx_pdflist.php';
+	alertify.popuppdf('title', "<iframe frameborder=0 style='width:100%;height:90%;overflow:none' src='" + tujuan + '?' + paramFilter().substring(1) + "'></iframe>").set({ 'resizable': true, 'overflow': false }).resizeTo('80%', '70%');
+}
+
+//pilihan (select2) langsung mencari
+if (window.jQuery) {
+	jQuery(document).ready(function () {
+		jQuery('#unitcr, #periodecr, #statusposcr, #statustagcr').on('change', function () {
+			loaddata(0);
+		});
+	});
 }
 
 function getpage(){
@@ -238,7 +266,7 @@ function previewdt(numrow,ev){
 					alert(con.responseText);
 				}else{
 					// document.getElementById('divpreviewdt').innerHTML = con.responseText;
-					alertify.popup("Detail",con.responseText).set({'resizable':true,'maximizable':true}).resizeTo('70%','70%'); 
+					alertify.popup("Detail",con.responseText).set({'resizable':true,'maximizable':true}).resizeTo('70%','70%');
 					loaddatadt(notransaksi,kodeblok,kodekeg);
 				}
 			}else{
@@ -548,6 +576,9 @@ function getsewahm(notransaksi,kodeblokdt,kodekegdt,termin,ketdt){
                     alert(con.responseText);
                 } else {
                     document.getElementById('hasilhkdt2').value=con.responseText;
+					if (con.responseText != '') {
+						z.numberFormat('hasilhkdt2',2);
+					}
 					calJumlah();
                 }
             } else {
@@ -649,7 +680,7 @@ function adddt2(notransaksi,kodeblokdt,kodekegdt,termin,ketdt,ev) {
 					alert(con.responseText);
 				} else {
 					alertify.popup2().destroy();
-					alertify.popup2("Detail",con.responseText).set({'resizable':true,'maximizable':true}).resizeTo('500px','70%');
+					alertify.popup2("Detail",con.responseText).set({'resizable':true,'maximizable':true}).resizeTo('420px','55%');
 					// document.getElementById('contapp').innerHTML = con.responseText;
 				}
 			} else {
@@ -752,9 +783,9 @@ function bataldt2(notransaksi,kodeblokdt,kodekegdt){
 }
 
 function calJumlah() {
-    var hasilH = document.getElementById('tothkjumlah').value;
-    var jumlahH = document.getElementById('totjumlahrp').value;
-    var hasil = document.getElementById('hasilhkdt2').value;
+    var hasilH = remove_comma_var(document.getElementById('tothkjumlah').value);
+    var jumlahH = remove_comma_var(document.getElementById('totjumlahrp').value);
+    var hasil = remove_comma_var(document.getElementById('hasilhkdt2').value);
     var jumlah = document.getElementById('jumlahrpdt2');
     
     if(jumlahH>0 && parseFloat(hasilH)!=0) {
@@ -788,7 +819,7 @@ function form_ajukan(kodeorg,notransaksi, tanggal,termin, numrow,jlhrealisasi,no
 					alert(con.responseText);
 				} else {
 					//document.getElementById('containeraju').innerHTML = con.responseText;
-					alertify.popup2("Ajukan",con.responseText).set({'resizable':true,'maximizable':true}).resizeTo('15%','40%'); 
+					alertify.popup2("Ajukan",con.responseText).set({'resizable':true,'maximizable':true}).resizeTo('45%','80%'); 
 				}
 			} else {
 				busy_off();
@@ -876,6 +907,33 @@ function postingData(subunit,kodeblok,kodekeg,hasilkerjarealisasi,hkrealisasi,ju
       //alert(param);
         post_response_text('log_slave_realisasispk_posting.php', param, respon);
     }
+}
+
+function unpostingBapp(notransaksi,nobapp){
+	if (!confirm('Unposting BAPP ' + nobapp + ' ?\nJurnal BAPP ini akan dihapus dan BAPP kembali ke status Belum Diajukan (approval diulang) supaya bisa direvisi/dihapus.\nBAPP lain tidak terpengaruh.')) {
+		return;
+	}
+	param = "method=unpostingBapp&notransaksi="+encodeURIComponent(notransaksi)+"&nobapp="+encodeURIComponent(nobapp);
+	tujuan = 'log_slave_realisasispkx.php';
+	post_response_text(tujuan, param, respog);
+	function respog(){
+		if (con.readyState == 4){
+			if (con.status == 200){
+				busy_off();
+				if (!isSaveResponse(con.responseText)){
+					alert(con.responseText);
+				}else{
+					alertify.popup().destroy();
+					alertify.popup2().destroy();
+					getpage();
+					alert(con.responseText);
+				}
+			}else{
+				busy_off();
+				error_catch(con.status);
+			}
+		}
+	}
 }
 
 function getdetailjurnal(notransaksi,nobapp,kodeorg,tanggal){
