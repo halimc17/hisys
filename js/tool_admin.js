@@ -582,83 +582,89 @@ function getInfo() {
         document.getElementById("pilUn_1").options[
             document.getElementById("pilUn_1").selectedIndex
         ].value;
-    var dar;
-    dar = "<h3>How Unposting Works</h3><ul><li>";
-    dar += "Enter Transaction number to Unpost.</li><li>";
-    dar +=
-        "Can be used for more than one transaction, by providing sign ',' (read 'comma').<br /> ex. 2013001/BKM/999,2013001/BKM/888,2013001/BKM/444</li><li>";
-    dar +=
-        "If it turns out there are the same number of transactions, may occur in cash/bank transaction, then do sort by entering the option unit</li>";
-    dar += "<li>Important Note<ol><li>";
-    dar += "Make sure the transaction in the current accounting period</li>";
-    dar += "<li>Select the type of transaction in accordance with</li>";
-    dar +=
-        "<li>By doing unposting, means canceling journals preconceived</li></ol></li></ul>";
-    // dar+="<h3>How to Change Block Code</h3><ul><li>";
-    // dar+="Select the unit you want to change the blocks</li><li>";
-    // dar+="After a old block appears, enter a new block in the desired</li><li>";
-    // dar+="Note!! If the old block code change data in the old transaction will be transferred to the new block</li></ul>";
-    dar += "<h3>Open / Close Accounting Period</h3><ul><li>";
-    dar += "Choose corresponding Unit will display option period</li><li>";
-    //   dar+="Pemilihan periode terbalik tidak menjadi masalah</li><li>";
-    dar +=
-        "When OPEN, the period of the unit will return to the smallest period selected</li><li>";
-    dar +=
-        "When CLOSE, the period corresponding unit will be the greatest period selected</li></ul>";
-    //    alert(pil);
-    //    return;
-    //$pil=array("1"=>"Kas bank","3"=>"SPK","4"=>"Perawatan Dgn Material","5"=>"Traksi");
+    //penyusun tampilan info: judul, daftar bertitik (ul), dan daftar bernomor (ol)
+    var judul = function (t) {
+        return "<h3 style='margin:0 0 6px 0;font-size:13px'>" + t + "</h3>";
+    };
+    var daftar = function (tag, items) {
+        var h = "<" + tag + " style='margin:0 0 12px 0;padding-left:20px'>";
+        for (var i = 0; i < items.length; i++) {
+            h += "<li style='margin-bottom:4px'>" + items[i] + "</li>";
+        }
+        return h + "</" + tag + ">";
+    };
+    var dar =
+        judul("Cara Kerja Unposting") +
+        daftar("ul", [
+            "Isi nomor transaksi yang akan di-unposting.",
+            "Bisa lebih dari satu transaksi, pisahkan dengan tanda koma (,).<br />Contoh: 2013001/BKM/999,2013001/BKM/888,2013001/BKM/444",
+            "Jika ada nomor transaksi yang sama (bisa terjadi pada transaksi kas/bank), urutkan dengan memilih unit terlebih dahulu.",
+            "Catatan penting:" +
+                daftar("ol", [
+                    "Pastikan transaksi berada di periode akuntansi yang sedang berjalan.",
+                    "Pilih jenis transaksi yang sesuai.",
+                    "Unposting berarti membatalkan jurnal yang sudah terbentuk.",
+                ]),
+        ]) +
+        judul("Buka / Tutup Periode Akuntansi") +
+        daftar("ul", [
+            "Pilih Unit, maka pilihan periode unit tersebut akan tampil.",
+            "Saat OPEN, periode unit kembali ke periode terkecil yang dipilih.",
+            "Saat CLOSE, periode unit menjadi periode terbesar yang dipilih (opsi Close saat ini tidak ditampilkan).",
+        ]);
     switch (pil) {
         case "1":
-            dar = "";
             dar =
-                "<h3>Unpost cash / bank only applies to transactions that are not connected with the Auto Jurnal on Unit</h3><ol><li>";
-            dar +=
-                "Displays the  cash transaction number  with the journal reference number</li>";
-            //dar+="<li>Menampilkan notransaksi dan nojurnal</li>";
-            dar +=
-                "<li>Removing the journal and change the flag post in keu_kasbankht</li></ol>";
+                judul(
+                    "Unposting kas / bank hanya berlaku untuk transaksi yang tidak terhubung dengan Auto Jurnal di Unit"
+                ) +
+                daftar("ol", [
+                    "Menampilkan nomor transaksi kas beserta nomor referensi jurnalnya.",
+                    "Menghapus jurnal dan mengubah flag posting di keu_kasbankht.",
+                ]);
             break;
         case "3":
-            dar = "";
-            dar = "<h3>Unposting Contract Transaction</h3><ol><li>";
-            dar +=
-                "Showing Journal Transaction Number from table  keu_jurnalht where cash/bank transaction number=reference number in table  keu_jurnalht</li>";
-            dar +=
-                "<li>Showing Journal Transaction Number and Transaction Number</li>";
-            dar +=
-                "<li>Removing the journal and change the flag post posting=0, statusjurnal=0, in table log_baspk</li></ol>";
+            dar =
+                judul("Unposting Transaksi Kontrak") +
+                daftar("ol", [
+                    "Menampilkan nomor jurnal dari tabel keu_jurnalht, dengan nomor transaksi kas/bank = nomor referensi di keu_jurnalht.",
+                    "Menampilkan nomor jurnal dan nomor transaksi.",
+                    "Menghapus jurnal dan mengubah flag posting=0, statusjurnal=0 di tabel log_baspk.",
+                ]);
             break;
         case "4":
-            dar = "";
             dar =
-                "<h3>Unposting Immature and Mature Transaction with material Usage</h3><ol><li>";
-            dar +=
-                "Showing journal number from table keu_jurnalht where cash/bank Transaction number=reference number in keu_jurnalht and journal transaction number not like '%M0%'</li>";
-            dar += "<li>Showing journal number and transaction number</li>";
-            dar += "<li>Delete corresponding journal</li>";
-            dar += "<li>Delete Good Issue from table log_transaksiht,(if exist)</li>";
-            dar += "<li>Update jurnal=0 table kebun_aktifitas</li>";
-            dar +=
-                "<li>Restore previous material balance on table log_5saldobulanan.</li>";
-            dar += "<li>Update value `saldo akhir` and  `qtykeluar harga`</li>";
-            dar +=
-                "<li>Update log_5masterbarangdt base on material balance</li></ul>";
+                judul(
+                    "Unposting Transaksi TBM dan TM dengan Pemakaian Material"
+                ) +
+                daftar("ol", [
+                    "Menampilkan nomor jurnal dari tabel keu_jurnalht, dengan nomor transaksi = nomor referensi di keu_jurnalht dan nomor jurnal tidak seperti '%M0%'.",
+                    "Menampilkan nomor jurnal dan nomor transaksi.",
+                    "Menghapus jurnal terkait.",
+                    "Menghapus Good Issue dari tabel log_transaksiht (jika ada).",
+                    "Mengubah jurnal=0 pada tabel kebun_aktifitas.",
+                    "Mengembalikan saldo material sebelumnya pada tabel log_5saldobulanan.",
+                    "Memperbarui nilai saldo akhir dan qtykeluar harga.",
+                    "Memperbarui log_5masterbarangdt berdasarkan saldo material.",
+                ]);
             break;
         case "5":
-            dar = "";
-            dar = "<h3>Unposting Vehicle Runn Transaction</h3><ol><li>";
-            dar += "Showing Transaction Detail</li>";
-            dar += "<li>Change flag posting=0 on vhc_runht</li></ol>";
+            dar =
+                judul("Unposting Transaksi Pemakaian Kendaraan (Run)") +
+                daftar("ol", [
+                    "Menampilkan detail transaksi.",
+                    "Mengubah flag posting=0 pada vhc_runht.",
+                ]);
             break;
         case "6":
-            dar = "";
-            dar = "<h3>Unposting Invoice In Transaction</h3><ol><li>";
-            dar += "Showing Transaction Detail</li>";
+            dar =
+                judul("Unposting Tagihan / Invoice Masuk") +
+                daftar("ol", ["Menampilkan detail transaksi."]);
             break;
     }
 
-    document.getElementById("infoTip").innerHTML = dar;
+    document.getElementById("infoTip").innerHTML =
+        "<div style='font-size:12px;line-height:1.5'>" + dar + "</div>";
 }
 function getInfo2() {
     pil =
@@ -772,6 +778,9 @@ function getPeriode(unit) {
                 } else {
                     document.getElementById("periodeopenclose").innerHTML =
                         con.responseText;
+                    if (window.jQuery && jQuery.fn.select2) {
+                        jQuery("#dariperiode, #sampaiperiode").select2({ dropdownAutoWidth: true });
+                    }
                     document.getElementById("buttonDong").style.display = "";
                 }
             } else {
@@ -795,6 +804,9 @@ function getPeriodebank(unit) {
                 } else {
                     document.getElementById("periodeopenclosebank").innerHTML =
                         con.responseText;
+                    if (window.jQuery && jQuery.fn.select2) {
+                        jQuery("#dariperiodebank, #sampaiperiodebank").select2({ dropdownAutoWidth: true });
+                    }
                     document.getElementById("buttonbank").style.display = "";
                 }
             } else {

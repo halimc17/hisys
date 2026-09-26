@@ -24,6 +24,12 @@ $nodo = checkPostGet('nodo', '');
 $listTransaksi =     isset($_POST['listTransaksi']) ? explode(",", $_POST['listTransaksi']) : array();
 $listTransaksi2 =    isset($_POST['listTransaksi2']) ? explode(",", $_POST['listTransaksi2']) : array();
 $pilUn_1 =	isset($_POST['pilUn_1']) ? $_POST['pilUn_1'] : '';
+#Unposting BAPP (Kontrak SPK / Per Termin) dinonaktifkan di Admin Tools, sekarang lewat halaman BAPP Kontraktor (tombol hijau di detail BAPP).
+#Kode case 3 dan 30 di bawah sengaja tidak dihapus.
+$pilUnBapp = isset($_POST['pilUn_1']) ? $_POST['pilUn_1'] : (isset($_GET['pilUn_1']) ? $_GET['pilUn_1'] : '');
+if (is_numeric($pilUnBapp) && ((int)$pilUnBapp == 3 || (int)$pilUnBapp == 30)) {
+	exit('Error : Unposting BAPP sudah dipindah ke halaman BAPP Kontraktor (tombol hijau di detail BAPP).');
+}
 $pilUn_5 =	isset($_POST['pilUn_5']) ? $_POST['pilUn_5'] : '';
 $unitId =	isset($_POST['unitId']) ? $_POST['unitId'] : '';
 $periodeId =	isset($_POST['periodeId']) ? $_POST['periodeId'] : '';
@@ -71,7 +77,7 @@ if ($method == 'unposting') {
 	$pil = array(
 		"1" => $_SESSION['lang']['kasbank'] . " Menghapus nomor voucher (Keuangan)",
 		"2" => 'Kasir  Menghapus nomor voucher (Keuangan)',
-		"3" => "BAPP (Kontrak SPK)",
+		// "3" => "BAPP (Kontrak SPK)", #dinonaktifkan
 		"4" => "BKM Rawat / " . $_SESSION['lang']['panen'] . " (Kebun)",
 		"5" => $_SESSION['lang']['traksi'] . "",
 		"6" => "Tagihan / Invoice Pembelian (Keuangan)",
@@ -91,7 +97,7 @@ if ($method == 'unposting') {
 		"27" => "Harga Jual TBS (Sales)",
 		"28" => "Transfer Produk (Pabrik/Bulking)",
 		"29" => $_SESSION['lang']['jurnalmemo'] . " (Keuangan)",
-		"30" => "BAPP (Per Termin)",
+		// "30" => "BAPP (Per Termin)", #dinonaktifkan
 		"31" => "Upload Absensi HO (SDM)",
 		"32" => "Surat Peringatan (SDM)",
 		"33" => "Pengajuan Service (Traksi)",
@@ -4479,19 +4485,13 @@ switch ($method) {
 		$z = 0;
 		$last = '';
 		while ($bar = $str->fetch()) {
-			if ($z == 0) {
-				#penambah periode             
-				$last = $bar->periode;
-				for ($u = 10; $u >= 1; $u--) {
-					$st = mktime(0, 0, 0, intval(substr($last, 5, 2)) + $u, 15, intval(substr($last, 0, 4)));
-					$stream .= "<option value='" . date('Y-m', $st) . "'>" . date('Y-m', $st) . "</option>";
-				}
-			}
+			#hanya periode yang sudah ada (tidak lagi menambah 10 bulan ke depan)
 			$stream .= "<option value='" . $bar->periode . "'>" . $bar->periode . "</option>";
 			$z++;
 		}
 
-		echo "<select id=dariperiode>" . $stream . "</select> to <select id=sampaiperiode>" . $stream . "</select>";
+		#tiap select dibungkus sendiri: handler fokus select2 membuka semua select saudara dalam satu induk
+		echo "<div style='display:flex;align-items:center;gap:6px;width:100%'><span style='flex:1;min-width:0'><select class='select2' id=dariperiode style='width:100%'>" . $stream . "</select></span><span>s/d</span><span style='flex:1;min-width:0'><select class='select2' id=sampaiperiode style='width:100%'>" . $stream . "</select></span></div>";
 		break;
 
 	case 'getPeriodebank':
@@ -4505,7 +4505,7 @@ switch ($method) {
 			$bln = substr($bar['periode'], 4, 2);
 			$stream .= "<option value='" . $thn . "-" . $bln . "'>" . $thn . "-" . $bln . "</option>";
 		}
-		echo "<select id=dariperiodebank>" . $stream . "</select> to <select id=sampaiperiodebank>" . $stream . "</select>";
+		echo "<div style='display:flex;align-items:center;gap:6px;width:100%'><span style='flex:1;min-width:0'><select class='select2' id=dariperiodebank style='width:100%'>" . $stream . "</select></span><span>s/d</span><span style='flex:1;min-width:0'><select class='select2' id=sampaiperiodebank style='width:100%'>" . $stream . "</select></span></div>";
 		break;
 
 	case 'openCloseMethodBank':
