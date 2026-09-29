@@ -8,6 +8,8 @@ require_once('lib/zLib.php');
 $prdlist = checkPostGet('prdlist','');
 $unitlist = checkPostGet('unitlist','');
 $afdlist = checkPostGet('afdlist','');
+$notranslist = checkPostGet('notranslist','');
+$statuslist = checkPostGet('statuslist','');
 $tgl1list = checkPostGet('tgl1list','');
 $tgl2list = checkPostGet('tgl2list','');
 $tgl1list = ($tgl1list!='') ? tanggalsystemn($tgl1list) : '';
@@ -28,14 +30,28 @@ if($_SESSION['empl']['subbagian']!=''){
 if($prdlist!=''){ $where.=" and periode='".$prdlist."' "; }
 if($unitlist!=''){ $where.=" and kodeorg='".$unitlist."' "; }
 if($afdlist!=''){ $where.=" and divisi='".$afdlist."' "; }
+if($notranslist!=''){ $where.=" and notransaksi like '%".$notranslist."%' "; }
+if($statuslist=='1'){ $where.=" and posting='1' "; }elseif($statuslist=='0'){ $where.=" and (posting<>'1' or posting is null) "; }
 if($tgl1list!='' && $tgl2list!=''){ $where.=" and tanggalpanen between '".$tgl1list."' and '".$tgl2list."' "; }
+
+#PT untuk logo/kop: unit yang dipilih, atau lokasi tugas user
+$unitcetak=($unitlist!='') ? $unitlist : $_SESSION['empl']['lokasitugas'];
+$ptkode=getindukPT($unitcetak);
+$hdpt=setheadreport($ptkode,$ptkode);
 
 class PDF extends FPDF
 {
 	function Header() {
-		global $prdlist, $unitlist, $afdlist, $tgl1list, $tgl2list;
+		global $prdlist, $unitlist, $afdlist, $tgl1list, $tgl2list, $hdpt, $notranslist, $statuslist;
 		$width = $this->w - $this->lMargin - $this->rMargin;
 		$height = 11;
+		if(file_exists($hdpt['logo'])){
+			$this->Image($hdpt['logo'],$this->lMargin,$this->tMargin,42);
+		}
+		$this->SetFont('Arial','B',10);
+		$this->SetXY($this->lMargin+50,$this->tMargin+6);
+		$this->Cell(400,12,$hdpt['nama'],0,1,'L');
+		$this->SetY($this->tMargin+40);
 		$this->SetFont('Arial','B',11);
 		$this->Cell($width,$height,'Daftar Premi Pemanen (SPB)',0,1,'C');
 		$this->SetFont('Arial','',8);
@@ -43,6 +59,8 @@ class PDF extends FPDF
 		if($tgl1list!='' && $tgl2list!=''){ $ket.=' | Tanggal: '.tanggalnormal($tgl1list).' s/d '.tanggalnormal($tgl2list); }
 		$ket.=' | Unit: '.($unitlist!=''?$unitlist:'Seluruhnya');
 		$ket.=' | Divisi: '.($afdlist!=''?$afdlist:'Seluruhnya');
+		if($notranslist!=''){ $ket.=' | No Transaksi: '.$notranslist; }
+		if($statuslist!=''){ $ket.=' | Status: '.($statuslist=='1'?'Posted':'Belum Posting'); }
 		$this->Cell($width,$height,$ket,0,1,'C');
 		$this->Ln(2);
 		$this->SetFont('Arial','B',6);

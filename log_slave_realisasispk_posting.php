@@ -32,9 +32,11 @@ $tgl = tanggalsystem($param['tanggal']);
 $tglsystemn = tanggalsystemn($param['tanggal']);
 
 
-#periksa tanggal periode akuntansi===============
-if ($_SESSION['org']['period']['start'] > $tgl)
-	exit('Error:Tanggal ' . $param['tanggal'] . ' diluar periode aktif ' . $_SESSION['org']['period']['start']);
+#periksa periode akuntansi unit SPK langsung dari database (tolak hanya jika sudah tutup buku)===============
+$perPosting = substr($tglsystemn, 0, 7);
+$cekPer = fetchData("select tutupbuku from " . $dbname . ".setup_periodeakuntansi where kodeorg='" . addslashes($param['kodeorg']) . "' and periode='" . $perPosting . "'");
+if (count($cekPer) > 0 && $cekPer[0]['tutupbuku'] == 1)
+	exit('Error:Periode akuntansi ' . $perPosting . ' unit ' . $param['kodeorg'] . ' sudah tutup buku.');
 
 
 // SPK

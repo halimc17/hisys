@@ -22,13 +22,15 @@ switch($method){
 
 		if(isset($_POST['txtsearch'])){
 			$txtsearch=$_POST['txtsearch'];
-			$orgsearch=$_POST['orgsearch'];	
-			$noktp=$_POST['noktp'];	
-			$tipesearch=$_POST['tipesearch'];	
+			$orgsearch=$_POST['orgsearch'];
+			$noktp=$_POST['noktp'];
+			$jabatansearch=$_POST['jabatansearch'];
+			$tipesearch=$_POST['tipesearch'];
 			$statussearch=$_POST['statussearch'];
 		}else{
 			$txtsearch='';
-			$orgsearch='';	
+			$orgsearch='';
+			$jabatansearch='';
 			$tipesearch='';
 			$statussearch='';
 			$noktp='';
@@ -44,7 +46,9 @@ switch($method){
 		   $where.= " and a.noktp like '%".$noktp."%'";
 
 		if($orgsearch!='')
-		   $where .=" and (a.lokasitugas='".$orgsearch."' or a.subbagian='".$orgsearch."') ";  
+		   $where .=" and (a.lokasitugas='".$orgsearch."' or a.subbagian='".$orgsearch."') ";
+		if($jabatansearch!='')
+		   $where .=" and a.kodejabatan='".$jabatansearch."'";
 		if($tipesearch!='')
 		   $where .=" and a.tipekaryawan='".$tipesearch."'";  
 		if($statussearch=='*')
@@ -87,9 +91,10 @@ switch($method){
 			  lokasitugas in(".getOrgDetail(2).") and namakaryawan not like '%ADMINISTRATOR%'
 			  and a.kodejabatan=b.kodejabatan and a.kodegolongan=c.kodegolongan
 			  and d.id=a.tipekaryawan 
-			  ".$where." 
+			  ".$where."
+			  order by a.namakaryawan asc
 			  limit ".$maxdisplay.",".$getrows
-			  ;   	
+			  ;
 		// }
 
 		$res=$owlPDO->query($str) or die(print " Gagal: ".PDOException::getMessage());
@@ -114,18 +119,17 @@ switch($method){
 				if($bar->tanggalkeluar == '0000-00-00'){
 					$valueTglKeluar = '-';
 				}else{
-					$valueTglKeluar = tanggalnormal($bar->tanggalkeluar);
+					$valueTglKeluar = "<span style='color:red;'>".tanggalnormal($bar->tanggalkeluar)."</span>";
 				}
-				$csss='';
-				// if($bar->photo != NULL || $bar->photo != ''){
-				// 	$csss = "class=zoom";
-				// 	$urlimage = $pathlocation.$bar->photo;
-				// }else{
-				// 	$urlimage = "images/noimages.png ";
-				// }
+				if($bar->photo != NULL && $bar->photo != ''){
+					$urlimage = $pathlocation.$bar->photo;
+				}else{
+					$urlimage = "images/noimages.png";
+				}
 
 				echo "<tr class=rowcontent>
 					 <td align=center>".$no."</td>
+					 <td align=center><img src='".$urlimage."' style='width:40px;height:40px;object-fit:cover;'></td>
 					 <td>".$bar->nik."</td>
 					 <td>".$bar->namakaryawan."</td>
 					 <td>".$bar->namajabatan."</td>
@@ -139,9 +143,9 @@ switch($method){
 					 <td>".$bar->statusperkawinan."</td>
 					 <td align=right >".$bar->jumlahanak."</td>
 					 <td align=center>".tanggalnormal($bar->tanggalmasuk)."</td>
-					 <td align=center>".$valueTglKeluar."</td>
 					<td align=center>".$bar->tipe."</td>
-					<td align=center>".$bar->statuskaryawan."</td>";
+					<td align=center>".($bar->statuskaryawan=='Keluar' ? "<span style='color:red;'>".$bar->statuskaryawan."</span>" : $bar->statuskaryawan)."</td>
+					 <td align=center>".$valueTglKeluar."</td>";
 
 					if($bar->statusapproval==0){
 				echo "<td style=width:25px align=center></td>";
@@ -173,7 +177,7 @@ switch($method){
         $offset = $page * $limit;
         $maxdisplay = ($page * $limit);
         $no = 0;
-		$colspan=6;
+		$colspan=12;
 		$tab = "";
         $no = $maxdisplay;
 		
@@ -184,12 +188,22 @@ switch($method){
 		} else {
 			$where = " and kodeorganisasi = '".$_SESSION['empl']['lokasitugas']."'";
 		}
-		
-		$sql = "select count(distinct periode, kodeorg, sudahproses) as notr from ".$dbname.".sdm_5periodegaji a where kodeorg in (".getOrgDetail(2).")";
+
+		$unitfilter = checkPostGet('unitfilter','');
+		$periodefilter = checkPostGet('periodefilter','');
+		$wherefilter = "";
+		if($unitfilter!=''){
+			$wherefilter .= " and kodeorg='".$unitfilter."'";
+		}
+		if($periodefilter!=''){
+			$wherefilter .= " and periode='".$periodefilter."'";
+		}
+
+		$sql = "select count(distinct periode, kodeorg, sudahproses) as notr from ".$dbname.".sdm_5periodegaji a where kodeorg in (".getOrgDetail(2).")".$wherefilter;
         $res = fetchdata($sql);
         $jlhbrs = $res[0]['notr'];
-		
-		$str = "select distinct periode, kodeorg, sudahproses from ".$dbname.".sdm_5periodegaji a where kodeorg in (".getOrgDetail(2).") order by periode desc limit " . $offset . "," . $limit . ""; 
+
+		$str = "select distinct periode, kodeorg, sudahproses from ".$dbname.".sdm_5periodegaji a where kodeorg in (".getOrgDetail(2).")".$wherefilter." order by periode desc limit " . $offset . "," . $limit . "";
 		$res = fetchdata($str);
 		$optNewOrg = $optprd = [];
 		foreach($res as $val){
@@ -205,48 +219,130 @@ switch($method){
 		}
 
 		## Cek ada datakaryawan di riwayatjabatan gak
-		$sql_1 = "select distinct mulaiberlaku,darikodeorg,kekodeorg,posting from ".$dbname.".sdm_riwayatjabatan a where darikodeorg in ('".implode("','",$optNewOrg)."') or kekodeorg in ('".implode("','",$optNewOrg)."') and posting ='2'";
+		$sql_1 = "select karyawanid,mulaiberlaku,darikodeorg,kekodeorg,posting from ".$dbname.".sdm_riwayatjabatan a where (darikodeorg in ('".implode("','",$optNewOrg)."') or kekodeorg in ('".implode("','",$optNewOrg)."')) and posting='2' and darikodeorg!=kekodeorg";
 		$req_1 = fetchdata($sql_1);
 		foreach($req_1 as $bar){
-			$data_riwayatjabatan_daorg[$bar['darikodeorg']][periodelalu(substr($bar['mulaiberlaku'],0,7))]= periodelalu(substr($bar['mulaiberlaku'],0,7));
-			$data_riwayatjabatan_keorg[$bar['kekodeorg']][periodelalu(substr($bar['mulaiberlaku'],0,7))]  = periodelalu(substr($bar['mulaiberlaku'],0,7));
+			$p = periodelalu(substr($bar['mulaiberlaku'],0,7));
+			@$data_riwayatjabatan_daorg[$bar['darikodeorg']][$p] += 1;
+			@$data_riwayatjabatan_keorg[$bar['kekodeorg']][$p] += 1;
 		}
 		
 		// echo"<pre>";
 		// print_r($data_riwayatjabatan_daorg);
 		// echo"</pre>";
 
+		$tglhriniposting=date('Y-m-d');
+
 		$res = fetchdata($str);
 		foreach($res as $val){
-			if($val['sudahproses']=='0' and $data[$val['kodeorg']][$val['periode']]==''){
-				$no++;
-				$tab.="<tr class=rowcontent>";
-				$tab.="<td align=center>" . $no . "</td>";
-				$tab.="<td align=center>" . $val['periode'] . "</td>";
-				$tab.="<td align=center>" . $val['kodeorg'] . "</td>";
-				$tab.="<td align=left>" . getNamaOrg($val['kodeorg']). "</td>";
-				$tab.="<td align=center>Not Posted</td>";
-				$tab.="<td align=center><button class=mybutton onclick=closedatakary('".$val['kodeorg']."','".$val['periode']."')>Posting</button></td>";
-				$tab.="</tr>";
-			}elseif($data[$val['kodeorg']][$val['periode']]!=''){				
-				$no++;
-				$tab.="<tr class=rowcontent>";
-				$tab.="<td align=center>" . $no . "</td>";
-				$tab.="<td align=center>" . $data[$val['kodeorg']][$val['periode']] . "</td>";
-				$tab.="<td align=center>" . $unit[$val['kodeorg']][$val['periode']] . "</td>";
-				$tab.="<td align=left>" . getNamaOrg($unit[$val['kodeorg']][$val['periode']]) . "</td>";
-				$tab.="<td align=center>Posted</td>";
-				// if($val['sudahproses']=='0' and ($data_riwayatjabatan_daorg[$val['kodeorg']][$val['periode']]=='' and $data_riwayatjabatan_keorg[$val['kodeorg']][$val['periode']]=='') ){
-					$tab.="<td align=center><button class=mybutton title='Click untuk unposting' style=color:green;border-color:green; onclick=unclosedatakary('".$val['kodeorg']."','".$val['periode']."')>Posted</button></td>";					
-				// }else{					
-				// 	$tab.="<td align=center><button class=mybutton style=color:red;border-color:red;>Closed</button></td>";
-				// }
-				$tab.="</tr>";
+			$kodeorg = $val['kodeorg'];
+			$periode = $val['periode'];
+			$isposted = ($data[$kodeorg][$periode] != '');
+
+			#jumlah data karyawan_hist yang tersimpan (hasil posting) untuk periode & unit ini
+			$sqlhist = "select count(*) c from ".$dbname.".datakaryawan_hist where lokasitugas='".$kodeorg."' and periodegaji='".$periode."' and approval_status='8' and version_type='B' and namakaryawan not like '%ADMINISTRATOR%'";
+			$reshist = fetchdata($sqlhist);
+			$jmlhist = $reshist[0]['c'];
+
+			#jumlah karyawan aktif di unit ini saat ini (real time, bukan potret periode)
+			$sqlaktif = "select count(*) c from ".$dbname.".datakaryawan where lokasitugas='".$kodeorg."' and (tanggalkeluar>='".$tglhriniposting."' or tanggalkeluar='0000-00-00') and namakaryawan not like '%ADMINISTRATOR%'";
+			$resaktif = fetchdata($sqlaktif);
+			$jmlaktif = $resaktif[0]['c'];
+
+			#tanggal mulai & sampai periode ini, untuk hitung yang keluar di periode ini
+			$sqlperiode = "select tanggalmulai,tanggalsampai from ".$dbname.".sdm_5periodegaji where kodeorg='".$kodeorg."' and periode='".$periode."' limit 1";
+			$resperiode = fetchdata($sqlperiode);
+			$jmlkeluar = 0;
+			if(count($resperiode)>0){
+				$sqlkeluar = "select count(*) c from ".$dbname.".datakaryawan where lokasitugas='".$kodeorg."' and tanggalkeluar between '".$resperiode[0]['tanggalmulai']."' and '".$resperiode[0]['tanggalsampai']."' and namakaryawan not like '%ADMINISTRATOR%'";
+				$reskeluar = fetchdata($sqlkeluar);
+				$jmlkeluar = $reskeluar[0]['c'];
 			}
+
+			$jmlriwayat = (int)@$data_riwayatjabatan_daorg[$kodeorg][$periode] + (int)@$data_riwayatjabatan_keorg[$kodeorg][$periode];
+			$adariwayat = ($jmlriwayat > 0);
+
+			#cek periode akuntansi (tutupbuku), terpisah dari periode gaji (sudahproses)
+			$sqlakuntansi = "select tutupbuku from ".$dbname.".setup_periodeakuntansi where kodeorg='".$kodeorg."' and periode='".$periode."' limit 1";
+			$resakuntansi = fetchdata($sqlakuntansi);
+			$tutupbukuakuntansi = (count($resakuntansi)>0 && $resakuntansi[0]['tutupbuku']=='1');
+			$adatutupbuku = ($val['sudahproses']!='0' || $tutupbukuakuntansi);
+
+			#jumlah karyawan asli (bukan ADMINISTRATOR) yang pernah tercatat di unit ini
+			$sqlkaryawanunit = "select count(*) c from ".$dbname.".datakaryawan where lokasitugas='".$kodeorg."' and namakaryawan not like '%ADMINISTRATOR%'";
+			$reskaryawanunit = fetchdata($sqlkaryawanunit);
+			$jmlkaryawanunit = $reskaryawanunit[0]['c'];
+
+			#siapa & kapan periode ini diposting (kalau memang sudah diposting)
+			$postingoleh = "-";
+			$tglposting = "-";
+			if($isposted){
+				$sqlpostinfo = "select updateby,updatetime from ".$dbname.".datakaryawan_hist where lokasitugas='".$kodeorg."' and periodegaji='".$periode."' and approval_status='8' and version_type='B' order by updatetime desc limit 1";
+				$respostinfo = fetchdata($sqlpostinfo);
+				if(count($respostinfo)>0){
+					$postingoleh = getNamaKaryawan($respostinfo[0]['updateby']);
+					$tglposting = tanggalnormal(substr($respostinfo[0]['updatetime'],0,10))." ".substr($respostinfo[0]['updatetime'],11,5);
+				}
+			}
+
+			if($jmlkaryawanunit==0){
+				$statuslabel = "Tidak Ada Data Karyawan";
+				$alasan = "Data Karyawan Tidak Ada";
+				$tombol = "-";
+			}elseif($isposted && !$adatutupbuku && !$adariwayat){
+				$statuslabel = "Posted";
+				$alasan = "-";
+				$tombol = "<button class=mybutton title='Click untuk unposting' style=color:green;border-color:green; onclick=unclosedatakary('".$kodeorg."','".$periode."')>Posted</button>";
+			}elseif($isposted){
+				$statuslabel = "Closed";
+				$alasanparts = array();
+				$alasanplainparts = array();
+				if($adatutupbuku){
+					$alasanparts[] = "Tutup Buku";
+					$alasanplainparts[] = "Tutup Buku";
+				}
+				if($adariwayat){
+					$linkpindah = "<a href='javascript:void(0)' onclick=\"lihatKaryawanPindah('".$kodeorg."','".$periode."')\">".$jmlriwayat." Karyawan Pindah</a>";
+					if($adatutupbuku){
+						$alasanparts[] = $linkpindah;
+						$alasanplainparts[] = $jmlriwayat." Karyawan Pindah";
+					}else{
+						$alasanparts[] = $linkpindah." - Perlu Pengecekan Tim IT untuk Unposting";
+						$alasanplainparts[] = $jmlriwayat." Karyawan Pindah - Perlu Pengecekan Tim IT untuk Unposting";
+					}
+				}
+				$alasan = implode(", ", $alasanparts);
+				$alasanplain = implode(", ", $alasanplainparts);
+				$tombol = "<button class=mybutton disabled style='color:red;border-color:red;' title='".$alasanplain."'>Closed</button>";
+			}elseif($val['sudahproses']=='0'){
+				$statuslabel = "Not Posted";
+				$alasan = "-";
+				$tombol = "<button class=mybutton onclick=closedatakary('".$kodeorg."','".$periode."')>Posting</button>";
+			}else{
+				$statuslabel = "Tutup Buku - Belum Posting SDM";
+				$alasan = "Tutup Buku";
+				$tombol = "<button class=mybutton onclick=closedatakary('".$kodeorg."','".$periode."')>Posting</button>";
+			}
+
+			$no++;
+			$tab.="<tr class=rowcontent>";
+			$tab.="<td align=center>" . $no . "</td>";
+			$tab.="<td align=center>" . $periode . "</td>";
+			$tab.="<td align=center>" . $kodeorg . "</td>";
+			$tab.="<td align=left>" . getNamaOrg($kodeorg). "</td>";
+			$tab.="<td align=right>" . $jmlhist . "</td>";
+			$tab.="<td align=right>" . $jmlaktif . "</td>";
+			$tab.="<td align=right>" . $jmlkeluar . "</td>";
+			$tab.="<td align=center>" . $statuslabel . "</td>";
+			$tab.="<td align=center>" . $alasan . "</td>";
+			$tab.="<td align=left>" . $postingoleh . "</td>";
+			$tab.="<td align=center>" . $tglposting . "</td>";
+			$tab.="<td align=center>" . $tombol . "</td>";
+			$tab.="</tr>";
 		}
-		
+
 		$tab.=createpaging($jlhbrs,$limit,$page,$colspan,'listpostingdata','getPage');
-		
+
 		echo $tab;
 	break;
 	case'closedatakary':
@@ -287,7 +383,7 @@ switch($method){
 		
 		#ambil datakaryawan
 		# and (tanggalkeluar>='" . $tanggal1 . "' or tanggalkeluar='0000-00-00') 
-		$query = "select karyawanid from " . $dbname . ".datakaryawan a where lokasitugas='" . $param['kodeorg'] . "' group by a.karyawanid";
+		$query = "select karyawanid from " . $dbname . ".datakaryawan a where lokasitugas='" . $param['kodeorg'] . "' and namakaryawan not like '%ADMINISTRATOR%' group by a.karyawanid";
 		$res = fetchdata($query);
 		foreach($res as $val){
 			$datakaryawan[$val['karyawanid']]=$val['karyawanid'];
@@ -355,7 +451,7 @@ switch($method){
 					'suku'               =>$bar['suku'],
 					'sim'                =>$bar['sim'],
 					'statuskaryawan'     =>$bar['statuskaryawan'],
-					'updateby'           =>$bar['updateby'],
+					'updateby'           =>$_SESSION['standard']['userid'],
 					'pensiun'            =>$bar['pensiun'],
 					'insstatuspajak'     =>$bar['insstatuspajak'],
 					'supbpjs'            =>$bar['supbpjs'],
@@ -369,7 +465,7 @@ switch($method){
 					'kecamatan'          =>$bar['kecamatan'],
 					'desa'               =>$bar['desa'],
 					'bulandaftarbpjs'    =>$bar['bulandaftarbpjs'],
-					'updatetime'         =>date('Y-m-d'),
+					'updatetime'         =>date('Y-m-d H:i:s'),
 					'approval_status'    =>'8',
 					'periodegaji'        =>$param['periode'],
 					'version_type'       =>'B',
@@ -402,7 +498,7 @@ switch($method){
 		
 		$str = "delete from " . $dbname . ".datakaryawan_hist where  lokasitugas='".$param['kodeorg']."' and periodegaji='".$param['periode']."' and approval_status='8' and version_type='B'";
 		$owlPDO->exec($str);
-		
+
 		#execute
 		$owlPDO->commit();
 	} catch (PDOException $e) {
@@ -410,6 +506,52 @@ switch($method){
 		echo "Error, " . addslashes($e->getMessage());
 		die();
 	}
+	break;
+	case'listkaryawanpindah':
+		$kodeorg = checkPostGet('kodeorg','');
+		$periode = checkPostGet('periode','');
+		$periodenext = date('Y-m', strtotime($periode.'-01 +1 month'));
+
+		$sql = "select a.karyawanid,b.namakaryawan,a.mulaiberlaku,a.darikodeorg,a.darisubbagian,a.kekodeorg,a.kesubbagian
+				from ".$dbname.".sdm_riwayatjabatan a
+				left join ".$dbname.".datakaryawan b on a.karyawanid=b.karyawanid
+				where (a.darikodeorg='".$kodeorg."' or a.kekodeorg='".$kodeorg."') and a.posting='2' and a.darikodeorg!=a.kekodeorg and substr(a.mulaiberlaku,1,7)='".$periodenext."'
+				order by b.namakaryawan asc";
+		$res = fetchdata($sql);
+
+		$tab = "<table class=sortable border=1 cellspacing=1 cellpadding=5 width=100%>
+			<thead><tr class=rowheader>
+				<td align=center>No.</td>
+				<td align=center>NIK</td>
+				<td align=center>Nama Karyawan</td>
+				<td align=center>Dari Unit</td>
+				<td align=center>Dari Divisi</td>
+				<td align=center>Ke Unit</td>
+				<td align=center>Ke Divisi</td>
+				<td align=center>Tanggal Mulai Berlaku</td>
+			</tr></thead><tbody>";
+		if(count($res)<1){
+			$tab .= "<tr class=rowcontent><td colspan=8 align=center>".$_SESSION['lang']['datanotfound']."</td></tr>";
+		}else{
+			$no=0;
+			foreach($res as $bar){
+				$no++;
+				$darisubbagian = ($bar['darisubbagian']!='') ? $bar['darisubbagian']." - ".getNamaOrg($bar['darisubbagian']) : "-";
+				$kesubbagian = ($bar['kesubbagian']!='') ? $bar['kesubbagian']." - ".getNamaOrg($bar['kesubbagian']) : "-";
+				$tab .= "<tr class=rowcontent>
+					<td align=center>".$no."</td>
+					<td align=center>".$bar['karyawanid']."</td>
+					<td align=left>".$bar['namakaryawan']."</td>
+					<td align=center>".$bar['darikodeorg']." - ".getNamaOrg($bar['darikodeorg'])."</td>
+					<td align=center>".$darisubbagian."</td>
+					<td align=center>".$bar['kekodeorg']." - ".getNamaOrg($bar['kekodeorg'])."</td>
+					<td align=center>".$kesubbagian."</td>
+					<td align=center>".tanggalnormal($bar['mulaiberlaku'])."</td>
+				</tr>";
+			}
+		}
+		$tab .= "</tbody></table>";
+		echo $tab;
 	break;
 }
 ?>

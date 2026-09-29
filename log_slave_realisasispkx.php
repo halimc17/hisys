@@ -5,7 +5,9 @@ require_once('master_validation.php');
 require_once('config/connection.php');
 require_once('lib/nangkoelib.php');
 include_once('lib/zLib.php');
+include_once('lib/zFunction.php');
 require_once('lib/fpdf.php');
+require_once('log_realisasispkx_filter.php');
 require_once('dompdf/autoload.inc.php');
 
 use Dompdf\Dompdf;
@@ -172,9 +174,10 @@ switch ($method) {
 			z-index: 2;
 		}
 		</style>";
-		$grid .= "<div class=table-scroll style='height:400px'>
-			<table class='freezetbl' cellpadding=5 cellspacing=1>
+		$grid .= "<div class=table-scroll style='max-height:400px;overflow:auto'>
+			<table class='freezetbl' cellpadding=5 cellspacing=1 style='width:814px'>
 			<thead><tr class='rowheader' style='text-align:center'>
+				<td style='width:35px'>No</td>
 				<td>" . $_SESSION['lang']['subunit'] . "</td>
 				<td>" . $_SESSION['lang']['kodekegiatan'] . "</td>
 				<td>" . $_SESSION['lang']['hk'] . "</td>
@@ -185,13 +188,14 @@ switch ($method) {
 			</tr></thead>";
 
 		# Grid Content
+		$totalJumlahDt = 0;
 		$grid .= "<tbody>";
 		if (empty($data)) {
-			$grid .= "<tr class='rowcontent'><td colspan='10'>Data Empty</td></tr>";
+			$grid .= "<tr class='rowcontent'><td colspan='8'>Data Empty</td></tr>";
 		} else {
 			foreach ($dataShow as $key => $row) {
 				// $grid .= "<tr class='rowcontent' onclick=\"manageDetail(".$key.")\" style='cursor:pointer'>";
-				$grid .= "<tr class='rowcontent'>";
+				$grid .= "<tr class='rowcontent'><td align='center'>" . ($key + 1) . "</td>";
 				foreach ($row as $head => $cont) {
 					$grid .= "<td id='" . $head . "_" . $key . "' ";
 					if (isset($data[$key][$head])) {
@@ -209,7 +213,7 @@ switch ($method) {
 					} elseif ($head == 'satuan') {
 						$grid .= ">" . $cont . "</td>";
 					} else {
-						$grid .= ">" . $data[$key][$head] . "-" . $cont . "</td>";
+						$grid .= ">" . $data[$key][$head] . ($cont != '' ? "-" . $cont : "") . "</td>";
 					}
 				}
 				$grid .= "<td style='text-align:center'>
@@ -217,14 +221,16 @@ switch ($method) {
 					</td>
 				</tr>";
 				// $grid .= "<tr><td colspan='6'><div id='detail_".$key."'></div></td></tr>";
+				$totalJumlahDt += $data[$key]['jumlahrp'];
 			}
+			$grid .= "<tr class='rowcontent'><td colspan='6' align='center'><b>TOTAL</b></td><td align='right'><b>" . number_format($totalJumlahDt) . "</b></td><td></td></tr>";
 		}
 		$grid .= "</tbody>";
 		$grid .= "</table></div>";
 
 		#== Display View
 		# Draw Tab
-		echo "<fieldset><legend><b>Detail</b></legend>";
+		echo "<fieldset style='width:100%;box-sizing:border-box'><legend><b>Detail</b></legend>";
 		echo $grid;
 		echo "</fieldset>";
 		break;
@@ -236,36 +242,38 @@ switch ($method) {
 		$res = fetchdata($str);
 
 
-		$tab = "<table>
+		$hargaSatuanDt = ($hasilkerjajumlahdt > 0) ? number_format($jumlahrpdt / $hasilkerjajumlahdt) : '0';
+		$tab = "<table border='0' cellspacing='0' cellpadding='3' style='width:100%;table-layout:fixed;margin-bottom:14px'>
+			<colgroup><col style='width:105px'><col style='width:10px'><col><col style='width:30px'><col style='width:105px'><col style='width:10px'><col></colgroup>
 			<tr>
-				<td>" . $_SESSION['lang']['notransaksi'] . "</td>
+				<td nowrap>" . $_SESSION['lang']['notransaksi'] . "</td>
 				<td>:</td>
 				<td>" . $notransaksi . "</td>
-				
-				<td style='padding-left:20px'>" . $_SESSION['lang']['hk'] . "</td>
+				<td></td>
+				<td nowrap>" . $_SESSION['lang']['hk'] . "</td>
 				<td>:</td>
-				<td>" . $hkdt . "</td>
+				<td>" . angkaPisah($hkdt) . "</td>
 			</tr>
 			<tr>
-				<td>" . $_SESSION['lang']['subunit'] . "</td>
+				<td nowrap>" . $_SESSION['lang']['subunit'] . "</td>
 				<td>:</td>
 				<td>" . $kodebloktextdt . "</td>
-				
-				<td style='padding-left:20px'>" . $_SESSION['lang']['hasilkerjajumlah'] . "</td>
+				<td></td>
+				<td nowrap>" . $_SESSION['lang']['hasilkerjajumlah'] . "</td>
 				<td>:</td>
-				<td>" . $hasilkerjajumlahdt . "</td>
+				<td>" . angkaPisah($hasilkerjajumlahdt) . "</td>
 			</tr>
 			<tr>
-				<td>" . $_SESSION['lang']['kegiatan'] . "</td>
-				<td>:</td>
+				<td nowrap valign='top'>" . $_SESSION['lang']['kegiatan'] . "</td>
+				<td valign='top'>:</td>
 				<td>" . $kodekegtextdt . "</td>
-				
-				<td style='padding-left:20px'>" . $_SESSION['lang']['jumlahrp'] . "</td>
+				<td></td>
+				<td nowrap>" . $_SESSION['lang']['hargasatuan'] . "</td>
 				<td>:</td>
-				<td>" . number_format($jumlahrpdt) . "</td>
+				<td>" . $hargaSatuanDt . "</td>
 			</tr>
 			<tr>
-				<td>" . $_SESSION['lang']['satuan'] . "</td>
+				<td nowrap>" . $_SESSION['lang']['satuan'] . "</td>
 				<td>:</td>
 				<td>" . $satuandt . "
 					<input type='hidden' id='tothk' value='" . $hkdt . "'>
@@ -273,20 +281,18 @@ switch ($method) {
 					<input type='hidden' id='totjumlahrp' value='" . $jumlahrpdt . "'>
 					<input type='hidden' id='matauangdt' value='" . $matauangdt . "'>
 				</td>
-				
-				<td style='padding-left:20px'>" . $_SESSION['lang']['hargasatuan'] . "</td>
+				<td></td>
+				<td nowrap>" . $_SESSION['lang']['jumlahrp'] . "</td>
 				<td>:</td>
-				<td>" . number_format(($jumlahrpdt / $hasilkerjajumlahdt)) . "</td>
+				<td><b>" . number_format($jumlahrpdt) . "</b></td>
 			</tr>
 			<tr>
-				<td colspan=3></td>
-				
-				<td style='padding-left:20px'>" . $_SESSION['lang']['matauang'] . "</td>
+				<td nowrap>" . $_SESSION['lang']['matauang'] . "</td>
 				<td>:</td>
 				<td>" . $matauangdt . "</td>
+				<td colspan='4'></td>
 			</tr>
 		</table>";
-
 		##create termin
 		// for($i=1;$i<=10;$i++){
 		// if($i==1){
@@ -473,28 +479,29 @@ switch ($method) {
 		}
 		$nobapp = $nobap . "/" . $notransaksi;
 
-		$tab .= "<fieldset style=float:left>
+		$tab .= "<fieldset style='float:left;margin-bottom:14px;padding:6px 10px 10px 10px'>
 			<legend>Form Realisasi</legend>
-			<table>
+			<table cellpadding='3' cellspacing='0'>
+				<colgroup><col style='width:75px'><col style='width:10px'><col style='width:230px'></colgroup>
 				<tr>
-					<td>" . $_SESSION['lang']['termin'] . "</td>
+					<td nowrap>" . $_SESSION['lang']['termin'] . "</td>
 					<td>:</td>
 					<td>
-						<input id='dttermin' onkeyup=getnobapp('" . $notransaksi . "'); class='myinputtextnumber' onkeypress='return isNumber(this,event)' type='text' style='width:70px' value=" . $notermin . ">
+						<input id='dttermin' onkeyup=getnobapp('" . $notransaksi . "'); class='myinputtextnumber' onkeypress='return isNumber(this,event)' type='text' style='width:230px;height:22px;box-sizing:border-box' value=" . $notermin . ">
 					</td>
 				</tr>
 				<tr>
-					<td>" . $_SESSION['lang']['subunit'] . "</td>
+					<td nowrap>" . $_SESSION['lang']['subunit'] . "</td>
 					<td>:</td>
 					<td>
-						<select style=min-width:75px id='kodeblokdt2'>" . @$optBlok . "</select>
+						<select style='width:230px;height:22px' id='kodeblokdt2'>" . @$optBlok . "</select>
 					</td>
 				</tr>
 				<tr>
-					<td>No. BAPP</td>
+					<td nowrap>No. BAPP</td>
 					<td>:</td>
-					<td colspan=5>
-						<input id='nobatermin' class='myinputtext' type='text' style='width:210px' value=" . $nobapp . ">
+					<td>
+						<input id='nobatermin' class='myinputtext' type='text' style='width:230px;height:22px;box-sizing:border-box' value=" . $nobapp . ">
 						<input type='hidden' id='prosestermin' value='inserttermin'>
 					</td>
 				</tr>
@@ -508,7 +515,7 @@ switch ($method) {
 			</table>
 		</fieldset>";
 
-		$tab .= "<div style=clear:both></div><fieldset style=float:left>
+		$tab .= "<div style='clear:both'></div><fieldset style='float:left;padding:6px 10px 10px 10px'>
 			<legend>List Realisasi</legend>
 			<table class='sortable' cellpadding=5 cellspacing=1>
 				<thead>
@@ -530,7 +537,7 @@ switch ($method) {
 			</table>
 		</fieldset>";
 
-		echo $tab;
+		echo "<div style='padding:10px 14px 16px 14px'>" . $tab . "<div style='clear:both'></div></div>";
 		break;
 
 	case 'loaddatadt':
@@ -578,8 +585,8 @@ switch ($method) {
 					<td>" . $optBlok[$val['kodeblok']] . "</td>
 					<td style='min-width:80px;text-align:center'>" . ($val['tanggal'] == '0000-00-00' ? '' : tanggalnormal($val['tanggal'])) . "</td>
 					<td style='text-align:right'></td>
-					<td style='text-align:right'>" . $val['hkrealisasi'] . "</td>
-					<td style='text-align:right'>" . $val['hasilkerjarealisasi'] . "</td>
+					<td style='text-align:right'>" . angkaPisah($val['hkrealisasi']) . "</td>
+					<td style='text-align:right'>" . angkaPisah($val['hasilkerjarealisasi']) . "</td>
 					<td style='text-align:right'>" . number_format($val['jumlahrealisasi']) . "</td>";
 				if ($val['statuspengajuan'] == '0' || $val['statuspengajuan'] == '3') {
 					$tab .= "<td style='text-align:center' nowrap>
@@ -611,8 +618,8 @@ switch ($method) {
 							<td>" . $optBlok[$valx['kodeblok']] . "</td>
 							<td style='min-width:80px;text-align:center;background-color:#50edd2'>" . tanggalnormal($valx['tanggal']) . "</td>
 							<td style='text-align:left;background-color:#50edd2'>" . $valx['keterangan2'] . "</td>
-							<td style='text-align:right;background-color:#50edd2'>" . $valx['hkrealisasi'] . "</td>
-							<td style='text-align:right;background-color:#50edd2'>" . $valx['hasilkerjarealisasi'] . "</td>
+							<td style='text-align:right;background-color:#50edd2'>" . angkaPisah($valx['hkrealisasi']) . "</td>
+							<td style='text-align:right;background-color:#50edd2'>" . angkaPisah($valx['hasilkerjarealisasi']) . "</td>
 							<td style='text-align:right;background-color:#50edd2'>" . number_format($valx['jumlahrealisasi']) . "</td>";
 
 						if ($val['statuspengajuan'] == '0') {
@@ -632,6 +639,7 @@ switch ($method) {
 		break;
 
 	case 'deletedt':
+		$nourut = addslashes($nourut);
 		$str = "select * from " . $dbname . ".log_baspkdt where nourut='" . $nourut . "'";
 		$res = fetchdata($str);
 		$notransaksi = $res[0]['notransaksi'];
@@ -645,6 +653,10 @@ switch ($method) {
 
 		$str = "select * from " . $dbname . ".log_baspk where notransaksi='" . $notransaksi . "' and kodeblok='" . $kodeblok . "' and kodekegiatan='" . $kodekegiatan . "' and termin='" . $termin . "' and keterangan='" . $keterangan . "'";
 		$res = fetchdata($str);
+		#hanya BAPP yang belum diajukan dan belum diposting yang boleh diubah (unposting dulu bila perlu revisi)
+		if (count($res) > 0 && ($res[0]['statuspengajuan'] != '0' || $res[0]['statusjurnal'] == '1')) {
+			exit('Error : BAPP sudah diajukan atau diposting, tidak bisa diubah. Lakukan unposting dulu untuk revisi.');
+		}
 		$hasilkerjarealisasi1 = $res[0]['hasilkerjarealisasi'];
 		$hkrealisasi1 = $res[0]['hkrealisasi'];
 		$jumlahrealisasi1 = $res[0]['jumlahrealisasi'];
@@ -722,7 +734,8 @@ switch ($method) {
 		}
 
 
-		$tab .= "<table>
+		$tab .= "<table cellspacing=1 border=0>
+			<colgroup><col style='width:110px'><col style='width:10px'><col style='width:230px'></colgroup>
 			<tr>
 				<td>" . $_SESSION['lang']['notransaksi'] . "</td>
 				<td>:</td>
@@ -746,41 +759,41 @@ switch ($method) {
 			<tr>
 				<td>" . $_SESSION['lang']['subunit'] . "</td>
 				<td>:</td>
-				<td>" . $optBlok[$kodeblokdt] . "</td>
+				<td>" . ((isset($optBlok[$kodeblokdt]) && $optBlok[$kodeblokdt] != '') ? $optBlok[$kodeblokdt] : $kodeblokdt) . "</td>
 			</tr>
 			<tr>
 				<td>" . $_SESSION['lang']['tanggal'] . "</td>
 				<td>:</td>
 				<td>
-					<input id='tgldt2' onchange=getsewahm('" . $notransaksi . "','" . $kodeblokdt . "','" . $kodekegdt . "','" . $dttermin . "','" . $nobatermin . "'); class='myinputtext' type='text' onmousemove='setCalendar(this.id)' readonly='readonly' style='width:80px'>
+					<input id='tgldt2' onchange=getsewahm('" . $notransaksi . "','" . $kodeblokdt . "','" . $kodekegdt . "','" . $dttermin . "','" . $nobatermin . "'); class='myinputtext' type='text' onmousemove='setCalendar(this.id)' readonly='readonly' style='width:230px;height:22px;box-sizing:border-box'>
 				</td>
 			</tr>
 			<tr>
 				<td style='vertical-align:top'>" . $_SESSION['lang']['keterangan'] . "</td>
 				<td style='vertical-align:top'>:</td>
 				<td>
-					<textarea id='keterangandt2'></textarea>
+					<textarea id='keterangandt2' style='width:230px;height:60px;box-sizing:border-box;font-family:inherit'></textarea>
 				</td>
 			</tr>
 			<tr>
 				<td>" . $_SESSION['lang']['hk'] . "</td>
 				<td>:</td>
 				<td>
-					<input id='hkdt2' class='myinputtextnumber' onkeypress='return angka_doang(event)' type='text' placeholder=0 style='width:80px'>
+					<input id='hkdt2' class='myinputtextnumber' onkeypress='return angka_doang(event)' onkeyup=\"z.numberFormat('hkdt2',2)\" type='text' placeholder=0 style='width:230px;height:22px;box-sizing:border-box'>
 				</td>
 			</tr>
 			<tr>
 				<td>" . $_SESSION['lang']['hasilkerjajumlah'] . "</td>
 				<td>:</td>
 				<td>
-					<input id='hasilhkdt2' class='myinputtextnumber' onkeypress='return angka_doang(event)' type='text' placeholder=0 style='width:80px' onkeyup=\"calJumlah()\">
+					<input id='hasilhkdt2' class='myinputtextnumber' onkeypress='return angka_doang(event)' type='text' placeholder=0 style='width:230px;height:22px;box-sizing:border-box' onkeyup=\"z.numberFormat('hasilhkdt2',2);calJumlah()\">
 				</td>
 			</tr>
 			<tr>
 				<td>" . $_SESSION['lang']['jumlahrp'] . "</td>
 				<td>:</td>
 				<td>
-					<input id='jumlahrpdt2' class='myinputtextnumber' onkeypress='return angka_doang(event)' type='text' placeholder=0 style='width:80px'>
+					<input id='jumlahrpdt2' class='myinputtextnumber' onkeypress='return angka_doang(event)' onkeyup=\"z.numberFormat('jumlahrpdt2',2)\" type='text' placeholder=0 style='width:230px;height:22px;box-sizing:border-box'>
 				</td>
 			</tr>
 			<tr>
@@ -788,7 +801,7 @@ switch ($method) {
 				<td>
 					<button class='mybutton' onclick=\"simpandt2('" . $notransaksi . "','" . $kodeblokdt . "','" . $kodekegdt . "','" . $dttermin . "','" . $nobatermin . "')\">" . $_SESSION['lang']['save'] . "</button>
 				</td>
-			</td>
+			</tr>
 		</table>";
 
 		echo $tab;
@@ -812,6 +825,17 @@ switch ($method) {
 		echo $hasilkerja;
 		break;
 	case 'deletedt2':
+		$notransaksi = addslashes($notransaksi);
+		$kodeblokdt = addslashes($kodeblokdt);
+		$kodekegdt = addslashes($kodekegdt);
+		$dttermin = addslashes($dttermin);
+		#hanya BAPP yang belum diajukan/ditolak dan belum diposting yang boleh dihapus (unposting dulu bila perlu revisi)
+		$rCekHapus = fetchdata("select statuspengajuan,statusjurnal from " . $dbname . ".log_baspk where notransaksi='" . $notransaksi . "' and kodeblok='" . $kodeblokdt . "' and kodekegiatan='" . $kodekegdt . "' and termin='" . $dttermin . "'");
+		foreach ($rCekHapus as $rh) {
+			if (($rh['statuspengajuan'] != '0' && $rh['statuspengajuan'] != '3') || $rh['statusjurnal'] == '1') {
+				exit('Error : BAPP sudah diajukan atau diposting, tidak bisa dihapus. Lakukan unposting dulu untuk revisi.');
+			}
+		}
 		$str = "delete from " . $dbname . ".log_baspkdt where notransaksi='" . $notransaksi . "' and kodeblok='" . $kodeblokdt . "' and kodekegiatan='" . $kodekegdt . "' and termin='" . $dttermin . "'";
 		try {
 			$owlPDO->exec($str);
@@ -1152,152 +1176,54 @@ switch ($method) {
 		break;
 
 	case 'loaddata':
-
-		$where = "";
-		$kdorg = $_SESSION['empl']['kodeorganisasi'];
-		if ($notransaksicr != '') {
-			$where .= " and notransaksi like '%" . $notransaksicr . "%' ";
-		}
-		if ($unitcr != '') {
-			$where .= " and kodeorg = '" . $unitcr . "' ";
-		}
-		if ($koderekanancr != '') {
-			$where .= " and koderekanan in (select supplierid from " . $dbname . ".log_5supplier where namasupplier like '%" . $koderekanancr . "%')";
-		}
-		if ($tglcr != '') {
-			$where .= " and tanggal = '" . tanggalsystem($tglcr) . "'";
-		}
-
-		// if ($_SESSION['empl']['tipelokasitugas'] == 'HOLDING') {
-		// 	$where .= " and length(kodeorg)=4";
-		// } else if ($_SESSION['empl']['tipelokasitugas'] == 'TRAKSI' or $_SESSION['empl']['tipelokasitugas'] == 'KANWIL') {
-		// 	$where .= " and length(kodeorg)=4 and kodeorg in (select kodeorganisasi from " . $dbname . ".organisasi where induk = '" . $kdOrganisasi . "') ";
-		// } else {
-			$where .= " and kodeorg IN (" . getOrgDetail(2) . ")";
-		// }
-
-		$where .= " and nopengajuan in (select notransaksi from " . $dbname . ".lgl_pengajuanspkht where jenis not in ('PO/SO','BELITBS','JUALTBS'))";
-
 		$limit = 15;
 		$page = 0;
 		if (isset($pages)) {
-			$page = $pages;
+			$page = (int)$pages;
 			if ($page < 0)
 				$page = 0;
 		}
 		$offset = $page * $limit;
 
-		$str = "select * from " . $dbname . ".log_spkht where 1=1 " . $where;
-		$res = fetchdata($str);
-		$jlhbrs = count($res);
+		#filter dan status memakai helper yang sama dengan Excel dan PDF
+		$dft = spkDaftar(array_merge($_GET, $_POST), $page, $limit);
+		if ($dft['flt']['error'] != '') {
+			exit($dft['flt']['error']);
+		}
+		$res = $dft['rows'];
+		$jlhbrs = $dft['total'];
+		$tab = "";
 		if ($jlhbrs == 0) {
 			$tab .= "<tr class=rowcontent>
-				<td colspan=13>" . $_SESSION['lang']['dataempty'] . "</td>
+				<td colspan=16>" . $_SESSION['lang']['dataempty'] . "</td>
 			</tr>";
 		} else {
-			$tab = "";
-			$no = (($page * $limit));
-			$str = "select * from " . $dbname . ".log_spkht where 1=1 " . $where . " order by tanggal desc limit " . $offset . "," . $limit . "";
-			// exit('warning; ' . $str);
-			$res = fetchdata($str);
+			$no = $offset;
+			$namaRekanan = spkNamaRekanan($res);
+			$petaPekerjaan = spkPekerjaan($res);
+			$totHal = array();
 			foreach ($res as $val) {
 				$no++;
-
-				$optrekanan = makeOption($dbname, 'log_5supplier', 'supplierid,namasupplier', "supplierid='" . $val['koderekanan'] . "'");
-
-				##Jumlah Realisasi (hanya yang jurnalnya benar-benar ada di ledger)
-				$realisasi = 0;
-				$strx = "select sum(b.jumlahrealisasi) as jumlahrealisasi from " . $dbname . ".log_baspk b where b.notransaksi='" . $val['notransaksi'] . "' and b.statusjurnal = '1' and exists (select 1 from " . $dbname . ".keu_jurnaldt d where d.nodok=b.keterangan)";
-				$resx = fetchdata($strx);
-				$realisasi = ($resx[0]['jumlahrealisasi'] == '' ? 0 : $resx[0]['jumlahrealisasi']);
-
-				##Rincian status per kategori (dihitung per BAPP/keterangan, bukan per baris blok)
-				$strBelumAjuan = "select count(distinct keterangan) as jml from " . $dbname . ".log_baspk where notransaksi='" . $val['notransaksi'] . "' and statuspengajuan='0'";
-				$resBelumAjuan = fetchdata($strBelumAjuan);
-				$jmlBelumAjuan = ($resBelumAjuan[0]['jml'] == '' ? 0 : $resBelumAjuan[0]['jml']);
-
-				$strBelumPosting = "select count(distinct keterangan) as jml from " . $dbname . ".log_baspk where notransaksi='" . $val['notransaksi'] . "' and statuspengajuan='1' and statusjurnal='0'";
-				$resBelumPosting = fetchdata($strBelumPosting);
-				$jmlBelumPosting = ($resBelumPosting[0]['jml'] == '' ? 0 : $resBelumPosting[0]['jml']);
-
-				##Cek BAPP yang sudah disetujui & statusjurnal=1 tapi jurnalnya tidak ditemukan (anomali)
-				$strAnomali = "select count(distinct keterangan) as jml from " . $dbname . ".log_baspk b where b.notransaksi='" . $val['notransaksi'] . "' and b.statuspengajuan='1' and b.statusjurnal='1' and not exists (select 1 from " . $dbname . ".keu_jurnaldt d where d.nodok=b.keterangan)";
-				$resAnomali = fetchdata($strAnomali);
-				$jmlAnomali = ($resAnomali[0]['jml'] == '' ? 0 : $resAnomali[0]['jml']);
-
-				$strSudahPosting = "select count(distinct b.keterangan) as jml from " . $dbname . ".log_baspk b where b.notransaksi='" . $val['notransaksi'] . "' and b.statuspengajuan='1' and b.statusjurnal='1' and exists (select 1 from " . $dbname . ".keu_jurnaldt d where d.nodok=b.keterangan)";
-				$resSudahPosting = fetchdata($strSudahPosting);
-				$jmlSudahPosting = ($resSudahPosting[0]['jml'] == '' ? 0 : $resSudahPosting[0]['jml']);
-
-				##Status Posting - rincian per kategori, masing-masing berwarna
-				$baris = array();
-				if ($jmlAnomali > 0) {
-					$baris[] = "<span style='color:red;font-weight:bold' title='statusjurnal=1 tapi jurnal tidak ditemukan di ledger'>Jurnal Bermasalah (" . $jmlAnomali . ")</span>";
+				if (!isset($totHal[$val['matauang']])) {
+					$totHal[$val['matauang']] = array('nilai' => 0, 'aktual' => 0);
 				}
-				if ($jmlBelumAjuan > 0) {
-					$baris[] = "<span style='color:gray'>Belum Diajukan (" . $jmlBelumAjuan . ")</span>";
-				}
-				if ($jmlBelumPosting > 0) {
-					$baris[] = "<span style='color:orange'>Belum Diposting (" . $jmlBelumPosting . ")</span>";
-				}
-				if ($jmlSudahPosting > 0) {
-					$baris[] = "<span style='color:green'>Posted (" . $jmlSudahPosting . ")</span>";
-				}
-				$statusposting = (count($baris) > 0) ? implode("<br>", $baris) : "?";
-
-				##Status Tagihan & Lunas
-				$strTagihan = "select sum(nilaiinvoice) as totaltagihan from ".$dbname.".keu_tagihanht where nopo='".$val['notransaksi']."'";
-				$resTagihan = fetchdata($strTagihan);
-				$totalTagihan = ($resTagihan[0]['totaltagihan'] == '' ? 0 : $resTagihan[0]['totaltagihan']);
-
-				$strBayar = "select sum(jumlah) as dibayar from ".$dbname.".keu_kasbankdtht_vw where nodok='".$val['notransaksi']."' and jumlah > 0";
-				$resBayar = fetchdata($strBayar);
-				$totalBayar = ($resBayar[0]['dibayar'] == '' ? 0 : $resBayar[0]['dibayar']);
-
-				$persenTertagih = ($val['nilaikontrak'] > 0) ? min(($totalTagihan / $val['nilaikontrak']) * 100, 100) : 0;
-
-				$statusLunas = "";
-				if ($totalTagihan == 0) {
-
-						$statusLunas = "<span style='color:gray;'>Belum Tagih</span>";
-
-					} else {
-
-							$persenBayar = ($totalTagihan > 0) ? min(($totalBayar / $totalTagihan) * 100, 100) : 0;
-
-							if ($totalBayar >= $totalTagihan && $totalBayar >= $val['nilaikontrak']) {
-
-									$statusLunas = "<span style='color:green; font-weight:bold;'>
-											Lunas (100%)
-									</span>";
-
-							} else if ($totalBayar > 0) {
-
-									$statusLunas = "<span style='color:orange; font-weight:bold;'>
-											SPK " . number_format($persenTertagih, 0) . "% &middot; Tagihan " . number_format($persenBayar, 0) . "%
-									</span>";
-
-							} else {
-
-									$statusLunas = "<span style='color:red; font-weight:bold;'>
-											SPK " . number_format($persenTertagih, 0) . "% &middot; Belum Dibayar
-									</span>";
-							}
-					}
-
+				$totHal[$val['matauang']]['nilai'] += $val['nilaikontrak'];
+				$totHal[$val['matauang']]['aktual'] += $val['st']['realisasi'];
 				$tab .= "<tr class=rowcontent style='text-align:center'>
 					<td style='vertical-align:top'>" . $no . "</td>
 					<td style='vertical-align:top'>" . $val['kodeorg'] . "</td>
-					<td style='vertical-align:top'>" . $val['notransaksi'] . "</td>
-					<td style='vertical-align:top'>" . tanggalnormal($val['tanggal']) . "</td>
+					<td style='vertical-align:top;white-space:nowrap'>" . $val['notransaksi'] . "</td>
+					<td style='vertical-align:top;white-space:nowrap'>" . tanggalnormal($val['tanggal']) . "</td>
 					<td style='vertical-align:top'>" . $val['divisi'] . "</td>
-					<td style='vertical-align:top'>" . $optrekanan[$val['koderekanan']] . "</td>
-					<td style='vertical-align:top'>" . number_format($val['nilaikontrak']) . "</td>
+					<td style='vertical-align:top'>" . $namaRekanan[$val['koderekanan']] . "</td>
+					<td style='vertical-align:top;text-align:left;min-width:180px'>" . htmlspecialchars(spkPekerjaanTeks($val, $petaPekerjaan)) . "</td>
+					<td style='vertical-align:top;white-space:nowrap'>" . spkPeriodeTeks($val) . "</td>
+					<td style='vertical-align:top;text-align:right'>" . number_format($val['nilaikontrak']) . "</td>
 					<td style='vertical-align:top'>" . $val['matauang'] . "</td>
-					<td style='vertical-align:top'>" . number_format($realisasi) . "</td>
-					<td style='vertical-align:top'>" . $statusposting . "</td>
-					<td style='vertical-align:top'>" . $statusLunas . "</td>
-					
+					<td style='vertical-align:top;text-align:right'>" . number_format($val['st']['realisasi']) . "</td>
+					<td style='vertical-align:top'>" . $val['st']['posting'] . "</td>
+					<td style='vertical-align:top'>" . $val['st']['tagihan'] . "</td>
+
 					<td style='vertical-align:top'>
 						<img src='images/skyblue/edit.png' class='zImgBtn' onclick=\"showEdit('" . $val['notransaksi'] . "','" . $val['kodeorg'] . "')\" title='Edit'>
 					</td>
@@ -1328,14 +1254,26 @@ switch ($method) {
 		} else {
 			$topage = (($page + 1) * $limit);
 		}
-		$tab .= "</tr>
-		<tr>
-			<td colspan=13 align=center>
+		#pemisah antara baris data (tbody) dan bagian bawah (tfoot: total halaman dan pager)
+		$tab .= "<!--PAGER-->";
+		if (isset($totHal)) {
+			foreach ($totHal as $mu => $th) {
+				$tab .= "<tr class=rowcontent>
+					<td colspan=8 align=center><b>TOTAL HALAMAN " . $mu . "</b></td>
+					<td align=right><b>" . number_format($th['nilai']) . "</b></td>
+					<td align=center>" . $mu . "</td>
+					<td align=right><b>" . number_format($th['aktual']) . "</b></td>
+					<td colspan=5></td>
+				</tr>";
+			}
+		}
+		$tab .= "<tr>
+			<td colspan=16 align=center>
 				" . $frompage . " to " . $topage . " Of " .  $jlhbrs . "
 			</td>
 		</tr>
 		<tr>
-			<td colspan=13 align=center>";
+			<td colspan=16 align=center>";
 
 		if ($page == '0') {
 			$tab .= "";
@@ -1599,6 +1537,7 @@ switch ($method) {
 			$no = '0';
 			$nox = '0';
 			$kodeorgspk = makeOption($dbname, 'log_spkht', 'notransaksi,kodeorg', "notransaksi='" . $notransaksi . "'");
+			$bolehUnposting = in_array($_SESSION['empl']['kodejabatan'], getPostingJabatan('baspk'));
 
 			$optnmkary = makeOption($dbname, 'datakaryawan', 'karyawanid,namakaryawan');
 			if (count($datashow) > 0) {
@@ -1648,7 +1587,13 @@ switch ($method) {
 								$statusJurnalTxt = 'Belum Diposting';
 								$warnaJurnal = 'gray';
 							}
-							$tab .= "<td align=center style=color:" . $warnaJurnal . ";font-weight:bold>" . $statusJurnalTxt . "</td>";
+							#"Sudah Ada Jurnal" bisa diklik untuk melihat jurnalnya
+							$aksiJurnal = '';
+							if ($tipeview == 'viewhtml' && $statusJurnalTxt == 'Sudah Ada Jurnal') {
+								$aksiJurnal = " title='Lihat Jurnal' onclick=\"getdetailjurnal('" . $notransaksi . "','" . $ket[$termin][$tanggal][$bapp] . "','" . $kodeorgspk[$notransaksi] . "','" . $tanggal . "')\"";
+								$warnaJurnal .= ";cursor:pointer;text-decoration:underline";
+							}
+							$tab .= "<td align=center style=color:" . $warnaJurnal . ";font-weight:bold" . $aksiJurnal . ">" . $statusJurnalTxt . "</td>";
 
 							#persetujuan
 							$warna = '';
@@ -1699,7 +1644,12 @@ switch ($method) {
 												<img class='zImgBtn' src='images/skyblue/posting.png' onclick=\"formpostingDataAll('" . $nopengajuan[$termin][$tanggal][$bapp] . "','" . $notransaksi . "','" . $ket[$termin][$tanggal][$bapp] . "','" . $kodeorgspk[$notransaksi] . "','" . $tanggal . "','" . $termin . "','" . $no . "')\">
 											</td>";
 								} elseif ($statuspengajuan[$termin][$tanggal][$bapp] == 1 and $stsjurnal[$termin][$tanggal][$bapp] == 1) {
-									$tab .= "<td align=center><img title='View Jurnal' class='zImgBtn' src='images/skyblue/posted.png' onclick=\"getdetailjurnal('" . $notransaksi . "','" . $ket[$termin][$tanggal][$bapp] . "','" . $kodeorgspk[$notransaksi] . "','" . $tanggal . "')\"></td>";
+									#tombol posted: unposting bila jabatan user terdaftar di setup posting BAPP, selain itu hanya penanda
+									if ($bolehUnposting) {
+										$tab .= "<td align=center><img title='Unposting BAPP' class='zImgBtn' src='images/icons/04/16/04.png' onclick=\"unpostingBapp('" . $notransaksi . "','" . $ket[$termin][$tanggal][$bapp] . "')\"></td>";
+									} else {
+										$tab .= "<td align=center><img title='Sudah diposting' class='zImgBtn' src='images/skyblue/posted.png'></td>";
+									}
 								} else {
 									$tab .= "<td></td>";
 								}
@@ -1737,6 +1687,126 @@ switch ($method) {
 			$dompdf->setPaper('A4', 'landscape');
 			$dompdf->render();
 			$dompdf->stream("Realisasi BAPP", array("Attachment" => 0));
+		}
+		break;
+	case 'unpostingBapp':
+		#unposting satu no BAPP untuk revisi: jurnal BAPP itu dihapus, approval dipindah ke riwayat, dan BAPP kembali ke Belum Diajukan
+		#(bisa diedit/dihapus lalu diajukan ulang). BAPP lain tidak disentuh. Hak: jabatan terdaftar di setup posting BAPP.
+		if (!in_array($_SESSION['empl']['kodejabatan'], getPostingJabatan('baspk'))) {
+			exit('Error : Anda tidak memiliki hak unposting BAPP.');
+		}
+		$spk = addslashes(trim($notransaksi));
+		$bapp = addslashes(trim($nobapp));
+		if ($spk == '' || $bapp == '') {
+			exit('Error : No. SPK dan No. BAPP harus diisi.');
+		}
+		$rSpk = fetchdata("select kodeorg,divisi from " . $dbname . ".log_spkht where notransaksi='" . $spk . "' and kodeorg IN (" . getOrgDetail(2) . ")");
+		if (count($rSpk) == 0) {
+			exit('Error : SPK tidak ditemukan atau di luar unit yang bisa Anda akses.');
+		}
+		if ($rSpk[0]['divisi'] == 'S' || $rSpk[0]['divisi'] == 'P') {
+			#jurnal SPK Perumahan/Pabrikasi memakai kode blok sebagai nodok, tidak bisa ditelusuri per no BAPP
+			exit('Error : Unposting belum tersedia untuk SPK Perumahan/Pabrikasi.');
+		}
+		$rBapp = fetchdata("select statusjurnal,tanggal,termin,nopengajuan from " . $dbname . ".log_baspk where notransaksi='" . $spk . "' and trim(keterangan)='" . $bapp . "'");
+		if (count($rBapp) == 0) {
+			exit('Error : BAPP tidak ditemukan.');
+		}
+		$sudahPosting = false;
+		foreach ($rBapp as $rb) {
+			if ($rb['statusjurnal'] == '1') {
+				$sudahPosting = true;
+			}
+		}
+		if (!$sudahPosting) {
+			exit('Error : BAPP ini belum diposting.');
+		}
+		$unitSpk = $rSpk[0]['kodeorg'];
+
+		#tagihan: BAPP yang sudah ditagih tidak boleh di-unposting
+		foreach ($rBapp as $rb) {
+			$rTagihan = fetchdata("select noinvoice from " . $dbname . ".keu_tagihanht where nopo='" . $spk . "' and termin='" . addslashes($rb['termin']) . "'");
+			if (count($rTagihan) > 0) {
+				exit('Error : BAPP ini sudah memiliki tagihan (No. Invoice: ' . $rTagihan[0]['noinvoice'] . '), batalkan tagihannya dulu.');
+			}
+		}
+
+		#periode akuntansi tanggal BAPP
+		foreach ($rBapp as $rb) {
+			$rTutup = fetchdata("select periode from " . $dbname . ".setup_periodeakuntansi where tutupbuku=1 and kodeorg='" . $unitSpk . "' and periode='" . substr($rb['tanggal'], 0, 7) . "'");
+			if (count($rTutup) > 0) {
+				exit('Error : Periode akuntansi ' . $rTutup[0]['periode'] . ' unit ' . $unitSpk . ' sudah tutup buku.');
+			}
+		}
+
+		#jurnal milik BAPP ini saja: header yang barisnya memakai nodok = no BAPP (sama dengan pengecekan "Sudah Ada Jurnal")
+		$rJurnal = fetchdata("select distinct h.nojurnal,h.tanggal,h.posting,h.noreferensi from " . $dbname . ".keu_jurnalht h inner join " . $dbname . ".keu_jurnaldt d on d.nojurnal=h.nojurnal where d.nodok='" . $bapp . "'");
+		$daftarJurnal = array();
+		foreach ($rJurnal as $rj) {
+			if (trim($rj['noreferensi']) != stripslashes($spk)) {
+				exit('Error : Jurnal ' . $rj['nojurnal'] . ' berisi No. BAPP ini tetapi terkait SPK lain (' . $rj['noreferensi'] . '), periksa manual.');
+			}
+			$daftarJurnal[] = $rj['nojurnal'];
+			$partJurnal = explode('/', $rj['nojurnal']);
+			$unitJurnal = isset($partJurnal[1]) ? $partJurnal[1] : $unitSpk;
+			$rTutup = fetchdata("select periode from " . $dbname . ".setup_periodeakuntansi where tutupbuku=1 and kodeorg='" . addslashes($unitJurnal) . "' and periode='" . substr($rj['tanggal'], 0, 7) . "'");
+			if (count($rTutup) > 0) {
+				exit('Error : Periode akuntansi ' . $rTutup[0]['periode'] . ' unit ' . $unitJurnal . ' sudah tutup buku (jurnal ' . $rj['nojurnal'] . ').');
+			}
+			if ($rj['posting'] == '1') {
+				exit('Error : Jurnal ' . $rj['nojurnal'] . ' sudah diposting di keuangan, batalkan dulu di sana.');
+			}
+			#pastikan jurnal itu tidak memuat dokumen lain selain BAPP ini dan SPK-nya
+			$rLain = fetchdata("select count(*) as jml from " . $dbname . ".keu_jurnaldt where nojurnal='" . addslashes($rj['nojurnal']) . "' and trim(nodok) not in ('" . $bapp . "','" . $spk . "')");
+			if ($rLain[0]['jml'] > 0) {
+				exit('Error : Jurnal ' . $rj['nojurnal'] . ' memuat dokumen lain, tidak bisa di-unposting otomatis.');
+			}
+		}
+
+		try {
+			$owlPDO->beginTransaction();
+			foreach ($daftarJurnal as $nojurnal) {
+				#detail jurnal ikut terhapus (foreign key cascade)
+				$owlPDO->exec("delete from " . $dbname . ".keu_jurnalht where nojurnal='" . addslashes($nojurnal) . "'");
+			}
+			#rincian BAPP dibuat ulang saat posting
+			$owlPDO->exec("delete from " . $dbname . ".log_baspkdt_detail where notransaksi='" . $spk . "' and trim(keterangan)='" . $bapp . "'");
+			#approval dipindah ke riwayat lalu dihapus, kecuali no pengajuan yang juga dipakai BAPP lain
+			$daftarPengajuan = array();
+			foreach ($rBapp as $rb) {
+				if (trim($rb['nopengajuan']) != '') {
+					$daftarPengajuan[trim($rb['nopengajuan'])] = 1;
+				}
+			}
+			foreach (array_keys($daftarPengajuan) as $nopeng) {
+				$nopeng = addslashes($nopeng);
+				$rPakai = fetchdata("select count(*) as jml from " . $dbname . ".log_baspk where nopengajuan='" . $nopeng . "' and not (notransaksi='" . $spk . "' and trim(keterangan)='" . $bapp . "')");
+				if ($rPakai[0]['jml'] > 0) {
+					continue;
+				}
+				$rUrut = fetchdata("select max(nourut) as nourut from " . $dbname . ".approval_return where jenispersetujuan='BAPP' and notransaksi='" . $nopeng . "'");
+				$urutRiwayat = ($rUrut[0]['nourut'] != '') ? $rUrut[0]['nourut'] + 1 : 1;
+				foreach (fetchdata("select * from " . $dbname . ".approval where jenispersetujuan='BAPP' and notransaksi='" . $nopeng . "'") as $ap) {
+					$owlPDO->exec("insert into " . $dbname . ".approval_return (`notransaksi`,`jenispersetujuan`,`level`,`karyawanid`,`status`,`komentar`,`keterangan`,`tanggal`,`nourut`) values (" .
+						$owlPDO->quote($ap['notransaksi']) . "," . $owlPDO->quote($ap['jenispersetujuan']) . "," . $owlPDO->quote($ap['level']) . "," . $owlPDO->quote($ap['karyawanid']) . "," . $owlPDO->quote($ap['status']) . "," . $owlPDO->quote($ap['komentar']) . "," .
+						$owlPDO->quote('Unposting BAPP ' . stripslashes($bapp) . ' pada ' . date('Y-m-d H:i:s')) . "," . $owlPDO->quote($ap['tanggal']) . "," . $owlPDO->quote($urutRiwayat) . ")");
+				}
+				$owlPDO->exec("delete from " . $dbname . ".approval where jenispersetujuan='BAPP' and notransaksi='" . $nopeng . "'");
+			}
+			#kembali ke Belum Diajukan supaya BAPP bisa direvisi/dihapus dan diajukan ulang
+			$owlPDO->exec("update " . $dbname . ".log_baspk set statusjurnal='0', statuspengajuan='0', nopengajuan='' where notransaksi='" . $spk . "' and trim(keterangan)='" . $bapp . "'");
+			$dataLog = array(
+				'jenis'       => 'BAPP (Kontrak SPK) - BAPP Kontraktor',
+				'notransaksi' => 'SPK: ' . $spk . ' | BAPP: ' . $bapp . ' | Jurnal: ' . (count($daftarJurnal) > 0 ? implode(', ', $daftarJurnal) : '-') . ' | Pengajuan: ' . (count($daftarPengajuan) > 0 ? implode(', ', array_keys($daftarPengajuan)) : '-'),
+				'tanggal'     => date('Y-m-d H:i:s'),
+				'update'      => $_SESSION['standard']['userid']
+			);
+			$owlPDO->exec(insertQuery($dbname, 'log_unposting', $dataLog, array_keys($dataLog)));
+			$owlPDO->commit();
+			echo 'Unposting BAPP ' . stripslashes($bapp) . ' berhasil (' . count($daftarJurnal) . ' jurnal dihapus). BAPP kembali ke Belum Diajukan dan bisa direvisi.';
+		} catch (PDOException $e) {
+			$owlPDO->rollBack();
+			echo 'Error : ' . addslashes($e->getMessage());
 		}
 		break;
 	case 'getdetailjurnal':
@@ -2547,43 +2617,95 @@ switch ($method) {
 		$res = fetchdata($str);
 		$unit = $res[0]['unit'];
 
-		$tab = "<table cellspacing=1 border=0 width=100%>
+		#rincian BAPP yang diajukan
+		$spkAju = addslashes($param['notransaksi']);
+		$bappAju = addslashes(trim($param['nobapp']));
+		$rSpkAju = fetchdata("select h.matauang,(select s.namasupplier from " . $dbname . ".log_5supplier s where s.supplierid=h.koderekanan) as rekanan from " . $dbname . ".log_spkht h where h.notransaksi='" . $spkAju . "'");
+		$rDetAju = fetchdata("select kodeblok,kodekegiatan,tanggal,hkrealisasi,hasilkerjarealisasi,jumlahrealisasi from " . $dbname . ".log_baspk where notransaksi='" . $spkAju . "' and trim(keterangan)='" . $bappAju . "' and termin='" . addslashes($param['termin']) . "' order by kodeblok,kodekegiatan");
+		$kegAju = array();
+		foreach ($rDetAju as $rd) {
+			$kegAju[$rd['kodekegiatan']] = "'" . addslashes($rd['kodekegiatan']) . "'";
+		}
+		$namaKegAju = array();
+		if (count($kegAju) > 0) {
+			foreach (fetchdata("select kodekegiatan,namakegiatan from " . $dbname . ".setup_kegiatan where kodekegiatan in (" . implode(',', $kegAju) . ")") as $rk) {
+				$namaKegAju[$rk['kodekegiatan']] = $rk['namakegiatan'];
+			}
+			foreach (fetchdata("select kodekegiatan,namakegiatan from " . $dbname . ".vhc_kegiatan where kodekegiatan in (" . implode(',', $kegAju) . ")") as $rk) {
+				if (!isset($namaKegAju[$rk['kodekegiatan']])) {
+					$namaKegAju[$rk['kodekegiatan']] = $rk['namakegiatan'];
+				}
+			}
+		}
+		$muAju = isset($rSpkAju[0]['matauang']) ? $rSpkAju[0]['matauang'] : '';
+		$totalAju = 0;
+		$totalHasilAju = 0;
+		$barisAju = '';
+		foreach ($rDetAju as $rd) {
+			$totalAju += $rd['jumlahrealisasi'];
+			$totalHasilAju += $rd['hasilkerjarealisasi'];
+			$barisAju .= "<tr class=rowcontent>
+					<td>" . ($rd['kodeblok'] == '' ? '-' : $rd['kodeblok']) . "</td>
+					<td>" . $rd['kodekegiatan'] . (isset($namaKegAju[$rd['kodekegiatan']]) ? " - " . $namaKegAju[$rd['kodekegiatan']] : "") . "</td>
+					<td align=right>" . number_format($rd['hasilkerjarealisasi'], 2) . "</td>
+					<td align=right>" . number_format($rd['jumlahrealisasi'], 2) . "</td>
+				</tr>";
+		}
+		$tglAju = (count($rDetAju) > 0 && $rDetAju[0]['tanggal'] != '0000-00-00') ? tanggalnormal($rDetAju[0]['tanggal']) : '';
+		$colInfo = "<colgroup><col style='width:125px'><col style='width:10px'><col></colgroup>";
+		$detailAjukan = "<fieldset style='margin-bottom:6px'><legend><b>Yang diajukan</b></legend>
+			<table cellspacing=1 border=0 width=100%>" . $colInfo . "
+				<tr class=rowcontent><td nowrap>No BAPP</td><td>:</td><td>" . htmlspecialchars(stripslashes($bappAju)) . "</td></tr>
+				<tr class=rowcontent><td nowrap>Rekanan</td><td>:</td><td>" . htmlspecialchars(isset($rSpkAju[0]['rekanan']) ? (string)$rSpkAju[0]['rekanan'] : '') . "</td></tr>
+				<tr class=rowcontent><td nowrap>Tanggal BAPP</td><td>:</td><td>" . $tglAju . "</td></tr>
+				<tr class=rowcontent><td nowrap>Jumlah Diajukan</td><td>:</td><td><b>" . $muAju . " " . number_format($totalAju, 2) . "</b></td></tr>
+			</table>
+			<table cellspacing=1 border=0 width=100% style='margin-top:6px'>
+				<colgroup><col style='width:100px'><col><col style='width:80px'><col style='width:110px'></colgroup>
+				<thead><tr class=rowheader><td align=center>Blok</td><td align=center>Kegiatan</td><td align=center>Hasil Kerja</td><td align=center>Jumlah (" . $muAju . ")</td></tr></thead>
+				<tbody>" . ($barisAju != '' ? $barisAju : "<tr class=rowcontent><td colspan=4 align=center>Data tidak ditemukan</td></tr>") . "</tbody>
+				<tfoot><tr class=rowcontent><td colspan=2 align=center><b>TOTAL</b></td><td align=right><b>" . number_format($totalHasilAju, 2) . "</b></td><td align=right><b>" . number_format($totalAju, 2) . "</b></td></tr></tfoot>
+			</table>
+		</fieldset>";
+
+		$tab = "<fieldset><legend><b>Pengajuan</b></legend>
+			<table cellspacing=1 border=0 width=100%>" . $colInfo . "
 				<tr class=rowcontent>
-					<td width=100px>" . $_SESSION['lang']['notransaksi'] . "</td>
-					<td width=5px>:</td>
+					<td nowrap>" . $_SESSION['lang']['notransaksi'] . "</td>
+					<td>:</td>
 					<td id=notran_aju>" . $param['notransaksi'] . "</td>
 				</tr>
 				<tr class=rowcontent>
-					<td width=100px>" . $_SESSION['lang']['termin'] . " Ke</td>
-					<td width=5px>:</td>
+					<td nowrap>" . $_SESSION['lang']['termin'] . " Ke</td>
+					<td>:</td>
 					<td id=termin_aju>" . $param['termin'] . "</td>
 				</tr>
 				<tr class=rowcontent>
-					<td width=100px>No Pengajuan</td>
-					<td width=5px>:</td>
+					<td nowrap>No Pengajuan</td>
+					<td>:</td>
 					<td id=nopengajuan_aju>" . $nopengajuan . "</td>
 				</tr>
 				<tr class=rowcontent>
-					<td width=100px>" . $_SESSION['lang']['tanggal'] . " Jurnal</td>
-					<td width=5px>:</td>
+					<td nowrap>" . $_SESSION['lang']['tanggal'] . " Jurnal</td>
+					<td>:</td>
 					<td>
 						<input type='hidden' id='unitdt2' value='" . $unit . "'>
 						<input type='hidden' id='bappdt2' value='" . $param['nobapp'] . "'>
-						<input id='tgljurnal' class='myinputtext' type='text' onmousemove='setCalendar(this.id)' readonly='readonly' style='width:80px'>
+						<input id='tgljurnal' class='myinputtext' type='text' onmousemove='setCalendar(this.id)' readonly='readonly' style='width:175px;height:22px;box-sizing:border-box' value='" . (($param['tanggal'] == '' || $param['tanggal'] == '0000-00-00') ? '' : tanggalnormal($param['tanggal'])) . "'>
 					</td>
 				</tr>
 				<tr class=rowcontent>
-					<td width=100px>" . $_SESSION['lang']['kepada'] . "</td>
-					<td width=5px>:</td>
-					<td><select id=kepada style='min-width:175px;'>" . $optKry . "</select></td>
+					<td nowrap>" . $_SESSION['lang']['kepada'] . "</td>
+					<td>:</td>
+					<td><select id=kepada style='width:175px;height:22px'>" . $optKry . "</select></td>
 				</tr>
 				<tr class=rowcontent>
 					<td></td><td><input id=numrow style=display:none value=" . $param['numrow'] . "></td>
 					<td align=left><button id=tomboldetail class=mybutton onclick=ajukan(event)>" . $_SESSION['lang']['diajukan'] . "</button></td>
-				</tr>				
-				</table>";
-
-		echo $tab;
+				</tr>
+			</table>
+		</fieldset>";
+		echo $detailAjukan . $tab;
 		break;
 
 	case 'ajukan':
@@ -2660,6 +2782,16 @@ switch ($method) {
 		break;
 }
 
+#angka dengan pemisah ribuan; desimal hanya bila ada (maks 2), mis. 50000 -> 50,000 dan 8.39 -> 8.39
+function angkaPisah($v)
+{
+	if ($v === '' || $v === null) {
+		return '';
+	}
+	$t = number_format((float)$v, 2);
+	return (strpos($t, '.') !== false) ? rtrim(rtrim($t, '0'), '.') : $t;
+}
+
 function formHeader($mode, $data)
 {
 	global $dbname;
@@ -2698,63 +2830,43 @@ function formHeader($mode, $data)
 		$optDiv = makeOption($dbname, 'project', 'kode,nama', "kode='" . $data['divisi'] . "' and posting=0");
 	}
 
-	$els = array();
-	$els[] = array(
-		makeElement('kodeorg', 'label', $_SESSION['lang']['kebun']),
-		makeElement(
-			'kodeorg',
-			'select',
-			$data['kodeorg'],
-			array('style' => 'width:150px', 'disabled' => 'disabled'),
-			$optOrg
-		)
-	);
-	$els[] = array(
-		makeElement('notransaksi', 'label', $_SESSION['lang']['notransaksi']),
-		makeElement(
-			'notransaksi',
-			'text',
-			$data['notransaksi'],
-			array('style' => 'width:150px', 'disabled' => 'disabled')
-		)
-	);
-	$els[] = array(
-		makeElement('tanggal', 'label', $_SESSION['lang']['tanggal']),
-		makeElement('tanggal', 'text', $data['tanggal'], array(
-			'style' => 'width:150px',
-			'disabled' => 'disabled'
-		))
-	);
-	$els[] = array(
-		makeElement('divisi', 'label', $_SESSION['lang']['subunit']),
-		makeElement(
-			'divisi',
-			'select',
-			$data['divisi'],
-			array('style' => 'width:150px', 'disabled' => 'disabled'),
-			$optDiv
-		)
-	);
-	$els[] = array(
-		makeElement('koderekanan', 'label', $_SESSION['lang']['koderekanan']),
-		makeElement(
-			'koderekanan',
-			'select',
-			$data['koderekanan'],
-			array('style' => 'width:150px', 'disabled' => 'disabled'),
-			$optSup
-		)
-	);
+	#uraian pekerjaan SPK (dari pengajuan SPK)
+	$pk = array();
+	if (!empty($data['nopengajuan'])) {
+		$pk = fetchdata("select kategori,jenis,project,spesifikasi from " . $dbname . ".lgl_pengajuanspkht where notransaksi='" . addslashes($data['nopengajuan']) . "'");
+	}
+	$rp = isset($pk[0]) ? $pk[0] : array();
+	$pekerjaan = mb_strtoupper(trim(isset($rp['project']) && trim($rp['project']) != '' ? $rp['project'] : (isset($data['keterangan']) ? $data['keterangan'] : '')), 'UTF-8');
+	$jenisSpk = trim((isset($rp['jenis']) ? $rp['jenis'] : '') . ((isset($rp['kategori']) && $rp['kategori'] != '') ? ' (' . $rp['kategori'] . ')' : ''));
+	$dariSpk = (isset($data['dari']) && $data['dari'] != '' && $data['dari'] != '0000-00-00') ? tanggalnormal($data['dari']) : '';
+	$sampaiSpk = (isset($data['sampai']) && $data['sampai'] != '' && $data['sampai'] != '0000-00-00') ? tanggalnormal($data['sampai']) : '';
+	$e = function ($v) {
+		return htmlspecialchars((string)$v, ENT_QUOTES);
+	};
 
-	$els[] = array(
-		makeElement('matauang', 'label', ''),
-		makeElement(
-			'matauang',
-			'hidden',
-			$data['matauang'],
-			array('style' => 'width:150px', 'disabled' => 'disabled')
-		)
-	);
+	#seluruh isian sama lebar dan tinggi
+	$w = 'width:290px;height:22px;box-sizing:border-box';
+	$elKebun = makeElement('kodeorg', 'select', $data['kodeorg'], array('style' => $w, 'disabled' => 'disabled'), $optOrg);
+	$elNoTrans = makeElement('notransaksi', 'text', $data['notransaksi'], array('style' => $w, 'disabled' => 'disabled'));
+	$elTanggal = makeElement('tanggal', 'text', $data['tanggal'], array('style' => $w, 'disabled' => 'disabled'));
+	$elDivisi = makeElement('divisi', 'select', $data['divisi'], array('style' => $w, 'disabled' => 'disabled'), $optDiv);
+	$elRekanan = makeElement('koderekanan', 'select', $data['koderekanan'], array('style' => $w, 'disabled' => 'disabled'), $optSup);
+	$elPeriode = makeElement('periodespk', 'text', ($dariSpk != '' || $sampaiSpk != '') ? $dariSpk . ' s/d ' . $sampaiSpk : '', array('style' => $w, 'disabled' => 'disabled'));
+	$elJenis = makeElement('jenisspk', 'text', $e($jenisSpk), array('style' => $w, 'disabled' => 'disabled'));
+	$elNilai = makeElement('nilaispk', 'text', isset($data['nilaikontrak']) ? $e($data['matauang']) . ' ' . number_format($data['nilaikontrak'], 2) : '', array('style' => $w . ';text-align:right', 'disabled' => 'disabled'));
+	$elPekerjaan = makeElement('pekerjaanspk', 'text', $e($pekerjaan), array('style' => 'width:100%;height:22px;box-sizing:border-box', 'disabled' => 'disabled'));
+	$elMatauang = makeElement('matauang', 'hidden', $data['matauang'], array('style' => 'width:150px', 'disabled' => 'disabled'));
+	$elSpesifikasi = "<textarea id='spesifikasispk' readonly='readonly' style='width:100%;height:64px;box-sizing:border-box;font-family:inherit;font-size:12px'>" . $e(isset($rp['spesifikasi']) ? $rp['spesifikasi'] : '') . "</textarea>";
 
-	return genElementMultiDim($_SESSION['lang']['header'], $els, 2);
+	$judul = $_SESSION['lang']['header'];
+	return "<fieldset style='float:left;width:100%;box-sizing:border-box'><legend id='title_Form'><b>" . $judul . "</b></legend><div id='" . $judul . "'>
+		<table border='0' cellspacing='0' cellpadding='2' style='font-size:12px'>
+			<colgroup><col style='width:95px'><col style='width:10px'><col style='width:290px'><col style='width:24px'><col style='width:95px'><col style='width:10px'><col style='width:290px'></colgroup>
+			<tr><td nowrap>" . $_SESSION['lang']['kebun'] . "</td><td>:</td><td>" . $elKebun . "</td><td></td><td nowrap>" . $_SESSION['lang']['koderekanan'] . "</td><td>:</td><td>" . $elRekanan . "</td></tr>
+			<tr><td nowrap>" . $_SESSION['lang']['notransaksi'] . "</td><td>:</td><td>" . $elNoTrans . "</td><td></td><td nowrap>" . $_SESSION['lang']['subunit'] . "</td><td>:</td><td>" . $elDivisi . "</td></tr>
+			<tr><td nowrap>" . $_SESSION['lang']['tanggal'] . "</td><td>:</td><td>" . $elTanggal . "</td><td></td><td nowrap>Periode SPK</td><td>:</td><td>" . $elPeriode . "</td></tr>
+			<tr><td nowrap>Jenis SPK</td><td>:</td><td>" . $elJenis . "</td><td></td><td nowrap>Nilai Kontrak</td><td>:</td><td>" . $elNilai . $elMatauang . "</td></tr>
+			<tr><td nowrap>Pekerjaan</td><td>:</td><td colspan='5'>" . $elPekerjaan . "</td></tr>
+			<tr><td nowrap valign='top'>Spesifikasi</td><td valign='top'>:</td><td colspan='5'>" . $elSpesifikasi . "</td></tr>
+		</table></div></fieldset>";
 }

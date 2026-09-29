@@ -37,50 +37,48 @@ require_once('lib/zSelect2.php');
 </script>
 <?php
 ##deklarasi untuk option##
-$optorg = "<option value=''>" . $_SESSION['lang']['pilihdata'] . "</option>";
-$where = "";
-if ($_SESSION['empl']['subbagian'] != "") {
-    $where .= " and induk='" . $_SESSION['empl']['subbagian'] . "'";
-} else {
-    $where .= " and induk like '" . $_SESSION['empl']['lokasitugas'] . "%'";
-}
-$sql = "SELECT distinct indukblok,namaindukblok FROM " . $dbname . ".organisasi where 1=1 and tipe='BLOK' " . $where . "";
-$qry = $owlPDO->query($sql) or die(print " Gagal: " . PDOException::getMessage());
-$qry->setFetchMode(PDO::FETCH_ASSOC);
-while ($bar = $qry->fetch()) {
-    $div = substr($bar['indukblok'], 0, 6);
-    if ($div != $group) {
-        $optorg .= "<optgroup label='" . getNamaOrg($div) . "'>";
-    }
-
-    $optorg .= "<option value=" . $bar['indukblok'] . ">" . $bar['indukblok'] . " - " . $bar['namaindukblok'] . "</option>";
-
-    $group = $div;
-    if ($div != $group) {
-        $optorg . "</optgroup>";
-    }
-}
-
+##mandor: hanya unit yang boleh diakses user dan yang belum keluar
+$startKel = ($_SESSION['org']['period']['start'] != '') ? $_SESSION['org']['period']['start'] : date('Ymd');
 $optKary = "<option value=''>" . $_SESSION['lang']['pilihdata'] . "</option>";
-$sql = "SELECT karyawanid, nik, namakaryawan,subbagian FROM " . $dbname . ".datakaryawan where 1=1 and kodejabatan IN ('6','7','8') order by subbagian asc, namakaryawan asc";
+$sql = "SELECT karyawanid, nik, namakaryawan,subbagian FROM " . $dbname . ".datakaryawan where 1=1 and kodejabatan IN ('6','7','8') and lokasitugas in (" . getOrgDetail(2) . ") and (tanggalkeluar = '0000-00-00' or tanggalkeluar > '" . $startKel . "') order by subbagian asc, namakaryawan asc";
 $qry = $owlPDO->query($sql) or die(print " Gagal: " . PDOException::getMessage());
 $qry->setFetchMode(PDO::FETCH_ASSOC);
+$group = null;
 while ($bar = $qry->fetch()) {
     $div = $bar['subbagian'];
-    if ($div != $group) {
+    if ($div !== $group) {
+        if ($group !== null) {
+            $optKary .= "</optgroup>";
+        }
         $optKary .= "<optgroup label='" . getNamaOrg($div) . "'>";
+        $group = $div;
     }
-    if ($nik == $bar['karyawanid']) {
-        $optKary .= "<option value=" . $bar['karyawanid'] . " selected>" . $bar['nik'] . " - " . $bar['namakaryawan'] . "</option>";
-    } else {
-        $optKary .= "<option value=" . $bar['karyawanid'] . ">" . $bar['nik'] . " - " . $bar['namakaryawan'] . "</option>";
-    }
-
-    $group = $div;
-    if ($div != $group) {
-        $optKary . "</optgroup>";
-    }
+    $optKary .= "<option value='" . $bar['karyawanid'] . "'>" . $bar['nik'] . " - " . $bar['namakaryawan'] . "</option>";
 }
+if ($group !== null) {
+    $optKary .= "</optgroup>";
+}
+
+##filter unit & periode untuk list (data umumnya hasil download dari mobile)
+$optUnitSch = "<option value=''>" . $_SESSION['lang']['all'] . "</option>";
+$resUnit = fetchdata("select kodeorganisasi,namaorganisasi from " . $dbname . ".organisasi where tipe='KEBUN' and kodeorganisasi in (" . getOrgDetail(2) . ") order by kodeorganisasi");
+foreach ($resUnit as $vu) {
+    $optUnitSch .= "<option value='" . $vu['kodeorganisasi'] . "'>" . $vu['kodeorganisasi'] . " - " . $vu['namaorganisasi'] . "</option>";
+}
+$periodeNow = date('Y-m');
+$listPeriode = array();
+$resPeriode = fetchdata("select distinct date_format(tanggal,'%Y-%m') as periode from " . $dbname . ".kebun_rekapmutuhancakpanen order by periode desc");
+foreach ($resPeriode as $vp) {
+    $listPeriode[$vp['periode']] = $vp['periode'];
+}
+$listPeriode[$periodeNow] = $periodeNow;
+krsort($listPeriode);
+$optPeriodeSch = "<option value=''>" . $_SESSION['lang']['all'] . "</option>";
+foreach ($listPeriode as $vp) {
+    $sel = ($vp == $periodeNow) ? " selected" : "";
+    $optPeriodeSch .= "<option value='" . $vp . "'" . $sel . ">" . $vp . "</option>";
+}
+
 
 ##HEADER UNTUK BUAT BARU SAMA LIST-->
 OPEN_BOX('', '<span class=judul>' . getMenu('kebun_mutuhancakpanen') . '</span>');
@@ -98,21 +96,30 @@ echo "<table>
             <fieldset><legend>" . $_SESSION['lang']['find'] . "</legend> 
 	
          <table>
-				<tr>
-					<td>" . $_SESSION['lang']['mandorpanen'] . "</td> 
-					<td>:</td>
-					<td>
-                        <input type=text class=myinputtext id=karyawansch onkeypress='return tanpa_kutip(event)' style=\"width:115px;\"/>
-                    </td>
-				</tr>
-				<tr>
-                    <td>" . $_SESSION['lang']['tanggal'] . "</td> 
-                    <td>:</td>
-                    <td><input type=text class=myinputtext  id=tglsch onmousemove=setCalendar(this.id) onkeypress=return false;   style=\"width:115px;\" readonly/></td>
-            </tr>
-                ";
-
-echo "<tr><td><td><td><button class=mybutton onclick=loaddata(0)>" . $_SESSION['lang']['find'] . "</button></td></td></tr></table>";
+					<tr>
+						<td>" . $_SESSION['lang']['mandorpanen'] . "</td>
+						<td>:</td>
+						<td><input type=text class=myinputtext id=karyawansch onkeypress='return tanpa_kutip(event)' style=\"width:194px;\"/></td>
+						<td style='padding-left:20px;'>" . $_SESSION['lang']['tanggal'] . "</td>
+						<td>:</td>
+						<td><input type=text class=myinputtext id=tglsch onmousemove=setCalendar(this.id) onkeypress=return false; style=\"width:194px;\" readonly/></td>
+					</tr>
+					<tr>
+						<td>Unit</td>
+						<td>:</td>
+						<td><select id=unitsch style=\"width:200px;\" onchange=loaddata(0)>" . $optUnitSch . "</select></td>
+						<td style='padding-left:20px;'>" . $_SESSION['lang']['periode'] . "</td>
+						<td>:</td>
+						<td><select id=periodesch data-default='" . $periodeNow . "' style=\"width:200px;\" onchange=loaddata(0)>" . $optPeriodeSch . "</select></td>
+					</tr>
+					<tr>
+						<td colspan=2></td>
+						<td colspan=4>
+							<button class=mybutton onclick=loaddata(0)>" . $_SESSION['lang']['find'] . "</button>
+							<button class=mybutton onclick=exportPdf()>PDF</button>
+							<button class=mybutton onclick=exportExcel()>Excel</button>
+						</td>
+					</tr></table>";
 echo "</fieldset></td>";
 echo "</tr>
 </table> ";

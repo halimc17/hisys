@@ -6,7 +6,7 @@ include('master_mainMenu.php');
 include('lib/zLib.php');
 ?>
 
-<script language=javascript1.2 src='js/log_5minstock.js?v=1.1'></script>
+<script language=javascript1.2 src='js/log_5minstock.js?v=1.3'></script>
 <?php
 
 OPEN_BOX('','<span class=judul>'.getMenu('log_5minstock').'</span><br>');
@@ -15,7 +15,8 @@ $optpt=$optgudang=$optklbarang=$optbarang="<option value=''>".$_SESSION['lang'][
 $optcrpt=$optcrgudang=$optcrklbarang=$optcrbarang="<option value=''>".$_SESSION['lang']['all']."</option>";
 
 ##GET PT
-$str="select * from ".$dbname.".organisasi where tipe='PT' order by namaorganisasi";
+##detail akses: hanya PT dari unit yang boleh diakses user
+$str="select * from ".$dbname.".organisasi where tipe='PT' and kodeorganisasi in (".getOrgDetail(4).") order by namaorganisasi";
 $res=fetchdata($str);
 foreach($res as $val){
 	$optpt.="<option value='".$val['kodeorganisasi']."'>".$val['kodeorganisasi']." - ".$val['namaorganisasi']."</option>";
@@ -31,14 +32,14 @@ foreach($res as $val){
 }
 
 ##FORM
-echo"<fieldset>
+echo"<fieldset style='display:inline-block;vertical-align:top;'>
 	<legend><b>".$_SESSION['lang']['form']."</b></legend>
 	<table border=0 style='display: inline-block;vertical-align:top'>
 		<tr>
 			<td class=bintang>".$_SESSION['lang']['pt']."</td>
 			<td>:</td>
 			<td>
-				<select id=pt onchange='getgudang()'>".$optpt."</select>
+				<select id=pt style='width:300px' onchange='getgudang()'>".$optpt."</select>
 				<img id='pt' onclick=z.elSearch('pt',event) class='resicon' src='images/onebit_02.png' style='position:relative;top:3px;left:3px;'>
 			</td>
 		</tr>
@@ -46,7 +47,7 @@ echo"<fieldset>
 			<td class=bintang>".$_SESSION['lang']['gudang']."</td> 
 			<td>:</td>
 			<td>
-				<select id=gudang>".$optgudang."</select>
+				<select id=gudang style='width:300px'>".$optgudang."</select>
 				<img id='gudang' onclick=z.elSearch('gudang',event) class='resicon' src='images/onebit_02.png' style='position:relative;top:3px;left:3px;'>
 			</td>
 		</tr>
@@ -54,7 +55,7 @@ echo"<fieldset>
 			<td class=bintang>".$_SESSION['lang']['kelompokbarang']."</td> 
 			<td>:</td>
 			<td>
-				<select id=kelompokbarang onchange='getbarang()'>".$optklbarang."</select>
+				<select id=kelompokbarang style='width:300px' onchange='getbarang()'>".$optklbarang."</select>
 				<img id='kelompokbarang' onclick=z.elSearch('kelompokbarang',event) class='resicon' src='images/onebit_02.png' style='position:relative;top:3px;left:3px;'>
 			</td>
 		</tr>
@@ -62,7 +63,7 @@ echo"<fieldset>
 			<td class=bintang>".$_SESSION['lang']['barang']."</td> 
 			<td>:</td>
 			<td>
-				<select id=barang onchange='getsatuan()'>".$optbarang."</select>
+				<select id=barang style='width:300px' onchange='getsatuan()'>".$optbarang."</select>
 				<img id='barang' onclick=z.elSearch('barang',event) class='resicon' src='images/onebit_02.png' style='position:relative;top:3px;left:3px;'>
 			</td>
 		</tr>
@@ -78,7 +79,7 @@ echo"<fieldset>
 			<td>".$_SESSION['lang']['maxstok']."</td> 
 			<td>:</td>
 			<td>
-				<input type=text class=myinputtextnumber id=maxstok onkeypress=\"return angka_doang(event);\" style=\"width:80px;\" placeholder='0' />
+				<input type=text class=myinputtextnumber id=maxstok onkeypress=\"return angka_doang(event);\" style=\"width:80px;\" placeholder='0' />&nbsp;<span style='color:#666'>(0 = tanpa batas)</span>
 			</td>
 		</tr>
 		<tr>
@@ -88,6 +89,30 @@ echo"<fieldset>
 				<input type=hidden id=myid value=''>
 				<button class=mybutton onclick=simpan()>".$_SESSION['lang']['save']."</button>
 				<button class=mybutton onclick=batal()>".$_SESSION['lang']['cancel']."</button>
+			</td>
+		</tr>
+	</table>
+</fieldset>
+<fieldset style='display:inline-block;vertical-align:top;margin-left:10px;max-width:480px;'>
+	<legend><b>Upload Excel</b></legend>
+	<table border=0>
+		<tr>
+			<td>File (.xlsx)</td>
+			<td>:</td>
+			<td><input type=file id=filex name=filex class=mybutton accept='.xlsx'></td>
+		</tr>
+		<tr>
+			<td colspan=3>
+				<b>Format Kolom Excel:</b><br/>
+				A: Kode PT | B: Kode Gudang | C: Kode Barang | D: Nama Barang | E: Satuan | F: Stok Minimum | G: Stok Maksimum<br/>
+				Kolom A, D, E hanya informasi. Data dicocokkan berdasarkan Gudang + Kode Barang: jika sudah ada akan diperbarui, jika belum ada akan ditambahkan.<br/>
+				Stok Maksimum 0 = tanpa batas. Jika ada satu baris yang salah, seluruh upload dibatalkan.
+			</td>
+		</tr>
+		<tr>
+			<td colspan=3>
+				<button class=mybutton onclick=downloadTemplate()>Download Template (Sesuai Filter List)</button>
+				<button class=mybutton onclick=submitUpload()>Upload File</button>
 			</td>
 		</tr>
 	</table>
@@ -106,14 +131,14 @@ echo"<fieldset style=''>
 						<td>".$_SESSION['lang']['pt']."</td>
 						<td>:</td>
 						<td>
-							<select style=width:200px id=crpt onchange='getcrgudang()'>".$optcrpt."</select>
+							<select style=width:250px id=crpt onchange='getcrgudang()'>".$optcrpt."</select>
 							<img id='crpt' onclick=z.elSearch('crpt',event) class='resicon' src='images/onebit_02.png' style='position:relative;top:3px;left:3px;'>
 						</td>
 						
 						<td style='padding-left:20px;'>".$_SESSION['lang']['kelompokbarang']."</td>
 						<td>:</td>
 						<td>
-							<select style=width:200px id=crklbarang onchange='getcrbarang()'>".$optcrklbarang."</select>
+							<select style=width:250px id=crklbarang onchange='getcrbarang()'>".$optcrklbarang."</select>
 							<img id='crklbarang' onclick=z.elSearch('crklbarang',event) class='resicon' src='images/onebit_02.png' style='position:relative;top:3px;left:3px;'>
 						</td>
 					</tr>
@@ -121,14 +146,14 @@ echo"<fieldset style=''>
 						<td>".$_SESSION['lang']['gudang']."</td> 
 						<td>:</td>
 						<td>
-							<select style=width:200px id=crgudang onchange='loaddata(0)'>".$optcrgudang."</select>
+							<select style=width:250px id=crgudang onchange='loaddata(0)'>".$optcrgudang."</select>
 							<img id='crgudang' onclick=z.elSearch('crgudang',event) class='resicon' src='images/onebit_02.png' style='position:relative;top:3px;left:3px;'>
 						</td>
 						
 						<td style='padding-left:20px;'>".$_SESSION['lang']['barang']."</td>
 						<td>:</td>
 						<td>
-							<select style=width:200px id=crbarang onchange='loaddata(0)'>".$optcrbarang."</select>
+							<select style=width:250px id=crbarang onchange='loaddata(0)'>".$optcrbarang."</select>
 							<img id='crbarang' onclick=z.elSearch('crbarang',event) class='resicon' src='images/onebit_02.png' style='position:relative;top:3px;left:3px;'>
 						</td>
 					</tr>
@@ -147,4 +172,4 @@ echo"<fieldset style=''>
 </fieldset>";
 CLOSE_BOX();
 echo close_body();
-?>
+?>

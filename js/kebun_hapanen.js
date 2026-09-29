@@ -1,6 +1,8 @@
 function displayList() {
 	document.getElementById('karyawansch').value = '';
 	document.getElementById('tglsch').value = '';
+	document.getElementById('unitsch').value = '';
+	document.getElementById('periodesch').value = document.getElementById('periodesch').getAttribute('data-default');
 	document.getElementById('listData').style.display = 'block';
 	document.getElementById('header').style.display = 'none';
 	document.getElementById('detail').style.display = 'none';
@@ -17,12 +19,20 @@ function getPage() {
 function loaddata(page) {
 	karyawansch = document.getElementById('karyawansch').value;
 	tglsch = document.getElementById('tglsch').value;
+	unitsch = document.getElementById('unitsch').value;
+	periodesch = document.getElementById('periodesch').value;
 	param = 'method=loaddata&page=' + page;
 	if (karyawansch != '') {
 		param += '&karyawansch=' + karyawansch;
 	}
 	if (tglsch != '') {
 		param += '&tglsch=' + tglsch;
+	}
+	if (unitsch != '') {
+		param += '&unitsch=' + encodeURIComponent(unitsch);
+	}
+	if (periodesch != '') {
+		param += '&periodesch=' + encodeURIComponent(periodesch);
 	}
 	tujuan = 'kebun_slave_hapanen.php';
 	post_response_text(tujuan, param, respog);
@@ -166,8 +176,8 @@ function posting(tgl, nik, page) {
 	}
 }
 
-function unposting(nikmandor, tgl, nik, kodeorg, page) {
-	param = 'method=unposting' + '&tgl2=' + tgl + '&nik=' + nik + '&nikmandor=' + nikmandor + '&kodeorg=' + kodeorg;
+function unposting(nikmandor, tgl, page) {
+	param = 'method=unposting' + '&tgl2=' + tgl + '&nikmandor=' + nikmandor;
 	tujuan = 'kebun_slave_hapanen.php';
 	if (confirm('Apakah Anda yakin ingin unposting Data ???')) {
 		post_response_text(tujuan, param, respog);
@@ -361,4 +371,33 @@ function deletedetail(row,mode) {
 			}
 		}
 	}
+}
+
+function exportParam(method) {
+	param = 'method=' + method;
+	karyawansch = document.getElementById('karyawansch').value;
+	tglsch = document.getElementById('tglsch').value;
+	unitsch = document.getElementById('unitsch').value;
+	periodesch = document.getElementById('periodesch').value;
+	if (karyawansch != '') {
+		param += '&karyawansch=' + encodeURIComponent(karyawansch);
+	}
+	if (tglsch != '') {
+		param += '&tglsch=' + encodeURIComponent(tglsch);
+	}
+	if (unitsch != '') {
+		param += '&unitsch=' + encodeURIComponent(unitsch);
+	}
+	if (periodesch != '') {
+		param += '&periodesch=' + encodeURIComponent(periodesch);
+	}
+	return param;
+}
+
+function exportPdf() {
+	window.open('kebun_slave_hapanen.php?' + exportParam('pdf'), '_blank');
+}
+
+function exportExcel() {
+	window.location.href = 'kebun_slave_hapanen.php?' + exportParam('excel');
 }

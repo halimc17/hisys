@@ -247,12 +247,17 @@ function getjjg(nospb) {
 				} else {
 					//alert(con.responseText);
 					data = con.responseText.split("####");
-					document.getElementById('jmlhJjg').value = data[0];
-					// document.getElementById('jmlhJjg').value = data[0];
+					document.getElementById('jmlhJjg').value = fmtAngka(data[0]);
+					// document.getElementById('jmlhJjg').value = fmtAngka(data[0]);
 					document.getElementById('nmSupir').value = data[2];
 					document.getElementById('kdKend').value = data[3];
 					document.getElementById('datapotongan').innerHTML = data[4];
+						document.getElementById('potKg').value = '';
+						aturPotKg();
+						getBersih(0);
 					document.getElementById('pabriktujuan').value = data[5];
+					document.getElementById('pabriktujuan').disabled = (document.getElementById('pabriktujuan').value != '');
+					refreshSelect2('pabriktujuan');
 					loadfiles(nospb);
 				}
 			} else {
@@ -276,7 +281,8 @@ function getNosbp() {
 					alert(con.responseText);
 				} else {
 					//alert(con.responseText);
-					document.getElementById('spbId').innerHTML = con.responseText;
+					document.getElementById('spbId').innerHTML = con.responseText.split("####")[0];
+					refreshSelect2('spbId');
 				}
 			} else {
 				busy_off();
@@ -303,26 +309,13 @@ function getBersih(xyz) {
 		document.getElementById('brtBrshpmks').value = brtBrshpmks;
 	}
 	if (xyz == 0) {
-		brtMsk = document.getElementById('brtMsk').value;
-		brtKlr = document.getElementById('brtKlr').value;
-		potKg = document.getElementById('potKg').value;
-		brtBrsh = parseInt(brtMsk) - parseInt(brtKlr) - parseInt(potKg);
-		if (isNaN(brtBrsh)) {
-			brtBrsh = 0;
-		}
-
-		if (brtBrsh < 0) {
-			//alert("Nilai tidak boleh minus");
-			brtBrsh = 0;
-			document.getElementById('brtMsk').value=0;
-			//return;
-		}
-
-		document.getElementById('brtBrsh').value = brtBrsh;
+		brtBrsh = angka('brtMsk') - angka('brtKlr') - angka('potKg');
+		document.getElementById('brtBrsh').value = numberFormat(brtBrsh, 0);
 	}
 
 }
 function saveData() {
+	hitungUlang();
 	tgl        = document.getElementById('tgl').value;
 	nosbp      = document.getElementById('spbId').value;
 	jmmsk      = document.getElementById('jmMasuk').value;
@@ -331,12 +324,12 @@ function saveData() {
 	mntklr     = document.getElementById('mntKeluar').value;
 	kdknd      = document.getElementById('kdKend').value;
 	nmspr      = document.getElementById('nmSupir').value;
-	jmjjg      = document.getElementById('jmlhJjg').value;
+	jmjjg      = angka('jmlhJjg');
 	notiket    = document.getElementById('notiket').value;
-	brtms      = document.getElementById('brtMsk').value;
-	brtklr     = document.getElementById('brtKlr').value;
-	brtbrsh    = document.getElementById('brtBrsh').value;
-	potDt      = document.getElementById('potKg').value;
+	brtms      = angka('brtMsk');
+	brtklr     = angka('brtKlr');
+	brtbrsh    = angka('brtMsk') - angka('brtKlr') - angka('potKg');
+	potDt      = angka('potKg');
 	spbpabrik = document.getElementById('spbpabrik').value;
 	tahuntanam2 = document.getElementById('tahuntanam2').value;
 	buahdikembalikan = document.getElementById('buahdikembalikan').value;
@@ -353,7 +346,6 @@ function saveData() {
 	// jjgSortsi  = document.getElementById('JjgSortasi').value;
 	noTrans    = document.getElementById('notrans').value;
 	prs        = document.getElementById('proses').value;
-	document.getElementById('dtlAbn').disabled=true;
 	
 	jamMasuk = jmmsk + ":" + mntmsk + ":00";
 	jamKeluar = jmklr + ":" + mntklr + ":00";
@@ -365,7 +357,7 @@ function saveData() {
 		var TotaljumlahPotongan = 0;  // Menginisialisasi variabel TotaljumlahPotongan
 		strUrl_potongan = "";
 		for (var index = 1; index <= jumlah; index++) {  // Mengubah nilai ke angka
-			strUrl_potongan +='&nilai_potongan[]='+parseFloat(document.getElementById('dt_potongan_' + index).value)+'&kode_potongan[]='+trim(document.getElementById('kode_potongan_'+index).value);
+			strUrl_potongan +='&nilai_potongan[]='+angka('dt_potongan_' + index)+'&kode_potongan[]='+trim(document.getElementById('kode_potongan_'+index).value);
 		}
 	}else{
 		var elements = document.querySelectorAll('[id^="dt_edit_potongan_"]');
@@ -373,7 +365,7 @@ function saveData() {
 		var TotaljumlahPotongan = 0;  // Menginisialisasi variabel TotaljumlahPotongan
 		strUrl_potongan = "";
 		for (var index = 1; index <= jumlah; index++) {  // Mengubah nilai ke angka
-			strUrl_potongan +='&nilai_potongan[]='+parseFloat(document.getElementById('dt_edit_potongan_' + index).value)+'&kode_potongan[]='+trim(document.getElementById('kode_potongan_'+index).value);
+			strUrl_potongan +='&nilai_potongan[]='+angka('dt_edit_potongan_' + index)+'&kode_potongan[]='+trim(document.getElementById('kode_potongan_'+index).value);
 		}
 	}
 	// akhir potongan
@@ -393,6 +385,20 @@ function saveData() {
 		return false;
 	}
 
+	if(nosbp == ''){
+		alert("Warning : No. SPB Tidak Boleh Kosong");
+		return false;
+	}
+
+	if(prs != 'updThnTnm' && document.getElementById('pabriktujuan').value == ''){
+		alert("Warning : Tujuan Pabrik Tidak Boleh Kosong");
+		return false;
+	}
+
+	if(brtbrsh < 0){
+		alert("Warning : Berat Bersih tidak boleh kurang dari 0. Berat Masuk harus lebih besar dari Berat Keluar ditambah Potongan.");
+		return false;
+	}
 
 	param = 'proses=' + prs;
 	param += '&tgl=' + tgl;
@@ -417,11 +423,80 @@ function saveData() {
 	param += '&spbpabrik=' + spbpabrik;
 	param += '&tahuntanam2=' + tahuntanam2;
 	param += '&buahdikembalikan=' + buahdikembalikan;
+	param += '&pabriktujuan=' + document.getElementById('pabriktujuan').value;
 	param += strUrl_potongan;
 
 	// param += '&tanggalpks=' + tanggalpks;
 	tujuan = 'kebun_slave_timbangke_eksternal.php';
+	document.getElementById('dtlAbn').disabled=true;
 	post_response_text(tujuan, param, respog);
+	function respog() {
+		if (con.readyState == 4) {
+			if (con.status == 200) {
+				busy_off();
+				if (!isSaveResponse(con.responseText)) {
+					document.getElementById('dtlAbn').disabled=false;
+					alert(con.responseText);
+				} else {
+					//alert(con.responseText);
+					displayList();
+				}
+			} else {
+				busy_off();
+				document.getElementById('dtlAbn').disabled=false;
+				error_catch(con.status);
+			}
+		}
+	}
+}
+function refreshSelect2(id) {
+	if (window.jQuery) {
+		jQuery('#' + id).trigger('change.select2');
+	}
+}
+if (window.jQuery) {
+	jQuery(document).ready(function () {
+		jQuery('#spbId').on('change', function () {
+			getjjg(this.value);
+		});
+	});
+}
+function angka(id) {
+	return parseFloat(remove_comma_var(String(document.getElementById(id).value))) || 0;
+}
+function fmtAngka(v) {
+	v = parseFloat(v);
+	return isNaN(v) ? '' : numberFormat(v, 0);
+}
+function hitungUlang() {
+	if (document.querySelectorAll('[id^="dt_potongan_"], [id^="dt_edit_potongan_"]').length > 0) {
+		getPotongan();
+	} else {
+		getBersih(0);
+	}
+}
+function aturPotKg() {
+	var adaFraksi = document.querySelectorAll('[id^="dt_potongan_"], [id^="dt_edit_potongan_"]').length > 0;
+	document.getElementById('potKg').disabled = adaFraksi;
+}
+function loadBadgeBelum() {
+	post_response_text('kebun_slave_timbangke_eksternal.php', 'proses=countBelumTimbang', respog);
+	function respog() {
+		if (con.readyState == 4) {
+			if (con.status == 200) {
+				busy_off();
+				var jml = parseInt(con.responseText) || 0;
+				var b = document.getElementById('badgeBelum');
+				b.innerHTML = jml;
+				b.style.display = (jml > 0) ? 'inline-block' : 'none';
+			} else {
+				busy_off();
+			}
+		}
+	}
+}
+function spbBelumTimbang() {
+	post_response_text('kebun_slave_timbangke_eksternal.php', 'proses=listBelumTimbang', respog);
 	function respog() {
 		if (con.readyState == 4) {
 			if (con.status == 200) {
@@ -429,10 +504,7 @@ function saveData() {
 				if (!isSaveResponse(con.responseText)) {
 					alert(con.responseText);
 				} else {
-					//alert(con.responseText);
-					enabledData();
-					cancelData();
-					loadData(0);
+					alertify.popup('SPB Belum Ada Hasil Timbang', con.responseText).set({ 'resizable': true, 'maximizable': true }).resizeTo('50%', '70%');
 				}
 			} else {
 				busy_off();
@@ -441,12 +513,47 @@ function saveData() {
 		}
 	}
 }
+function paramFilterBaru() {
+	var p = '';
+	p += '&spbpabriksrc=' + encodeURIComponent(document.getElementById('spbpabriksrc').value);
+	p += '&supirsrc=' + encodeURIComponent(document.getElementById('supirsrc').value);
+	p += '&pabriktujuansrc=' + encodeURIComponent(document.getElementById('pabriktujuansrc').value);
+	p += '&periodesrc=' + encodeURIComponent(document.getElementById('periodesrc').value);
+	return p;
+}
+function dataKePDF(ev) {
+	var tgl = document.getElementById('tgl_cari').value;
+	var tglSampai = document.getElementById('tgl_cari_sampai').value;
+	if (tglSampai != '' && tgl == '') {
+		alert('Warning : Jika tanggal sampai terisi maka tanggal dari nya harus terisi!!!');
+		return;
+	}
+	var param = 'nosbpCr=' + encodeURIComponent(document.getElementById('nosbpCr').value);
+	param += '&tahuntanamsrc=' + encodeURIComponent(document.getElementById('ttsrc').value);
+	param += '&tgl_cari=' + tgl + '&tgl_cari_sampai=' + tglSampai;
+	param += paramFilterBaru();
+	var tujuan = 'kebun_timbangke_eksternal_pdflist.php';
+	alertify.popuppdf('title', "<iframe frameborder=0 style='width:100%;height:90%;overflow:none' src='" + tujuan + '?' + param + "'></iframe>").set({ 'resizable': true, 'overflow': false }).resizeTo('80%', '70%');
+}
+if (window.jQuery) {
+	jQuery(document).ready(function () {
+		jQuery('#ttsrc, #pabriktujuansrc, #periodesrc').on('change', function () {
+			loadData(0);
+		});
+	});
+}
 function displayList() {
 	document.getElementById('listData').style.display = 'block';
 	document.getElementById('headher').style.display = 'none';
 	document.getElementById('nosbpCr').value = '';
 	document.getElementById('tgl_cari').value = '';
 	document.getElementById('tgl_cari_sampai').value = '';
+	document.getElementById('spbpabriksrc').value = '';
+	document.getElementById('supirsrc').value = '';
+	if (window.jQuery) {
+		jQuery('#ttsrc, #pabriktujuansrc').val('').trigger('change.select2');
+		jQuery('#periodesrc').val(periodeDefault).trigger('change.select2');
+	}
 	enabledData();
 	cancelData();
 	loadData(0);
@@ -459,13 +566,11 @@ function enabledData() {
 	document.getElementById('jmlhJjg').disabled = false;
 	document.getElementById('brtMsk').disabled = false;
 	document.getElementById('brtKlr').disabled = false;
-	document.getElementById('brtBrsh').disabled = false;
 	document.getElementById('jmMasuk').disabled = false;
 	document.getElementById('mntMasuk').disabled = false;
 	document.getElementById('jmKeluar').disabled = false;
 	document.getElementById('mntKeluar').disabled = false;
 	document.getElementById('JjgSortasi').disabled = false;
-	document.getElementById('potKg').disabled = false;
 	document.getElementById('nokontrak').disabled = false;
 	document.getElementById('notiket').disabled = false;
 	document.getElementById('tglpks').disabled = false;
@@ -475,7 +580,11 @@ function enabledData() {
 	document.getElementById('tahuntanam2').disabled = false;
 	document.getElementById('spbpabrik').disabled = false;
 	document.getElementById('spbId').disabled = false;
+	refreshSelect2('spbId');
 	document.getElementById('buahdikembalikan').disabled = false;
+	document.getElementById('pabriktujuan').disabled = false;
+	refreshSelect2('pabriktujuan');
+	document.getElementById('nodo').disabled = false;
 
 	var elements = document.querySelectorAll('[id^="dt_potongan_"]');
 	var jumlah = elements.length;
@@ -517,7 +626,17 @@ function cancelData() {
 	document.getElementById('brtBrshpmks').value = '';
 	document.getElementById('tahuntanam2').value = '';
 	document.getElementById('spbpabrik').value = '';
+	document.getElementById('buahdikembalikan').value = '0';
+	document.getElementById('pabriktujuan').value = '';
+	refreshSelect2('pabriktujuan');
 	document.getElementById('spbId').innerHTML = '';
+	refreshSelect2('spbId');
+	document.getElementById('tktkebun').value = '';
+	document.getElementById('notrans').value = '';
+	document.getElementById('nodo').innerHTML = '';
+	document.getElementById('datapotongan').innerHTML = '';
+	document.getElementById('listfiles').innerHTML = '';
+	document.getElementById('potKg').disabled = true;
 
 	var elements = document.querySelectorAll('[id^="dt_potongan_"]');
 	var jumlah = elements.length;
@@ -544,6 +663,7 @@ function loadData(num,tipe='html') {
 	param += '&tahuntanamsrc=' + ttsrc;
 	param += '&tgl_cari=' + tgl;
 	param += '&tgl_cari_sampai=' + tgl_sampai;
+	param += paramFilterBaru();
 	param += '&page=' + num;
 	if(tipe == 'excel'){
 		tipe_tampil = 'excel';
@@ -568,6 +688,7 @@ function loadData(num,tipe='html') {
 					alert(con.responseText);
 				} else {
 					document.getElementById('contain').innerHTML = con.responseText;
+					loadBadgeBelum();
 				}
 			} else {
 				busy_off();
@@ -589,7 +710,8 @@ function printFile(param, tujuan, title, ev) {
   }
 
 
-function fillField(tahuntanam2,spbpabrik,notransaksi, jammask2, jamklur, nokendaraan, supir, notiket, jumlahtandan1, beratmasuk, beratkeluar, beratbersih, jjgsortasi, kgpotsortas, nospb, tgl, nokontrak,nodo,pabriktujuan, beratmasukpmks,beratkeluarpmks,beratbersihpmks,tanggalpks,kgjual) {
+function fillField(tahuntanam2,spbpabrik,notransaksi, jammask2, jamklur, nokendaraan, supir, notiket, jumlahtandan1, beratmasuk, beratkeluar, beratbersih, jjgsortasi, kgpotsortas, nospb, tgl, nokontrak,nodo,pabriktujuan,buahdikembalikan, beratmasukpmks,beratkeluarpmks,beratbersihpmks,tanggalpks,kgjual) {
+	enabledData();
 	
 	document.getElementById('headher').style.display = "block";
 	document.getElementById('listData').style.display = "none";
@@ -626,16 +748,19 @@ function fillField(tahuntanam2,spbpabrik,notransaksi, jammask2, jamklur, nokenda
 	document.getElementById('nodo').innerHTML = "<option value="+nodo+" selected>"+nodo+"</option>";
 	document.getElementById('notiket').value = notiket;
 	document.getElementById('nmSupir').value = supir;
-	document.getElementById('jmlhJjg').value = jumlahtandan1;
-	document.getElementById('brtMsk').value = beratmasuk;
-	document.getElementById('brtKlr').value = beratkeluar;
-	document.getElementById('brtBrsh').value = beratbersih;
+	document.getElementById('jmlhJjg').value = fmtAngka(jumlahtandan1);
+	document.getElementById('brtMsk').value = fmtAngka(beratmasuk);
+	document.getElementById('brtKlr').value = fmtAngka(beratkeluar);
+	document.getElementById('brtBrsh').value = fmtAngka(beratbersih);
 	document.getElementById('JjgSortasi').value = jjgsortasi;
-	document.getElementById('potKg').value = kgpotsortas;
+	document.getElementById('potKg').value = fmtAngka(kgpotsortas);
 	document.getElementById('tgl').value = tgl;
 	document.getElementById('tahuntanam2').value = tahuntanam2;
 	document.getElementById('spbpabrik').value = spbpabrik;
 	document.getElementById('pabriktujuan').value = pabriktujuan;
+	document.getElementById('pabriktujuan').disabled = (document.getElementById('pabriktujuan').value != '');
+	refreshSelect2('pabriktujuan');
+	document.getElementById('buahdikembalikan').value = fmtAngka(buahdikembalikan);
 	if(tanggalpks=='00-00-0000'){
 		tanggalpks='';
 	}
@@ -660,7 +785,9 @@ function fillField(tahuntanam2,spbpabrik,notransaksi, jammask2, jamklur, nokenda
 					// document.getElementById('spbId').innerHTML = con.responseText;
 					data = con.responseText.split("####");
 					document.getElementById('spbId').innerHTML = data[0];
+					refreshSelect2('spbId');
 					document.getElementById('datapotongan').innerHTML = data[1];
+						aturPotKg();
 					loadfiles(nospb);
 				}
 			} else {
@@ -670,7 +797,7 @@ function fillField(tahuntanam2,spbpabrik,notransaksi, jammask2, jamklur, nokenda
 		}
 	}
 }
-function fillFieldTahunTanam(tahuntanam2,spbpabrik,notransaksi, jammask2, jamklur, nokendaraan, supir, notiket, jumlahtandan1, beratmasuk, beratkeluar, beratbersih, jjgsortasi, kgpotsortas, nospb, tgl, nokontrak,nodo, beratmasukpmks,beratkeluarpmks,beratbersihpmks,tanggalpks,kgjual) {
+function fillFieldTahunTanam(tahuntanam2,spbpabrik,notransaksi, jammask2, jamklur, nokendaraan, supir, notiket, jumlahtandan1, beratmasuk, beratkeluar, beratbersih, jjgsortasi, kgpotsortas, nospb, tgl, nokontrak,nodo, pabriktujuan,buahdikembalikan,beratbersihpmks,tanggalpks,kgjual) {
 	document.getElementById('headher').style.display = "block";
 	document.getElementById('listData').style.display = "none";
 	document.getElementById('notrans').value = notransaksi;
@@ -709,17 +836,21 @@ function fillFieldTahunTanam(tahuntanam2,spbpabrik,notransaksi, jammask2, jamklu
 	document.getElementById('nodo').innerHTML = "<option value="+nodo+" selected>"+nodo+"</option>";
 	document.getElementById('notiket').value = notiket;
 	document.getElementById('nmSupir').value = supir;
-	document.getElementById('jmlhJjg').value = jumlahtandan1;
-	document.getElementById('brtMsk').value = beratmasuk;
-	document.getElementById('brtKlr').value = beratkeluar;
-	document.getElementById('brtBrsh').value = beratbersih;
+	document.getElementById('jmlhJjg').value = fmtAngka(jumlahtandan1);
+	document.getElementById('brtMsk').value = fmtAngka(beratmasuk);
+	document.getElementById('brtKlr').value = fmtAngka(beratkeluar);
+	document.getElementById('brtBrsh').value = fmtAngka(beratbersih);
 	document.getElementById('JjgSortasi').value = jjgsortasi;
-	document.getElementById('potKg').value = kgpotsortas;
+	document.getElementById('potKg').value = fmtAngka(kgpotsortas);
 	document.getElementById('tgl').value = tgl;
 	document.getElementById('tahuntanam2').value = tahuntanam2;
 	document.getElementById('spbpabrik').value = spbpabrik;
+	document.getElementById('buahdikembalikan').value = fmtAngka(buahdikembalikan);
 
 	document.getElementById('kdKend').disabled = true;
+	document.getElementById('pabriktujuan').value = pabriktujuan;
+	document.getElementById('pabriktujuan').disabled = true;
+	refreshSelect2('pabriktujuan');
 	document.getElementById('nokontrak').disabled = true;
 	document.getElementById('nodo').disabled = true;
 	document.getElementById('notiket').disabled = true;
@@ -757,7 +888,9 @@ function fillFieldTahunTanam(tahuntanam2,spbpabrik,notransaksi, jammask2, jamklu
 					// document.getElementById('spbId').innerHTML = con.responseText;
 					data = con.responseText.split("####");
 					document.getElementById('spbId').innerHTML = data[0];
+					refreshSelect2('spbId');
 					document.getElementById('spbId').disabled = true;
+					refreshSelect2('spbId');
 					document.getElementById('datapotongan').innerHTML = data[1];
 					var elements = document.querySelectorAll('[id^="dt_potongan_"]');
 					var jumlah = elements.length;
@@ -783,7 +916,6 @@ function fillFieldTahunTanam(tahuntanam2,spbpabrik,notransaksi, jammask2, jamklu
 	}
 }
 function deleteData(notrans, nospb) {
-	deletefileall(notrans, nospb);
 	param = 'proses=deleteData' + '&notransaksi=' + notrans;
 	tujuan = 'kebun_slave_timbangke_eksternal.php';
 	if (confirm("Anda Yakin Ingin Menghapus?")) {
@@ -894,31 +1026,18 @@ function getberatbersih(){
 	document.getElementById('kgJual').value=hslbersh;
 }
 function getPotongan(){
+	var TotaljumlahPotongan = 0;
+	var prefix = 'dt_potongan_';
 	var elements = document.querySelectorAll('[id^="dt_potongan_"]');
-	var jumlah = elements.length;
-	var TotaljumlahPotongan = 0;  // Menginisialisasi variabel TotaljumlahPotongan
-	if(jumlah > 0){
-		for (var index = 1; index <= jumlah; index++) {
-			var jumlahPotongan = parseFloat(document.getElementById('dt_potongan_' + index).value) || 0;  // Mengubah nilai ke angka
-			TotaljumlahPotongan += jumlahPotongan;  // Menjumlahkan jumlahPotongan ke TotaljumlahPotongan
-		}
-	}else{
-		var elements = document.querySelectorAll('[id^="dt_edit_potongan_"]');
-		var jumlah = elements.length;
-		var TotaljumlahPotongan = 0;  // Menginisialisasi variabel TotaljumlahPotongan
-		for (var index = 1; index <= jumlah; index++) {
-			var jumlahPotongan = parseFloat(document.getElementById('dt_edit_potongan_' + index).value) || 0;  // Mengubah nilai ke angka
-			TotaljumlahPotongan += jumlahPotongan;  // Menjumlahkan jumlahPotongan ke TotaljumlahPotongan
-		}
+	if (elements.length == 0) {
+		prefix = 'dt_edit_potongan_';
+		elements = document.querySelectorAll('[id^="dt_edit_potongan_"]');
 	}
-
-	brtMsk = document.getElementById('brtMsk').value;
-	brtKlr = document.getElementById('brtKlr').value;
-	
-	bertbersih= parseInt(brtMsk) - parseInt(brtKlr);
-	potKg=document.getElementById('potKg').value = TotaljumlahPotongan;
-	hslbersh=parseInt(bertbersih)-parseInt(potKg);
-	document.getElementById('brtBrsh').value=hslbersh;
+	for (var index = 1; index <= elements.length; index++) {
+		TotaljumlahPotongan += angka(prefix + index);
+	}
+	document.getElementById('potKg').value = numberFormat(TotaljumlahPotongan, 0);
+	document.getElementById('brtBrsh').value = numberFormat(angka('brtMsk') - angka('brtKlr') - TotaljumlahPotongan, 0);
 }
 
 /*

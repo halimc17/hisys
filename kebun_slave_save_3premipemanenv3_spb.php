@@ -19,6 +19,8 @@ if(count($param)==0){
 $prdlist    =checkPostGet('prdlist','');
 $unitlist   =checkPostGet('unitlist','');
 $afdlist    =checkPostGet('afdlist','');
+$notranslist=checkPostGet('notranslist','');
+$statuslist =checkPostGet('statuslist','');
 $tgl1list   =checkPostGet('tgl1list','');
 $tgl2list   =checkPostGet('tgl2list','');
 $tgl1list   =($tgl1list!='') ? tanggalsystemn($tgl1list) : '';
@@ -1463,6 +1465,15 @@ switch($proses){
 		    "kodeaplikasi='PNN' and jurnalid='PNN03'");
 		$resParam3 = fetchData($queryParam3);
 
+		#filter No Transaksi dan Status Posting
+		if($notranslist!=''){
+			$where.=" and notransaksi like '%".$notranslist."%' ";
+		}
+		if($statuslist=='1'){
+			$where.=" and posting='1' ";
+		}elseif($statuslist=='0'){
+			$where.=" and (posting<>'1' or posting is null) ";
+		}
         $strcount = "SELECT COUNT(DISTINCT notransaksi) as jlh FROM ".$dbname.".kebun_3premipemanen where 1=1 ".$where."";
         $rescount = fetchdata($strcount);
 		$jlhbrs = $rescount[0]['jlh'];
@@ -1672,6 +1683,15 @@ switch($proses){
 			$wh.=" and b.tanggal between '" . $tgl1list . "' and '" . $tgl2list . "' ";
 		}
 
+		#filter No Transaksi dan Status Posting
+		if($notranslist!=''){
+			$where.=" and notransaksi like '%".$notranslist."%' ";
+		}
+		if($statuslist=='1'){
+			$where.=" and posting='1' ";
+		}elseif($statuslist=='0'){
+			$where.=" and (posting<>'1' or posting is null) ";
+		}
 		$kodeJurnal = 'PNN01';
 		$queryParam = selectQuery($dbname,'keu_5parameterjurnal','noakunkredit,noakundebet',
 			"kodeaplikasi='PNN' and jurnalid='".$kodeJurnal."'");
@@ -1809,6 +1829,33 @@ switch($proses){
 			$couex.="</tbody>";
 		$couex .= "</table>";
 
+		#kop: logo PT, nama PT, judul, filter, dan waktu cetak
+		$unitcetak=($unitlist!='') ? $unitlist : $_SESSION['empl']['lokasitugas'];
+		$ptkode=getindukPT($unitcetak);
+		$hd=setheadreport($ptkode,$ptkode);
+		$logourl='';
+		if(file_exists($hd['logo'])){
+			$skema=(isset($_SERVER['HTTPS']) and $_SERVER['HTTPS']!='off') ? 'https' : 'http';
+			$logourl=$skema."://".@$_SERVER['HTTP_HOST'].rtrim(dirname(@$_SERVER['SCRIPT_NAME']),'/')."/".$hd['logo'];
+		}
+		$infocetak="Periode: ".($prdlist!='' ? $prdlist : 'Seluruhnya')." | Unit: ".($unitlist!='' ? $unitlist : 'Seluruhnya')." | Divisi: ".($afdlist!='' ? $afdlist : 'Seluruhnya');
+		if($tgl1list!='' && $tgl2list!=''){
+			$infocetak.=" | Tanggal: ".tanggalnormal($tgl1list)." s/d ".tanggalnormal($tgl2list);
+		}
+		if($notranslist!=''){
+			$infocetak.=" | No Transaksi: ".$notranslist;
+		}
+		if($statuslist!=''){
+			$infocetak.=" | Status: ".($statuslist=='1' ? 'Posted' : 'Belum Posting');
+		}
+		$couex="<table>
+			<tr><td colspan='10' height='70' style='height:52pt'>".($logourl!='' ? "<img src='".$logourl."' height='60'>" : "")."</td></tr>
+			<tr><td colspan='10'><b>".$hd['nama']."</b></td></tr>
+			<tr><td colspan='10'><b>DAFTAR PREMI PEMANEN (LIST DATA)</b></td></tr>
+			<tr><td colspan='10'>".$infocetak."</td></tr>
+			<tr><td colspan='10'>Dicetak: ".date('d-m-Y H:i:s')." oleh ".$_SESSION['empl']['name']."</td></tr>
+		</table><br>".$couex;
+
 		$tglSkrg=date("YmdHis");
 		$nop_="List_Data_Premi_Pemanen_".$tglSkrg;
 		if(strlen($couex)>0){
@@ -1865,6 +1912,7 @@ switch($proses){
 		
 		
 		
+		$where = "";
 		if($_SESSION['empl']['tipelokasitugas']=='HOLDING'){
 			$where = "";
 		} else if ($_SESSION['empl']['tipelokasitugas']=='KANWIL'){
@@ -1880,6 +1928,15 @@ switch($proses){
 			$where.=" and kodeorg='".$param['kodeorg']."'";
 		}
 
+		#filter No Transaksi dan Status Posting
+		if($notranslist!=''){
+			$where.=" and notransaksi like '%".$notranslist."%' ";
+		}
+		if($statuslist=='1'){
+			$where.=" and posting='1' ";
+		}elseif($statuslist=='0'){
+			$where.=" and (posting<>'1' or posting is null) ";
+		}
 		$nmkary=makeOption($dbname,'datakaryawan','karyawanid,namakaryawan');
 		
 		$str = "select *  from " . $dbname . ".kebun_3premipemanen where 1=1 and periode='".$param['periode']."' ".$where.""; #exit("error$str");
@@ -1891,7 +1948,8 @@ switch($proses){
 		$col     = array("TAHAP","JENIS","DATA");
 		$val     = array("JUMLAH");
 		foreach($res as $bar){
-			$data[]=array(
+			#kolom disesuaikan dengan struktur kebun_3premipemanen saat ini (hasil proses premi pemanen v3 SPB)
+			$base=array(
 				$bar['notransaksi'],
 				$bar['nospb'],
 				$bar['posting'],
@@ -1903,186 +1961,29 @@ switch($proses){
 				$bar['tanggalpanen'],
 				$nmorg[$bar['blok']],
 				$bar['tahuntanam'],
-				$bar['status'],
+				'',
 				$nmkary[$bar['mandor']],
 				$nmkary[$bar['kerani']],
 				$nikkar[$bar['karyawanid']],
-				$nmkary[$bar['karyawanid']],
-				'RP',
-				'DENDA',
-				$bar['denda']*(-1)
+				$nmkary[$bar['karyawanid']]
 			);
-			$data[]=array(
-				$bar['notransaksi'],
-				$bar['nospb'],
-				$bar['posting'],
-				$bar['jurnal'],
-				$bar['kodeorg'],
-				$bar['divisi'],
-				$bar['periode'],
-				$bar['tahap'],
-				$bar['tanggalpanen'],
-				$nmorg[$bar['blok']],
-				$bar['tahuntanam'],
-				$bar['status'],
-				$nmkary[$bar['mandor']],
-				$nmkary[$bar['kerani']],
-				$nikkar[$bar['karyawanid']],
-				$nmkary[$bar['karyawanid']],
-				'RP',
-				'TAMBAHAN',
-				$bar['tambahan']
+			#jumlah RP: KEHADIRAN + RP LB + RP BRD + DENDA = total premi
+			$items=array(
+				array('RP','DENDA',$bar['dendapanen']*(-1)),
+				array('RP','KEHADIRAN',($bar['rphkbuahbesar']+$bar['rphkbuahkecil'])-($bar['rphkbuahbesarpot']+$bar['rphkbuahkecilpot'])),
+				array('RP','RP BRD',$bar['rpbrondolan']),
+				array('RP','RP LB',$bar['rplbbuahbesar']+$bar['rplbbuahkecil']),
+				array('KG','KG LB',$bar['lbbuahbesar']+$bar['lbbuahkecil']),
+				array('KG','BRD (Kg)',$bar['brondolan']),
+				array('KG','KG',$bar['kgbuahbesar']+$bar['kgbuahkecil']),
+				array('JJG','JJG',$bar['jjgbuahbesar']+$bar['jjgbuahkecil'])
 			);
-			$data[]=array(
-				$bar['notransaksi'],
-				$bar['nospb'],
-				$bar['posting'],
-				$bar['jurnal'],
-				$bar['kodeorg'],
-				$bar['divisi'],
-				$bar['periode'],
-				$bar['tahap'],
-				$bar['tanggalpanen'],
-				$nmorg[$bar['blok']],
-				$bar['tahuntanam'],
-				$bar['status'],
-				$nmkary[$bar['mandor']],
-				$nmkary[$bar['kerani']],
-				$nikkar[$bar['karyawanid']],
-				$nmkary[$bar['karyawanid']],
-				'RP',
-				'KEHADIRAN',
-				$bar['kehadiran']
-			);
-			$data[]=array(
-				$bar['notransaksi'],
-				$bar['nospb'],
-				$bar['posting'],
-				$bar['jurnal'],
-				$bar['kodeorg'],
-				$bar['divisi'],
-				$bar['periode'],
-				$bar['tahap'],
-				$bar['tanggalpanen'],
-				$nmorg[$bar['blok']],
-				$bar['tahuntanam'],
-				$bar['status'],
-				$nmkary[$bar['mandor']],
-				$nmkary[$bar['kerani']],
-				$nikkar[$bar['karyawanid']],
-				$nmkary[$bar['karyawanid']],
-				'RP',
-				'RP BRD',
-				$bar['rpbrd']
-			);
-			$data[]=array(
-				$bar['notransaksi'],
-				$bar['nospb'],
-				$bar['posting'],
-				$bar['jurnal'],
-				$bar['kodeorg'],
-				$bar['divisi'],
-				$bar['periode'],
-				$bar['tahap'],
-				$bar['tanggalpanen'],
-				$nmorg[$bar['blok']],
-				$bar['tahuntanam'],
-				$bar['status'],
-				$nmkary[$bar['mandor']],
-				$nmkary[$bar['kerani']],
-				$nikkar[$bar['karyawanid']],
-				$nmkary[$bar['karyawanid']],
-				'RP',
-				'RP LB',
-				$bar['rplb1']
-			);
-			$data[]=array(
-				$bar['notransaksi'],
-				$bar['nospb'],
-				$bar['posting'],
-				$bar['jurnal'],
-				$bar['kodeorg'],
-				$bar['divisi'],
-				$bar['periode'],
-				$bar['tahap'],
-				$bar['tanggalpanen'],
-				$nmorg[$bar['blok']],
-				$bar['tahuntanam'],
-				$bar['status'],
-				$nmkary[$bar['mandor']],
-				$nmkary[$bar['kerani']],
-				$nikkar[$bar['karyawanid']],
-				$nmkary[$bar['karyawanid']],
-				'KG',
-				'KG LB',
-				$bar['kglb1']
-			);
-			$data[]=array(
-				$bar['notransaksi'],
-				$bar['nospb'],
-				$bar['posting'],
-				$bar['jurnal'],
-				$bar['kodeorg'],
-				$bar['divisi'],
-				$bar['periode'],
-				$bar['tahap'],
-				$bar['tanggalpanen'],
-				$nmorg[$bar['blok']],
-				$bar['tahuntanam'],
-				$bar['status'],
-				$nmkary[$bar['mandor']],
-				$nmkary[$bar['kerani']],
-				$nikkar[$bar['karyawanid']],
-				$nmkary[$bar['karyawanid']],
-				'KG',
-				'POT BRD (Kg)',
-				$bar['potbrdkg']
-			);
-			$data[]=array(
-				$bar['notransaksi'],
-				$bar['nospb'],
-				$bar['posting'],
-				$bar['jurnal'],
-				$bar['kodeorg'],
-				$bar['divisi'],
-				$bar['periode'],
-				$bar['tahap'],
-				$bar['tanggalpanen'],
-				$nmorg[$bar['blok']],
-				$bar['tahuntanam'],
-				$bar['status'],
-				$nmkary[$bar['mandor']],
-				$nmkary[$bar['kerani']],
-				$nikkar[$bar['karyawanid']],
-				$nmkary[$bar['karyawanid']],
-				'KG',
-				'KG',
-				$bar['kgwb']
-			);
-			$data[]=array(
-				$bar['notransaksi'],
-				$bar['nospb'],
-				$bar['posting'],
-				$bar['jurnal'],
-				$bar['kodeorg'],
-				$bar['divisi'],
-				$bar['periode'],
-				$bar['tahap'],
-				$bar['tanggalpanen'],
-				$nmorg[$bar['blok']],
-				$bar['tahuntanam'],
-				$bar['status'],
-				$nmkary[$bar['mandor']],
-				$nmkary[$bar['kerani']],
-				$nikkar[$bar['karyawanid']],
-				$nmkary[$bar['karyawanid']],
-				'JJG',
-				'JJG',
-				$bar['jjgpanen']
-			);
-			
+			foreach($items as $it){
+				$data[]=array_merge($base,$it);
+			}
 		}
-		
+
+
 		echo json_encode($data)."####".json_encode($row)."####".json_encode($col)."####".json_encode($val)."####".json_encode($datasort);
 		
 	break;

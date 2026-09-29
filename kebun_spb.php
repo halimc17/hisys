@@ -40,7 +40,7 @@ OPEN_BOX('','<span class=judul>'.getMenu('kebun_spb').'</span>');
 ?>
 <div id="action_list">
 <?php
-$optPeriode="";
+$optPeriode="<option value=''>Seluruhnya</option>";
 $sql="select distinct(substr(tanggal,1,7)) as periode from ".$dbname.".kebun_spbht where kodeorg IN (".getOrgDetail(2).") order by periode desc";
 $query=$owlPDO->query($sql) or die(print " Gagal: ".PDOException::getMessage());
 $query->setFetchMode(PDO::FETCH_ASSOC);
@@ -48,7 +48,7 @@ while($res=$query->fetch()){
 	$optPeriode.="<option value=".$res['periode'].">".$res['periode']."</option>"; 
 }
 
-$optorg = "<option value=''>" . $_SESSION['lang']['pilihdata'] . "</option>";
+$optorg = "<option value=''>Seluruhnya</option>";
 $sql = "SELECT kodeorganisasi,namaorganisasi FROM " . $dbname . ".organisasi where length(kodeorganisasi)=6 and tipe='AFDELING' and induk IN (".getOrgDetail(2).") ";
 $qry = $owlPDO->query($sql) or die(print " Gagal: " . PDOException::getMessage());
 $qry->setFetchMode(PDO::FETCH_ASSOC);
@@ -58,7 +58,7 @@ while ($bar = $qry->fetch()) {
 
 
 $sql="select kodeorganisasi,namaorganisasi from ".$dbname.".organisasi where kodeorganisasi IN (".getOrgDetail(2).")";
-$optOrg="";
+$optOrg="<option value=''>Seluruhnya</option>";
 $query=$owlPDO->query($sql) or die(print " Gagal: ".PDOException::getMessage());
 $query->setFetchMode(PDO::FETCH_ASSOC);
 while($res=$query->fetch()){	
@@ -84,22 +84,38 @@ echo"<table cellspacing=1 border=0>
         <td align=center style='width:100px;cursor:pointer;' onclick=donwloadlist()>
            <img class=delliconBig src=images/download.png title='Download Data Mobile'><br>Mobile Data
         </td>
-        <td><fieldset><legend>".$_SESSION['lang']['find']."</legend>"; 
-		echo $_SESSION['lang']['nospb']."   : <input type=text id=txtsearch size=18 style=width:125px; maxlength=30 class=myinputtext onkeypress='enterkey(event,loadData)'>&nbsp;";
-                echo $_SESSION['lang']['noreferensi']."   : <input type=text id=referensisearch size=18 style=width:125px; maxlength=30 class=myinputtext onkeypress='enterkey(event,loadData)'>&nbsp;";
-
-		echo $_SESSION['lang']['divisi']."  : <select class=select2 id=divsch style=width:125px; onchange=\"loadData(0)\">" . $optorg . "</select>&nbsp;";
-		echo $_SESSION['lang']['tanggal']." : <input type=text class=myinputtext id=tgl_cari onmousemove=setCalendar(this.id) onkeypress=return false;  size=9 maxlength=10 readonly/>&nbsp;";
-		echo $_SESSION['lang']['status']."  : <select class=select2 id=status_spb style=width:125px; onchange=\"loadData(0)\">" . $optStatus . "</select>&nbsp;";
-
-		echo"<button class=mybutton onclick=loadData(0)>".$_SESSION['lang']['find']."</button>";
-echo"</fieldset></td>
-         <td><fieldset><legend>".$_SESSION['lang']['exportData']."</legend>"; 
-		echo $_SESSION['lang']['periode']." : <select class=select2 id=periode nama=periode>".$optPeriode."</select>&nbsp;";
-		echo $_SESSION['lang']['kodeorg']." : <select class=select2 id=unitOrg name=unitOrg>".$optOrg."</select>";
-		echo"&nbsp;<img onclick=dataKeExcel(event,'kebun_sbp_excel.php') src=images/excel.jpg class=zImgBtn title='MS.Excel'> 
-         <img onclick=dataKePDF(event) title='PDF' class=zImgBtn src=images/pdf.jpg>";
-echo"</fieldset></td>
+        <td><fieldset><legend>".$_SESSION['lang']['find']."</legend>
+		<table cellspacing=0 cellpadding=2 border=0>
+		<tr>
+			<td align=right style='width:95px;'>".$_SESSION['lang']['nospb']." :</td>
+			<td><input type=text id=txtsearch size=18 style=width:150px; maxlength=30 class=myinputtext onkeypress='enterkey(event,loadData)'></td>
+			<td align=right style='width:95px;'>".$_SESSION['lang']['noreferensi']." :</td>
+			<td><input type=text id=referensisearch size=18 style=width:150px; maxlength=30 class=myinputtext onkeypress='enterkey(event,loadData)'></td>
+			<td align=right style='width:95px;'>".$_SESSION['lang']['kodeorg']." :</td>
+			<td><select class=select2 id=unitOrg name=unitOrg style=width:150px; onchange=\"loadData(0)\">".$optOrg."</select></td>
+			<td align=right style='width:95px;'>".$_SESSION['lang']['divisi']." :</td>
+			<td><select class=select2 id=divsch style=width:150px; onchange=\"loadData(0)\">" . $optorg . "</select></td>
+		</tr>
+		<tr>
+			<td align=right style='width:95px;'>".$_SESSION['lang']['periode']." :</td>
+			<td><select class=select2 id=periode nama=periode style=width:150px; onchange=\"loadData(0)\">".$optPeriode."</select></td>
+			<td align=right style='width:95px;'>".$_SESSION['lang']['tanggal']." :</td>
+			<td><input type=text class=myinputtext id=tgl_cari onmousemove=setCalendar(this.id) onkeypress=return false; size=9 maxlength=10 style=width:150px; readonly/></td>
+			<td align=right style='width:95px;'>".$_SESSION['lang']['status']." :</td>
+			<td><select class=select2 id=status_spb style=width:150px; onchange=\"loadData(0)\">" . $optStatus . "</select></td>
+			<td align=right style='width:95px;'>Status Posting :</td>
+			<td><select class=select2 id=postsch style=width:150px; onchange=\"loadData(0)\"><option value=''>Seluruhnya</option><option value='1'>Posted</option><option value='0'>Belum Posting</option></select></td>
+		</tr>
+		<tr>
+			<td></td>
+			<td colspan=7>
+				<button class=mybutton onclick=loadData(0)>".$_SESSION['lang']['find']."</button>
+				<button class=mybutton onclick=dataKeExcel(event,'kebun_spb_excel.php')>".$_SESSION['lang']['excel']."</button>
+				<button class=mybutton onclick=dataKePDF(event)>PDF</button>
+			</td>
+		</tr>
+		</table>
+		</fieldset></td>
          </tr>
          </table> "; 
 ?>
@@ -129,7 +145,7 @@ CLOSE_BOX();
 <th align=center style=max-width:80px ><?php echo $_SESSION['lang']['kgwb']." (Setelah Sortasi)" ?></th>
 <th align=center ><?php echo $_SESSION['lang']['tkbm']?></th>
 <th align=center ><?php echo $_SESSION['lang']['updateby']?></th>
-<th align=center colspan=8>Action</th>
+<th align=center colspan=<?php echo (getindukPT($_SESSION['empl']['lokasitugas']) != 'PPP') ? 8 : 7; ?>>Action</th>
 </tr>
 </thead>
 <tbody id="contain">

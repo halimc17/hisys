@@ -1,6 +1,8 @@
 function displayList() {
 	document.getElementById('karyawansch').value = '';
 	document.getElementById('tglsch').value = '';
+	document.getElementById('unitsch').value = '';
+	document.getElementById('periodesch').value = document.getElementById('periodesch').getAttribute('data-default');
 	document.getElementById('listData').style.display = 'block';
 	document.getElementById('header').style.display = 'none';
 	document.getElementById('detail').style.display = 'none';
@@ -17,12 +19,20 @@ function getPage() {
 function loaddata(page) {
 	karyawansch = document.getElementById('karyawansch').value;
 	tglsch = document.getElementById('tglsch').value;
+	unitsch = document.getElementById('unitsch').value;
+	periodesch = document.getElementById('periodesch').value;
 	param = 'method=loaddata&page=' + page;
 	if (karyawansch != '') {
-		param += '&karyawansch=' + karyawansch;
+		param += '&karyawansch=' + encodeURIComponent(karyawansch);
 	}
 	if (tglsch != '') {
-		param += '&tglsch=' + tglsch;
+		param += '&tglsch=' + encodeURIComponent(tglsch);
+	}
+	if (unitsch != '') {
+		param += '&unitsch=' + encodeURIComponent(unitsch);
+	}
+	if (periodesch != '') {
+		param += '&periodesch=' + encodeURIComponent(periodesch);
 	}
 	tujuan = 'kebun_slave_mutuhancakpanen.php';
 	post_response_text(tujuan, param, respog);
@@ -263,20 +273,15 @@ function savedetail(row,mode) {
 	jjgbuahkecilx = document.getElementById('jjgbuahkecilx'+row).innerHTML;
 	totaljjgx = document.getElementById('totaljjgx'+row).innerHTML;
 
-	penalti1 = document.getElementById('penaltix1_'+row).value;
-	penalti2 = document.getElementById('penaltix2_'+row).value;
-	penalti3 = document.getElementById('penaltix3_'+row).value;
-	penalti4 = document.getElementById('penaltix4_'+row).value;
-	penalti5 = document.getElementById('penaltix5_'+row).value;
-	penalti6 = document.getElementById('penaltix6_'+row).value;
-	penalti7 = document.getElementById('penaltix7_'+row).value;
-	penalti8 = document.getElementById('penaltix8_'+row).value;
-	penalti9 = document.getElementById('penaltix9_'+row).value;
-	penalti10 = document.getElementById('penaltix10_'+row).value;
-	penalti11 = document.getElementById('penaltix11_'+row).value;
-	penalti12 = document.getElementById('penaltix12_'+row).value;
-	// penalti13 = document.getElementById('penaltix13_'+row).value;
-	
+	penaltiParam = '';
+	var inputs = document.querySelectorAll("[id^='penaltix'][id$='_" + row + "']");
+	for (var i = 0; i < inputs.length; i++) {
+		var m = inputs[i].id.match(/^penaltix(\d+)_/);
+		if (m) {
+			penaltiParam += '&penalti' + m[1] + '=' + encodeURIComponent(inputs[i].value);
+		}
+	}
+
 	method = document.getElementById('method').value;
 
 	param = 'kodeorg=' + blokx;
@@ -287,19 +292,7 @@ function savedetail(row,mode) {
 	param += '&jjgbuahbesar=' + jjgbuahbesarx;
 	param += '&jjgbuahkecil=' + jjgbuahkecilx;
 
-	param += '&penalti1=' + penalti1;
-	param += '&penalti2=' + penalti2;
-	param += '&penalti3=' + penalti3;
-	param += '&penalti4=' + penalti4;
-	param += '&penalti5=' + penalti5;
-	param += '&penalti6=' + penalti6;
-	param += '&penalti7=' + penalti7;
-	param += '&penalti8=' + penalti8;
-	param += '&penalti9=' + penalti9;
-	param += '&penalti10=' + penalti10;
-	param += '&penalti11=' + penalti11;
-	param += '&penalti12=' + penalti12;
-	// param += '&penalti13=' + penalti13;
+	param += penaltiParam;
 
 	if (mode == 'edit') {
 		param += '&mode=' + mode;
@@ -332,8 +325,9 @@ function deletedetail(row,mode) {
 	kodeorg = document.getElementById('kodeorgd'+row).innerHTML;
 	tgl = document.getElementById('tgld'+row).innerHTML;
 	nik = document.getElementById('nikd'+row).innerHTML;
-	param = 'method=deletedetail'; 
-	param += '&kodeorg=' + kodeorg + '&tgl2=' + tgl + '&nikpemanen=' + nik;
+	nikmandor = document.getElementById('namamandor').value;
+	param = 'method=deletedetail';
+	param += '&kodeorg=' + kodeorg + '&tgl2=' + tgl + '&nikpemanen=' + nik + '&nik=' + nikmandor;
 	tujuan = 'kebun_slave_mutuhancakpanen.php';
 	
 	post_response_text(tujuan, param, respog);
@@ -356,4 +350,33 @@ function deletedetail(row,mode) {
 			}
 		}
 	}
+}
+
+function exportParam(method) {
+	param = 'method=' + method;
+	karyawansch = document.getElementById('karyawansch').value;
+	tglsch = document.getElementById('tglsch').value;
+	unitsch = document.getElementById('unitsch').value;
+	periodesch = document.getElementById('periodesch').value;
+	if (karyawansch != '') {
+		param += '&karyawansch=' + encodeURIComponent(karyawansch);
+	}
+	if (tglsch != '') {
+		param += '&tglsch=' + encodeURIComponent(tglsch);
+	}
+	if (unitsch != '') {
+		param += '&unitsch=' + encodeURIComponent(unitsch);
+	}
+	if (periodesch != '') {
+		param += '&periodesch=' + encodeURIComponent(periodesch);
+	}
+	return param;
+}
+
+function exportPdf() {
+	window.open('kebun_slave_mutuhancakpanen.php?' + exportParam('pdf'), '_blank');
+}
+
+function exportExcel() {
+	window.location.href = 'kebun_slave_mutuhancakpanen.php?' + exportParam('excel');
 }

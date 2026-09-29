@@ -2,6 +2,7 @@
 require_once('master_validation.php');
 include('lib/nangkoelib.php');
 echo open_body();
+require_once('lib/zSelect2.php');
 ?>
 <script language=javascript src=js/zTools.js></script>
 <script language=javascript1.2 src='js/tool_admin.js?v=<?php echo time(); ?>'></script>
@@ -9,6 +10,7 @@ echo open_body();
 
 $arr = "##listTransaksi##pilUn_1##unitId##method";
 include('master_mainMenu.php');
+echo "<script language=javascript src=js/zSelect2.js?ver=1></script>";
 
 ##Jenis Transaksi##
 $opt = "<option value=''>" . $_SESSION['lang']['pilihdata'] . "</option>";
@@ -16,7 +18,7 @@ $opt = "<option value=''>" . $_SESSION['lang']['pilihdata'] . "</option>";
 $pil = array(
 	"1" => $_SESSION['lang']['kasbank'] . " Menghapus nomor voucher (Keuangan)",
 	"2" => 'Kasir  Menghapus nomor voucher (Keuangan)',
-	"3" => "BAPP (Kontrak SPK)",
+	// "3" => "BAPP (Kontrak SPK)", #dinonaktifkan: unposting BAPP dipindah ke halaman BAPP Kontraktor
 	"4" => "BKM Rawat / " . $_SESSION['lang']['panen'] . " (Kebun)",
 	"5" => $_SESSION['lang']['traksi'] . "",
 	"6" => "Tagihan / Invoice Pembelian (Keuangan)",
@@ -36,7 +38,7 @@ $pil = array(
 	"27" => "Harga Jual TBS (Sales)",
 	"28" => "Transfer Produk (Pabrik/Bulking)",
 	"29" => $_SESSION['lang']['jurnalmemo'] . " (Keuangan)",
-	"30" => "BAPP (Per Termin)",
+	// "30" => "BAPP (Per Termin)", #dinonaktifkan: unposting BAPP dipindah ke halaman BAPP Kontraktor
 	"31" => "Upload Absensi HO (SDM)",
 	"32" => "Surat Peringatan (SDM)",
 	"33" => "Pengajuan Service (Traksi)",
@@ -71,15 +73,15 @@ while ($rUnit = $qUnit->fetch()) {
 }
 
 ##Form Unposting##
-$frm[0] = "<table>
-	<tr>
-		<td valign=top>
-			<fieldset style=width:350px;>
+$frm[0] = "<div style='display:flex;align-items:stretch'>
+	<div style='padding-right:14px'>
+			<fieldset style='width:420px;box-sizing:border-box'>
 			<legend>Unposting</legend>
-			<table>
+			<table style='width:100%'>
+				<colgroup><col style='width:95px'><col></colgroup>
 				<tr>
-					<td>" . $_SESSION['lang']['notransaksi'] . "</td>
-					<td><textarea id=listTransaksi name=listTransaksi></textarea></td>
+					<td valign=top>" . $_SESSION['lang']['notransaksi'] . "</td>
+					<td><textarea id=listTransaksi name=listTransaksi style='width:100%;height:80px;box-sizing:border-box;font-family:inherit'></textarea></td>
 				</tr>
 				<tr hidden>
 					<td>" . $_SESSION['lang']['unit'] . "</td>
@@ -90,7 +92,7 @@ $frm[0] = "<table>
 				<tr>
 					<td>" . $_SESSION['lang']['jenis'] . "</td>
 					<td>
-						<select id=pilUn_1 style=width:150px onchange=getInfo()>" . $opt . "</select>
+						<select class='select2' id=pilUn_1 style='width:100%' onchange=getInfo()>" . $opt . "</select>
 					</td>
 				</tr>
 				<tr>
@@ -150,35 +152,37 @@ if ($_SESSION['empl']['bagian'] == "IT") {
 }
 
 ##LIST GUDANG##
-$str = "select  kodeorganisasi from " . $dbname . ".organisasi where tipe not like '%GUDANG%'  and length(kodeorganisasi)=4 order by kodeorganisasi";
+#unit sesuai detail akses user, dengan nama unit
+$str = "select kodeorganisasi,namaorganisasi from " . $dbname . ".organisasi where tipe not like '%GUDANG%'  and length(kodeorganisasi)=4 and kodeorganisasi IN (" . getOrgDetail(2) . ") order by kodeorganisasi";
 $res = $owlPDO->query($str) or die(print " Gagal: " . PDOException::getMessage());
 $res->setFetchMode(PDO::FETCH_OBJ);
-$optOpenClose1 = "<option value=''></option>";
+$optOpenClose1 = "<option value=''>" . $_SESSION['lang']['pilihdata'] . "</option>";
 while ($bar = $res->fetch()) {
-	$optOpenClose1 .= "<option value='" . $bar->kodeorganisasi . "'>" . $bar->kodeorganisasi . "</option>";
+	$optOpenClose1 .= "<option value='" . $bar->kodeorganisasi . "'>" . $bar->kodeorganisasi . " - " . $bar->namaorganisasi . "</option>";
 } //<select id=openclose><option value='OPEN'>Open</option><option value='CLOSE'>Close</option></select>
-$frm[0] .= "<table>
-<div style=clear:both></div>
-	<fieldset>
+$frm[0] .= "<div style=clear:both></div>
+	<fieldset style='width:420px;box-sizing:border-box;margin-top:10px'>
 	<legend>Open Periode For Accounting</legend>
-		<select id=openclose><option value='OPEN'>Open</option></select>
-        Unit:<select id=unitopenclose onchange=getPeriode(this.options[this.selectedIndex].value)>" . $optOpenClose1 . "</select>
-        From<span id=periodeopenclose></span>
-</table>
-<button class=mybutton onclick=prosesDong() id=buttonDong style='display:none;'>Proses!</button>
-</fieldset>";
+	<table style='width:100%'>
+		<colgroup><col style='width:95px'><col></colgroup>
+		<tr><td>Action</td><td><select class='select2' id=openclose style='width:100%'><option value='OPEN'>Open</option></select></td></tr>
+		<tr><td>Unit</td><td><select class='select2' id=unitopenclose style='width:100%' onchange=getPeriode(this.options[this.selectedIndex].value)>" . $optOpenClose1 . "</select></td></tr>
+		<tr><td>From</td><td><span id=periodeopenclose style='display:block;width:100%'></span></td></tr>
+		<tr><td></td><td><button class=mybutton onclick=prosesDong() id=buttonDong style='display:none;margin-top:4px'>Proses!</button></td></tr>
+	</table>
+	</fieldset>";
 
-$frm[0] .= "<table>
-<div style=clear:both></div>
-	<fieldset>
+$frm[0] .= "<div style=clear:both></div>
+	<fieldset style='width:420px;box-sizing:border-box;margin-top:10px'>
 	<legend>Open Periode For Closing Bank</legend>
-		<select id=openclosebank><option value='OPEN'>Open</option></select>
-        Unit:<select id=unitopenclosebank onchange=getPeriodebank(this.options[this.selectedIndex].value)>" . $optOpenClose1 . "</select>
-        From<span id=periodeopenclosebank></span>
-</table>
-<button class=mybutton onclick=prosesbank() id=buttonbank style='display:none;'>Proses</button>
-</fieldset>";
-
+	<table style='width:100%'>
+		<colgroup><col style='width:95px'><col></colgroup>
+		<tr><td>Action</td><td><select class='select2' id=openclosebank style='width:100%'><option value='OPEN'>Open</option></select></td></tr>
+		<tr><td>Unit</td><td><select class='select2' id=unitopenclosebank style='width:100%' onchange=getPeriodebank(this.options[this.selectedIndex].value)>" . $optOpenClose1 . "</select></td></tr>
+		<tr><td>From</td><td><span id=periodeopenclosebank style='display:block;width:100%'></span></td></tr>
+		<tr><td></td><td><button class=mybutton onclick=prosesbank() id=buttonbank style='display:none;margin-top:4px'>Proses</button></td></tr>
+	</table>
+	</fieldset>";
 ##Tipe Transaksi Gudang##
 $optj = "<option value=''>" . $_SESSION['lang']['pilihdata'] . "</option>";
 $optjen = array("1" => $_SESSION['lang']['penerimaanbarang'], "3" => $_SESSION['lang']['terimamutasi'], "5" => $_SESSION['lang']['pengeluaranbarang'], "7" => $_SESSION['lang']['mutasi']);
@@ -208,10 +212,10 @@ $frm[0] .= "<fieldset style='display:none'><legend>Unposting Warehouse</legend>
 <button class=mybutton id=tmblDt onclick=saveFranco2('tool_slave_admin','" . $arr2 . "')>" . $_SESSION['lang']['proses'] . "</button>
 </fieldset><input type=hidden id=method3 value=getData2 />";
 
-$frm[0] .= "</td>
-	<td valign=top>
-		<fieldset style=width:350px;><legend>" . $_SESSION['lang']['info'] . "</legend><div id=infoTip style=align:justify><script>getInfo()</script>";
-$frm[0] .= "</div></fieldset></td></tr></table>";
+$frm[0] .= "</div>
+	<div style='flex:0 0 420px'>
+		<fieldset style='width:420px;height:100%;box-sizing:border-box'><legend>" . $_SESSION['lang']['info'] . "</legend><div id=infoTip style=align:justify><script>getInfo()</script>";
+$frm[0] .= "</div></fieldset></div></div>";
 
 $frm[0] .= "<table><tr></td>";
 $frm[0] .= "<div id=listData style=display:none>";

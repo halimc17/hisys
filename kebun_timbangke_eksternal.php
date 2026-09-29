@@ -19,6 +19,7 @@ function add_new_data(){
 }
 nmTmblDone='<?php echo $_SESSION['lang']['done']?>';
 nmTmblCancel='<?php echo $_SESSION['lang']['cancel']?>';
+periodeDefault='<?php echo date('Y-m'); ?>';
 </script>
 <script language="javascript" src="js/kebun_timbangke_eksternal.js?v=<?php echo time(); ?>"></script>
 <input type="hidden" id="proses" name="proses" value="insert"  />
@@ -33,11 +34,27 @@ $res = fetchData($sql);
 
 # PKS
 $optPks="<option value=''>Pilih Data</option>";
+$optTujuanSrc="<option value=''>Seluruhnya</option>";
 $iPks="select distinct b.* from ".$dbname.".pmn_4komoditi a left join ".$dbname.".pmn_4customer b ON a.kodecustomer=b.kodecustomer where a.kodebarang='40000003'  and b.kodecustomer is not null"; 
 $nPks=$owlPDO->query($iPks) or die(print " Gagal: ".PDOException::getMessage());
 $nPks->setFetchMode(PDO::FETCH_ASSOC);
 while($dPks=$nPks->fetch()){	
 	$optPks.="<option value='".$dPks['kodecustomer']."'>".$dPks['namacustomer']."</option>";
+	$optTujuanSrc.="<option value='".$dPks['kodecustomer']."'>".$dPks['namacustomer']."</option>";
+}
+
+# Periode Search (default: bulan berjalan)
+$periodeSkrg=date('Y-m');
+$listPeriode=array($periodeSkrg);
+foreach(fetchData("select distinct left(tanggal,7) as periode from ".$dbname.".pabrik_timbangan where millcode='EXTM' and kodeorg IN (".getOrgDetail(2).") order by periode desc") as $rPer){
+	if(!in_array($rPer['periode'],$listPeriode)){
+		$listPeriode[]=$rPer['periode'];
+	}
+}
+rsort($listPeriode);
+$optPeriodeSrc="<option value=''>Seluruhnya</option>";
+foreach($listPeriode as $perSrc){
+	$optPeriodeSrc.="<option value='".$perSrc."'".($perSrc==$periodeSkrg?' selected':'').">".$perSrc."</option>";
 }
 
 foreach($res as $val):
@@ -56,12 +73,34 @@ echo"<table cellspacing=1 border=0>
 	 <td align=center style='width:100px;cursor:pointer;' onclick=displayList()>
 	 <img class=delliconBig src=images/skyblue/list.png title='" . $_SESSION['lang']['list'] . "'><br>" . $_SESSION['lang']['list'] . "</td>
 	 <td><fieldset><legend>".$_SESSION['lang']['find']."</legend>"; 
-		echo $_SESSION['lang']['nospb']." : <input type=text class='myinputtext' onkeypress='return tanpa_kutip(event)' id=nosbpCr />&nbsp;";
-		echo $_SESSION['lang']['tahuntanam']." : <select class='select2' onkeypress='return tanpa_kutip(event)' id='ttsrc' style='width:100px;' onchange='loadData()'>".$opttt."</select>&nbsp;";
-		echo $_SESSION['lang']['tanggal']." Dari : <input type=text class=myinputtext id=tgl_cari onmousemove='setCalendar(this.id)' onkeypress='return false;' size=10 maxlength=10 readonly/>";
-		echo " Sampai : <input type=text class=myinputtext id=tgl_cari_sampai onmousemove='setCalendar(this.id)' onkeypress='return false;' size=10 maxlength=10 readonly/>";
-		echo"<button class=mybutton onclick=loadData(0)>".$_SESSION['lang']['find']."</button>";
-		echo"<button class=mybutton onclick=loadData('0','excel')>".$_SESSION['lang']['excel']."</button>";
+		echo "<table cellspacing=1 border=0>
+		<colgroup>
+			<col style='width:85px'><col style='width:10px'><col style='width:170px'><col style='width:22px'>
+			<col style='width:85px'><col style='width:10px'><col style='width:170px'><col style='width:22px'>
+			<col style='width:85px'><col style='width:10px'><col style='width:170px'><col style='width:22px'>
+			<col style='width:85px'><col style='width:10px'><col style='width:170px'>
+		</colgroup>
+		<tr>
+			<td nowrap>".$_SESSION['lang']['nospb']."</td><td>:</td><td><input type=text class='myinputtext' onkeypress='return tanpa_kutip(event)' id=nosbpCr style='width:170px'/></td><td></td>
+			<td nowrap>SPB Pabrik</td><td>:</td><td><input type=text class='myinputtext' onkeypress='return tanpa_kutip(event)' id=spbpabriksrc style='width:170px'/></td><td></td>
+			<td nowrap>Nama Supir</td><td>:</td><td><input type=text class='myinputtext' onkeypress='return tanpa_kutip(event)' id=supirsrc style='width:170px'/></td><td></td>
+			<td nowrap>".$_SESSION['lang']['tahuntanam']."</td><td>:</td><td><select class='select2' id='ttsrc' style='width:170px;'>".preg_replace("/^<option value=''>[^<]*/","<option value=''>Seluruhnya",$opttt)."</select></td>
+		</tr>
+		<tr>
+			<td nowrap>Tujuan Pabrik</td><td>:</td><td><select class='select2' id='pabriktujuansrc' style='width:170px;'>".$optTujuanSrc."</select></td><td></td>
+			<td nowrap>Periode</td><td>:</td><td><select class='select2' id='periodesrc' style='width:170px;'>".$optPeriodeSrc."</select></td><td></td>
+			<td nowrap>".$_SESSION['lang']['tanggal']."</td><td>:</td>
+			<td nowrap><input type=text class=myinputtext id=tgl_cari onmousemove='setCalendar(this.id)' onkeypress='return false;' size=10 maxlength=10 style='width:72px' readonly/> s/d <input type=text class=myinputtext id=tgl_cari_sampai onmousemove='setCalendar(this.id)' onkeypress='return false;' size=10 maxlength=10 style='width:72px' readonly/></td><td></td>
+			<td colspan=3></td>
+		</tr>
+		<tr>
+			<td colspan=15 style='padding-top:4px'>
+				<button class=mybutton onclick=loadData(0)>".$_SESSION['lang']['find']."</button>
+				<button class=mybutton onclick=loadData('0','excel')>".$_SESSION['lang']['excel']."</button>
+				<button class=mybutton onclick=dataKePDF(event)>PDF</button>
+			</td>
+		</tr>
+		</table>";
 echo"</fieldset></td>
 	 </tr>
 	 </table> "; 
@@ -106,184 +145,135 @@ for($i=0;$i<60;)
 <fieldset style="float:left">
 <legend><?php echo $_SESSION['lang']['entryForm']?></legend>
 <table cellspacing="1" border="0">
-
-<tr><td><?php echo $_SESSION['lang']['tanggal']." ".$_SESSION['lang']['timbangan']. '<font size=2px style=color:red;vertical-align:middle;vertical-align:middle><b>*</b></font>'?></td>
-<td>:</td>
-<td><input style="width:150px" type=text class=myinputtext id=tgl onmousemove='setCalendar(this.id)' onkeypress='return false;' onchange='getNosbp()'  size=10 maxlength=10 readonly/></td>
-
-<td><?php echo $_SESSION['lang']['nomor']." ".$_SESSION['lang']['ticket']." timbangan kebun (DMA & MHA)"?> <font size=2px style=color:red;vertical-align:middle;vertical-align:middle><b>*</b></font></td>
-<td>:</td>
-<td><input type="text" class="myinputtext"  onkeypress="return tanpa_kutip(event)" id="tktkebun" name="tktkebun" style="width:150px;" />
-</td>
-
-<tr>
-
-<td></td>
-<td></td>
-<td></td>
-
-
-<td><?php echo $_SESSION['lang']['nospb'] .'<font size=2px style=color:red;vertical-align:middle;vertical-align:middle><b>*</b></font>'?></td>
-<td>:</td>
-<td>
-	<select id="spbId" name="spbId" style="width:155px;" onchange="getjjg(this.value)" ><?php echo $optOrg;?></select>
-	<img id='spbId' onclick=z.elSearch('spbId',event) class='zImgBtn' src='images/skyblue/zoom.png' style='position:relative;top:3px;left:3px;'>
-</td>
-
-
-
-
-</tr>
-
-</tr>
-<tr> 	 
-	<td style='valign:top'><? echo $_SESSION['lang']['jammasuk']; ?></td>
-	<td>:</td>
-	<td><select style="width:70px" id=jmMasuk><? echo $jmMsk; ?></select> : <select id=mntMasuk style="width:72px"><? echo $mntMsk; ?></select>
-</td>
-
-<td style='valign:top'><? echo $_SESSION['lang']['jamkeluar']; ?></td>
-<td>:</td>
-<td><select id=jmKeluar style="width:70px"><? echo $jmKlr; ?></select> : <select id=mntKeluar style="width:72px"><? echo $mntKlr; ?></select></td>
-
-
-</tr>
-<tr> 	 
-
-<td><?php echo $_SESSION['lang']['nopol'] .'<font size=2px style=color:red;vertical-align:middle;vertical-align:middle><b>*</b></font>'?></td>
-<td>:</td>
-<td><input type="text" class="myinputtext" maxlength="20" onkeypress="return tanpa_kutip(event)" onkeydown="upperCaseF(this)" id="kdKend" name="kdKend" style="width:150px;" />
-</td>
-
-<td><?php echo $_SESSION['lang']['supir'] .'<font size=2px style=color:red;vertical-align:middle;vertical-align:middle><b>*</b></font>'?></td>
-<td>:</td>
-<td><input type="text" class="myinputtext" onkeypress="return tanpa_kutip(event)" onkeydown="upperCaseF(this)" id="nmSupir" name="nmSupir" style="width:150px;" />
-</td>	
-</tr>
-
-<tr>
-
-<td><?php echo $_SESSION['lang']['jumlah']." ".$_SESSION['lang']['jjg'] .'<font size=2px style=color:red;vertical-align:middle;vertical-align:middle><b>*</b></font>'?></td>
-<td>:</td>
-<td><input type="text" class="myinputtextnumber" onkeypress="return angka_doang(event)" id="jmlhJjg" name="jmlhJjg" style="width:150px;" />
-</td>
-
-
-<td><?php echo $_SESSION['lang']['nomor']." ".$_SESSION['lang']['ticket']?> <font size=2px style=color:red;vertical-align:middle;vertical-align:middle><b>*</b></font></td>
-<td>:</td>
-<td><input type="text" class="myinputtext" onkeypress="return tanpa_kutip(event)" id="notiket" name="notiket" style="width:150px;" />
-</td>
-
-
-
-</tr>
-
-
-
-
 <?php
+$req = '<font size=2px style=color:red;vertical-align:middle><b>*</b></font>';
+$sec = "style='font-weight:bold;padding-top:10px;border-bottom:1px solid #9db3cf;'";
 ?>
-<tr ><td><?php echo $_SESSION['lang']['beratMasuk'] ?> (Kg) <font size=2px style=color:red;vertical-align:middle;vertical-align:middle><b>*</b></font></td>
-<td>:</td>
-<td><input type="text" class="myinputtextnumber" onkeypress="return angka_doang(event)" id="brtMsk" name="brtMsk" onblur="getBersih(0)" style="width:150px;" />
-</td>
+<colgroup><col style="width:190px"><col style="width:10px"><col style="width:170px"><col style="width:30px"><col style="width:190px"><col style="width:10px"><col style="width:170px"></colgroup>
 
-<td hidden><?php echo $_SESSION['lang']['kontrak']?></td>
-<td hidden>:</td>
-<td hidden><input type="text" class="myinputtext" onkeypress="return tanpa_kutip(event)" onclick="searchNosibp('<?php echo $_SESSION['lang']['find']?>','<div id=formPencariandata></div>',event)" id="nokontrak" name="nokontrak" style="width:145px;"   />
-
-
-<td><?php echo $_SESSION['lang']['beratKeluar']?> (Kg) <font size=2px style=color:red;vertical-align:middle;vertical-align:middle><b>*</b></font></td>
-<td>:</td>
-<td><input type="text" class="myinputtextnumber" onkeypress="return angka_doang(event)" id="brtKlr" name="brtKlr" onblur="getBersih(0)"  style="width:150px;" />
-</td>
-
-<td hidden><?php echo $_SESSION['lang']['nodo']?></td>
-<td hidden>:</td>
-<td hidden><select id="nodo" name="nodo" style="width:145px;" > </select>
-
+<tr><td colspan="6" <?php echo $sec?>>Data SPB</td><td <?php echo $sec?>><button class=mybutton onclick=spbBelumTimbang() title='SPB External periode berjalan yang belum ada hasil timbang' style='width:155px;padding:2px 0;white-space:nowrap;font-size:11px'>SPB Belum Ditimbang <span id=badgeBelum style='display:none;background:#d9534f;color:#fff;border-radius:9px;padding:0 5px;font-size:10px'></span></button></td></tr>
+<tr>
+	<td><?php echo $_SESSION['lang']['tanggal']." ".$_SESSION['lang']['timbangan']." ".$req?></td>
+	<td>:</td>
+	<td><input style="width:150px" type=text class=myinputtext id=tgl onmousemove='setCalendar(this.id)' onkeypress='return false;' onchange='getNosbp()' size=10 maxlength=10 readonly/></td>
+	<td></td>
+	<td><?php echo $_SESSION['lang']['nospb']." ".$req?></td>
+	<td>:</td>
+	<td>
+		<select class="select2" id="spbId" name="spbId" style="width:155px;"><?php echo $optOrg;?></select>
+	</td>
+</tr>
+<tr>
+	<td><?php echo $_SESSION['lang']['nomor']." ".$_SESSION['lang']['ticket']." timbangan kebun (DMA & MHA) ".$req?></td>
+	<td>:</td>
+	<td><input type="text" class="myinputtext" onkeypress="return tanpa_kutip(event)" id="tktkebun" name="tktkebun" style="width:150px;" /></td>
+	<td></td>
+	<td><?php echo $_SESSION['lang']['nomor']." ".$_SESSION['lang']['ticket']." ".$req?></td>
+	<td>:</td>
+	<td><input type="text" class="myinputtext" onkeypress="return tanpa_kutip(event)" id="notiket" name="notiket" style="width:150px;" /></td>
+</tr>
+<tr>
+	<td>SPB Pabrik <?php echo $req?></td>
+	<td>:</td>
+	<td><input type="text" class="myinputtext" onkeypress="return tanpa_kutip(event)" id="spbpabrik" name="spbpabrik" style="width:150px;"/></td>
+	<td></td>
+	<td>Tujuan Pabrik <?php echo $req?></td>
+	<td>:</td>
+	<td><select class="select2" id="pabriktujuan" name="pabriktujuan" style="width:155px;"><?php echo $optPks;?></select></td>
 </tr>
 
+<tr><td colspan="7" <?php echo $sec?>>Kendaraan</td></tr>
+<tr>
+	<td><?php echo $_SESSION['lang']['nopol']." ".$req?></td>
+	<td>:</td>
+	<td><input type="text" class="myinputtext" maxlength="20" onkeypress="return tanpa_kutip(event)" onkeydown="upperCaseF(this)" id="kdKend" name="kdKend" style="width:150px;" /></td>
+	<td></td>
+	<td><?php echo $_SESSION['lang']['supir']." ".$req?></td>
+	<td>:</td>
+	<td><input type="text" class="myinputtext" onkeypress="return tanpa_kutip(event)" onkeydown="upperCaseF(this)" id="nmSupir" name="nmSupir" style="width:150px;" /></td>
+</tr>
+<tr>
+	<td>Tahun Tanam <?php echo $req?></td>
+	<td>:</td>
+	<td><input type="text" class="myinputtext" onkeypress="return tanpa_kutip(event)" id="tahuntanam2" name="tahuntanam2" maxlength="4" style="width:150px;"/></td>
+	<td></td>
+	<td><?php echo $_SESSION['lang']['jumlah']." ".$_SESSION['lang']['jjg']." ".$req?></td>
+	<td>:</td>
+	<td><input type="text" class="myinputtextnumber" onkeypress="return angka_doang(event)" id="jmlhJjg" name="jmlhJjg" onkeyup="z.numberFormat('jmlhJjg',2)" style="width:150px;" /></td>
+</tr>
+
+<tr><td colspan="7" <?php echo $sec?>>Timbangan</td></tr>
+<tr>
+	<td><?php echo $_SESSION['lang']['jammasuk']?></td>
+	<td>:</td>
+	<td><select style="width:70px" id=jmMasuk><?php echo $jmMsk; ?></select> : <select id=mntMasuk style="width:72px"><?php echo $mntMsk; ?></select></td>
+	<td></td>
+	<td><?php echo $_SESSION['lang']['jamkeluar']?></td>
+	<td>:</td>
+	<td><select id=jmKeluar style="width:70px"><?php echo $jmKlr; ?></select> : <select id=mntKeluar style="width:72px"><?php echo $mntKlr; ?></select></td>
+</tr>
+<tr>
+	<td><?php echo $_SESSION['lang']['beratMasuk']?> (Kg) <?php echo $req?></td>
+	<td>:</td>
+	<td><input type="text" class="myinputtextnumber" onkeypress="return angka_doang(event)" id="brtMsk" name="brtMsk" onkeyup="z.numberFormat('brtMsk',2);getBersih(0)" onblur="getBersih(0)" style="width:150px;" /></td>
+	<td></td>
+	<td><?php echo $_SESSION['lang']['beratKeluar']?> (Kg) <?php echo $req?></td>
+	<td>:</td>
+	<td><input type="text" class="myinputtextnumber" onkeypress="return angka_doang(event)" id="brtKlr" name="brtKlr" onkeyup="z.numberFormat('brtKlr',2);getBersih(0)" onblur="getBersih(0)" style="width:150px;" /></td>
+</tr>
 <tr>
 	<td>Buah dikembalikan</td>
 	<td>:</td>
-	<td><input type="text" class="myinputtextnumber" onkeypress="return angka_doang(event)" id="buahdikembalikan" name="buahdikembalikan" style="width:150px;" value="0" />
-	</td>
-
-	<td>SPB Pabrik <font size=2px style=color:red;vertical-align:middle;vertical-align:middle><b>*</b></font></td>
-	<td>:</td>
-	<td><input type="text" class="myinputtext" onkeypress="return tanpa_kutip(event)" id="spbpabrik" name="spbpabrik" style="width:150px;"/>
-	</td>
-</tr>
-<tr>
-	<td>Tahun Tanam <font size=2px style=color:red;vertical-align:middle;vertical-align:middle><b>*</b></font></td>
-	<td>:</td>
-	<td>
-		<input type="text" class="myinputtext" onkeypress="return tanpa_kutip(event)" id="tahuntanam2" name="tahuntanam2" maxlength="4" style="width:150px;"/>
-	</td>
-
-	<td>Tujuan Pabrik</td>
-	<td>:</td>
-	<td>
-		<select disabled  id="pabriktujuan" name="pabriktujuan" style="width:155px;"><?php echo $optPks;?></select>
-	</td>
+	<td><input type="text" class="myinputtextnumber" onkeypress="return angka_doang(event)" id="buahdikembalikan" name="buahdikembalikan" onkeyup="z.numberFormat('buahdikembalikan',2)" style="width:150px;" value="0" /></td>
+	<td colspan="4"></td>
 </tr>
 
-
+<tr><td colspan="7" <?php echo $sec?>>Potongan</td></tr>
 <tbody id="datapotongan"></tbody>
-
 <tr>
-<td><?php echo $_SESSION['lang']['potongan']?> (Kg)</td>
-<td>:</td>
-<td><input type="text" class="myinputtextnumber"  onkeypress="return angka_doang(event)" onblur="getBersih(0)" id="potKg" name="potKg" disabled style="width:150px;" />
-</td>
-
-<tr>
-<td><?php echo $_SESSION['lang']['beratBersih']?> (Kg)</td>
-<td>:</td>
-<td><input type="text" class="myinputtextnumber" disabled onkeypress="return angka_doang(event)" id="brtBrsh" name="brtBrsh" style="width:150px;" />
-</td>
+	<td><?php echo $_SESSION['lang']['potongan']?> (Kg)</td>
+	<td>:</td>
+	<td><input type="text" class="myinputtextnumber" onkeypress="return angka_doang(event)" onblur="getBersih(0)" id="potKg" name="potKg" onkeyup="z.numberFormat('potKg',2);getBersih(0)" disabled style="width:150px;" /></td>
+	<td></td>
+	<td><?php echo $_SESSION['lang']['beratBersih']?> (Kg)</td>
+	<td>:</td>
+	<td><input type="text" class="myinputtextnumber" disabled onkeypress="return angka_doang(event)" id="brtBrsh" name="brtBrsh" style="width:150px;" /></td>
 </tr>
 
+<tr hidden>
+	<td><?php echo $_SESSION['lang']['kontrak']?></td>
+	<td>:</td>
+	<td><input type="text" class="myinputtext" onkeypress="return tanpa_kutip(event)" onclick="searchNosibp('<?php echo $_SESSION['lang']['find']?>','<div id=formPencariandata></div>',event)" id="nokontrak" name="nokontrak" style="width:145px;" /></td>
+	<td></td>
+	<td><?php echo $_SESSION['lang']['nodo']?></td>
+	<td>:</td>
+	<td><select id="nodo" name="nodo" style="width:145px;"></select></td>
 </tr>
 <tr hidden>
-
-<td><?php echo $_SESSION['lang']['jjgpenalty']?></td>
-<td>:</td>
-<td><input type="text" class="myinputtextnumber" onkeypress="return angka_doang(event)" id="JjgSortasi" name="JjgSortasi" style="width:80px;" />
-</td>
-
-</tr>
-<tr hidden><td colspan=7><hr></td>
-</tr>
-<tr hidden><td><?php echo $_SESSION['lang']['tanggal']." ".$_SESSION['lang']['timbangan']?> (Pabrik)</td>
-<td>:</td>
-<td><input style="width:80px" type=text class=myinputtext id=tglpks onmousemove='setCalendar(this.id)' onkeypress='return false;' size=10 maxlength=10 readonly/></td>
-</tr>
-
-<tr hidden><td><?php echo $_SESSION['lang']['beratMasuk']?> (Kg)(Pabrik)</td>
-<td>:</td>
-<td><input type="text" class="myinputtextnumber" onkeypress="return angka_doang(event)" id="brtMskpmks" name="brtMskpmks" onblur="getBersih(1)" style="width:80px;" />
-</td>
+	<td><?php echo $_SESSION['lang']['jjgpenalty']?></td>
+	<td>:</td>
+	<td><input type="text" class="myinputtextnumber" onkeypress="return angka_doang(event)" id="JjgSortasi" name="JjgSortasi" style="width:80px;" /></td>
 </tr>
 <tr hidden>
-<td><?php echo $_SESSION['lang']['beratKeluar']?> (Kg)(Pabrik)</td>
-<td>:</td>
-<td><input type="text" class="myinputtextnumber" onkeypress="return angka_doang(event)" id="brtKlrpmks" name="brtKlrpmks" onblur="getBersih(1)"  style="width:80px;" />
-
-
+	<td><?php echo $_SESSION['lang']['tanggal']." ".$_SESSION['lang']['timbangan']?> (Pabrik)</td>
+	<td>:</td>
+	<td><input style="width:80px" type=text class=myinputtext id=tglpks onmousemove='setCalendar(this.id)' onkeypress='return false;' size=10 maxlength=10 readonly/></td>
 </tr>
-<tr hidden><td><?php echo $_SESSION['lang']['beratBersih']?> (Kg)(Pabrik)</td>
-<td>:</td>
-<td><input type="text" class="myinputtextnumber" disabled onkeypress="return angka_doang(event)" id="brtBrshpmks" name="brtBrshpmks" style="width:80px;" />
-</td>
+<tr hidden>
+	<td><?php echo $_SESSION['lang']['beratMasuk']?> (Kg)(Pabrik)</td>
+	<td>:</td>
+	<td><input type="text" class="myinputtextnumber" onkeypress="return angka_doang(event)" id="brtMskpmks" name="brtMskpmks" onblur="getBersih(1)" style="width:80px;" /></td>
 </tr>
-
-	<?php
-
-?>
-
-
+<tr hidden>
+	<td><?php echo $_SESSION['lang']['beratKeluar']?> (Kg)(Pabrik)</td>
+	<td>:</td>
+	<td><input type="text" class="myinputtextnumber" onkeypress="return angka_doang(event)" id="brtKlrpmks" name="brtKlrpmks" onblur="getBersih(1)" style="width:80px;" /></td>
+</tr>
+<tr hidden>
+	<td><?php echo $_SESSION['lang']['beratBersih']?> (Kg)(Pabrik)</td>
+	<td>:</td>
+	<td><input type="text" class="myinputtextnumber" disabled onkeypress="return angka_doang(event)" id="brtBrshpmks" name="brtBrshpmks" style="width:80px;" /></td>
+</tr>
 <tr><td colspan='7'><hr></td></tr>
 <tr id="uplFileId"><td></td><td colspan='5'>
 <?php
