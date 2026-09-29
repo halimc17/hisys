@@ -141,6 +141,17 @@ switch ($method) {
 		if ($jabatan != '') $whrd .= " and kodejabatan='" . $jabatan . "'";
 		if ($karyawanId != '') $whrd .= " and karyawanid='" . $karyawanId . "'";
 		
+		$arrKomp = array();
+		if ($idKomponen != '') {
+			$arrKomp[] = $idKomponen;
+		} else {
+			$sKomp = "select id from " . $dbname . ".sdm_ho_component where type='basic' order by id asc";
+			$rKomp = fetchdata($sKomp);
+			foreach ($rKomp as $brsKomp) {
+				$arrKomp[] = $brsKomp['id'];
+			}
+		}
+		
 		// Query active employees
 		$s = "select nik, namakaryawan, tipekaryawan, kodegolongan, kodejabatan, karyawanid from " . $dbname . ".datakaryawan 
 			  where tanggalkeluar='0000-00-00' " . $whrd . " order by namakaryawan asc";
@@ -148,31 +159,47 @@ switch ($method) {
 		
 		$optGolName = makeOption($dbname, 'sdm_5golongan', 'kodegolongan,namagolongan');
 		
+		$arrUpah = array();
+		if (count($r) > 0) {
+			$karyIds = array();
+			foreach($r as $b) {
+				$karyIds[] = "'" . $b['karyawanid'] . "'";
+			}
+			$sUpahAll = "select karyawanid, idkomponen, jumlah from " . $dbname . ".sdm_5gajipokok where tahun='" . $thn . "' and karyawanid in (" . implode(',', $karyIds) . ")";
+			if ($idKomponen != '') {
+				$sUpahAll .= " and idkomponen='" . $idKomponen . "'";
+			}
+			$rUpahAll = fetchdata($sUpahAll);
+			foreach($rUpahAll as $u) {
+				$arrUpah[$u['karyawanid']][$u['idkomponen']] = $u['jumlah'];
+			}
+		}
+		
 		$row = 2;
 		foreach ($r as $baris) {
-			// Find existing upah
-			$upah = 0;
-			if ($idKomponen != '') {
-				$sUpah = "select jumlah from " . $dbname . ".sdm_5gajipokok where tahun='" . $thn . "' and karyawanid='" . $baris['karyawanid'] . "' and idkomponen='" . $idKomponen . "'";
-				$rUpah = fetchdata($sUpah);
-				if (count($rUpah) > 0) $upah = $rUpah[0]['jumlah'];
+			foreach ($arrKomp as $kompId) {
+				// Find existing upah
+				$upah = 0;
+				if (isset($arrUpah[$baris['karyawanid']][$kompId])) {
+					$upah = $arrUpah[$baris['karyawanid']][$kompId];
+				}
+				
+				$tipeKaryawan = isset($optTip[$baris['tipekaryawan']]) ? $baris['tipekaryawan'] . ' - ' . $optTip[$baris['tipekaryawan']] : $baris['tipekaryawan'];
+				$jabatanName = isset($optJbtn[$baris['kodejabatan']]) ? $baris['kodejabatan'] . ' - ' . $optJbtn[$baris['kodejabatan']] : $baris['kodejabatan'];
+				$komponenName = isset($optKomponen[$kompId]) ? $kompId . ' - ' . $optKomponen[$kompId] : $kompId;
+				$golonganName = isset($optGolName[$baris['kodegolongan']]) ? $baris['kodegolongan'] . ' - ' . $optGolName[$baris['kodegolongan']] : $baris['kodegolongan'];
+				
+				$objPHPExcel->getActiveSheet()->setCellValueExplicit('A' . $row, $thn, PHPExcel_Cell_DataType::TYPE_STRING);
+				$objPHPExcel->getActiveSheet()->setCellValueExplicit('B' . $row, $kdUnit, PHPExcel_Cell_DataType::TYPE_STRING);
+				$objPHPExcel->getActiveSheet()->setCellValueExplicit('C' . $row, $baris['nik'], PHPExcel_Cell_DataType::TYPE_STRING);
+				$objPHPExcel->getActiveSheet()->setCellValueExplicit('D' . $row, $baris['namakaryawan'], PHPExcel_Cell_DataType::TYPE_STRING);
+				$objPHPExcel->getActiveSheet()->setCellValueExplicit('E' . $row, $tipeKaryawan, PHPExcel_Cell_DataType::TYPE_STRING);
+				$objPHPExcel->getActiveSheet()->setCellValueExplicit('F' . $row, $golonganName, PHPExcel_Cell_DataType::TYPE_STRING);
+				$objPHPExcel->getActiveSheet()->setCellValueExplicit('G' . $row, $jabatanName, PHPExcel_Cell_DataType::TYPE_STRING);
+				$objPHPExcel->getActiveSheet()->setCellValueExplicit('H' . $row, $komponenName, PHPExcel_Cell_DataType::TYPE_STRING);
+				$objPHPExcel->getActiveSheet()->setCellValueExplicit('I' . $row, $upah, PHPExcel_Cell_DataType::TYPE_NUMERIC);
+				$row++;
 			}
-			
-			$tipeKaryawan = isset($optTip[$baris['tipekaryawan']]) ? $baris['tipekaryawan'] . ' - ' . $optTip[$baris['tipekaryawan']] : $baris['tipekaryawan'];
-			$jabatanName = isset($optJbtn[$baris['kodejabatan']]) ? $baris['kodejabatan'] . ' - ' . $optJbtn[$baris['kodejabatan']] : $baris['kodejabatan'];
-			$komponenName = isset($optKomponen[$idKomponen]) ? $idKomponen . ' - ' . $optKomponen[$idKomponen] : $idKomponen;
-			$golonganName = isset($optGolName[$baris['kodegolongan']]) ? $baris['kodegolongan'] . ' - ' . $optGolName[$baris['kodegolongan']] : $baris['kodegolongan'];
-			
-			$objPHPExcel->getActiveSheet()->setCellValueExplicit('A' . $row, $thn, PHPExcel_Cell_DataType::TYPE_STRING);
-			$objPHPExcel->getActiveSheet()->setCellValueExplicit('B' . $row, $kdUnit, PHPExcel_Cell_DataType::TYPE_STRING);
-			$objPHPExcel->getActiveSheet()->setCellValueExplicit('C' . $row, $baris['nik'], PHPExcel_Cell_DataType::TYPE_STRING);
-			$objPHPExcel->getActiveSheet()->setCellValueExplicit('D' . $row, $baris['namakaryawan'], PHPExcel_Cell_DataType::TYPE_STRING);
-			$objPHPExcel->getActiveSheet()->setCellValueExplicit('E' . $row, $tipeKaryawan, PHPExcel_Cell_DataType::TYPE_STRING);
-			$objPHPExcel->getActiveSheet()->setCellValueExplicit('F' . $row, $golonganName, PHPExcel_Cell_DataType::TYPE_STRING);
-			$objPHPExcel->getActiveSheet()->setCellValueExplicit('G' . $row, $jabatanName, PHPExcel_Cell_DataType::TYPE_STRING);
-			$objPHPExcel->getActiveSheet()->setCellValueExplicit('H' . $row, $komponenName, PHPExcel_Cell_DataType::TYPE_STRING);
-			$objPHPExcel->getActiveSheet()->setCellValueExplicit('I' . $row, $upah, PHPExcel_Cell_DataType::TYPE_NUMERIC);
-			$row++;
 		}
 		
 		header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
