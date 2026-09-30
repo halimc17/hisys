@@ -161,7 +161,9 @@ switch ($method) {
 			}
 
 			// $str = "SELECT * FROM " . $dbname . ".keu_5akun where noakun like '111%' and noakun < '11103' " . $whr . " and " . $whnoakun . " detail=1 and aktif=1";
-			$str = "SELECT a.noakun, a.namaakun, a.pemilik, b.noakun AS noakununit, b.kodeunit FROM keu_5akun a LEFT JOIN keu_5akununit b ON a.noakun = b.noakun WHERE a.kasbank = 1 AND a.detail = 1 AND a.aktif = 1 AND a.level = '5' AND ((b.kodeunit IS NOT NULL AND b.kodeunit IN ('" . $param['kodeorg'] . "')) OR (b.kodeunit IS NULL AND (a.pemilik = 'GLOBAL' OR a.pemilik = '{$tipeorganisasi[$param['kodeorg']]}' OR a.pemilik IN ('" . $param['kodeorg'] . "')))) {$whnoakun} GROUP BY a.noakun";
+			#= b difilter langsung di ON (bukan di WHERE) supaya akun pemilik=GLOBAL/sesuai tipe tetap muncul untuk
+			#= kodeorg ini walau akun tsb sudah punya baris keu_5akununit untuk unit lain (dulu ketutup, jadi gak muncul)
+			$str = "SELECT a.noakun, a.namaakun, a.pemilik, b.noakun AS noakununit, b.kodeunit FROM keu_5akun a LEFT JOIN keu_5akununit b ON a.noakun = b.noakun AND b.kodeunit = '" . $param['kodeorg'] . "' WHERE a.kasbank = 1 AND a.detail = 1 AND a.aktif = 1 AND a.level = '5' AND (b.kodeunit IS NOT NULL OR a.pemilik = 'GLOBAL' OR a.pemilik = '{$tipeorganisasi[$param['kodeorg']]}' OR a.pemilik IN ('" . $param['kodeorg'] . "')) {$whnoakun} GROUP BY a.noakun";
 			$res = fetchdata($str);
 			foreach ($res as $bar) {
 				// $optnoakun[$bar['noakun']]=$bar['noakun'];
@@ -222,7 +224,9 @@ switch ($method) {
 			}
 
 			// $str = "SELECT * FROM " . $dbname . ".keu_5akun where noakun like '111%' and noakun < '11103' " . $whr . " and " . $whnoakun . " detail=1 and aktif=1";
-			$str = "SELECT a.noakun, a.namaakun, a.pemilik, b.noakun AS noakununit, b.kodeunit FROM keu_5akun a LEFT JOIN keu_5akununit b ON a.noakun = b.noakun WHERE a.kasbank = 1 AND a.detail = 1 AND a.aktif = 1 AND a.level = '5' AND ((b.kodeunit IS NOT NULL AND b.kodeunit IN ('" . $param['kodeorg'] . "')) OR (b.kodeunit IS NULL AND (a.pemilik = 'GLOBAL' OR a.pemilik = '{$tipeorganisasi[$param['kodeorg']]}' OR a.pemilik IN ('" . $param['kodeorg'] . "')))) {$whnoakun} GROUP BY a.noakun";
+			#= b difilter langsung di ON (bukan di WHERE) supaya akun pemilik=GLOBAL/sesuai tipe tetap muncul untuk
+			#= kodeorg ini walau akun tsb sudah punya baris keu_5akununit untuk unit lain (dulu ketutup, jadi gak muncul)
+			$str = "SELECT a.noakun, a.namaakun, a.pemilik, b.noakun AS noakununit, b.kodeunit FROM keu_5akun a LEFT JOIN keu_5akununit b ON a.noakun = b.noakun AND b.kodeunit = '" . $param['kodeorg'] . "' WHERE a.kasbank = 1 AND a.detail = 1 AND a.aktif = 1 AND a.level = '5' AND (b.kodeunit IS NOT NULL OR a.pemilik = 'GLOBAL' OR a.pemilik = '{$tipeorganisasi[$param['kodeorg']]}' OR a.pemilik IN ('" . $param['kodeorg'] . "')) {$whnoakun} GROUP BY a.noakun";
 			$res = fetchdata($str);
 			foreach ($res as $bar) {
 				// $optnoakun[$bar['noakun']]=$bar['noakun'];
@@ -235,7 +239,7 @@ switch ($method) {
 		} else { #= Cek jika, noakun penerima kosong, maka normal
 			// $str = "SELECT * FROM " . $dbname . ".keu_5akun where noakun like '111%' and noakun < '11103' " . $whr . " and detail=1 and aktif=1";
 
-			$str = "SELECT a.noakun, a.namaakun, a.pemilik, b.noakun AS noakununit, b.kodeunit FROM keu_5akun a LEFT JOIN keu_5akununit b ON a.noakun = b.noakun WHERE a.kasbank = 1 AND a.detail = 1 AND a.aktif = 1 AND a.level = '5' AND ((b.kodeunit IS NOT NULL AND b.kodeunit IN ('" . $param['kodeorg'] . "')) OR (b.kodeunit IS NULL AND (a.pemilik = 'GLOBAL' OR a.pemilik = '{$tipeorganisasi[$param['kodeorg']]}' OR a.pemilik IN ('" . $param['kodeorg'] . "')))) GROUP BY a.noakun";
+			$str = "SELECT a.noakun, a.namaakun, a.pemilik, b.noakun AS noakununit, b.kodeunit FROM keu_5akun a LEFT JOIN keu_5akununit b ON a.noakun = b.noakun AND b.kodeunit = '" . $param['kodeorg'] . "' WHERE a.kasbank = 1 AND a.detail = 1 AND a.aktif = 1 AND a.level = '5' AND (b.kodeunit IS NOT NULL OR a.pemilik = 'GLOBAL' OR a.pemilik = '{$tipeorganisasi[$param['kodeorg']]}' OR a.pemilik IN ('" . $param['kodeorg'] . "')) GROUP BY a.noakun";
 			$res = fetchdata($str);
 			foreach ($res as $bar) {
 				// $optnoakun[$bar['noakun']]=$bar['noakun'];
