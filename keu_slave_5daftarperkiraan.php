@@ -4,6 +4,7 @@ require_once('config/connection.php');
 require_once('lib/nangkoelib.php');
 require_once('lib/zLib.php');
 include_once('lib/rTable.php');
+include_once('lib/HtmlExcel.php');
 
 $kodeorg    = checkPostGet('kodeorg','');
 $noakun     = checkPostGet('noakun','');
@@ -393,14 +394,100 @@ switch ($method) {
                   '".$d['kodevhc']."',
                   '".$d['kodeblok']."',
                   '".$d['nodok']."',
-                  '".$d['pemilik']."');\">
+                  '".$d['pemilik']."');\">&nbsp;&nbsp;
           				<img src='images/skyblue/zoom.png' class='resicon' title='Add Detail ".@$nmdetail2[$d['noakun']]."' onclick=\"viewdetailbaru('".$d['noakun']."')\">
 				      </td>";
 
-            echo"</tr>"; 
+            echo"</tr>";
         }
     echo"</tbody></table>";
 	break;
+
+	case 'excel':
+		$where = '';
+		if ($txt_search != '') {
+			$where = " and namaakun LIKE '%" . $txt_search . "%'";
+		}
+		if ($txtNoakun != '') {
+			$where = " and noakun LIKE '%" . $txtNoakun . "%'";
+		}
+
+		#kop/logo/ditarik-oleh format standar (sama seperti laporan lain), pakai org karyawan yang login
+		#karena daftar perkiraan ini data bersama (bukan per-PT)
+		$hdpt = setheadreport($_SESSION['empl']['kodeorganisasi'], $_SESSION['empl']['kodeorganisasi']);
+		$logourl = '';
+		if (file_exists($hdpt['logo'])) {
+			$skema = (isset($_SERVER['HTTPS']) and $_SERVER['HTTPS'] != 'off') ? 'https' : 'http';
+			$logourl = $skema . "://" . @$_SERVER['HTTP_HOST'] . rtrim(dirname(@$_SERVER['SCRIPT_NAME']), '/') . "/" . $hdpt['logo'];
+		}
+		$kolom = 20;
+		$stream = "<table>
+			<tr><td colspan=" . $kolom . " height='70' style='height:52pt'>" . ($logourl != '' ? "<img src='" . $logourl . "' height='60'>" : "") . "</td></tr>
+			<tr><td colspan=" . $kolom . "><b>" . htmlspecialchars($hdpt['nama']) . "</b></td></tr>
+			<tr><td colspan=" . $kolom . "><b>" . strtoupper($_SESSION['lang']['daftarperkiraan']) . "</b></td></tr>
+			<tr><td colspan=" . $kolom . ">Ditarik oleh " . htmlspecialchars($_SESSION['empl']['name']) . " (" . htmlspecialchars($_SESSION['standard']['username']) . ") pada " . date('d-m-Y H:i:s') . "</td></tr>
+			<tr><td colspan=" . $kolom . ">&nbsp;</td></tr>
+			</table>";
+
+		$stream .= "<table class=sortable cellspacing=1 cellpadding=3 border=1>
+			<thead><tr>
+				<th align=center>" . $_SESSION['lang']['noakun'] . "</th>
+				<th align=center>" . $_SESSION['lang']['namaakun'] . "</th>
+				<th align=center>" . $_SESSION['lang']['tipeakun'] . "</th>
+				<th align=center>" . $_SESSION['lang']['level'] . "</th>
+				<th align=center>" . $_SESSION['lang']['matauang'] . "</th>
+				<th align=center>" . $_SESSION['lang']['kodeorg'] . "</th>
+				<th align=center>" . $_SESSION['lang']['pemilik'] . "</th>
+				<th align=center>" . $_SESSION['lang']['kasbank'] . "</th>
+				<th align=center>" . $_SESSION['lang']['detail'] . "</th>
+				<th align=center>" . $_SESSION['lang']['kasbank'] . " " . $_SESSION['lang']['detail'] . "</th>
+				<th align=center>" . $_SESSION['lang']['kodekegiatan'] . "</th>
+				<th align=center>" . $_SESSION['lang']['kodeblok'] . "</th>
+				<th align=center>" . $_SESSION['lang']['invoice'] . " AP</th>
+				<th align=center>" . $_SESSION['lang']['kodeasset'] . "</th>
+				<th align=center>" . $_SESSION['lang']['kodesupplier'] . "</th>
+				<th align=center>" . $_SESSION['lang']['jurnalmemo'] . "</th>
+				<th align=center>" . $_SESSION['lang']['nik'] . "</th>
+				<th align=center>" . $_SESSION['lang']['kodevhc'] . "</th>
+				<th align=center>" . $_SESSION['lang']['nodok'] . "</th>
+				<th align=center>" . $_SESSION['lang']['kodecustomer'] . "</th>
+			</tr></thead><tbody>";
+
+		$input = "select * from " . $dbname . ".keu_5akun where noakun<>'' " . $where . " order by noakun";
+		$n = $owlPDO->query($input) or die(print " Gagal: " . PDOException::getMessage());
+		$n->setFetchMode(PDO::FETCH_ASSOC);
+		while ($d = $n->fetch()) {
+			$stream .= "<tr>
+				<td>" . $d['noakun'] . "</td>
+				<td>" . $d['namaakun'] . "</td>
+				<td>" . $d['tipeakun'] . "</td>
+				<td align=center>" . $d['level'] . "</td>
+				<td align=center>" . $d['matauang'] . "</td>
+				<td align=center>" . $d['kodeorg'] . "</td>
+				<td>" . $d['pemilik'] . "</td>
+				<td align=center>" . ($d['kasbank'] == 1 ? 'Ya' : '') . "</td>
+				<td align=center>" . ($d['detail'] == 1 ? 'Ya' : '') . "</td>
+				<td align=center>" . ($d['kasbankdetail'] == 1 ? 'Ya' : '') . "</td>
+				<td align=center>" . ($d['kodekegiatan'] == 1 ? 'Ya' : '') . "</td>
+				<td align=center>" . ($d['kodeblok'] == 1 ? 'Ya' : '') . "</td>
+				<td align=center>" . ($d['tagihan'] == 1 ? 'Ya' : '') . "</td>
+				<td align=center>" . ($d['kodeasset'] == 1 ? 'Ya' : '') . "</td>
+				<td align=center>" . ($d['kodesupplier'] == 1 ? 'Ya' : '') . "</td>
+				<td align=center>" . ($d['jurnalmemorial'] == 1 ? 'Ya' : '') . "</td>
+				<td align=center>" . ($d['nik'] == 1 ? 'Ya' : '') . "</td>
+				<td align=center>" . ($d['kodevhc'] == 1 ? 'Ya' : '') . "</td>
+				<td align=center>" . ($d['nodok'] == 1 ? 'Ya' : '') . "</td>
+				<td align=center>" . ($d['kodecustomer'] == 1 ? 'Ya' : '') . "</td>
+			</tr>";
+		}
+		$stream .= "</tbody></table>";
+
+		$xls = new HtmlExcel();
+		$xls->addSheet("DaftarPerkiraan", $stream);
+		$xls->headers("DaftarPerkiraan_" . date('YmdHis') . ".xls");
+		echo $xls->buildFile();
+	break;
+
     default:
 }
 ?>
