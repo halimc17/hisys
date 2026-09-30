@@ -1,192 +1,218 @@
 <?php
+#PDF Neraca Saldo (nama file lama keu_laporanBukuBesar_pdf.php, dipanggil dari halaman keu_2bukubesar.php),
+#mengikuti data yang sama dengan preview/excel (keu_2bukubesarnew_slave.php / keu_slave_2bukubesarrekap.php).
+#Sebelumnya PDF ini punya filter "noakun not like '3%'" yang tidak ada di preview/excel, sehingga akun
+#golongan 3 (modal/ekuitas) hilang di PDF tapi muncul di preview - sudah dihapus supaya datanya konsisten.
 require_once('master_validation.php');
 require_once('config/connection.php');
 require_once('lib/nangkoelib.php');
 require_once('lib/fpdf.php');
+include_once('lib/zLib.php');
 
-$pt=checkPostGet('pt','');
-$gudang=checkPostGet('gudang','');
-$periode=checkPostGet('periode','');
-$periode1=checkPostGet('periode1','');
-$revisi=checkPostGet('revisi','');
-$regional=checkPostGet('regional','');
-$kdKel=checkPostGet('kdKel','');
+$pt = checkPostGet('pt', '');
+$gudang = checkPostGet('gudang', '');
+$periode = checkPostGet('periode', '');
+$periode1 = checkPostGet('periode1', '');
+$revisi = (int)checkPostGet('revisi', '0');
+$regional = checkPostGet('regional', '');
+$akundari = checkPostGet('akundari', '');
+$akunsampai = checkPostGet('akunsampai', '');
+$tampilanId = checkPostGet('tampilanId', '');
 
-$akundari=checkPostGet('akundari','');
-$akunsampai=checkPostGet('akunsampai','');
-$tampilanId=checkPostGet('tampilanId','');
-//cek periode dan periode1
-if($periode1<$periode)
-{  #ditukar
-    $z=$periode;
-    $periode=$periode1;
-    $periode1=$z;
-}        
-	$where='';
-if($akundari!='' and $akunsampai!=''){
-	$where.=" and noakun between '".$akundari."' and  '".$akunsampai."'";
+#cek periode dan periode1, sama seperti di slave preview/excel
+if ($periode1 < $periode) {
+	$z = $periode;
+	$periode = $periode1;
+	$periode1 = $z;
 }
-//ambil namapt
-$str=$owlPDO->query("select namaorganisasi from ".$dbname.".organisasi where kodeorganisasi='".$pt."'");
-$namapt='';
-$str->setFetchMode(PDO::FETCH_OBJ);
-while($bar=$str->fetch())
+$whereAkun = '';
+if ($akundari != '' && $akunsampai != '') {
+	$whereAkun = " and noakun between '" . addslashes($akundari) . "' and '" . addslashes($akunsampai) . "'";
+}
+
+#akun laba/rugi tahun berjalan (CLM), dikecualikan dari daftar akun - sama seperti laporan lain
+$CLM = '';
+$rClm = fetchData("select noakundebet from " . $dbname . ".keu_5parameterjurnal where kodeaplikasi='CLM'");
+if (count($rClm) > 0) {
+	$CLM = $rClm[0]['noakundebet'];
+}
+
+#cakupan unit: PT saja, PT+regional, atau satu unit - daftar kodeorg diambil dulu (query kecil terpisah) lalu
+#ditempel sebagai IN(literal) di query besar - jauh lebih cepat daripada IN(select ...) langsung
+#(lihat catatan optimasi di keu_2bukubesarnew_slave.php)
+if ($regional == '' && $gudang == '') {
+	$rUnit = fetchData("select kodeorganisasi from " . $dbname . ".organisasi where induk='" . addslashes($pt) . "' and length(kodeorganisasi)=4");
+} elseif ($regional != '' && $gudang == '') {
+	$rUnit = fetchData("select kodeunit as kodeorganisasi from " . $dbname . ".bgt_regional_assignment where regional='" . addslashes($regional) . "'"
+		. " and kodeunit in (select kodeorganisasi from " . $dbname . ".organisasi where induk='" . addslashes($pt) . "')");
+} else {
+	$rUnit = array(array('kodeorganisasi' => $gudang));
+}
+$listUnit = array();
+foreach ($rUnit as $r) {
+	$listUnit[] = "'" . addslashes($r['kodeorganisasi']) . "'";
+}
+$whereUnit = (count($listUnit) > 0) ? " and kodeorg in (" . implode(',', $listUnit) . ")" : " and 1=0";
+
+#daftar akun dalam rentang, CLM dikecualikan
+$TAB = array();
+$kolNama = ($_SESSION['language'] == 'ID') ? 'namaakun' : 'namaakun1 as namaakun';
+$sqlAkun = "select distinct noakun," . $kolNama . " from " . $dbname . ".keu_5akun where noakun!='" . addslashes($CLM) . "' " . $whereAkun . " order by noakun";
+foreach (fetchData($sqlAkun) as $r) {
+	$TAB[$r['noakun']] = array('noakun' => $r['noakun'], 'namaakun' => $r['namaakun'], 'sawal' => 0, 'debet' => 0, 'kredit' => 0, 'salak' => 0);
+}
+
+#saldo awal periode (kolom awalNN pada baris periode itu sendiri, sudah pasti terisi - lihat catatan di keu_2neracasaldoperiodik_filter.php)
+$kolAwal = 'awal' . substr(str_replace('-', '', $periode), 4, 2);
+$sqlAwal = "select sum(" . $kolAwal . ") as sawal, noakun from " . $dbname . ".keu_saldobulanan where periode='" . addslashes(str_replace('-', '', $periode)) . "' and noakun!='" . addslashes($CLM) . "' " . $whereUnit . " group by noakun";
+foreach (fetchData($sqlAwal) as $r) {
+	if (isset($TAB[$r['noakun']])) {
+		$TAB[$r['noakun']]['sawal'] = (float)$r['sawal'];
+		$TAB[$r['noakun']]['salak'] = (float)$r['sawal'];
+	}
+}
+
+#debet/kredit dari jurnal, direntang periode s/d periode1
+$sqlJurnal = "select sum(debet) as debet, sum(kredit) as kredit, noakun from " . $dbname . ".keu_jurnaldt_vw
+	where periode>='" . addslashes($periode) . "' and periode<='" . addslashes($periode1) . "' " . $whereUnit . " " . $whereAkun . "
+	and noakun!='" . addslashes($CLM) . "' and revisi<='" . $revisi . "' group by noakun";
+foreach (fetchData($sqlJurnal) as $r) {
+	if (isset($TAB[$r['noakun']])) {
+		$TAB[$r['noakun']]['debet'] = (float)$r['debet'];
+		$TAB[$r['noakun']]['kredit'] = (float)$r['kredit'];
+		$TAB[$r['noakun']]['salak'] = $TAB[$r['noakun']]['sawal'] + $r['debet'] - $r['kredit'];
+	}
+}
+
+#buang akun yang nol semua, bila diminta
+if ($tampilanId == 1) {
+	foreach ($TAB as $k => $d) {
+		if ($d['sawal'] == 0 && $d['debet'] == 0 && $d['kredit'] == 0) {
+			unset($TAB[$k]);
+		}
+	}
+}
+
+$hdpt = setheadreport($pt, $pt);
+if ($gudang != '') {
+	$rUnit = fetchData("select namaorganisasi from " . $dbname . ".organisasi where kodeorganisasi='" . addslashes($gudang) . "'");
+	$nmUnit = $gudang . (count($rUnit) > 0 ? ' - ' . $rUnit[0]['namaorganisasi'] : '');
+} else {
+	$nmUnit = 'Seluruh unit PT ' . $pt;
+}
+$infofilter = 'PT: ' . $pt . ' | Unit: ' . $nmUnit . ' | Periode: ' . $periode . ' s/d ' . $periode1 . ' | Revisi: ' . $revisi;
+
+function bbT($v)
 {
-    $namapt=strtoupper($bar->namaorganisasi);
+	return utf8_decode($v);
 }
 
-//ambil namagudang
-$str=$owlPDO->query("select namaorganisasi from ".$dbname.".organisasi where kodeorganisasi='".$gudang."'");
-$namagudang='';
-$str->setFetchMode(PDO::FETCH_OBJ);
-while($bar=$str->fetch())
+#nama akun yang kepanjangan dipotong+"..." supaya tidak tumpang tindih ke kolom sebelah
+function bbFitTeks($pdf, $txt, $w, $f = 8)
 {
-    $namagudang=strtoupper($bar->namaorganisasi);
+	$txt = bbT($txt);
+	$pdf->SetFont('Arial', '', $f);
+	if ($pdf->GetStringWidth($txt) <= $w - 2) {
+		return $txt;
+	}
+	while (strlen($txt) > 1 && $pdf->GetStringWidth($txt . '...') > $w - 2) {
+		$txt = substr($txt, 0, -1);
+	}
+	return rtrim($txt) . '...';
 }
 
-//ambil akun laba rugi tahun berjalan:
-$CLM='';
-$str=$owlPDO->query("select noakundebet from ".$dbname.".keu_5parameterjurnal where kodeaplikasi='CLM'");
-$str->setFetchMode(PDO::FETCH_OBJ);
-while($bar=$str->fetch())
+#pindah halaman manual per baris (bukan auto-page-break FPDF) supaya aman untuk data banyak baris
+function bbMuat($pdf, $h)
 {
-    $CLM=$bar->noakundebet;
+	if ($pdf->GetY() + $h > $pdf->h - $pdf->bMargin) {
+		$pdf->AddPage();
+	}
 }
 
-//ambil semua noakun dari bulan lalu dan bulan ini
-$lmperiode=mktime(0,0,0,substr($periode,5,2)-1,4,substr($periode,0,4));
-$lmperiode=date('Y-m',$lmperiode);
-if($_SESSION['language']=='ID'){
-    $str="select distinct noakun,namaakun from ".$dbname.".keu_5akun where  noakun!='".$CLM."' and noakun not like '3%' ".$where." order by noakun";
-}
-else{
-    $str="select distinct noakun,namaakun1 as namaakun from ".$dbname.".keu_5akun where  noakun!='".$CLM."' and noakun not like '3%' ".$where." order by noakun";
-}
-$res=$owlPDO->query($str);
-$res->setFetchMode(PDO::FETCH_OBJ);
-$TAB=Array();
-while($bar=$res->fetch())
+class PDF extends FPDF
 {
-    $TAB[$bar->noakun]['noakun']=$bar->noakun;
-    $TAB[$bar->noakun]['namaakun']=$bar->namaakun;
-    $TAB[$bar->noakun]['sawal']=0;
-    $TAB[$bar->noakun]['salak']=0;
+	public $infofilter = '';
+	public $colW = array();
+
+	function Header()
+	{
+		global $hdpt;
+		$width = $this->w - $this->lMargin - $this->rMargin;
+		if (file_exists($hdpt['logo'])) {
+			$this->Image($hdpt['logo'], $this->lMargin, $this->tMargin, 20);
+		}
+		$this->SetFont('Arial', 'B', 11);
+		$this->SetXY($this->lMargin + 24, $this->tMargin + 2);
+		$this->Cell(160, 6, bbT($hdpt['nama']), 0, 1, 'L');
+		$this->SetY($this->tMargin + 15);
+		$this->SetFont('Arial', 'B', 13);
+		$this->Cell($width, 7, 'NERACA SALDO', 0, 1, 'C');
+		$this->SetFont('Arial', '', 8);
+		$this->Cell($width, 5, bbT($this->infofilter), 0, 1, 'C');
+		$this->Cell($width, 5, bbT('Ditarik oleh ' . $_SESSION['empl']['name'] . ' (' . $_SESSION['standard']['username'] . ') pada ' . date('d-m-Y H:i:s')), 0, 1, 'C');
+		$this->Ln(1);
+
+		$this->SetFillColor(220, 220, 220);
+		$this->SetFont('Arial', 'B', 8);
+		$judul = array('No', 'No Akun', 'Nama Akun', 'Saldo Awal', 'Debet', 'Kredit', 'Saldo Akhir');
+		foreach ($judul as $i => $j) {
+			$this->Cell($this->colW[$i], 6, $j, 1, 0, 'C', true);
+		}
+		$this->Ln();
+	}
+
+	function Footer()
+	{
+		$this->SetY(-12);
+		$this->SetFont('Arial', 'I', 7);
+		$this->Cell(0, 8, 'Halaman ' . $this->PageNo() . ' / {nb}', 0, 0, 'R');
+	}
 }
 
-
-if($regional=='' && $gudang=='')
-{
-   $where =" and kodeorg in(select kodeorganisasi from ".$dbname.".organisasi where induk='".$pt."' and length(kodeorganisasi)=4)";
-}
-else if($regional!='' && $gudang=='')
-{
-    $where=" and kodeorg in (select kodeunit from ".$dbname.".bgt_regional_assignment where regional='".$regional."'"
-            . " and kodeunit in (select kodeorganisasi from ".$dbname.".organisasi where induk='".$pt."')) ";   
-}
-else
-{
-    $where =" and kodeorg ='".$gudang."'";
-}
-
-$str="select sum(awal".substr(str_replace("-","",$periode),4,2).") as sawal,noakun from ".$dbname.".keu_saldobulanan 
-      where periode ='".str_replace("-","",$periode)."' and noakun!='".$CLM."'  ".$where." and noakun not like '3%' group by noakun order by noakun";
-$res=$owlPDO->query($str);
-$res->setFetchMode(PDO::FETCH_OBJ);
-while($bar=$res->fetch())
-{
-    $TAB[$bar->noakun]['sawal']=$bar->sawal;
-    $TAB[$bar->noakun]['salak']=$bar->sawal;
-}
-
-$str="select sum(debet) as debet,sum(kredit) as kredit,noakun from ".$dbname.".keu_jurnaldt_vw
-        where periode>='".$periode."' and periode<='".$periode1."' ".$where."
-        and noakun!='".$CLM."' and revisi <= '".$revisi."' group by noakun"; #tidak sama dengan laba/rugi berjalan
-
-$res=$owlPDO->query($str);
-$res->setFetchMode(PDO::FETCH_OBJ);
-while($bar=$res->fetch())
-{
-        $TAB[$bar->noakun]['debet']=$bar->debet;
-        $TAB[$bar->noakun]['kredit']=$bar->kredit;
-        $TAB[$bar->noakun]['salak']=$TAB[$bar->noakun]['sawal']+$bar->debet-$bar->kredit;
-    } 
-
-//=================================================
-class PDF extends FPDF {
-    function Header() {
-        global $namapt;
-        global $periode;
-        global $gudang;
-        $this->SetFont('Arial','B',9); 
-        $this->Cell($this->w-$this->rMargin-$this->lMargin,3,$namapt,'',1,'R');
-        $this->SetFont('Arial','B',12);
-        $this->Cell(190,3,strtoupper($_SESSION['lang']['neracasaldo']),0,1,'C');
-        $this->SetFont('Arial','',9);
-        $this->Cell(15,3,$_SESSION['lang']['tanggal'],'',0,'L');
-        $this->Cell(2,3,':','',0,'L');
-        $this->Cell(35,3,date('d-m-Y H:i'),0,1,'L');
-        $this->Cell(15,3,'Unit','',0,'L');
-        $this->Cell(2,3,':','',0,'L');
-        $this->Cell(133,3,$gudang,0,0,'L');
-        $this->Cell(100,3,$_SESSION['lang']['page'],'',0,'R');
-        $this->Cell(2,3,':','',0,'L');
-        $this->Cell(35,3,$this->PageNo(),'',1,'L');
-        $this->Cell(15,3,'Periode','',0,'L');
-        $this->Cell(2,3,':','',0,'L');
-        $this->Cell(133,3,$periode,0,0,'L');
-        $this->Cell(100,3,'User','',0,'R');
-        $this->Cell(2,3,':','',0,'L');
-        $this->Cell(35,3,$_SESSION['standard']['username'],'',1,'L');
-        $this->Ln();
-        $this->SetFont('Arial','',7);
-        $this->Cell(15,5,$_SESSION['lang']['nomor'],1,0,'C');
-        $this->Cell(20,5,$_SESSION['lang']['noakun'],1,0,'C');	
-        $this->Cell(160,5,$_SESSION['lang']['namaakun'],1,0,'C');	
-        $this->Cell(20,5,$_SESSION['lang']['saldoawal'],1,0,'C');	
-        $this->Cell(20,5,$_SESSION['lang']['debet'],1,0,'C');
-        $this->Cell(20,5,$_SESSION['lang']['kredit'],1,0,'C');
-        $this->Cell(20,5,$_SESSION['lang']['saldoakhir'],1,0,'C');
-        $this->Ln();						
-        $this->Ln();						
-    }
-}
-//================================
-$pdf=new PDF('L','mm','A4');
+$pdf = new PDF('P', 'mm', 'A4');
+$pdf->infofilter = $infofilter;
+$pdf->AliasNbPages();
+#margin bawah 16 dipakai murni sebagai batas nspMuat/bbMuat (auto-page-break FPDF tetap mati) supaya baris
+#terakhir tidak tumpang tindih dengan teks "Halaman.." di Footer() yang ada di -12
+$pdf->SetAutoPageBreak(false, 16);
+$width = $pdf->w - $pdf->lMargin - $pdf->rMargin;
+$pdf->colW = array(10, 22, $width - 10 - 22 - 30 * 4, 30, 30, 30, 30);
 $pdf->AddPage();
-$sal_awal=0;
-$sal_debet=0;
-$sal_kredit=0;
-$sal_salak=0;    
-foreach($TAB as $baris => $data)
-{
-    if($tampilanId==1){
-        if(($data['sawal']==0)&&($data['debet']==0)&&($data['kredit']==0)){
-            continue;
-        }
-    }
-	$no+=1;
-	
-	setIt($data['sawal'],0);
-	setIt($data['debet'],0);
-	setIt($data['kredit'],0);
-	setIt($data['salak'],0);
-    $pdf->Cell(15,5,$no,0,0,'C');
-    $pdf->Cell(20,5,$data['noakun'],0,0,'L');
-    $pdf->Cell(160,5,$data['namaakun'],0,0,'L');				
-    $pdf->Cell(20,5,number_format($data['sawal'],2),0,0,'R');	
-    $pdf->Cell(20,5,number_format($data['debet'],2),0,0,'R');
-    $pdf->Cell(20,5,number_format($data['kredit'],2),0,0,'R');	
-    $pdf->Cell(20,5,number_format($data['salak'],2),0,1,'R');	
-	
-    $sal_awal+=$data['sawal'];
-    $sal_debet+=$data['debet'];
-    $sal_kredit+=$data['kredit'];
-    $sal_salak+=$data['salak'];
-} 
-$pdf->Cell(195,5,'T O T A L',0,0,'C');			
-$pdf->Cell(20,5,number_format($sal_awal,2),0,0,'R');	
-$pdf->Cell(20,5,number_format($sal_debet,2),0,0,'R');
-$pdf->Cell(20,5,number_format($sal_kredit,2),0,0,'R');	
-$pdf->Cell(20,5,number_format($sal_salak,2),0,1,'R');      
-$pdf->Output();		
-?>
+$h = 6;
+$no = 0;
+$tot = array('sawal' => 0, 'debet' => 0, 'kredit' => 0, 'salak' => 0);
+
+if (count($TAB) == 0) {
+	$pdf->SetFont('Arial', '', 9);
+	$pdf->Cell($width, 8, 'Data tidak ditemukan', 1, 1, 'C');
+} else {
+	foreach ($TAB as $noakun => $d) {
+		$no++;
+		bbMuat($pdf, $h);
+		$pdf->SetFont('Arial', '', 8);
+		$c = $pdf->colW;
+		$pdf->Cell($c[0], $h, $no, 1, 0, 'C');
+		$pdf->Cell($c[1], $h, $noakun, 1, 0, 'L');
+		$pdf->Cell($c[2], $h, bbFitTeks($pdf, $d['namaakun'], $c[2]), 1, 0, 'L');
+		$pdf->Cell($c[3], $h, number_format($d['sawal'], 2), 1, 0, 'R');
+		$pdf->Cell($c[4], $h, number_format($d['debet'], 2), 1, 0, 'R');
+		$pdf->Cell($c[5], $h, number_format($d['kredit'], 2), 1, 0, 'R');
+		$pdf->Cell($c[6], $h, number_format($d['salak'], 2), 1, 0, 'R');
+		$pdf->Ln();
+		$tot['sawal'] += $d['sawal'];
+		$tot['debet'] += $d['debet'];
+		$tot['kredit'] += $d['kredit'];
+		$tot['salak'] += $d['salak'];
+	}
+	bbMuat($pdf, $h);
+	$pdf->SetFont('Arial', 'B', 8);
+	$pdf->SetFillColor(240, 240, 240);
+	$c = $pdf->colW;
+	$pdf->Cell($c[0] + $c[1] + $c[2], $h, 'TOTAL', 1, 0, 'C', true);
+	$pdf->Cell($c[3], $h, number_format($tot['sawal'], 2), 1, 0, 'R', true);
+	$pdf->Cell($c[4], $h, number_format($tot['debet'], 2), 1, 0, 'R', true);
+	$pdf->Cell($c[5], $h, number_format($tot['kredit'], 2), 1, 0, 'R', true);
+	$pdf->Cell($c[6], $h, number_format($tot['salak'], 2), 1, 0, 'R', true);
+	$pdf->Ln();
+}
+$pdf->Output();

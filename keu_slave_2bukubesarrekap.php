@@ -85,19 +85,24 @@ while($bar=$res->fetch())
     $TAB[$bar->noakun]['salak']=0;
 }
 
+#daftar kodeorg diambil dulu (query kecil terpisah) lalu ditempel sebagai IN(literal) di query besar -
+#jauh lebih cepat daripada IN(select ...) langsung (lihat catatan optimasi di keu_2bukubesarnew_slave.php)
 if($regional=='' && $gudang=='')
 {
-   $where =" and kodeorg in(select kodeorganisasi from ".$dbname.".organisasi where induk='".$pt."' and length(kodeorganisasi)=4)";
+    $rUnit = fetchData("select kodeorganisasi from ".$dbname.".organisasi where induk='".addslashes($pt)."' and length(kodeorganisasi)=4");
 }
 else if($regional!='' && $gudang=='')
 {
-    $where=" and kodeorg in (select kodeunit from ".$dbname.".bgt_regional_assignment where regional='".$regional."'"
-            . " and kodeunit in (select kodeorganisasi from ".$dbname.".organisasi where induk='".$pt."')) "; 
+    $rUnit = fetchData("select kodeunit as kodeorganisasi from ".$dbname.".bgt_regional_assignment where regional='".addslashes($regional)."'"
+            . " and kodeunit in (select kodeorganisasi from ".$dbname.".organisasi where induk='".addslashes($pt)."')");
 }
 else
 {
-    $where =" and kodeorg ='".$gudang."'";
+    $rUnit = array(array('kodeorganisasi'=>$gudang));
 }
+$listUnit = array();
+foreach($rUnit as $r){ $listUnit[] = "'".addslashes($r['kodeorganisasi'])."'"; }
+$where = (count($listUnit) > 0) ? " and kodeorg in (".implode(',', $listUnit).")" : " and 1=0";
 
 
 
@@ -139,29 +144,47 @@ if($tipelaporan=='excel'){
     $border ='';
 }
 $nmorg	= makeOption($dbname,'organisasi','kodeorganisasi,namaorganisasi',"kodeorganisasi='".$gudang."'");
-if($tipelaporan!='html'){
-	$stream.="Laporan Neraca<br>";
-	if($gudang==''){
-		$unit 	= 'Seluruh Unit';
-		$stream.="".$unit."<br>";
-	}else{
-		$unit = $gudang;
-		$stream.="".$unit." - ".$nmorg[$unit]."<br>";
+
+if($gudang==''){
+	$unit = 'Seluruh Unit';
+	$infoUnit = $unit;
+}else{
+	$unit = $gudang;
+	$infoUnit = $unit." - ".(isset($nmorg[$unit]) ? $nmorg[$unit] : '');
+}
+$infofilter = 'PT: '.$pt.' | Unit: '.$infoUnit.' | Periode: '.$periode.' s/d '.$periode1.' | Revisi: '.$revisi;
+
+#kop/logo/ditarik-oleh format standar (sama seperti laporan lain), hanya untuk export Excel, bukan preview html
+if($tipelaporan=='excel'){
+	$hdpt = setheadreport($pt, $pt);
+	$logourl = '';
+	if (file_exists($hdpt['logo'])) {
+		$skema = (isset($_SERVER['HTTPS']) and $_SERVER['HTTPS'] != 'off') ? 'https' : 'http';
+		$logourl = $skema . "://" . @$_SERVER['HTTP_HOST'] . rtrim(dirname(@$_SERVER['SCRIPT_NAME']), '/') . "/" . $hdpt['logo'];
 	}
-	$stream.="Periode ".$periode." s/d ".$periode1."<br><br>";
+	$kolom = 7;
+	$stream .= "<table>
+		<tr><td colspan=" . $kolom . " height='70' style='height:52pt'>" . ($logourl != '' ? "<img src='" . $logourl . "' height='60'>" : "") . "</td></tr>
+		<tr><td colspan=" . $kolom . "><b>" . htmlspecialchars($hdpt['nama']) . "</b></td></tr>
+		<tr><td colspan=" . $kolom . "><b>NERACA SALDO</b></td></tr>
+		<tr><td colspan=" . $kolom . ">" . htmlspecialchars($infofilter) . "</td></tr>
+		<tr><td colspan=" . $kolom . ">Ditarik oleh " . htmlspecialchars($_SESSION['empl']['name']) . " (" . htmlspecialchars($_SESSION['standard']['username']) . ") pada " . date('d-m-Y H:i:s') . "</td></tr>
+		<tr><td colspan=" . $kolom . ">&nbsp;</td></tr>
+		</table>";
 }
 $stream.="
-        <table class=sortable cellspacing=1 ".$border.">
+        <table class=sortable cellspacing=1 cellpadding=3 ".$border.">
+            <colgroup><col style='width:50px'><col style='width:80px'><col style='width:450px'><col style='width:130px'><col style='width:130px'><col style='width:130px'><col style='width:130px'></colgroup>
             <thead>
                 <tr>
-                    <th align=center style='width:50px;'>".$_SESSION['lang']['nomor']."</th>
-                    <th align=center style='width:80px;'>".$_SESSION['lang']['noakun']."</th>
-                    <th align=center style='width:450px;'>".$_SESSION['lang']['namaakun']."</th>
-                    <th align=center style='width:130px;'>".$_SESSION['lang']['saldoawal']."</th>
-                    <th align=center style='width:130px;'>".$_SESSION['lang']['debet']."</th>
-                    <th align=center style='width:130px;'>".$_SESSION['lang']['kredit']."</th>
-                    <th align=center style='width:130px;'>".$_SESSION['lang']['saldoakhir']."</th>
-                </tr> 
+                    <th align=center>".$_SESSION['lang']['nomor']."</th>
+                    <th align=center>".$_SESSION['lang']['noakun']."</th>
+                    <th align=center>".$_SESSION['lang']['namaakun']."</th>
+                    <th align=center>".$_SESSION['lang']['saldoawal']."</th>
+                    <th align=center>".$_SESSION['lang']['debet']."</th>
+                    <th align=center>".$_SESSION['lang']['kredit']."</th>
+                    <th align=center>".$_SESSION['lang']['saldoakhir']."</th>
+                </tr>
             </thead>
             <tbody>";
 
@@ -189,13 +212,13 @@ $stream.="
                 }    
 
                 $stream.="<tr class=rowcontent style='cursor:pointer;' title='Click untuk melihat detail' onclick=\"lihatDetail('".$data['noakun']."','".$periode."','".$periode1."','".$lmperiode."','".$pt."','".$regional."','".$gudang."','".$revisi."',event);\">
-                    <td style='width:50px;' align=center>".$no."</td>
-                    <td style='width:80px;'>".$data['noakun']."</td>     
-                    <td style='width:450px;'>".$data['namaakun']."</td>
-                    <td align=right style='width:130px;'>".$qsawal."</td>
-                    <td align=right style='width:130px;'>".$qdebet."</td>
-                    <td align=right style='width:130px;'>".$qkredit."</td>   
-                    <td align=right style='width:130px;'>".$qakhir."</td>    
+                    <td align=center>".$no."</td>
+                    <td>".$data['noakun']."</td>
+                    <td>".$data['namaakun']."</td>
+                    <td align=right>".$qsawal."</td>
+                    <td align=right>".$qdebet."</td>
+                    <td align=right>".$qkredit."</td>
+                    <td align=right>".$qakhir."</td>
                 </tr>";
 				@$gtsawal+=$data['sawal'];
 				@$gtdb+=$data['debet'];

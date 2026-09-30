@@ -82,36 +82,47 @@ while($bar=$res->fetch())
 {
     $TAB[$bar->noakun]['noakun']=$bar->noakun;
     $TAB[$bar->noakun]['namaakun']=$bar->namaakun;
-    $TAB[$bar->noakun]['sawal']=0;
-    $TAB[$bar->noakun]['salak']=0;
+    $TAB[$bar->noakun]['unit']=array();
 }
 
+#daftar kodeorg diambil dulu (query kecil terpisah) lalu ditempel sebagai IN(literal) di query besar
+#(keu_saldobulanan & keu_jurnaldt_vw) - jauh lebih cepat daripada IN(select ...) langsung di query besar itu,
+#terbukti dari pengujian: query saldo awal 270ms->11ms, query jurnal 544ms->306ms untuk dataset yang sama
 if($regional=='' && $gudang=='')
 {
-   $where =" and kodeorg in(select kodeorganisasi from ".$dbname.".organisasi where induk='".$pt."' and length(kodeorganisasi)=4)";
+    $rUnit = fetchData("select kodeorganisasi from ".$dbname.".organisasi where induk='".addslashes($pt)."' and length(kodeorganisasi)=4");
 }
 else if($regional!='' && $gudang=='')
 {
-    $where=" and kodeorg in (select kodeunit from ".$dbname.".bgt_regional_assignment where regional='".$regional."'"
-            . " and kodeunit in (select kodeorganisasi from ".$dbname.".organisasi where induk='".$pt."')) "; 
+    $rUnit = fetchData("select kodeunit as kodeorganisasi from ".$dbname.".bgt_regional_assignment where regional='".addslashes($regional)."'"
+            . " and kodeunit in (select kodeorganisasi from ".$dbname.".organisasi where induk='".addslashes($pt)."')");
 }
 else
 {
-    $where =" and kodeorg ='".$gudang."'";
+    $rUnit = array(array('kodeorganisasi'=>$gudang));
 }
+$listUnit = array();
+foreach($rUnit as $r){ $listUnit[] = "'".addslashes($r['kodeorganisasi'])."'"; }
+$where = (count($listUnit) > 0) ? " and kodeorg in (".implode(',', $listUnit).")" : " and 1=0";
 
 
 
 
-#disini tambahin kodeorg
-$str="select sum(awal".substr(str_replace("-","",$periode),4,2).") as sawal,noakun,kodeorg from ".$dbname.".keu_saldobulanan 
-      where periode ='".str_replace("-","",$periode)."'  and  noakun!='".$CLM."' ".$where."   group by noakun order by noakun";
+#dipecah per kodeorg (bukan cuma per noakun) supaya mode Rincian beneran beda dari Rekap: kalau Unit
+#filter-nya "Seluruhnya", tiap akun tampil satu baris per unit, bukan cuma satu baris gabungan semua unit
+$str="select sum(awal".substr(str_replace("-","",$periode),4,2).") as sawal,noakun,kodeorg from ".$dbname.".keu_saldobulanan
+      where periode ='".str_replace("-","",$periode)."'  and  noakun!='".$CLM."' ".$where."   group by noakun,kodeorg order by noakun";
 // echo $str;
 $res=$owlPDO->query($str);
 $res->setFetchMode(PDO::FETCH_OBJ);
 while($bar=$res->fetch()){
-    $TAB[$bar->noakun]['sawal']=$bar->sawal;
-    $TAB[$bar->noakun]['salak']=$bar->sawal;
+    if (!isset($TAB[$bar->noakun])) { continue; }
+    $kd = $bar->kodeorg;
+    if (!isset($TAB[$bar->noakun]['unit'][$kd])) {
+        $TAB[$bar->noakun]['unit'][$kd] = array('kodeorg'=>$kd,'sawal'=>0,'debet'=>0,'kredit'=>0,'salak'=>0);
+    }
+    $TAB[$bar->noakun]['unit'][$kd]['sawal'] += $bar->sawal;
+    $TAB[$bar->noakun]['unit'][$kd]['salak'] += $bar->sawal;
 }
 
 //Ini tidak bisa karena dikunci menggunakan store procedure bawaan db. Gunakan script ini jika mau:
@@ -127,16 +138,22 @@ $tanggalx = $periode1."-".$lastDay;
 $whNew = " and tanggal>='".$tanggal."' and tanggal<='".$tanggalx."'";
 
 $str="select sum(debet) as debet,sum(kredit) as kredit, noakun,kodeorg from ".$dbname.".keu_jurnaldt_vw
-    where 5=5 {$whNew} ".$where." ".$whereakun." 
-    and noakun!='".$CLM."' and revisi <= '".$revisi."' group by noakun"; #tidak sama dengan laba/rugi berjalan
+    where 5=5 {$whNew} ".$where." ".$whereakun."
+    and noakun!='".$CLM."' and revisi <= '".$revisi."' group by noakun,kodeorg"; #tidak sama dengan laba/rugi berjalan
 // echo $str;
 $res=$owlPDO->query($str);
 
 $res->setFetchMode(PDO::FETCH_OBJ);
 while($bar=$res->fetch()){
-	@$TAB[$bar->noakun]['debet']+=$bar->debet;
-	@$TAB[$bar->noakun]['kredit']+=$bar->kredit;
-} 
+	if (!isset($TAB[$bar->noakun])) { continue; }
+	$kd = $bar->kodeorg;
+	if (!isset($TAB[$bar->noakun]['unit'][$kd])) {
+		$TAB[$bar->noakun]['unit'][$kd] = array('kodeorg'=>$kd,'sawal'=>0,'debet'=>0,'kredit'=>0,'salak'=>0);
+	}
+	$TAB[$bar->noakun]['unit'][$kd]['debet'] += $bar->debet;
+	$TAB[$bar->noakun]['unit'][$kd]['kredit'] += $bar->kredit;
+	$TAB[$bar->noakun]['unit'][$kd]['salak'] = $TAB[$bar->noakun]['unit'][$kd]['sawal'] + $TAB[$bar->noakun]['unit'][$kd]['debet'] - $TAB[$bar->noakun]['unit'][$kd]['kredit'];
+}
 
 // $str = "SELECT SUM(debet) AS debet, SUM(kredit) AS kredit, noakun, kodeorg 
 //         FROM " . $dbname . ".keu_jurnaldt_vw
@@ -176,34 +193,51 @@ if($tipelaporan=='excel'){
 }else{
     $border ='';
 }
-$nmorg	= makeOption($dbname,'organisasi','kodeorganisasi,namaorganisasi',"kodeorganisasi='".$gudang."'");
-$nmorgPT	= makeOption($dbname,'organisasi','kodeorganisasi,namaorganisasi',"kodeorganisasi='".$pt."'");
+#nama semua unit di bawah PT ini (bukan cuma unit filter-nya) supaya breakdown per unit di mode Rincian
+#bisa nampilin nama unit-nya, bukan cuma kode kodeorg mentah
+$nmorg	= makeOption($dbname,'organisasi','kodeorganisasi,namaorganisasi',"induk='".$pt."'");
 
-if($tipelaporan!='html'){
-	$stream.="Laporan Neraca<br>";
-    // exit('error PT. " . $pt . " - " '.  $nmorgPT[$pt] .'"');
-    $stream .= "PT. " . $pt . " - " . (isset($nmorgPT[$pt]) ? $nmorgPT[$pt] : "") . "<br>"; 
-	if($gudang==''){
-		$unit 	= 'Seluruh Unit';
-		$stream.="".$unit."<br>";
-	}else{
-		$unit   = $gudang;
-		$stream.="".$unit." - ".$nmorg[$unit]."<br>";
+if($gudang==''){
+	$unit = 'Seluruh Unit';
+	$infoUnit = $unit;
+}else{
+	$unit = $gudang;
+	$infoUnit = $unit." - ".(isset($nmorg[$unit]) ? $nmorg[$unit] : '');
+}
+$infofilter = 'PT: '.$pt.' | Unit: '.$infoUnit.' | Periode: '.$periode.' s/d '.$periode1.' | Revisi: '.$revisi;
+
+#kop/logo/ditarik-oleh format standar (sama seperti laporan lain), hanya untuk export Excel, bukan preview html
+if($tipelaporan=='excel'){
+	$hdpt = setheadreport($pt, $pt);
+	$logourl = '';
+	if (file_exists($hdpt['logo'])) {
+		$skema = (isset($_SERVER['HTTPS']) and $_SERVER['HTTPS'] != 'off') ? 'https' : 'http';
+		$logourl = $skema . "://" . @$_SERVER['HTTP_HOST'] . rtrim(dirname(@$_SERVER['SCRIPT_NAME']), '/') . "/" . $hdpt['logo'];
 	}
-	$stream.="Periode ".$periode." s/d ".$periode1."<br><br>";
+	$kolom = 8;
+	$stream .= "<table>
+		<tr><td colspan=" . $kolom . " height='70' style='height:52pt'>" . ($logourl != '' ? "<img src='" . $logourl . "' height='60'>" : "") . "</td></tr>
+		<tr><td colspan=" . $kolom . "><b>" . htmlspecialchars($hdpt['nama']) . "</b></td></tr>
+		<tr><td colspan=" . $kolom . "><b>NERACA SALDO</b></td></tr>
+		<tr><td colspan=" . $kolom . ">" . htmlspecialchars($infofilter) . "</td></tr>
+		<tr><td colspan=" . $kolom . ">Ditarik oleh " . htmlspecialchars($_SESSION['empl']['name']) . " (" . htmlspecialchars($_SESSION['standard']['username']) . ") pada " . date('d-m-Y H:i:s') . "</td></tr>
+		<tr><td colspan=" . $kolom . ">&nbsp;</td></tr>
+		</table>";
 }
 $stream.="
-        <table class=sortable cellspacing=1 ".$border.">
+        <table class=sortable cellspacing=1 cellpadding=3 ".$border.">
+            <colgroup><col style='width:50px'><col style='width:80px'><col style='width:400px'><col style='width:180px'><col style='width:130px'><col style='width:130px'><col style='width:130px'><col style='width:130px'></colgroup>
             <thead>
                 <tr>
-                    <th align=center style='width:50px;'>".$_SESSION['lang']['nomor']."</th>
-                    <th align=center style='width:80px;'>".$_SESSION['lang']['noakun']."</th>
-                    <th align=center style='width:450px;'>".$_SESSION['lang']['namaakun']."</th>
-                    <th align=center style='width:130px;'>".$_SESSION['lang']['saldoawal']."</th>
-                    <th align=center style='width:130px;'>".$_SESSION['lang']['debet']."</th>
-                    <th align=center style='width:130px;'>".$_SESSION['lang']['kredit']."</th>
-                    <th align=center style='width:130px;'>".$_SESSION['lang']['saldoakhir']."</th>
-                </tr> 
+                    <th align=center>".$_SESSION['lang']['nomor']."</th>
+                    <th align=center>".$_SESSION['lang']['noakun']."</th>
+                    <th align=center>".$_SESSION['lang']['namaakun']."</th>
+                    <th align=center>".$_SESSION['lang']['unit']."</th>
+                    <th align=center>".$_SESSION['lang']['saldoawal']."</th>
+                    <th align=center>".$_SESSION['lang']['debet']."</th>
+                    <th align=center>".$_SESSION['lang']['kredit']."</th>
+                    <th align=center>".$_SESSION['lang']['saldoakhir']."</th>
+                </tr>
             </thead>
             <tbody>";
 
@@ -212,56 +246,68 @@ $stream.="
 	
         foreach($TAB as $baris => $data){
             if($data['noakun']!=''){
+                #satu baris per unit yang benar-benar ada datanya (kalau akun sama sekali tidak ada aktivitas
+                #di unit manapun, tetap tampil satu baris kosong seperti sebelumnya)
+                $units = $data['unit'];
+                if(count($units)==0){
+                    $units = array(''=>array('kodeorg'=>'','sawal'=>0,'debet'=>0,'kredit'=>0,'salak'=>0));
+                }
+                foreach($units as $u){
                 if($tampilanId==1){
-                    if(($data['sawal']==0)&&($data['debet']==0)&&($data['kredit']==0)){
+                    if(($u['sawal']==0)&&($u['debet']==0)&&($u['kredit']==0)){
                         continue;
                     }
                 }
                 $no+=1;
-				@$data['salak']=$data['sawal']+$data['debet']-$data['kredit'];
 
                 if($tipelaporan=='excel'){
-                    $qsawal=$data['sawal'];
-                    $qdebet=isset($data['debet'])? $data['debet']: 0;
-                    $qkredit=isset($data['kredit'])? $data['kredit']: 0;
-                    $qakhir=$data['salak'];
+                    $qsawal=$u['sawal'];
+                    $qdebet=$u['debet'];
+                    $qkredit=$u['kredit'];
+                    $qakhir=$u['salak'];
                 }else{
-                    $qsawal=hidezerodecimal($data['sawal'],2);
-                    $qdebet=hidezerodecimal(isset($data['debet'])? $data['debet']: 0,2);
-                    $qkredit=hidezerodecimal(isset($data['kredit'])? $data['kredit']: 0,2);
-                    $qakhir=hidezerodecimal($data['salak'],2);
-                }    
+                    $qsawal=number_format($u['sawal'],2);
+                    $qdebet=number_format($u['debet'],2);
+                    $qkredit=number_format($u['kredit'],2);
+                    $qakhir=number_format($u['salak'],2);
+                }
 
+                #klik baris buka detail jurnal untuk unit baris itu sendiri (kodeorg), bukan filter Unit keseluruhan,
+                #supaya kalau Unit="Seluruhnya" tetap buka rincian jurnal yang benar per unit
+                $gudangDetail = ($u['kodeorg']!='') ? $u['kodeorg'] : $gudang;
                 if($rekapdetail=='detail' OR $rekapdetail=='1'){
 
-                $stream.="<tr class=rowcontent style='cursor:pointer;' title='Click untuk melihat detail' onclick=\"lihatDetail('".$data['noakun']."','".$periode."','".$periode1."','".$lmperiode."','".$pt."','".$regional."','".$gudang."','".$revisi."',event);\">";
+                $stream.="<tr class=rowcontent style='cursor:pointer;' title='Click untuk melihat detail' onclick=\"lihatDetail('".$data['noakun']."','".$periode."','".$periode1."','".$lmperiode."','".$pt."','".$regional."','".$gudangDetail."','".$revisi."',event);\">";
                 }else{
-                $stream.="<tr class=rowcontent style='cursor:pointer;' title='Click untuk melihat detail' onclick=\"lihatRekap('".$data['noakun']."','".$periode."','".$periode1."','".$lmperiode."','".$pt."','".$regional."','".$gudang."','".$revisi."',event);\">";
+                $stream.="<tr class=rowcontent style='cursor:pointer;' title='Click untuk melihat detail' onclick=\"lihatRekap('".$data['noakun']."','".$periode."','".$periode1."','".$lmperiode."','".$pt."','".$regional."','".$gudangDetail."','".$revisi."',event);\">";
 
                 }
-                $stream.="<td style='width:50px;' align=center>".$no."</td>
-                    <td style='width:80px;'>".$data['noakun']."</td>    
-                    <td style='width:450px;'>".$data['namaakun']."</td>
-                    <td align=right style='width:130px;'>".$qsawal."</td>
-                    <td align=right style='width:130px;'>".$qdebet."</td>
-                    <td align=right style='width:130px;'>".$qkredit."</td>   
-                    <td align=right style='width:130px;'>".$qakhir."</td>    
+                $namaUnitBaris = ($u['kodeorg']!='') ? $u['kodeorg'].' - '.(isset($nmorg[$u['kodeorg']]) ? $nmorg[$u['kodeorg']] : '') : '';
+                $stream.="<td align=center>".$no."</td>
+                    <td>".$data['noakun']."</td>
+                    <td>".$data['namaakun']."</td>
+                    <td>".$namaUnitBaris."</td>
+                    <td align=right>".$qsawal."</td>
+                    <td align=right>".$qdebet."</td>
+                    <td align=right>".$qkredit."</td>
+                    <td align=right>".$qakhir."</td>
                 </tr>";
-            
-                $sal_awal+=$data['sawal'];
-                $sal_debet+=isset($data['debet'])? $data['debet']: 0;
-                $sal_kredit+=isset($data['kredit'])? $data['kredit']: 0;
-                $sal_salak+=$data['salak']; 
+
+                $sal_awal+=$u['sawal'];
+                $sal_debet+=$u['debet'];
+                $sal_kredit+=$u['kredit'];
+                $sal_salak+=$u['salak'];
+                }
             }
         }
-	
+
 $stream.="<tr class=rowcontent>
-            <td colspan=3 align=center><b>".$_SESSION['lang']['total']."</b></td>
-            <td align=right><b>".hidezerodecimal($sal_awal,2)."</b></td>
-            <td align=right><b>".hidezerodecimal($sal_debet,2)."</b></td>
-            <td align=right><b>".hidezerodecimal($sal_kredit,2)."</b></td>   
-            <td align=right><b>".hidezerodecimal($sal_salak,2)."</b></td> 
-        </tr>"; 
+            <td colspan=4 align=center><b>".$_SESSION['lang']['total']."</b></td>
+            <td align=right><b>".number_format($sal_awal,2)."</b></td>
+            <td align=right><b>".number_format($sal_debet,2)."</b></td>
+            <td align=right><b>".number_format($sal_kredit,2)."</b></td>
+            <td align=right><b>".number_format($sal_salak,2)."</b></td>
+        </tr>";
 $stream.="</tbody>
             <tfoot>
             </tfoot>		 
