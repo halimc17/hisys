@@ -19,6 +19,7 @@ function batalcari(){
 	document.getElementById('divsch').value='';
 	document.getElementById('tglsch').value='';
 	document.getElementById('kontrakcr').value='';
+	document.getElementById('notraksicr').value='';
 }
 
 function hapus(){
@@ -50,9 +51,10 @@ function loadData(num){
 	divsch      = document.getElementById('divsch').value;
 	tglsch      = document.getElementById('tglsch').value;
 	kontrakcr   = document.getElementById('kontrakcr').value;
+	notraksicr  = document.getElementById('notraksicr').value;
 
     param   ='method=loadData&page=' + num;
-    if(nospkcr != ''){      
+    if(nospkcr != ''){
         param  +='&nospkcr=' + nospkcr.trim();
     }
     if(divsch != ''){
@@ -63,6 +65,9 @@ function loadData(num){
     }
     if(kontrakcr != ''){
         param  +='&kontrakcr=' + kontrakcr.trim();
+    }
+    if(notraksicr != ''){
+        param  +='&notraksicr=' + notraksicr.trim();
     }
     tujuan  ='lgl_slave_rekapsewahm.php';
     post_response_text(tujuan, param, respog);
@@ -981,6 +986,64 @@ function deletedetail(kodeorg, periode, notraksi) {
 			}
 		}
 	}
+}
+
+function viewDetailInput(kodeorg,periode,spk,periodebyr,ev) {
+	param = 'method=viewdetailinput' + '&kodeorg=' + kodeorg + '&periode=' + periode;
+	param += '&spk=' + spk;
+	param += '&periodebyr=' + periodebyr;
+	tujuan = 'lgl_slave_rekapsewahm.php';
+	post_response_text(tujuan, param, respog);
+	function respog() {
+		if (con.readyState == 4) {
+			if (con.status == 200) {
+				busy_off();
+				if (!isSaveResponse(con.responseText)) {
+					alertify.alert('Informasi',con.responseText);
+				} else {
+					alertify.popup2("Detail Input - " + spk,con.responseText).set({'resizable':true,'maximizable':true}).resizeTo('70%','60%');
+				}
+			} else {
+				busy_off();
+				error_catch(con.status);
+			}
+		}
+	}
+}
+
+function getFilterParamRekap() {
+	nospkcr    = document.getElementById('nospkcr').value.trim();
+	divsch     = document.getElementById('divsch').value.trim();
+	tglsch     = document.getElementById('tglsch').value.trim();
+	kontrakcr  = document.getElementById('kontrakcr').value.trim();
+	notraksicr = document.getElementById('notraksicr').value.trim();
+	param = '';
+	if (nospkcr != '') param += '&nospkcr=' + nospkcr;
+	if (divsch != '') param += '&divsch=' + divsch;
+	if (tglsch != '') param += '&tglsch=' + tglsch;
+	if (kontrakcr != '') param += '&kontrakcr=' + kontrakcr;
+	if (notraksicr != '') param += '&notraksicr=' + notraksicr;
+	return param;
+}
+function exportExcel() {
+	param = 'method=excel' + getFilterParamRekap();
+	tujuan = 'lgl_slave_rekapsewahm.php?' + param;
+	alertify.popup('Report Ms.Excel', "<iframe frameborder=0 style='width:100%;height:100%;overflow:none' src='" + tujuan + "'></iframe>").set({'resizable':true,'overflow':false}).resizeTo('80%','70%');
+}
+function exportPdf(ev) {
+	param = getFilterParamRekap();
+	tujuan = 'lgl_rekapsewahm_pdf.php?' + param;
+	alertify.popup('Report PDF', "<iframe frameborder=0 style='width:100%;height:100%;overflow:none' src='" + tujuan + "'></iframe>").set({'resizable':true,'overflow':false}).resizeTo('80%','70%');
+}
+function exportExcelRow(kodeorg,periode,spk,periodebyr) {
+	param = 'method=excel&kodeorgx=' + kodeorg + '&periodex=' + periode + '&spkx=' + spk + '&periodebyrx=' + periodebyr;
+	tujuan = 'lgl_slave_rekapsewahm.php?' + param;
+	alertify.popup('Report Ms.Excel', "<iframe frameborder=0 style='width:100%;height:100%;overflow:none' src='" + tujuan + "'></iframe>").set({'resizable':true,'overflow':false}).resizeTo('80%','70%');
+}
+function exportPdfRow(kodeorg,periode,spk,periodebyr) {
+	param = 'kodeorgx=' + kodeorg + '&periodex=' + periode + '&spkx=' + spk + '&periodebyrx=' + periodebyr;
+	tujuan = 'lgl_rekapsewahm_pdf.php?' + param;
+	alertify.popup('Report PDF', "<iframe frameborder=0 style='width:100%;height:100%;overflow:none' src='" + tujuan + "'></iframe>").set({'resizable':true,'overflow':false}).resizeTo('80%','70%');
 }
 
 function unposting(kodeorg,periode,spk,nobapp,periodebyr, numrow) {
