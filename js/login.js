@@ -6,8 +6,9 @@ function login()
         var lang=document.getElementById('language').options[document.getElementById('language').selectedIndex].value;
         var theme=document.getElementById('theme').options[document.getElementById('theme').selectedIndex].value;
 
+        document.getElementById('msg').innerHTML = '';
         if (uname == '' || password == '') {
-                alert('Your UserName and Password are required');
+                document.getElementById('msg').innerHTML = 'Username dan Password wajib diisi.';
                 document.getElementById('name').focus();
         }else {
                 param = 'uname=' + uname + '&password=' + password +'&language='+lang+'&theme='+theme;
@@ -24,7 +25,7 @@ function login()
                         if (con.status == 200) {
                                 busy_off();
                                 if (!isSaveResponse(con.responseText)) {
-                                        alert(con.responseText);
+                                        document.getElementById('msg').innerHTML = con.responseText;
                                 }
                                 else {
                                         if (con.responseText.lastIndexOf('Wrong') > -1) {
@@ -55,10 +56,28 @@ function login()
         }	   
 }
 
-function resetf()//clear from	
+function resetf()//clear from
 {
         document.getElementById('name').value='';
-        document.getElementById('pwd').value='';	
+        document.getElementById('pwd').value='';
+}
+
+function togglePwd()
+{
+        var pwd = document.getElementById('pwd');
+        var eyeOpen = document.getElementById('eyeOpen');
+        var eyeClosed = document.getElementById('eyeClosed');
+        if (pwd.type === 'password') {
+                pwd.type = 'text';
+                eyeOpen.style.display = 'none';
+                eyeClosed.style.display = 'inline';
+                document.getElementById('pwdToggle').title = 'Sembunyikan password';
+        } else {
+                pwd.type = 'password';
+                eyeOpen.style.display = 'inline';
+                eyeClosed.style.display = 'none';
+                document.getElementById('pwdToggle').title = 'Tampilkan password';
+        }
 }
 
 function enter(e)
