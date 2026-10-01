@@ -507,9 +507,42 @@ function postinggr(notransaksi, tipe) {
       if (con.status == 200) {
         busy_off();
         if (!isSaveResponse(con.responseText)) {
-          alert(con.responseText);
+          alertify.error(con.responseText);
         } else {
-          // closeDialog5();
+          alertify.success("Posting berhasil");
+          // tutup popup form Posting GR (dynamic5), tampilkan hasilnya pakai alertify.alert
+          // biar seragam gayanya sama kayak popup hasil unposting
+          if (document.getElementById("dynamic5")) {
+            closeDialog5();
+          }
+          alertify.alert("Detail Jurnal Terbentuk", con.responseText).set({'resizable':true,'maximizable':true}).resizeTo('60%','60%');
+          getpage();
+        }
+      } else {
+        busy_off();
+        error_catch(con.status);
+      }
+    }
+  }
+}
+
+function unpostinggr(notransaksi) {
+  param = "method=unpostinggr&notransaksi=" + notransaksi;
+  tujuan = "log_slave_noninventory.php";
+
+  if (confirm("Anda yakin ingin unposting no transaksi " + notransaksi + " ?")) {
+    post_response_text(tujuan, param, respog);
+  }
+
+  function respog() {
+    if (con.readyState == 4) {
+      if (con.status == 200) {
+        busy_off();
+        if (!isSaveResponse(con.responseText)) {
+          alertify.error(con.responseText);
+        } else {
+          alertify.success("Unposting berhasil");
+          alertify.alert("Detail Jurnal Dihapus", con.responseText).set({'resizable':true,'maximizable':true}).resizeTo('60%','60%');
           getpage();
         }
       } else {
