@@ -222,9 +222,11 @@ try {
 
 				// Cek Data Karyawan Hist Karyawan
 				// NIK pekerja bisa tersimpan di kolom nik ATAU nikpemel tergantung tipe transaksi (mis. tipe TM pakai nikpemel)
+				// version_type='b' disamakan dengan filter di query data histori (dibawah) - kalau beda, cek ini bisa
+				// bernilai true padahal query data histori tidak dapat match apapun (lokasitugas/kodeorg jadi kosong semua)
 				$scekhst = "SELECT a.karyawanid FROM " . $dbname . ".datakaryawan_hist a
 				JOIN " . $dbname . ".kebun_prestasi_detail b ON (a.karyawanid = b.nik OR a.karyawanid = b.nikpemel)
-				WHERE a.periodegaji='{$prdgj}' AND b.notransaksi='{$notranX}'";
+				WHERE a.periodegaji='{$prdgj}' AND a.version_type='b' AND b.notransaksi='{$notranX}'";
 				$rcekhst = fetchData($scekhst);
 				$counthst = count($rcekhst);
 
