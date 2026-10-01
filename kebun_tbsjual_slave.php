@@ -24,6 +24,56 @@ foreach($res as $bar){
 	$namacustomer[$bar['kodecustomer']]=$bar['namacustomer'];
 }
 
+#= Info "dicetak oleh" & kop surat (logo+nama/alamat PT) - standar dipakai bareng
+#= oleh export excel/pdf detail BA maupun export daftar BA, biar gak dobel logic.
+function getInfoCetakTbsjual() {
+	$namapencetak = $_SESSION['empl']['name'];
+	if ($namapencetak == '') {
+			$namapencetak = $_SESSION['standard']['username'];
+	}
+	return "Dicetak oleh : ".$namapencetak." pada ".date('d-m-Y H:i:s');
+}
+
+function getKopHeaderTbsjual($dbname, $unitKode, $tipe = 'pdf') {
+	# Pakai fungsi standar yang sudah ada (sama persis dipakai log_realisasispkx_excel.php
+	# / log_realisasispkx_pdflist.php) biar konsisten dengan laporan lain, bukan bikin lookup sendiri.
+	$ptKode = getindukPT($unitKode);
+	$hd = setheadreport($ptKode, $ptKode);
+
+	$logoSrc = '';
+	if (file_exists($hd['logo'])) {
+			if ($tipe == 'excel') {
+					# Excel buka file .xls ini sebagai dokumen HTML lepas dari server (bisa
+					# di komputer lain), jadi logo-nya HARUS url http absolut supaya Excel
+					# yang nge-fetch gambarnya sendiri - base64/path lokal bikin gak kebuka.
+					$skema = (isset($_SERVER['HTTPS']) and $_SERVER['HTTPS'] != 'off') ? 'https' : 'http';
+					$logoSrc = $skema."://".@$_SERVER['HTTP_HOST'].rtrim(dirname(@$_SERVER['SCRIPT_NAME']), '/')."/".$hd['logo'];
+			} else {
+					# PDF dirender dompdf di server, jadi cukup path lokal langsung.
+					$logoSrc = $hd['logo'];
+			}
+	}
+
+	# Logo & alamat ditumpuk (bukan 2 kolom sejajar pakai class CSS) - sama
+	# persis pola log_realisasispkx_excel.php. Excel gak dikasih <style> block
+	# kita (cuma dipasang di dompdf), jadi class CSS semacam kop-logo/kop-table
+	# gak ada artinya di Excel - logonya dulu malah render ukuran asli filenya
+	# dan nabrak/numpuk konten lain. Pakai atribut height= langsung di <img>
+	# supaya ukurannya kekontrol di Excel maupun PDF tanpa perlu CSS sama sekali.
+	$out = "<table>";
+	if ($logoSrc != '') {
+			$out .= "<tr><td height='60' style='height:45pt;'><img src='".$logoSrc."' height='50'></td></tr>";
+	}
+	$out .= "<tr><td><b>".$hd['nama']."</b></td></tr>";
+	if (trim($hd['alamat']) != '') {
+			$out .= "<tr><td>".$hd['alamat']."</td></tr>";
+	}
+	$out .= "<tr><td>&nbsp;</td></tr>";
+	$out .= "</table>";
+
+	return $out;
+}
+
 #= ambil daftar unit didalam pt bentukan array
 // $str = "select * from ".$dbname.".organisasi where (length(kodeorganisasi)=4 or length(kodeorganisasi)=3 or length(kodeorganisasi)=6) and inti=1 ";
 // // echo $str;exit();
@@ -323,16 +373,51 @@ switch($method){
 		$streamRekapTT .= "</table>";
 
 		// ============================================================
-		// OUTPUT KE EXCEL (3 SHEET)
+		// KOP SURAT (logo + nama/alamat PT) + INFO SIAPA YANG MENCETAK -
+		// dipasang di ATAS, sebelum isi laporan
 		// ============================================================
-		$nop = "TBS_".$param['notransaksi']."_".$tgl1excel1."_s/d_".$tgl1excel2.".xls";
-		$xls = new HtmlExcel();
-		$xls->setCss($css);
-		$xls->addSheet("Detail Penjualan TBS", $stream);
-		$xls->addSheet("Rekap Per Tanggal", $streamRekap);
-		$xls->addSheet("Rekap Tahun Tanam", $streamRekapTT);
-		$xls->headers($nop);
-		echo $xls->buildFile();
+		$tipe = isset($param['tipe']) && $param['tipe'] != '' ? $param['tipe'] : 'excel';
+		$kopHeader = getKopHeaderTbsjual($dbname, $res[0]['unit'], $tipe);
+		$infoCetak = getInfoCetakTbsjual();
+
+		if ($tipe == 'pdf') {
+				$streamPdf = "<style>
+						footer .pagenum:before { content: counter(page); }
+						@page { margin-top: 25px; margin-left: 20px; margin-right: 20px; margin-bottom: 40px; }
+						body { font-family: Tahoma, Verdana, Segoe, sans-serif; font-size: 8px; }
+						table { width: 100%; table-layout: fixed; border-collapse: collapse; }
+						th, td { font-size: 8px; word-wrap: break-word; overflow-wrap: break-word; }
+						footer { position: fixed; bottom: -20px; left: 0px; right: 0px; height: 50px; }
+				</style>";
+				$streamPdf .= $kopHeader;
+				$streamPdf .= "<p style='font-size:9px;color:#555555;'>".$infoCetak."</p>";
+				$streamPdf .= "<p align=center style='font-size:14px;'><b>Rekapan Penjualan TBS Periode Tanggal ".$tgl1excel1." s/d ".$tgl1excel2."</b><br>".$namacustomer[$res[0]['kodecustomer']]."</p>";
+				$streamPdf .= $stream;
+				$streamPdf .= "<br>".$streamRekap;
+				$streamPdf .= "<br>".$streamRekapTT;
+				$streamPdf .= "<footer><div class=pagenum-container>Page <span class=pagenum></span></div> ".date('d-m-Y')." </footer>";
+
+				$dompdf = new Dompdf();
+				$dompdf->load_html($streamPdf);
+				$dompdf->setPaper('A4', 'landscape');
+				$dompdf->render();
+				$dompdf->stream("TBS_".$param['notransaksi']."_".$tgl1excel1."_sd_".$tgl1excel2.".pdf", array("Attachment" => 0));
+		} else {
+				// ============================================================
+				// OUTPUT KE EXCEL (3 SHEET)
+				// ============================================================
+				$streamHeaderXls = $kopHeader."<br>".$infoCetak."<br><br>";
+				$stream = $streamHeaderXls.$stream;
+
+				$nop = "TBS_".$param['notransaksi']."_".$tgl1excel1."_s/d_".$tgl1excel2.".xls";
+				$xls = new HtmlExcel();
+				$xls->setCss($css);
+				$xls->addSheet("Detail Penjualan TBS", $stream);
+				$xls->addSheet("Rekap Per Tanggal", $streamRekap);
+				$xls->addSheet("Rekap Tahun Tanam", $streamRekapTT);
+				$xls->headers($nop);
+				echo $xls->buildFile();
+		}
 	break;
 
 	case'posting':
@@ -403,16 +488,16 @@ switch($method){
 	
 		$where=" 1=1 ";
 		if($param['tanggalselesaisch']!='' and $param['tanggalmulaisch']!=''){
-			$where.=" and tanggal between '".$param['tanggalmulaisch']."' and '".$param['tanggalselesaisch']."'";
+			$where.=" and tanggal between '".tanggalsystemn($param['tanggalmulaisch'])."' and '".tanggalsystemn($param['tanggalselesaisch'])."'";
 		}
 		if($param['notransaksisch']!=''){
 			$where.=" and notransaksi like '%".$param['notransaksisch']."%'";
 		}
-		
+
 		if($param['kodecustomersch']!=''){
 			$where.=" and kodecustomer like '%".$param['kodecustomersch']."%'";
 		}
-		
+
 		$limit = 20;
 		$page = 0;
 		if (isset($_POST['page'])) {
@@ -489,6 +574,7 @@ switch($method){
 					$stream.="&nbsp;&nbsp;&nbsp;<img src=images/skyblue/posted.png class=resicon  title='Posted'>";
 				}
 				$stream.="&nbsp;&nbsp;&nbsp;<img src=images/excel.jpg class=resicon  caption='Excel'  title='Excel  ".$bar['notransaksi']."' onclick=\"excel('".$bar['notransaksi']."');\">";
+				$stream.="&nbsp;&nbsp;&nbsp;<img src=images/pdf.jpg class=resicon  caption='PDF'  title='PDF  ".$bar['notransaksi']."' onclick=\"pdfdetail('".$bar['notransaksi']."');\">";
 				// Koreksi cuma boleh untuk transaksi yang sudah posting - sebelum posting datanya
 				// masih bisa diedit lewat menu edit biasa, jadi belum perlu alur approval koreksi.
 				if($bar['posting']==1){
@@ -503,7 +589,137 @@ switch($method){
 		
 		echo $stream."####".$footd;
 	break;
-	
+
+	case'exportlist':
+
+		$where=" 1=1 ";
+		if($param['tanggalselesaisch']!='' and $param['tanggalmulaisch']!=''){
+			$where.=" and tanggal between '".tanggalsystemn($param['tanggalmulaisch'])."' and '".tanggalsystemn($param['tanggalselesaisch'])."'";
+		}
+		if($param['notransaksisch']!=''){
+			$where.=" and notransaksi like '%".$param['notransaksisch']."%'";
+		}
+		if($param['kodecustomersch']!=''){
+			$where.=" and kodecustomer like '%".$param['kodecustomersch']."%'";
+		}
+
+		$str = "select sum(kgbruto) as kgbruto,sum(kgnetto) as kgnetto,sum(kgpotongan) as kgpotongan,sum(totalrp) as totalrp,max(revstatus) as revstatus,tanggal,tanggaltbs1,tanggaltbs2,kodecustomer,keteranganht,unit,notransaksi,posting,createby,postingby from ".$dbname.".".$table." where ".$where." and unit in (" . getOrgDetail(2) . ")  group by notransaksi order by tanggal desc,notransaksi desc";
+		$res = fetchdata($str);
+
+		if (empty($res)) {
+				echo "Warningsystem:Data tidak ditemukan untuk filter yang dipilih.";
+				exit;
+		}
+
+		$arrkaryawan = [];
+		foreach ($res as $bar) {
+				$arrkaryawan[] = $bar['createby'];
+				$arrkaryawan[] = $bar['postingby'];
+		}
+		$namakaryawan = [];
+		$strdt = "select namakaryawan,karyawanid from ".$dbname.".datakaryawan where karyawanid in ('".implode("','", array_unique($arrkaryawan))."')";
+		$resdt = fetchdata($strdt);
+		foreach ($resdt as $bardt) {
+				$namakaryawan[$bardt['karyawanid']] = $bardt['namakaryawan'];
+		}
+
+		$tipe = isset($param['tipe']) && $param['tipe'] != '' ? $param['tipe'] : 'excel';
+
+		$stream = "<table border=1 cellspacing=1 class=sortable width=100%>";
+		$stream .= "<tr class=rowheader bgcolor=#D3D3D3>
+				<td align=center width=25><b>No</b></td>
+				<td align=center width=90><b>".$_SESSION['lang']['notransaksi']."</b></td>
+				<td align=center width=55><b>".$_SESSION['lang']['tanggal']."</b></td>
+				<td align=center width=45><b>".$_SESSION['lang']['unit']."</b></td>
+				<td align=center><b>".$_SESSION['lang']['customer']."</b></td>
+				<td align=center width=90><b>".$_SESSION['lang']['tanggal']." ".$_SESSION['lang']['tbs']."</b></td>
+				<td align=center width=65><b>Berat TBS</b></td>
+				<td align=center width=65><b>".$_SESSION['lang']['netto']."</b></td>
+				<td align=center width=60><b>".$_SESSION['lang']['potongan']."</b></td>
+				<td align=center width=85><b>Total Rp.</b></td>
+				<td align=center width=85><b>Status Revisi</b></td>
+				<td align=center><b>".$_SESSION['lang']['keterangan']."</b></td>
+				<td align=center width=70><b>".$_SESSION['lang']['dibuat']."</b></td>
+				<td align=center width=45><b>".$_SESSION['lang']['posting']."</b></td>
+		</tr>";
+
+		$no = 0;
+		$tkgbruto = $tkgnetto = $tkgpotongan = $ttotalrp = 0;
+		foreach ($res as $bar) {
+				$no++;
+				$statusRevTxt = '-';
+				if ((int)$bar['revstatus'] == 9) $statusRevTxt = 'Menunggu Persetujuan';
+				if ((int)$bar['revstatus'] == 1) $statusRevTxt = 'Disetujui';
+				if ((int)$bar['revstatus'] == 2) $statusRevTxt = 'Ditolak';
+
+				$stream .= "<tr>";
+				$stream .= "<td align=center>".$no."</td>";
+				$stream .= "<td>".$bar['notransaksi']."</td>";
+				$stream .= "<td>".tanggalnormal($bar['tanggal'])."</td>";
+				$stream .= "<td>".$bar['unit']."</td>";
+				$stream .= "<td>".@$namacustomer[$bar['kodecustomer']]."</td>";
+				$stream .= "<td>".tanggalnormal($bar['tanggaltbs1'])." s/d ".tanggalnormal($bar['tanggaltbs2'])."</td>";
+				$stream .= "<td align=right>".number_format($bar['kgbruto'])."</td>";
+				$stream .= "<td align=right>".number_format($bar['kgnetto'])."</td>";
+				$stream .= "<td align=right>".number_format($bar['kgpotongan'])."</td>";
+				$stream .= "<td align=right>".number_format($bar['totalrp'], 2)."</td>";
+				$stream .= "<td align=center>".$statusRevTxt."</td>";
+				$stream .= "<td>".$bar['keteranganht']."</td>";
+				$stream .= "<td>".@$namakaryawan[$bar['createby']]."</td>";
+				$stream .= "<td align=center>".($bar['posting']==1?'Posted':'-')."</td>";
+				$stream .= "</tr>";
+
+				$tkgbruto += $bar['kgbruto'];
+				$tkgnetto += $bar['kgnetto'];
+				$tkgpotongan += $bar['kgpotongan'];
+				$ttotalrp += $bar['totalrp'];
+		}
+
+		$stream .= "<tr bgcolor=#FFD966>
+				<td align=center colspan=6><b>".$_SESSION['lang']['total']."</b></td>
+				<td align=right><b>".number_format($tkgbruto)."</b></td>
+				<td align=right><b>".number_format($tkgnetto)."</b></td>
+				<td align=right><b>".number_format($tkgpotongan)."</b></td>
+				<td align=right><b>".number_format($ttotalrp, 2)."</b></td>
+				<td colspan=4></td>
+		</tr>";
+		$stream .= "</table>";
+
+		$kopHeader = getKopHeaderTbsjual($dbname, $res[0]['unit'], $tipe);
+		$infoCetak = getInfoCetakTbsjual();
+		$judulLaporan = "Daftar BA Penjualan TBS";
+
+		if ($tipe == 'pdf') {
+				$streamPdf = "<style>
+						footer .pagenum:before { content: counter(page); }
+						@page { margin-top: 25px; margin-left: 20px; margin-right: 20px; margin-bottom: 40px; }
+						body { font-family: Tahoma, Verdana, Segoe, sans-serif; font-size: 8px; }
+						table { width: 100%; table-layout: fixed; border-collapse: collapse; }
+						th, td { font-size: 8px; word-wrap: break-word; overflow-wrap: break-word; }
+						footer { position: fixed; bottom: -20px; left: 0px; right: 0px; height: 50px; }
+				</style>";
+				$streamPdf .= $kopHeader;
+				$streamPdf .= "<p style='font-size:9px;color:#555555;'>".$infoCetak."</p>";
+				$streamPdf .= "<p align=center style='font-size:14px;'><b>".$judulLaporan."</b></p>";
+				$streamPdf .= $stream;
+				$streamPdf .= "<footer><div class=pagenum-container>Page <span class=pagenum></span></div> ".date('d-m-Y')." </footer>";
+
+				$dompdf = new Dompdf();
+				$dompdf->load_html($streamPdf);
+				$dompdf->setPaper('A4', 'landscape');
+				$dompdf->render();
+				$dompdf->stream("Daftar_BA_Penjualan_TBS_".date('Ymd_His').".pdf", array("Attachment" => 0));
+		} else {
+				$stream = $kopHeader."<br>".$infoCetak."<br><br>".$stream;
+				$nop = "Daftar_BA_Penjualan_TBS_".date('Ymd_His').".xls";
+				$xls = new HtmlExcel();
+				$xls->setCss($css);
+				$xls->addSheet("Daftar BA Penjualan TBS", $stream);
+				$xls->headers($nop);
+				echo $xls->buildFile();
+		}
+	break;
+
 	case'saveht':
 	
 		#= validasi apakah ada nokontrak dan customer tersebut di pmn_kontrakjual
@@ -615,7 +831,7 @@ switch($method){
 			}
 
 			// 5. Olah Data & Buat Tampilan Tabel Utama
-			$stream = "<div class='table-scroll' style='max-height: 900px; overflow-y: auto; overflow-x: auto; border: 1px solid #ccc; margin-bottom: 15px;'>";
+			$stream = "<div class='table-scroll' style='height: auto; max-height: 900px; overflow-y: auto; overflow-x: auto; border: 1px solid #ccc; margin-bottom: 15px;'>";
 			$stream .= "<table cellpadding=1 cellspacing=1 border=0 class=sortable width=100%>
 				<thead>
 					<tr class=rowheader>
