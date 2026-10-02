@@ -4,6 +4,7 @@ require_once('lib/nangkoelib.php');
 require_once('lib/zLib.php');
 include_once('lib/zFunction.php');
 include("lib/mharvest/getContentAPI.php");
+include_once('lib/mharvest/cekpemanenmobile.php');
 
 // ini_set('display_errors', 1);
 // ini_set('display_startup_errors', 1);
@@ -175,6 +176,9 @@ switch ($method) {
                         $rowsDetail = $resDetail->response['result']['data'];
                         if (is_array($rowsDetail)) {
                             foreach ($rowsDetail as $dt) {
+                                if (pemanenMutuKosong($dt)) {
+                                    continue;
+                                }
                                 $kg = strtoupper($dt['kodeorg']) . '|' . $dt['tanggal'] . '|' . (int)$dt['nikmandor'];
                                 if (isset($sudahAda[$kg]) && !isset($nikErp[$kg][(int)$dt['nik']])) {
                                     $pemanenKurang[$kg][(int)$dt['nik']] = 1;

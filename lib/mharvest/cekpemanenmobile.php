@@ -1,6 +1,14 @@
 <?php
 include_once('lib/mharvest/getContentAPI.php');
 
+# Pemanen mutu hancak tanpa janjang dan tanpa denda tidak berpengaruh ke premi, jadi tidak dihitung sebagai "kurang"
+function pemanenMutuKosong($row)
+{
+    $jjg = (float)$row['jjgbuahbesar'] + (float)$row['jjgbuahkecil'];
+    $denda = isset($row['penalti']) && is_array($row['penalti']) ? array_sum(array_map('floatval', $row['penalti'])) : 0;
+    return $jjg == 0 && $denda == 0;
+}
+
 # Cek kelengkapan pemanen sebelum posting: bandingkan pemanen di mobile dengan yang sudah ada di ERP
 # $tipe: 'mutu' (Mutu Hancak Panen) atau 'ha' (HA Panen), $tanggal: Y-m-d, $nikmandor: karyawanid mandor
 # Hasil: array('gagal' => bool, 'kurang' => array(array('kodeorg' =>, 'nik' =>)))
@@ -82,6 +90,9 @@ function cekPemanenMobile($tipe, $tanggal, $nikmandor)
         $kodeorg = $tipe == 'mutu' ? $row['kodeorg'] : $row['blok'];
         $nik = $tipe == 'mutu' ? $row['nik'] : $row['pemanen'];
         if ($kodeorg == '' || $nik == '') {
+            continue;
+        }
+        if ($tipe == 'mutu' && pemanenMutuKosong($row)) {
             continue;
         }
         $k = strtoupper($kodeorg) . '|' . (int)$nik;
