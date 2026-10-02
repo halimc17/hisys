@@ -94,6 +94,22 @@ for ($x = 0; $x < 20; $x++) {
     $optprd .= "<option value=" . date("Y-m", $dt) . " " . $select . ">" . date("m-Y", $dt) . "</option>";
 }
 
+$optdivsch = "<option value=''>" . $_SESSION['lang']['all'] . "</option>";
+if ($_SESSION['empl']['subbagian'] != "") {
+    $whdivsch = " and kodeorganisasi='" . $_SESSION['empl']['subbagian'] . "'";
+    $whmdrsch = " and subbagian='" . $_SESSION['empl']['subbagian'] . "'";
+} else {
+    $whdivsch = " and induk like '" . $_SESSION['empl']['lokasitugas'] . "%'";
+    $whmdrsch = " and lokasitugas like '" . $_SESSION['empl']['lokasitugas'] . "%'";
+}
+foreach (fetchdata("select kodeorganisasi, namaorganisasi from " . $dbname . ".organisasi where tipe='AFDELING' " . $whdivsch . " order by kodeorganisasi asc") as $dv) {
+    $optdivsch .= "<option value=" . $dv['kodeorganisasi'] . ">" . $dv['kodeorganisasi'] . " - " . $dv['namaorganisasi'] . "</option>";
+}
+$optmdrsch = "<option value=''>" . $_SESSION['lang']['all'] . "</option>";
+foreach (fetchdata("select karyawanid, nik, namakaryawan from " . $dbname . ".datakaryawan where kodejabatan IN ('7') " . $whmdrsch . " order by namakaryawan asc") as $md) {
+    $optmdrsch .= "<option value=" . $md['karyawanid'] . ">" . $md['namakaryawan'] . "</option>";
+}
+
 ##HEADER UNTUK BUAT BARU SAMA LIST-->
 OPEN_BOX('', '<span class=judul>' . getMenu('kebun_download_rekaphektarpanen_mobile') . '</span>');
 echo "<div id=action_list>"; //buka div
@@ -111,11 +127,35 @@ echo "<table>
 					<td>" . $_SESSION['lang']['periode'] . "</td> 
 					<td>:</td>
 					<td>
-                        <select class=select2 id=periodesch onchange='loaddata(0)' style=\"width:130px;\">" . $optprd . "</select>
+                        <select class=select2 id=periodesch onchange='loaddata(0)' style=\"width:200px;\">" . $optprd . "</select>
                     </td>
 				</tr>";
 
-echo "<tr><td><td><td><button class=mybutton onclick=loaddata(0)>" . $_SESSION['lang']['find'] . "</button></td></td></tr></table>";
+echo "<tr>
+						<td>" . $_SESSION['lang']['divisi'] . "</td>
+						<td>:</td>
+						<td><select class=select2 id=divisisch style=\"width:200px;\">" . $optdivsch . "</select></td>
+					</tr>
+					<tr>
+						<td>" . $_SESSION['lang']['mandorpanen'] . "</td>
+						<td>:</td>
+						<td><select class=select2 id=mandorsch style=\"width:200px;\">" . $optmdrsch . "</select></td>
+					</tr>
+					<tr>
+						<td>" . $_SESSION['lang']['tanggal'] . "</td>
+						<td>:</td>
+						<td>
+							<input type=text class=myinputtext id=tglsch1 onmousemove=setCalendar(this.id) onkeypress=return false; size=10 maxlength=10 style=\"width:84px;\" readonly> s/d
+							<input type=text class=myinputtext id=tglsch2 onmousemove=setCalendar(this.id) onkeypress=return false; size=10 maxlength=10 style=\"width:84px;\" readonly>
+						</td>
+					</tr>
+					<tr>
+						<td></td>
+						<td></td>
+						<td><label style=\"display:block;padding-top:2px;\"><input type=checkbox id=cekpemanen style=\"margin:0 5px 0 0;vertical-align:middle;\">Cek pemanen yang belum lengkap</label></td>
+					</tr>";
+echo "<tr><td><td><td><button class=mybutton onclick=loaddata(0)>" . $_SESSION['lang']['find'] . "</button>
+		<button class=mybutton onclick=resetfilter()>" . $_SESSION['lang']['cancel'] . "</button></td></td></tr></table>";
 echo "</fieldset></td>";
 echo "</tr>
 </table> ";
@@ -140,6 +180,7 @@ echo "
 					<td align=center>" . $_SESSION['lang']['divisi'] . "</td>
 					<td align=center>" . $_SESSION['lang']['mandorpanen'] . "</td>
 					<td align=center>" . $_SESSION['lang']['kodeblok'] . "</td>
+					<td align=center>Keterangan</td>
 					<td align=center colspan='1'>" . $_SESSION['lang']['action'] . "</td>
                 </tr> 
             </thead>

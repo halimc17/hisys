@@ -1,8 +1,10 @@
 function displayList() {
 	document.getElementById('karyawansch').value = '';
 	document.getElementById('tglsch').value = '';
-	document.getElementById('unitsch').value = '';
-	document.getElementById('periodesch').value = document.getElementById('periodesch').getAttribute('data-default');
+	// select2: perbarui tampilan tanpa memicu onchange (loaddata dipanggil di bawah)
+	$('#unitsch').val('').trigger('change.select2');
+	$('#statussch').val('').trigger('change.select2');
+	$('#periodesch').val(document.getElementById('periodesch').getAttribute('data-default')).trigger('change.select2');
 	document.getElementById('listData').style.display = 'block';
 	document.getElementById('header').style.display = 'none';
 	document.getElementById('detail').style.display = 'none';
@@ -33,6 +35,10 @@ function loaddata(page) {
 	}
 	if (periodesch != '') {
 		param += '&periodesch=' + encodeURIComponent(periodesch);
+	}
+	statussch = document.getElementById('statussch').value;
+	if (statussch != '') {
+		param += '&statussch=' + statussch;
 	}
 	tujuan = 'kebun_slave_hapanen.php';
 	post_response_text(tujuan, param, respog);
@@ -390,6 +396,10 @@ function exportParam(method) {
 	}
 	if (periodesch != '') {
 		param += '&periodesch=' + encodeURIComponent(periodesch);
+	}
+	statussch = document.getElementById('statussch').value;
+	if (statussch != '') {
+		param += '&statussch=' + statussch;
 	}
 	return param;
 }

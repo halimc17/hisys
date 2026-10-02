@@ -15,6 +15,11 @@ $method    = checkPostGet('method', '');
 $kodeorg      = checkPostGet('kodeorg', '');
 $nikmandor    = checkPostGet('nikmandor', '');
 $periodesch   = checkPostGet('periodesch', '');
+$tglsch1      = checkPostGet('tglsch1', '');
+$tglsch2      = checkPostGet('tglsch2', '');
+$divisisch    = checkPostGet('divisisch', '');
+$mandorsch    = checkPostGet('mandorsch', '');
+$cekPemanen   = checkPostGet('cekpemanen', '') == '1';
 $nmorg     = makeOption($dbname, 'organisasi', 'kodeorganisasi,namaorganisasi');
 $nmindk     = makeOption($dbname, 'organisasi', 'indukblok,namaindukblok');
 $nmkar     = makeOption($dbname, 'datakaryawan', 'karyawanid,namakaryawan');
@@ -89,32 +94,105 @@ switch ($method) {
 			$url = $urlocal . 'mobile/index.php/api/module/mluas/erpHeader/send';
 		}
 
+		// Filter tanggal (dd-mm-YYYY), divisi dan mandor
+		$tglDari = $tglsch1 != '' ? tanggalsystemn($tglsch1) : '';
+		$tglSampai = $tglsch2 != '' ? tanggalsystemn($tglsch2) : '';
+		if ($tglDari != '' && $tglSampai == '') {
+			$tglSampai = $tglDari;
+		}
+		if ($tglSampai != '' && $tglDari == '') {
+			$tglDari = $tglSampai;
+		}
+		$periodeApi = $periodesch != "" ? $periodesch : ($tglDari != '' ? substr($tglDari, 0, 7) : "");
+
 		$dataParam = array(
-			// 'tanggal' =>   $tglsch != '--' ? $tglsch : "",
-			'periode' => $periodesch != "" ? $periodesch : "",
+			'periode' => $periodeApi,
 			'kodeorg' => getOrgDetail(28),
 		);
+		if ($mandorsch != '') {
+			$dataParam['nikmandor'] = $mandorsch;
+		}
+		if ($tglDari != '' && $tglDari == $tglSampai) {
+			$dataParam['tanggal'] = $tglDari;
+		}
 
 		$nok = 0;
 		$data = $getApi->post($url, $dataParam);
-		// echo "<pre>";
-		// print_r($data->response['result']['data']);
-		// echo "</pre>";
-		if (count($data->response['result']['data']) > 0) {
-			foreach ($data->response['result']['data'] as $key => $val) {
-				$sCek = "SELECT * FROM $dbname.kebun_rekaphancakpanen_vw 
-                WHERE kodeorg='" . $val['blok'] . "' AND tanggal='" . $val['tanggal'] . "' AND nikmandor='" . $val['mandor'] . "'";
-				$rCek = fetchData($sCek);
-				$countData = count($rCek);
-				if ($countData == 0) {
+		$rowsApi = $data->response['result']['data'];
+		if (is_array($rowsApi) && count($rowsApi) > 0) {
+			$kandidat = array();
+			$tglMin = '';
+			$tglMax = '';
+			foreach ($rowsApi as $val) {
+				if ($tglDari != '' && ($val['tanggal'] < $tglDari || $val['tanggal'] > $tglSampai)) {
+					continue;
+				}
+				if ($divisisch != '' && substr($val['blok'], 0, strlen($divisisch)) != $divisisch) {
+					continue;
+				}
+				if ($mandorsch != '' && (int)$val['mandor'] != (int)$mandorsch) {
+					continue;
+				}
+				$kandidat[] = $val;
+				if ($tglMin == '' || $val['tanggal'] < $tglMin) {
+					$tglMin = $val['tanggal'];
+				}
+				if ($tglMax == '' || $val['tanggal'] > $tglMax) {
+					$tglMax = $val['tanggal'];
+				}
+			}
+
+			if (count($kandidat) > 0) {
+				// Satu query untuk semua data yang sudah ada di ERP (bukan satu query per baris)
+				$sudahAda = array();
+				$nikErp = array();
+				$sCek = "SELECT DISTINCT kodeorg, tanggal, nikmandor" . ($cekPemanen ? ", nik" : "") . " FROM $dbname.kebun_rekaphancakpanen_vw
+                WHERE tanggal BETWEEN '" . $tglMin . "' AND '" . $tglMax . "'";
+				foreach (fetchData($sCek) as $rc) {
+					$kg = strtoupper($rc['kodeorg']) . '|' . $rc['tanggal'] . '|' . (int)$rc['nikmandor'];
+					$sudahAda[$kg] = 1;
+					if ($cekPemanen) {
+						$nikErp[$kg][(int)$rc['nik']] = 1;
+					}
+				}
+
+				// Bandingkan pemanen di mobile dengan yang sudah ada di ERP (API detail cukup satu kali panggil)
+				$pemanenKurang = array();
+				if ($cekPemanen) {
+					$urlDetail = str_replace('mluas/erpHeader/send', 'mluas/erpDetail/send', $url);
+					$resDetail = $getApi->post($urlDetail, $dataParam);
+					$rowsDetail = $resDetail->response['result']['data'];
+					if (is_array($rowsDetail)) {
+						foreach ($rowsDetail as $dt) {
+							$kg = strtoupper($dt['blok']) . '|' . $dt['tanggal'] . '|' . (int)$dt['mandor'];
+							if (isset($sudahAda[$kg]) && !isset($nikErp[$kg][(int)$dt['pemanen']])) {
+								$pemanenKurang[$kg][(int)$dt['pemanen']] = 1;
+							}
+						}
+					}
+				}
+
+				foreach ($kandidat as $val) {
+					$kg = strtoupper($val['blok']) . '|' . $val['tanggal'] . '|' . (int)$val['mandor'];
+					$ket = "Baru";
+					$warna = "#4cdf26";
+					if (isset($sudahAda[$kg])) {
+						if (!isset($pemanenKurang[$kg])) {
+							continue;
+						}
+						$ket = "Pemanen kurang " . count($pemanenKurang[$kg]);
+						$warna = "#ffb347";
+					}
+					$div = substr($val['blok'], 0, 6);
 					$nok++;
-					$tab .= "<tr class=rowcontent style='background-color:#4cdf26;'>";
+					$tab .= "<tr class=rowcontent style='background-color:" . $warna . ";'>";
 					$tab .= "<td align=center>" . $nok . "</td>";
 					$tab .= "<td align=center>" . $val['notransaksi'] . "</td>";
 					$tab .= "<td align=center>" . $val['tanggal'] . "</td>";
-					$tab .= "<td>" . substr($val['blok'], 0, 6) . " - " . getNamaOrg(substr($val['blok'], 0, 6)) . "</td>";
-					$tab .= "<td align=center>" . getNamaKaryawan($val['mandor']) . "</td>";
+					$tab .= "<td>" . $div . " - " . (isset($nmorg[$div]) ? $nmorg[$div] : getNamaOrg($div)) . "</td>";
+					$tab .= "<td align=center>" . (isset($nmkar[$val['mandor']]) ? $nmkar[$val['mandor']] : getNamaKaryawan($val['mandor'])) . "</td>";
 					$tab .= "<td align=center>" . $nmindk[$val['blok']] . "</td>";
+					$tab .= "<td align=center>" . $ket . "</td>";
 					$tab .= "<td colspan=1 align=center>
                     <img src=images/skyblue/zoom.png class=zImgBtn class=zImgBtn height='30' title='Preview Data' onclick=\"previewData('" . $val['blok'] . "','" . $val['tanggal'] . "','" . $val['mandor'] . "')\">
                     </td>";
