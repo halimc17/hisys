@@ -145,6 +145,42 @@ function getKar() {
   }
 }
 
+function getKarDl() {
+  kdUnit = document.getElementById("kdUnitDl").value;
+  tpKary = document.getElementById("tpKaryDl").value;
+  golongan = document.getElementById("golonganDl").value;
+  idKomponen = document.getElementById("idKomponenDl").value;
+  jabatan = document.getElementById("jabatanDl").value;
+
+  param =
+    "method=getKar" +
+    "&kdUnit=" + kdUnit +
+    "&tpKary=" + tpKary +
+    "&golongan=" + golongan +
+    "&idKomponen=" + idKomponen +
+    "&jabatan=" + jabatan;
+
+  tujuan = "sdm_slave_5gajipokok";
+
+  function responDl() {
+    if (con.readyState == 4) {
+      if (con.status == 200) {
+        busy_off();
+        if (!isSaveResponse(con.responseText)) {
+          alert(con.responseText);
+        } else {
+          document.getElementById("karyawanIdDl").innerHTML = con.responseText;
+        }
+      } else {
+        busy_off();
+        error_catch(con.status);
+      }
+    }
+  }
+
+  post_response_text(tujuan + ".php", param, responDl);
+}
+
 function saveFranco(fileTarget, passParam) {
   var passP = passParam.split("##");
   var param = "";
@@ -493,21 +529,21 @@ function dataKeExcel(ev) {
 }
 
 function downloadTemplate() {
-  thn = document.getElementById("thn").value;
-  kdUnit = document.getElementById("kdUnit").value;
-  tpKar = document.getElementById("tpKary").value;
-  golongan = document.getElementById("golongan").value;
-  jabatan = document.getElementById("jabatan").value;
-  idkomp = document.getElementById("idKomponen").value;
-  karyawanId = document.getElementById("karyawanId").value;
-  
-  if (kdUnit == "") {
-      alert("Unit Kerja harus dipilih!");
-      return;
+  thn = document.getElementById("thnDl").value;
+  kdUnit = document.getElementById("kdUnitDl").value;
+  tpKar = document.getElementById("tpKaryDl").value;
+  golongan = document.getElementById("golonganDl").value;
+  jabatan = document.getElementById("jabatanDl").value;
+  idkomp = document.getElementById("idKomponenDl").value;
+  karyawanId = document.getElementById("karyawanIdDl").value;
+
+  if (thn == "") {
+    alert("Periode harus diisi!");
+    return;
   }
-  if (idkomp == "") {
-      alert("ID Komponen harus dipilih!");
-      return;
+  if (kdUnit == "") {
+    alert("Unit Kerja harus dipilih!");
+    return;
   }
 
   param = "method=downloadTemplate" + "&thn=" + encodeURIComponent(thn);
@@ -523,19 +559,19 @@ function downloadTemplate() {
 
 function submitUpload() {
   var file = document.getElementById('filex').files[0];
-  if(getValue('filex') == "") {
+  if (getValue('filex') == "") {
     alert("Warning : Silakan pilih file terlebih dahulu!");
     return false;
   }
-  
+
   var formdata = new FormData();
   formdata.append("file", file);
   formdata.append("method", "uploadData");
-  
+
   busy_on();
   var con = createXMLHttpRequest();
   con.open("POST", "sdm_slave_5gajipokok.php?method=uploadData", true);
-  con.onreadystatechange = function() {
+  con.onreadystatechange = function () {
     if (con.readyState == 4) {
       if (con.status == 200) {
         busy_off();
