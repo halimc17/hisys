@@ -131,9 +131,10 @@ switch($proses){
 			$table .= "<td><input type='text' style='width:85px;' onchange='getBlokSma()' class='myinputtext' id='tglpanen' onmousemove='setCalendar(this.id)' onkeypress='return false'; readonly/>
 		</td>";
 		//}
-		$optsesi="<option value='1'>1</option>";
-		$optsesi.="<option value='2'>2</option>";
-		$optsesi.="<option value='3'>3</option>";
+		$optsesi="";
+		for($i=1;$i<=9;$i++){
+			$optsesi.="<option value='".$i."'>".$i."</option>";
+		}
 		$optpemanen=$opttph="<option value=''></option>";
 		$table .= "<td><select style=width:150px id=pemanendt>".$optpemanen."</select></td>";
 		$table .= "<td style=width:20px>

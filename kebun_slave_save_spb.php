@@ -73,6 +73,28 @@ if(count($_POST)>0){
 
 $jab          =getPostingJabatan('spat');
 
+# Khusus unit PT PPP: sesi SPB harus ada di BKM panen pemanen yang sama,
+# karena premi pemanen mencocokkan BKM dan SPB lewat sesi. Hasil: pesan error, kosong jika valid.
+function cekSesiSpbVsBkm($pemanen,$blok,$tph,$tglpanen,$sesi)
+{
+	global $owlPDO,$dbname;
+	if($blok=='' or $tglpanen=='' or $tglpanen=='--'){
+		return "";
+	}
+	$qPt=$owlPDO->query("select kodeorganisasi from ".$dbname.".organisasi where kodeorganisasi=".$owlPDO->quote(substr($blok,0,4))." and induk='PPP'");
+	if($qPt->fetchColumn()===false){
+		return "";
+	}
+	$q=$owlPDO->query("select distinct a.sesi from ".$dbname.".kebun_prestasi a join ".$dbname.".kebun_aktifitas b on b.notransaksi=a.notransaksi
+		where b.tipetransaksi='PNN' and a.nik=".$owlPDO->quote($pemanen)." and a.kodeorg=".$owlPDO->quote($blok)." and a.tph=".$owlPDO->quote($tph)." and b.tanggal=".$owlPDO->quote($tglpanen)."
+		and ((b.noreferensi='' and b.deviceid is null) or (b.noreferensi!='' and b.deviceid!='')) order by a.sesi");
+	$sesiBkm=array_map('strval',$q->fetchAll(PDO::FETCH_COLUMN));
+	if(count($sesiBkm)==0 or in_array((string)$sesi,$sesiBkm,true)){
+		return "";
+	}
+	return "Sesi ".$sesi." tidak ada di BKM panen pemanen ini (TPH ".$tph.", tanggal ".tanggalnormal($tglpanen).").<br>Sesi yang ada di BKM : ".implode(", ",$sesiBkm).".<br>Pilih salah satu sesi tersebut.";
+}
+
 $sReg="select distinct regional from ".$dbname.".bgt_regional_assignment where kodeunit='".$_SESSION['empl']['lokasitugas']."'";
 
 $qReg=$owlPDO->query($sReg) or die(print " Gagal: ".PDOException::getMessage());
@@ -708,6 +730,11 @@ switch($proses){
 	$rCek=count($qCek);
 	if($rCek>0){
 		exit("warning : Data sudah ada... ");
+	}
+
+	$errSesi=cekSesiSpbVsBkm($param['pemanendt'],$blok,$param['tphdt'],$tglpanen,$param['sesidt']);
+	if($errSesi!=''){
+		throw new PDOException($errSesi);
 	}
 	
 	if($kgwb!=''){
@@ -1884,6 +1911,11 @@ switch($proses){
 		validasiInput(substr($blok,0,4),substr($blok,0,6),'spb',$tanggal,$exit='0');
 	}
 	
+		$errSesi=cekSesiSpbVsBkm($param['pemanendt'],$blok,$param['tphdt'],$tglpanen,$param['sesidt']);
+		if($errSesi!=''){
+			throw new PDOException($errSesi);
+		}
+
 		$sCek="select distinct nospb from ".$dbname.".kebun_spbht where nospb='".$data['noSpb']."'";
 		$qCek=$owlPDO->query($sCek) or die(print " Gagal: ".PDOException::getMessage());
 		$rCek=owlBaris($qCek);
