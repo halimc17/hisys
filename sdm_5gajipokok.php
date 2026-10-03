@@ -173,7 +173,7 @@ CLOSE_BOX();
 
 echo "<div id=inputdata style=display:none;>";
 OPEN_BOX();
-echo "<table border=0><td><fieldset style='float:left;'>
+echo "<table border=0><tr><td valign=top><fieldset style='float:left;'>
      <legend><b>Form</b></legend>
 	 <table>
 	 <tr>
@@ -279,11 +279,37 @@ if (trim($_SESSION['empl']['tipelokasitugas']) == 'HOLDING' || trim($_SESSION['e
 		<td colspan=6><hr></td>
 	</tr><tr>
 		<td colspan=6>ID : Copy upah dari konfigurasi periode gaji tertentu ke periode tertentu</td>
-    </tr></table></fieldset>
+    </tr></table></fieldset></td></tr>
+	<tr><td colspan=2>
 	
-	<fieldset style='float:left;margin-top:10px;width:100%;'>
+	<fieldset style='float:left;margin-top:10px;'>
     <legend>Template & Upload Excel</legend>
     <table border=0>
+    <tr>
+        <td colspan=3><b>Filter Download Template:</b></td>
+    </tr>
+    <tr>
+        <td>Periode</td><td>:</td><td><input type=text class=myinputtextnumber id=thnDl style=width:145px; maxlength='7' value='" . date('Y-m') . "'></td>
+    </tr>
+    <tr>
+        <td>Unit Kerja</td><td>:</td><td><select id=kdUnitDl onchange='getKarDl()' style=width:150px;>" . $optUnit . "</select></td>
+    </tr>
+    <tr>
+        <td>Tipe Karyawan</td><td>:</td><td><select id=tpKaryDl onchange='getKarDl()' style=width:150px;>" . $optTipe3 . "</select></td>
+    </tr>
+    <tr>
+        <td>Golongan</td><td>:</td><td><select id=golonganDl onchange='getKarDl()' style=width:150px;>" . $optGol . "</select></td>
+    </tr>
+    <tr>
+        <td>Jabatan</td><td>:</td><td><select id=jabatanDl onchange='getKarDl()' style=width:150px;>" . $optJbtn . "</select></td>
+    </tr>
+    <tr>
+        <td>ID Komponen</td><td>:</td><td><select id=idKomponenDl style=width:150px;>" . $optTipe . "</select></td>
+    </tr>
+    <tr>
+        <td>Nama Karyawan</td><td>:</td><td><select id=karyawanIdDl style=width:150px;>" . $optTipe2 . "</select><img id='searchKaryawanDl1' onclick=z.elSearch('karyawanIdDl',event) class='resicon' src='images/onebit_02.png' style='position:relative;top:3px;left:3px;'></td>
+    </tr>
+    <tr><td colspan=3><hr></td></tr>
     <tr>
         <td>File (.xlsx)</td><td>:</td>
         <td><input type=file id=filex name=filex class=mybutton></td>
@@ -296,7 +322,7 @@ if (trim($_SESSION['empl']['tipelokasitugas']) == 'HOLDING' || trim($_SESSION['e
     </tr>
     <tr>
         <td colspan=3>
-            <button class=mybutton onclick=downloadTemplate()>Download Template (Sesuai Form)</button>
+            <button class=mybutton onclick=downloadTemplate()>Download Template</button>
             <button class=mybutton onclick=submitUpload()>Upload File</button>
         </td>
     </tr>
@@ -323,11 +349,37 @@ if (trim($_SESSION['empl']['tipelokasitugas']) == 'HOLDING' || trim($_SESSION['e
 	</tr><tr>
 		<td colspan=6>Info : Copy gaji dari konfigurasi gaji periode tertentu ke periode tertentu dan data yang tidak tercopy merupakan data yang berbeda dengan data karyawan , silahkan input manual</td>
 	</tr><tr>
-    </tr></table></fieldset>
+    </tr></table></fieldset></td></tr>
+	<tr><td colspan=2>
 	
-	<fieldset style='float:left;margin-top:10px;width:100%;'>
+	<fieldset style='float:left;margin-top:10px;'>
     <legend>Template & Upload Excel</legend>
     <table border=0>
+    <tr>
+        <td colspan=3><b>Filter Download Template:</b></td>
+    </tr>
+    <tr>
+        <td>Periode</td><td>:</td><td><input type=text class=myinputtextnumber id=thnDl style=width:145px; maxlength='7' value='" . date('Y-m') . "'></td>
+    </tr>
+    <tr>
+        <td>Unit Kerja</td><td>:</td><td><select id=kdUnitDl onchange='getKarDl()' style=width:150px;>" . $optUnit . "</select></td>
+    </tr>
+    <tr>
+        <td>Tipe Karyawan</td><td>:</td><td><select id=tpKaryDl onchange='getKarDl()' style=width:150px;>" . $optTipe3 . "</select></td>
+    </tr>
+    <tr>
+        <td>Golongan</td><td>:</td><td><select id=golonganDl onchange='getKarDl()' style=width:150px;>" . $optGol . "</select></td>
+    </tr>
+    <tr>
+        <td>Jabatan</td><td>:</td><td><select id=jabatanDl onchange='getKarDl()' style=width:150px;>" . $optJbtn . "</select></td>
+    </tr>
+    <tr>
+        <td>ID Komponen</td><td>:</td><td><select id=idKomponenDl style=width:150px;>" . $optTipe . "</select></td>
+    </tr>
+    <tr>
+        <td>Nama Karyawan</td><td>:</td><td><select id=karyawanIdDl style=width:150px;>" . $optTipe2 . "</select><img id='searchKaryawanDl2' onclick=z.elSearch('karyawanIdDl',event) class='resicon' src='images/onebit_02.png' style='position:relative;top:3px;left:3px;'></td>
+    </tr>
+    <tr><td colspan=3><hr></td></tr>
     <tr>
         <td>File (.xlsx)</td><td>:</td>
         <td><input type=file id=filex name=filex class=mybutton></td>
@@ -340,7 +392,7 @@ if (trim($_SESSION['empl']['tipelokasitugas']) == 'HOLDING' || trim($_SESSION['e
     </tr>
     <tr>
         <td colspan=3>
-            <button class=mybutton onclick=downloadTemplate()>Download Template (Sesuai Form)</button>
+            <button class=mybutton onclick=downloadTemplate()>Download Template</button>
             <button class=mybutton onclick=submitUpload()>Upload File</button>
         </td>
     </tr>
