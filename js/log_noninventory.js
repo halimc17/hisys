@@ -1,3 +1,24 @@
+function getFilterParamGrni() {
+  scnotransaksi = document.getElementById("scnotransaksi").value;
+  sctanggal = document.getElementById("sctanggal").value;
+  crnopo = document.getElementById("crnopo").value;
+  sctipe = document.getElementById("sctipe").value;
+  scsupplier = document.getElementById("scsupplier").value;
+  scunit = document.getElementById("scunit").value;
+  return "&scnotransaksi=" + scnotransaksi + "&sctanggal=" + sctanggal + "&crnopo=" + crnopo +
+    "&sctipe=" + sctipe + "&scsupplier=" + scsupplier + "&scunit=" + scunit;
+}
+function exportExcelGrni() {
+  param = "method=excel" + getFilterParamGrni();
+  tujuan = "log_slave_noninventory.php?" + param;
+  alertify.popup("Report Ms.Excel", "<iframe frameborder=0 style='width:100%;height:100%;overflow:none' src='" + tujuan + "'></iframe>").set({'resizable':true,'overflow':false}).resizeTo('80%','70%');
+}
+function exportPdfGrni(ev) {
+  param = getFilterParamGrni();
+  tujuan = "log_noninventory_pdf.php?" + param;
+  alertify.popup("Report PDF", "<iframe frameborder=0 style='width:100%;height:100%;overflow:none' src='" + tujuan + "'></iframe>").set({'resizable':true,'overflow':false}).resizeTo('80%','70%');
+}
+
 function displayforminput() {
   document.getElementById("listdata").style.display = "none";
   document.getElementById("forminput").style.display = "block";
@@ -339,6 +360,9 @@ function loaddata(pg) {
   scnotransaksi = document.getElementById("scnotransaksi").value;
   sctanggal = document.getElementById("sctanggal").value;
   crnopo = document.getElementById("crnopo").value;
+  sctipe = document.getElementById("sctipe").value;
+  scsupplier = document.getElementById("scsupplier").value;
+  scunit = document.getElementById("scunit").value;
 
   param =
     "method=loaddata&page=" +
@@ -348,7 +372,13 @@ function loaddata(pg) {
     "&sctanggal=" +
     sctanggal +
     "&crnopo=" +
-    crnopo;
+    crnopo +
+    "&sctipe=" +
+    sctipe +
+    "&scsupplier=" +
+    scsupplier +
+    "&scunit=" +
+    scunit;
   tujuan = "log_slave_noninventory.php";
   post_response_text(tujuan, param, respog);
 
@@ -507,9 +537,42 @@ function postinggr(notransaksi, tipe) {
       if (con.status == 200) {
         busy_off();
         if (!isSaveResponse(con.responseText)) {
-          alert(con.responseText);
+          alertify.error(con.responseText);
         } else {
-          // closeDialog5();
+          alertify.success("Posting berhasil");
+          // tutup popup form Posting GR (dynamic5), tampilkan hasilnya pakai alertify.alert
+          // biar seragam gayanya sama kayak popup hasil unposting
+          if (document.getElementById("dynamic5")) {
+            closeDialog5();
+          }
+          alertify.alert("Detail Jurnal Terbentuk", con.responseText).set({'resizable':true,'maximizable':true}).resizeTo('60%','60%');
+          getpage();
+        }
+      } else {
+        busy_off();
+        error_catch(con.status);
+      }
+    }
+  }
+}
+
+function unpostinggr(notransaksi) {
+  param = "method=unpostinggr&notransaksi=" + notransaksi;
+  tujuan = "log_slave_noninventory.php";
+
+  if (confirm("Anda yakin ingin unposting no transaksi " + notransaksi + " ?")) {
+    post_response_text(tujuan, param, respog);
+  }
+
+  function respog() {
+    if (con.readyState == 4) {
+      if (con.status == 200) {
+        busy_off();
+        if (!isSaveResponse(con.responseText)) {
+          alertify.error(con.responseText);
+        } else {
+          alertify.success("Unposting berhasil");
+          alertify.alert("Detail Jurnal Dihapus", con.responseText).set({'resizable':true,'maximizable':true}).resizeTo('60%','60%');
           getpage();
         }
       } else {

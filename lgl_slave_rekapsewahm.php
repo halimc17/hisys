@@ -4,7 +4,8 @@
     require_once('lib/nangkoelib.php');
     require_once('lib/zLib.php');
     include_once('lib/zFunction.php');
-?>	
+    include_once('lib/HtmlExcel.php');
+?>
 
 <?php
     $param          =$_POST;if(count($param)==0){$param = $_GET;}
@@ -248,6 +249,72 @@
             </tbody>	
             </table>";
         break;
+
+        case 'viewdetailinput':
+            #versi lihat-saja (tanpa hapus) dari loaddatadetail, dipanggil dari ikon kaca pembesar di List Data -
+            #ikut kasih tau siapa yang create & posting, karena ini cuma buat lihat, bukan buat edit transaksi
+            $nmkaryawan = makeOption($dbname,'datakaryawan','karyawanid,namakaryawan');
+            echo"
+            <div class=table-scroll>
+            <table border=0 cellpadding=5 cellspacing=1 class=sortable>
+            <thead>
+            <tr class=rowheader>
+                <th align=center width=10px>No</th>
+                <th align=center>" . $_SESSION['lang']['notransaksi'] . " Traksi</th>
+                <th align=center>" . $_SESSION['lang']['kodekegiatan'] . "</th>
+                <th align=center>" . $_SESSION['lang']['blok'] . "</th>
+                <th align=center>" . $_SESSION['lang']['tanggal'] . "</th>
+                <th align=center>" . $_SESSION['lang']['hasilkerja2'] . "</th>
+                <th align=center width=50px>HM</th>
+                <th align=center>" . $_SESSION['lang']['harga']. "</th>
+                <th align=center>" . $_SESSION['lang']['rp'] . "</th>
+                <th align=center>Create By</th>
+                <th align=center>Create Time</th>
+                <th align=center>Posted By</th>
+            </tr>
+            </thead>
+            <tbody>";
+            $qry = "SELECT b.*,a.tanggal,a.createby,a.createtime,a.postingby,a.posting FROM $dbname.lgl_rekapsewahmdt b
+                    LEFT JOIN $dbname.lgl_rekapsewahm a ON a.notraksi=b.notraksi
+                    WHERE b.notraksi IN (SELECT notraksi FROM $dbname.lgl_rekapsewahm WHERE kodeorg='".$param['kodeorg']."' AND periode='".$param['periode']."' AND periodebyr='".$param['periodebyr']."')
+                    AND b.spk ='".$param['spk']."' order by a.tanggal";
+            $rst = fetchdata($qry);$ttlrupiah=$ttlhm=0;$nox=0;
+            if(count($rst)>0){
+                foreach ($rst as $bar){
+                    $nox++;
+                    echo"<tr class=rowcontent>";
+                    echo"<td align=center>" . $nox . "</td>";
+                    echo"<td align=center>" . $bar['notraksi'] . "</td>";
+                    echo"<td align=left>" . $bar['jeniskegiatan'] . " - ".getNamaKegVhc($bar['jeniskegiatan'])."</td>";
+                    echo"<td align=center>" . getIndukBlok($bar['blok']) . "</td>";
+                    echo"<td align=center>" . tglnmbln($bar['tanggal'],'I','long') . "</td>";
+                    echo"<td align=right>" . $bar['prestasi'] . "</td>";
+                    echo"<td align=right>" . number_format($bar['hm'],2) . "</td>";
+                    echo"<td align=right>" . number_format($bar['harga'],2) . "</td>";
+                    echo"<td align=right>" . number_format($bar['rupiah']) . "</td>";
+                    echo"<td align=left>" . @$nmkaryawan[$bar['createby']] . "</td>";
+                    echo"<td align=center>" . $bar['createtime'] . "</td>";
+                    echo"<td align=left>" . (($bar['posting']==1) ? @$nmkaryawan[$bar['postingby']] : '-') . "</td>";
+                    echo"</tr>";
+                    $ttlrupiah += $bar['rupiah'];
+                    $ttlhm += $bar['hm'];
+                }
+                echo "<tr class=rowcontent>
+                        <td colspan=6 align=center><b>".$_SESSION['lang']['total']."</b></td>
+                        <td align=right>".$ttlhm."</td>
+                        <td align=right></td>
+                        <td align=right><b>".number_format($ttlrupiah)."</b></td>
+                        <td colspan=3></td>
+                    </tr>";
+            }else{
+                echo "<tr class=rowcontent><td align=center colspan=12>".$_SESSION['lang']['errdatanotexist']."</td></tr>";
+            }
+            echo"
+            </tbody>
+            </table>
+            </div>";
+        break;
+
         case 'getnospk':
             $namasupp=array();
             $optsupp = "<option value=''>" . $_SESSION['lang']['pilihdata'] . "</option>";
@@ -265,22 +332,40 @@
         case 'loadData':
             $hsl['tab'] ="";
             $hsl['foot']="";
-            $limit      = 10;
+            $limit      = 99999; #full kan list data nya - gak perlu paging kecil2, satu halaman langsung semua
             $page       = 0;
-            $colspan    = 14;
+            $colspan    = 15; #9 kolom tunggal + 6 kolom Aksi (colspan=6 di header)
 
             if (isset($pagejs)) {
                 $page   = $pagejs;
                 if ($page < 0)
                     $page = 0;
             }
-            
+
             $offset     = floatval($page) * $limit;
             $maxdisplay =(floatval($page) * $limit);
             $no         =((floatval($page) * $limit));
-            
-            if($param['nospkcr']!='' || $param['divsch']!='' || $param['tglsch']!='' || $param['kontrakcr']!=''){ 
+
+            if($param['nospkcr']!='' || $param['divsch']!='' || $param['tglsch']!='' || $param['kontrakcr']!='' || $param['notraksicr']!=''){
                 $where.="and spk LIKE '%".$param['nospkcr']."%' and kodeorg LIKE '%".$param['divsch']."%' and periode LIKE '%".$param['tglsch']."%'";
+                if($param['notraksicr']!=''){
+                    $where.=" and notraksi LIKE '%".addslashes($param['notraksicr'])."%'";
+                }
+                if($param['kontrakcr']!=''){
+                    #cari spk yang kontraktornya (namasupplier) cocok dulu, baru dipakai sebagai filter spk -
+                    #lebih cepat & aman daripada subquery IN(select...) langsung di query besar
+                    $rSupp = fetchData("select supplierid from ".$dbname.".log_5supplier where namasupplier LIKE '%".addslashes($param['kontrakcr'])."%'");
+                    $listSupp = array();
+                    foreach($rSupp as $r){ $listSupp[] = "'".addslashes($r['supplierid'])."'"; }
+                    if(count($listSupp) > 0){
+                        $rSpk = fetchData("select notransaksi from ".$dbname.".lgl_pengajuanspkht where koderekanan in (".implode(',',$listSupp).")");
+                        $listSpk = array();
+                        foreach($rSpk as $r){ $listSpk[] = "'".addslashes($r['notransaksi'])."'"; }
+                        $where.= (count($listSpk) > 0) ? " and spk in (".implode(',',$listSpk).")" : " and 1=0";
+                    } else {
+                        $where.=" and 1=0";
+                    }
+                }
             }
 
             $str        = "SELECT * FROM $dbname.lgl_rekapsewahm WHERE 1=1 $where GROUP BY periodebyr,periode,spk ORDER BY createtime DESC";
@@ -314,7 +399,8 @@
             }else{
                 $iList  = "SELECT *,SUM(totalprestasi) AS totalprestasi FROM $dbname.lgl_rekapsewahm WHERE 1=1 $where GROUP BY periodebyr,periode,spk ORDER BY periode DESC,kodeorg LIMIT ".$offset.",".$limit."";
                 $hasil  = fetchdata($iList);
-                
+                $nmkaryawan = makeOption($dbname,'datakaryawan','karyawanid,namakaryawan');
+
                 foreach ($hasil as $dList){
                     $optOrg         = makeOption($dbname,'organisasi','kodeorganisasi,namaorganisasi',"kodeorganisasi='".$dList['kodeorg']."'");
                     $optKontraktor  = makeOption($dbname,'lgl_pengajuanspkht','notransaksi,koderekanan',"notransaksi='".$dList['spk']."'");
@@ -338,6 +424,12 @@
                         $hsl['tab'].="<td align=left>".getNamaSupplier($optKontraktor[$dList['spk']])."</td>";
                         $hsl['tab'].="<td align=right>".number_format($rs[0]['rupiah'])."</td>";
                         $hsl['tab'].="<td align=left style=color:blue;cursor:pointer; title=\"Click untuk melihat dan mengajuan BAPP\" onclick=viewdetailbapp('".$dList['spk']."','".$dList['kodeorg']."','viewhtml','event','".$dList['nobapp']."')>" . ($dList['nobapp']). "</td>";
+                        $hsl['tab'].="<td align=left>".@$nmkaryawan[$dList['createby']]."</td>";
+                        $hsl['tab'].="<td align=center>".$dList['createtime']."</td>";
+                        $hsl['tab'].="<td align=left>".(($dList['posting']==1) ? @$nmkaryawan[$dList['postingby']] : '-')."</td>";
+                        $hsl['tab'].="<td width=20px align=center><img src='images/skyblue/zoom.png' class=zImgBtn title='Detail data yang diinput' onclick=\"viewDetailInput('".$dList['kodeorg']."','" .$dList['periode']. "','" .$dList['spk']. "','".$dList['periodebyr']."',event);\"></td>";
+                        $hsl['tab'].="<td width=20px align=center><img src=images/excel.jpg class=zImgBtn title='Excel' onclick=\"exportExcelRow('".$dList['kodeorg']."','" .$dList['periode']. "','" .$dList['spk']. "','".$dList['periodebyr']."');\"></td>";
+                        $hsl['tab'].="<td width=20px align=center><img src=images/pdf.jpg class=zImgBtn title='PDF' onclick=\"exportPdfRow('".$dList['kodeorg']."','" .$dList['periode']. "','" .$dList['spk']. "','".$dList['periodebyr']."');\"></td>";
                         if($dList['posting'] == 0){
                             $hsl['tab'].="<td align=center>
                                         <img src=images/application/application_edit.png class=zImgBtn  caption='Edit' onclick=\"edit('" . $dList['kodeorg'] . "','" . $dList['periode'] . "','" . $dList['spk'] . "','".$dList['periodebyr']."');\">
@@ -366,6 +458,97 @@
             }
             echo json_encode($hsl);
         break;
+
+        case 'excel':
+            #tarikan per-baris (ikon Excel di Aksi) kirim kodeorgx/periodex/spkx/periodebyrx buat exact-match 1 baris
+            #aja - kalau gak ada, ikut filter yang lagi aktif di form Cari (tarikan dari fieldset Cari)
+            if($param['kodeorgx']!='' && $param['periodex']!='' && $param['periodebyrx']!='' && $param['spkx']!=''){
+                $where = " and kodeorg='".$param['kodeorgx']."' and periode='".$param['periodex']."' and periodebyr='".$param['periodebyrx']."' and spk='".$param['spkx']."'";
+            } elseif($param['nospkcr']!='' || $param['divsch']!='' || $param['tglsch']!='' || $param['kontrakcr']!='' || $param['notraksicr']!=''){
+                $where.="and spk LIKE '%".$param['nospkcr']."%' and kodeorg LIKE '%".$param['divsch']."%' and periode LIKE '%".$param['tglsch']."%'";
+                if($param['notraksicr']!=''){
+                    $where.=" and notraksi LIKE '%".addslashes($param['notraksicr'])."%'";
+                }
+                if($param['kontrakcr']!=''){
+                    $rSupp = fetchData("select supplierid from ".$dbname.".log_5supplier where namasupplier LIKE '%".addslashes($param['kontrakcr'])."%'");
+                    $listSupp = array();
+                    foreach($rSupp as $r){ $listSupp[] = "'".addslashes($r['supplierid'])."'"; }
+                    if(count($listSupp) > 0){
+                        $rSpk = fetchData("select notransaksi from ".$dbname.".lgl_pengajuanspkht where koderekanan in (".implode(',',$listSupp).")");
+                        $listSpk = array();
+                        foreach($rSpk as $r){ $listSpk[] = "'".addslashes($r['notransaksi'])."'"; }
+                        $where.= (count($listSpk) > 0) ? " and spk in (".implode(',',$listSpk).")" : " and 1=0";
+                    } else {
+                        $where.=" and 1=0";
+                    }
+                }
+            }
+
+            #kop/logo/ditarik-oleh format standar, pakai org karyawan yang login (data lintas unit, bukan per-PT)
+            $hdpt = setheadreport($_SESSION['empl']['kodeorganisasi'], $_SESSION['empl']['kodeorganisasi']);
+            $logourl = '';
+            if (file_exists($hdpt['logo'])) {
+                $skema = (isset($_SERVER['HTTPS']) and $_SERVER['HTTPS'] != 'off') ? 'https' : 'http';
+                $logourl = $skema . "://" . @$_SERVER['HTTP_HOST'] . rtrim(dirname(@$_SERVER['SCRIPT_NAME']), '/') . "/" . $hdpt['logo'];
+            }
+            $kolom = 12;
+            $stream = "<table>
+                <tr><td colspan=" . $kolom . " height='70' style='height:52pt'>" . ($logourl != '' ? "<img src='" . $logourl . "' height='60'>" : "") . "</td></tr>
+                <tr><td colspan=" . $kolom . "><b>" . htmlspecialchars($hdpt['nama']) . "</b></td></tr>
+                <tr><td colspan=" . $kolom . "><b>REKAP SEWA HM</b></td></tr>
+                <tr><td colspan=" . $kolom . ">Ditarik oleh " . htmlspecialchars($_SESSION['empl']['name']) . " (" . htmlspecialchars($_SESSION['standard']['username']) . ") pada " . date('d-m-Y H:i:s') . "</td></tr>
+                <tr><td colspan=" . $kolom . ">&nbsp;</td></tr>
+                </table>";
+
+            $stream .= "<table class=sortable cellspacing=1 cellpadding=3 border=1>
+                <thead><tr>
+                    <th align=center>" . $_SESSION['lang']['nourut'] . "</th>
+                    <th align=center>" . $_SESSION['lang']['unit'] . "</th>
+                    <th align=center>" . $_SESSION['lang']['bulan'] . "</th>
+                    <th align=center>" . $_SESSION['lang']['periode'] . "</th>
+                    <th align=center>" . $_SESSION['lang']['nospk'] . "</th>
+                    <th align=center>" . $_SESSION['lang']['notransaksi'] . " Traksi</th>
+                    <th align=center>" . $_SESSION['lang']['kontraktor'] . "</th>
+                    <th align=center>" . $_SESSION['lang']['rupiah'] . "</th>
+                    <th align=center>No BAPP</th>
+                    <th align=center>Create By</th>
+                    <th align=center>Create Time</th>
+                    <th align=center>Posted By</th>
+                </tr></thead><tbody>";
+
+            $iList = "SELECT *,SUM(totalprestasi) AS totalprestasi FROM $dbname.lgl_rekapsewahm WHERE 1=1 $where GROUP BY periodebyr,periode,spk ORDER BY periode DESC,kodeorg";
+            $hasil = fetchdata($iList);
+            $nmkaryawan = makeOption($dbname,'datakaryawan','karyawanid,namakaryawan');
+            $no = 0;
+            foreach ($hasil as $dList){
+                $optOrg = makeOption($dbname,'organisasi','kodeorganisasi,namaorganisasi',"kodeorganisasi='".$dList['kodeorg']."'");
+                $optKontraktor = makeOption($dbname,'lgl_pengajuanspkht','notransaksi,koderekanan',"notransaksi='".$dList['spk']."'");
+                $qr = "SELECT SUM(rupiah) AS rupiah FROM $dbname.lgl_rekapsewahmdt WHERE notraksi IN (SELECT notraksi FROM $dbname.lgl_rekapsewahm WHERE spk='{$dList['spk']}' AND periodebyr='{$dList['periodebyr']}' AND periode='{$dList['periode']}')";
+                $rs = fetchdata($qr);
+                $no+=1;
+                $stream .= "<tr>
+                    <td align=center>" . $no . "</td>
+                    <td>" . $dList['kodeorg'] . " - " . $optOrg[$dList['kodeorg']] . "</td>
+                    <td>" . $dList['periode'] . "</td>
+                    <td>" . tanggalnormal($dList['tgldari']) . " s.d " . tanggalnormal($dList['tglsampai']) . "</td>
+                    <td>" . $dList['spk'] . "</td>
+                    <td>" . $dList['notraksi'] . "</td>
+                    <td>" . getNamaSupplier($optKontraktor[$dList['spk']]) . "</td>
+                    <td align=right>" . number_format($rs[0]['rupiah']) . "</td>
+                    <td>" . $dList['nobapp'] . "</td>
+                    <td>" . @$nmkaryawan[$dList['createby']] . "</td>
+                    <td>" . $dList['createtime'] . "</td>
+                    <td>" . (($dList['posting']==1) ? @$nmkaryawan[$dList['postingby']] : '-') . "</td>
+                </tr>";
+            }
+            $stream .= "</tbody></table>";
+
+            $xls = new HtmlExcel();
+            $xls->addSheet("RekapSewaHM", $stream);
+            $xls->headers("RekapSewaHM_" . date('YmdHis') . ".xls");
+            echo $xls->buildFile();
+        break;
+
         case 'insert':
             if($param['cek'] == 1){
                 //Ambil total HM yang sudah diinput
@@ -373,8 +556,9 @@
                 $rst=fetchData($sql);
                 $jlhhm=$rst[0]['jlhhm'];
 
-                //Ambil total HM yang sudah diinput
-                $str1=selectQuery($dbname,'lgl_rekapsewahmdt','sum(hm) as ttlhmdiinput',"spk='{$param['spk']}'");
+                //Ambil total HM yang sudah diinput, kecuali punya notraksi ini sendiri (mau direplace lewat delete-insert,
+                //jadi jangan ikut dihitung sebagai "sudah diinput" - supaya Simpan ulang notraksi yang sama tidak salah ketolak)
+                $str1=selectQuery($dbname,'lgl_rekapsewahmdt','sum(hm) as ttlhmdiinput',"spk='{$param['spk']}' and notraksi!='{$param['notraksi']}'");
                 $res1=fetchData($str1);
                 $ttlhm=$res1[0]['ttlhmdiinput'];
                 if(($ttlhm+$param['hm']) > $jlhhm){exit("Warningsystem : Data HM yang sudah diinputkan + yang akan diinputkan<br>melebihi Total HM di SPK ".$param['spk'].".<br> Total HM SPK ".$param['spk']." = ".number_format($jlhhm)."<br> Total HM yang sudah diinput = ".number_format($ttlhm+$param['hm'])." !");}
@@ -434,6 +618,12 @@
                     foreach($datadt as $kuy=>$row) {
                             $colsdt[] = $kuy;
                     }
+
+                    #hapus dulu detail lama punya notraksi ini (delete-insert) - supaya tombol Simpan bisa diklik ulang
+                    #sebelum posting tanpa kena duplicate entry (PK nya notraksi+jeniskegiatan+blok+spk+prestasi)
+                    $strdel = "delete from " . $dbname . ".lgl_rekapsewahmdt where notraksi='" . $param['notraksi'] . "' and spk='" . $param['spk'] . "'";
+                    $owlPDO->exec($strdel);
+
                     $strx = insertQuery($dbname,'lgl_rekapsewahmdt',$datadt,$colsdt)."";
                     $owlPDO->exec($strx);
                     
@@ -634,9 +824,10 @@
                     #update nilai di lgl_rekapsewahm
                     $updaterekap = array(
                         'posting' => '1',
-                        'nobapp' => $nobapp
+                        'nobapp' => $nobapp,
+                        'postingby' => $_SESSION['standard']['userid']
                         );
-            
+
                     $where = "periode='".$param['periode']."' and kodeorg='".$param['kodeorg']."' and periodebyr='".$param['periodebyr']."' and spk ='".$param['spk']."'";
                     $str = updateQuery($dbname,'lgl_rekapsewahm',$updaterekap,$where);
                     $owlPDO->exec($str);
@@ -684,9 +875,10 @@
                 #update nilai di lgl_rekapsewahm
                 $updaterekap = array(
                     'posting' => '0',
-                    'nobapp' => ''
+                    'nobapp' => '',
+                    'postingby' => '0000000000'
                     );
-        
+
                 $where = "periode='".$periode."' and kodeorg='".$kodeorg."' and periodebyr='".$periodebyr."' and spk='".$spk."'";
                 $str = updateQuery($dbname,'lgl_rekapsewahm',$updaterekap,$where);
                 $owlPDO->exec($str);

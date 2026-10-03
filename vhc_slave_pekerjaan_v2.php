@@ -5,6 +5,7 @@ require_once('config/connection.php');
 include_once('lib/nangkoelib.php');
 include_once('lib/zLib.php');
 include_once('lib/zFunction.php');
+include_once('lib/HtmlExcel.php');
 
 $param          = $_POST;
 if (count($param) == 0) {
@@ -307,6 +308,8 @@ switch ($proses) {
                 $whrpiluas = "(luasbloking-lc) >0";
             } elseif (getNamaKeg($param['jns_kerja'], 'pilihanluas') == 2) {
                 $whrpiluas = "(lc) >0";
+            } elseif ($rAlokasi['kelompok'] == 'TB') {
+                $whrpiluas = "(luasareaproduktif > 0 OR lc > 0 OR luasbloking > 0)";
             } else {
                 $whrpiluas = "(luasareaproduktif) >0";
             }
@@ -718,6 +721,15 @@ switch ($proses) {
         if ($param['kontanan_cari'] != '%') {
             $where .= " and kontanan = '" . $param['kontanan_cari'] . "'";
         }
+        if (in_array(checkPostGet('posting_cari', ''), array('0', '1'), true)) {
+            $where .= " and posting = '" . $param['posting_cari'] . "'";
+        }
+        if (checkPostGet('periode_cari', '') != '') {
+            $where .= " and left(tanggal,7) = '" . addslashes(checkPostGet('periode_cari', '')) . "'";
+        }
+        if (checkPostGet('operator_cari', '') != '') {
+            $where .= " and notransaksi in (select notransaksi from " . $dbname . ".vhc_rundt where operator = '" . addslashes(checkPostGet('operator_cari', '')) . "')";
+        }
 
         $query  = "select count(*) as jmlhrow from " . $dbname . ".vhc_runht where substr(kodeorg,1,4) regexp '" . str_replace(',', '|', str_replace("'", "", getOrgDetail(2))) . "' " . $where . " order by tanggal desc,posting asc"; // echo $ql2;
         $result = fetchData($query);
@@ -855,6 +867,141 @@ switch ($proses) {
         $totrows = ceil($jlhbrs / $limit);
         $footd = createpaging($jlhbrs, $limit, $page, $colspan, 'loaddata', 'getPage');
         echo $tab . "##" . $footd;
+        break;
+    case 'excel':
+        #filter sama persis dengan loaddata, supaya tarikan Excel ikut filter yang lagi aktif di form Cari
+        $tgl_cari   = checkPostGet('tgl_cari', '');
+        $tgl_carisd = tanggalsystemn(checkPostGet('tgl_carisd', ''));
+        $where = "";
+        if ($tgl_cari != '') {
+            $txtTgl = tanggalsystemn($tgl_cari);
+            if ($tgl_carisd != '--') {
+                $where .= " AND tanggal BETWEEN '" . $txtTgl . "' AND '" . $tgl_carisd . "' ";
+            } else {
+                $where .= " and tanggal='" . $txtTgl . "'";
+            }
+        }
+        if (checkPostGet('txtCari', '') != '') {
+            $where .= " and notransaksi like '%" . addslashes(trim(checkPostGet('txtCari', ''))) . "%'";
+        }
+        if (checkPostGet('kodevhc_cari', '') != '') {
+            $where .= " and kodevhc like '%" . addslashes(trim(checkPostGet('kodevhc_cari', ''))) . "%'";
+        }
+        if (checkPostGet('kontanan_cari', '%') != '%') {
+            $where .= " and kontanan = '" . addslashes(checkPostGet('kontanan_cari', '')) . "'";
+        }
+        if (in_array(checkPostGet('posting_cari', ''), array('0', '1'), true)) {
+            $where .= " and posting = '" . checkPostGet('posting_cari', '') . "'";
+        }
+        if (checkPostGet('periode_cari', '') != '') {
+            $where .= " and left(tanggal,7) = '" . addslashes(checkPostGet('periode_cari', '')) . "'";
+        }
+        if (checkPostGet('operator_cari', '') != '') {
+            $where .= " and notransaksi in (select notransaksi from " . $dbname . ".vhc_rundt where operator = '" . addslashes(checkPostGet('operator_cari', '')) . "')";
+        }
+        $whereOrg = "substr(kodeorg,1,4) regexp '" . str_replace(',', '|', str_replace("'", "", getOrgDetail(2))) . "' " . $where;
+
+        $resH = fetchData("select * from " . $dbname . ".vhc_runht where " . $whereOrg . " order by tanggal desc, notransaksi desc");
+
+        #nama operator/helper per transaksi (unik, urut sesuai input), diambil sekali untuk semua transaksi yang difilter
+        $arOpt = array();
+        $resD = fetchData("select notransaksi,operator,helper,helper2,helper3 from " . $dbname . ".vhc_rundt where notransaksi in (select notransaksi from " . $dbname . ".vhc_runht where " . $whereOrg . ") order by notransaksi");
+        foreach ($resD as $d) {
+            foreach (array('operator', 'helper', 'helper2', 'helper3') as $k) {
+                if ($d[$k] != '' && $d[$k] != '0000000000') {
+                    $arOpt[$d['notransaksi']][$k][$d[$k]] = $d[$k];
+                }
+            }
+        }
+
+        $nmKar   = makeOption($dbname, 'datakaryawan', 'karyawanid,namakaryawan');
+        $nmVhc   = makeOption($dbname, 'vhc_5master', 'kodevhc,nopol');
+        $nmDet   = makeOption($dbname, 'vhc_5master', 'kodevhc,detailvhc');
+        $nmJenis = makeOption($dbname, 'vhc_5jenisvhc', 'jenisvhc,namajenisvhc');
+        $nmBbm   = makeOption($dbname, 'log_5masterbarang', 'kodebarang,namabarang', "kodebarang in (select distinct jenisbbm from " . $dbname . ".vhc_runht)");
+
+        #kop/logo/ditarik-oleh format standar, pakai org karyawan yang login (data lintas unit)
+        $hdpt = setheadreport($_SESSION['empl']['kodeorganisasi'], $_SESSION['empl']['kodeorganisasi']);
+        $logourl = '';
+        if (file_exists($hdpt['logo'])) {
+            $skema = (isset($_SERVER['HTTPS']) and $_SERVER['HTTPS'] != 'off') ? 'https' : 'http';
+            $logourl = $skema . "://" . @$_SERVER['HTTP_HOST'] . rtrim(dirname(@$_SERVER['SCRIPT_NAME']), '/') . "/" . $hdpt['logo'];
+        }
+        $kolom = 19;
+        $stream = "<table>
+            <tr><td colspan=" . $kolom . " height='70' style='height:52pt'>" . ($logourl != '' ? "<img src='" . $logourl . "' height='60'>" : "") . "</td></tr>
+            <tr><td colspan=" . $kolom . "><b>" . htmlspecialchars($hdpt['nama']) . "</b></td></tr>
+            <tr><td colspan=" . $kolom . "><b>PEKERJAAN</b></td></tr>
+            <tr><td colspan=" . $kolom . ">Ditarik oleh " . htmlspecialchars($_SESSION['empl']['name']) . " (" . htmlspecialchars($_SESSION['standard']['username']) . ") pada " . date('d-m-Y H:i:s') . "</td></tr>
+            <tr><td colspan=" . $kolom . ">&nbsp;</td></tr>
+            </table>";
+
+        $stream .= "<table class=sortable cellspacing=1 cellpadding=3 border=1>
+            <thead><tr>
+                <th align=center>" . $_SESSION['lang']['nourut'] . "</th>
+                <th align=center>" . $_SESSION['lang']['notransaksi'] . "</th>
+                <th align=center>" . $_SESSION['lang']['jenisvch'] . "</th>
+                <th align=center>" . $_SESSION['lang']['kodevhc'] . "</th>
+                <th align=center>" . $_SESSION['lang']['nopol'] . "</th>
+                <th align=center>" . $_SESSION['lang']['detail'] . "</th>
+                <th align=center>" . $_SESSION['lang']['mandor'] . "</th>
+                <th align=center>" . $_SESSION['lang']['operator'] . "</th>
+                <th align=center>" . $_SESSION['lang']['helper'] . " 1</th>
+                <th align=center>" . $_SESSION['lang']['helper'] . " 2</th>
+                <th align=center>" . $_SESSION['lang']['helper'] . " 3</th>
+                <th align=center>" . $_SESSION['lang']['tanggal'] . "</th>
+                <th align=center>" . $_SESSION['lang']['vhc_jenis_bbm'] . "</th>
+                <th align=center>" . $_SESSION['lang']['vhc_jumlah_bbm'] . "</th>
+                <th align=center>" . $_SESSION['lang']['kontanan'] . "</th>
+                <th align=center>" . $_SESSION['lang']['createby'] . "</th>
+                <th align=center>" . $_SESSION['lang']['createtime'] . "</th>
+                <th align=center>Status Posting</th>
+                <th align=center>Diposting Oleh</th>
+                <th align=center>Waktu Posting</th>
+            </tr></thead><tbody>";
+
+        $no = 0;
+        foreach ($resH as $r) {
+            $no++;
+            $nm = array();
+            foreach (array('operator', 'helper', 'helper2', 'helper3') as $k) {
+                $nm[$k] = array();
+                if (isset($arOpt[$r['notransaksi']][$k])) {
+                    foreach ($arOpt[$r['notransaksi']][$k] as $kid) {
+                        $nm[$k][] = @$nmKar[$kid];
+                    }
+                }
+            }
+            $posted = ($r['posting'] == 1);
+            $stream .= "<tr>
+                <td align=center>" . $no . "</td>
+                <td>" . $r['notransaksi'] . "</td>
+                <td>" . $r['jenisvhc'] . " - " . @$nmJenis[$r['jenisvhc']] . "</td>
+                <td>" . $r['kodevhc'] . "</td>
+                <td>" . @$nmVhc[$r['kodevhc']] . "</td>
+                <td>" . @$nmDet[$r['kodevhc']] . "</td>
+                <td>" . @$nmKar[$r['mandor']] . "</td>
+                <td>" . implode(', ', $nm['operator']) . "</td>
+                <td>" . implode(', ', $nm['helper']) . "</td>
+                <td>" . implode(', ', $nm['helper2']) . "</td>
+                <td>" . implode(', ', $nm['helper3']) . "</td>
+                <td align=center>" . tanggalnormal($r['tanggal']) . "</td>
+                <td>" . @$nmBbm[$r['jenisbbm']] . "</td>
+                <td align=right>" . $r['jlhbbm'] . "</td>
+                <td align=center>" . ($r['kontanan'] != '' ? 'YA' : 'TIDAK') . "</td>
+                <td>" . @$nmKar[$r['updateby']] . "</td>
+                <td align=center>" . ($r['createdtime'] == '0000-00-00 00:00:00' ? '' : $r['createdtime']) . "</td>
+                <td align=center>" . ($posted ? 'Posted' : 'Belum Posting') . "</td>
+                <td>" . ($posted ? @$nmKar[$r['postingby']] : '') . "</td>
+                <td align=center>" . ($posted && $r['postedtime'] != '0000-00-00 00:00:00' ? $r['postedtime'] : '') . "</td>
+            </tr>";
+        }
+        $stream .= "</tbody></table>";
+
+        $xls = new HtmlExcel();
+        $xls->addSheet("Pekerjaan", $stream);
+        $xls->headers("Pekerjaan_" . date('YmdHis') . ".xls");
+        echo $xls->buildFile();
         break;
     case 'loaddetail':
         $ttlrit         = 0;

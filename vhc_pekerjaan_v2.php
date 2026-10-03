@@ -106,6 +106,24 @@
 		$optkontanan.="<option value='".$lstStatus."'>".$vwStatus."</option>";
 	}
 
+	$optposting_cari="<option value=''>".$_SESSION['lang']['all']."</option>";
+	$optposting_cari.="<option value='1'>Posted</option>";
+	$optposting_cari.="<option value='0'>Belum Posting</option>";
+
+	$regexOrg = str_replace(',','|',str_replace("'","",getOrgDetail(2)));
+
+	$optperiode_cari="<option value=''>".$_SESSION['lang']['all']."</option>";
+	$sPer="select left(tanggal,7) as periode from ".$dbname.".vhc_runht where substr(kodeorg,1,4) regexp '".$regexOrg."' group by left(tanggal,7) order by periode desc";
+	foreach(fetchData($sPer) as $val){
+		$optperiode_cari.="<option value='".$val['periode']."'>".$val['periode']."</option>";
+	}
+
+	$optoperator_cari="<option value=''>".$_SESSION['lang']['all']."</option>";
+	$sOpr="select k.karyawanid,k.namakaryawan,k.nik from ".$dbname.".datakaryawan k where k.karyawanid in (select d.operator from ".$dbname.".vhc_rundt d join ".$dbname.".vhc_runht h on h.notransaksi=d.notransaksi where substr(h.kodeorg,1,4) regexp '".$regexOrg."' and d.operator<>'0000000000') order by k.namakaryawan";
+	foreach(fetchData($sOpr) as $val){
+		$optoperator_cari.="<option value='".$val['karyawanid']."'>".$val['namakaryawan']." - ".$val['nik']."</option>";
+	}
+
     #= Mandor
     $optMandor="<option value=''>".$_SESSION['lang']['pilihdata']."</option>";
     $sbrg="select * from ".$dbname.".vhc_5mandortraksi ";
@@ -170,15 +188,39 @@
                                 <legend>".$_SESSION['lang']['find']." Data</legend>
                                 <table cellspacing=\"1\" border=\"0\">
                                     <tr>
-                                        <td>".$_SESSION['lang']['notransaksi']." </td>
-                                        <td><input type=\"text\" id='txtCari' onkeyup='loaddata(0)' name='txtCari' style='width:130px' class=myinputtext /></td>
-                                        <td>".$_SESSION['lang']['tanggal']."
-                                            <input type=text class=myinputtext id=tgl_cari onmousemove=setCalendar(this.id) onchange='loaddata(0)' size=8 maxlength=10 readonly/> s.d 
-                                            <input type=text class=myinputtext id=tgl_carisd onmousemove=setCalendar(this.id) onchange='loaddata(0)' size=8 maxlength=10 readonly/>
+                                        <td nowrap>".$_SESSION['lang']['notransaksi']."</td>
+                                        <td>:</td>
+                                        <td><input type=\"text\" id='txtCari' onkeyup='loaddata(0)' name='txtCari' style='width:180px' class=myinputtext /></td>
+                                        <td nowrap>Periode</td>
+                                        <td>:</td>
+                                        <td><select id=periode_cari class=select2 onchange='loaddata(0)' style=width:180px;>".$optperiode_cari."</select></td>
+                                        <td nowrap>".$_SESSION['lang']['tanggal']."</td>
+                                        <td>:</td>
+                                        <td nowrap>
+                                            <input type=text class=myinputtext id=tgl_cari onmousemove=setCalendar(this.id) onchange='loaddata(0)' style='width:76px' maxlength=10 readonly/> s.d
+                                            <input type=text class=myinputtext id=tgl_carisd onmousemove=setCalendar(this.id) onchange='loaddata(0)' style='width:76px' maxlength=10 readonly/>
                                         </td>
-                                        <td>".$_SESSION['lang']['kodevhc']." 
-                                        <select id=kodevhc_cari class=select2 name=kodevhc_cari onchange='loaddata(0)' style=width:150px;>".$optkodevhc."</select></td><td>Kontanan <select id=kontanan_cari class=select2 onchange='loaddata(0)'>".$optkontanan."</select></td>
-                                        <td><button class=mybutton  onclick=batalcariDataTransaksi()>".$_SESSION['lang']['cancel']."</button></td>
+                                        <td nowrap>Status Posting</td>
+                                        <td>:</td>
+                                        <td><select id=posting_cari class=select2 onchange='loaddata(0)' style=width:180px;>".$optposting_cari."</select></td>
+                                    </tr>
+                                    <tr>
+                                        <td nowrap>".$_SESSION['lang']['kodevhc']."</td>
+                                        <td>:</td>
+                                        <td><select id=kodevhc_cari class=select2 name=kodevhc_cari onchange='loaddata(0)' style=width:180px;>".$optkodevhc."</select></td>
+                                        <td nowrap>".$_SESSION['lang']['operator']."</td>
+                                        <td>:</td>
+                                        <td><select id=operator_cari class=select2 onchange='loaddata(0)' style=width:180px;>".$optoperator_cari."</select></td>
+                                        <td nowrap>Kontanan</td>
+                                        <td>:</td>
+                                        <td><select id=kontanan_cari class=select2 onchange='loaddata(0)' style=width:180px;>".$optkontanan."</select></td>
+                                    </tr>
+                                    <tr>
+                                        <td colspan=12>
+                                            <button class=mybutton onclick=exportExcelPekerjaan()>".$_SESSION['lang']['excel']."</button>
+                                            <button class=mybutton onclick=exportPdfPekerjaan(event)>PDF</button>
+                                            <button class=mybutton onclick=batalcariDataTransaksi()>".$_SESSION['lang']['cancel']."</button>
+                                        </td>
                                     </tr>
                                 </table>
                             </fieldset>

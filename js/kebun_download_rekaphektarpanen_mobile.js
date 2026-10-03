@@ -7,6 +7,15 @@ function displayList() {
 	loaddata(0);
 }
 
+function resetfilter() {
+	document.getElementById('tglsch1').value = '';
+	document.getElementById('tglsch2').value = '';
+	$('#divisisch').val('').trigger('change');
+	$('#mandorsch').val('').trigger('change');
+	document.getElementById('cekpemanen').checked = false;
+	loaddata(0);
+}
+
 function getPage() {
 	pg = document.getElementById('pages');
 	pg = pg.options[pg.selectedIndex].value;
@@ -21,6 +30,25 @@ function loaddata(page) {
 	param = 'method=loaddata&page=' + page;
 	if (periodesch != '') {
 		param += '&periodesch=' + periodesch;
+	}
+	tglsch1 = document.getElementById('tglsch1').value;
+	tglsch2 = document.getElementById('tglsch2').value;
+	divisisch = document.getElementById('divisisch').value;
+	mandorsch = document.getElementById('mandorsch').value;
+	if (tglsch1 != '') {
+		param += '&tglsch1=' + tglsch1;
+	}
+	if (tglsch2 != '') {
+		param += '&tglsch2=' + tglsch2;
+	}
+	if (divisisch != '') {
+		param += '&divisisch=' + divisisch;
+	}
+	if (mandorsch != '') {
+		param += '&mandorsch=' + mandorsch;
+	}
+	if (document.getElementById('cekpemanen').checked) {
+		param += '&cekpemanen=1';
 	}
 	// if (tglsch != '') {
 	// 	param += '&tglsch=' + tglsch;

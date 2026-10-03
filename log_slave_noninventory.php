@@ -6,6 +6,7 @@ include_once('lib/rTable.php');
 include_once('lib/terbilang.php');
 require_once('dompdf/autoload.inc.php');
 require_once('lib/zFunction.php');
+include_once('lib/HtmlExcel.php');
 use Dompdf\Dompdf;
 
 $nosj=checkPostGet('nosj','');
@@ -30,6 +31,9 @@ $scnopo=checkPostGet('scnopo','');
 $crnopo=checkPostGet('crnopo','');
 $scnotransaksi=checkPostGet('scnotransaksi','');
 $sctanggal=checkPostGet('sctanggal','');
+$sctipe=checkPostGet('sctipe','');
+$scsupplier=checkPostGet('scsupplier','');
+$scunit=checkPostGet('scunit','');
 
 //Umar
 $tab = '';
@@ -47,6 +51,56 @@ $str="select * from ".$dbname.".setup_kegiatan";
 $res=fetchdata($str);
 foreach($res as $bar){
 	$klkegiatan[$bar['kodekegiatan']]=$bar['kelompok'];
+}
+
+#= bikin tabel rincian jurnal (dipakai bareng pas posting & unposting, nojurnal dicari lewat noreferensi)
+function bbTabelJurnal($dbname,$notransaksi){
+	global $owlPDO;
+	#= sengaja gak nampilin kolom Jumlah/Rupiah - info ini cuma buat liat akun & D/K yang kena, bukan buat
+	#= nampilin nominal (gak semua yang posting/unposting boleh liat nilai rupiahnya)
+	$optNmAkun = makeOption($dbname,'keu_5akun','noakun,namaakun');
+	$strInfo = "select nojurnal,noakun,jumlah from ".$dbname.".keu_jurnaldt where nojurnal in
+		(select nojurnal from ".$dbname.".keu_jurnalht where noreferensi='".$notransaksi."') order by nojurnal,nourut";
+	$resInfo = fetchdata($strInfo);
+	$infoJurnal = array();
+	foreach($resInfo as $ri){
+		$infoJurnal[$ri['nojurnal']][] = array(
+			'akun' => $ri['noakun'].' - '.@$optNmAkun[$ri['noakun']],
+			'dk'   => ($ri['jumlah']>=0) ? 'Debet' : 'Kredit'
+		);
+	}
+	$tbl = "<table class=sortable cellpadding=5 cellspacing=1 style='width:100%'>
+		<thead><tr class=rowheader>
+			<th align=center>No</th>
+			<th align=center>No Jurnal</th>
+			<th align=left>Akun</th>
+			<th align=center>D/K</th>
+		</tr></thead><tbody>";
+	$no=0;
+	foreach($infoJurnal as $noj=>$rows){
+		$jmlbaris = count($rows);
+		$firstRow = true;
+		foreach($rows as $row){
+			$no++;
+			$tbl .= "<tr class=rowcontent>";
+			$tbl .= "<td align=center>".$no."</td>";
+			if($firstRow){
+				$tbl .= "<td align=center valign=top rowspan=".$jmlbaris."><b>".$noj."</b></td>";
+				$firstRow = false;
+			}
+			$tbl .= "<td align=left>".$row['akun']."</td>";
+			$tbl .= "<td align=center>".$row['dk']."</td>";
+			$tbl .= "</tr>";
+		}
+	}
+	$tbl .= "</tbody></table>";
+	return $tbl;
+}
+
+#= banner hijau standar buat pesan sukses (posting/unposting), $ket boleh ada HTML (misal <b>notransaksi</b>)
+function bbBannerSukses($ket){
+	return "<div style='background:#d4edda;color:#155724;border:1px solid #c3e6cb;border-radius:4px;
+		padding:8px 12px;margin-bottom:8px;'>&#10003; ".$ket."</div>";
 }
 
 switch($method){
@@ -80,9 +134,10 @@ switch($method){
         }
 		@$offset=$page*$limit;
 		@$no=(($page*$limit));
-		$colspan=17;
+		$colspan=20;
 		
 		$arrorgdet = getOrgDetail(2);
+		$jabUnpost = getPostingJabatan('penerimaannoninvt');
 		$where = "";
 		if($scnotransaksi!=''){
 			$where.=" and notransaksi like '%".$scnotransaksi."%'";
@@ -95,7 +150,16 @@ switch($method){
 			$txt_tgl=tanggalsystemn($sctanggal);
 			$where.=" and tanggal='".$txt_tgl."'";
 		}
-		
+		if($sctipe!=''){
+			$where.=" and tipe='".$sctipe."'";
+		}
+		if($scunit!=''){
+			$where.=" and unit='".$scunit."'";
+		}
+		if($scsupplier!=''){
+			$where.=" and supplierid in (select supplierid from ".$dbname.".log_5supplier where namasupplier like '%".$scsupplier."%')";
+		}
+
 		## GET JUMLAH BARIS
 		$str="select notransaksi from ".$dbname.".log_noninventory where 
 		unit in (".$arrorgdet.") ".$where." order by tanggal desc, pt asc, unit asc, nopo asc";
@@ -153,10 +217,13 @@ switch($method){
 				$tab.="<td align=left valign=top>".$optnamasupplier[$val['supplierid']]."</td>";
 				$tab.="<td align=center valign=top>".($val['termin']=='0'?'':$val['termin'])."</td>";
 				$tab.="<td align=left valign=top>".getNamaKaryawan($val['createdby'])."</td>";
+				$tab.="<td align=center valign=top>".($val['createtime']=='0000-00-00 00:00:00'?'':tanggalnormald($val['createtime']))."</td>";
 				$tab.="<td align=left valign=top>".$statusapp."</td>";
-				
+
 				if($val['posting']=='0'){
 					$tab.="<td align=center valign=top>Not Posted</td>";
+					$tab.="<td align=center valign=top>-</td>";
+					$tab.="<td align=center valign=top>-</td>";
 					if ($val['persetujuan'] == 1) {
 						$tab .= "<td align='center' valign='top'></td>";
 						$tab .= "<td align='center' valign='top'></td>";
@@ -175,10 +242,16 @@ switch($method){
 						$tab.="<td align=left valign=top colspan=3></td>";
 					}
 				}else{
-					$tab.="<td align=center width=25px valign=top>".getNamaKaryawan($val['postedby'])."</td>";
+					$tab.="<td align=center valign=top>Posted</td>";
+					$tab.="<td align=center valign=top>".getNamaKaryawan($val['postedby'])."</td>";
+					$tab.="<td align=center valign=top>".($val['postedtime']=='0000-00-00 00:00:00'?'':tanggalnormald($val['postedtime']))."</td>";
 					$tab.="<td></td>";
 					$tab.="<td></td>";
-					$tab.="<td align=center width=25px valign=top><img src='images/skyblue/posted.png' class='zImgOffBtn' title='Posted'></td>";
+					if(in_array($_SESSION['empl']['jabatan'],$jabUnpost)){
+						$tab.="<td align=center width=25px valign=top><img src='images/icons/04/16/04.png' class='resicon' title='Unposting' onclick=\"unpostinggr('".$val['notransaksi']."');\"></td>";
+					}else{
+						$tab.="<td align=center width=25px valign=top><img src='images/skyblue/posted.png' class='zImgOffBtn' title='Posted'></td>";
+					}
 				}
 				$tab.="<td align=center width=25px valign=top>
 					<img src=images/zoom.png class=resicon title='Preview' onclick=\"previewgr(event,'".$val['notransaksi']."','".$kodebarang."');\">
@@ -811,8 +884,8 @@ switch($method){
 	case'postinggr':
 	
 		#= penambahan setup posting
-		
-		$jab = getPostingJabatan('gudangnoninventory');	
+
+		$jab = getPostingJabatan('gudangnoninventory');
 		// if(!in_array($_SESSION['empl']['jabatan'],$jab)){
 			// exit("warningsistem:Jabatan anda tidak diperbolehkan untuk posting  noninventory, hubungi IT untuk mendaftarkan disetup posting");
 		// }
@@ -849,13 +922,21 @@ switch($method){
 			$noakunkr = "2110301";
 		}
 
-		// GRIR 2021
-		$noakungrir='2110501';
+		// GRIR 2021 - akun Hutang Good Receipt/Invoice Receipt PO (dicek ke histori jurnal NOINV: 2111401
+		// konsisten dipakai 3000+ kali, 2110501 gak terdaftar di keu_5akun sama sekali - salah ketik lama)
+		$noakungrir='2111401';
 		$noakunkr=$noakungrir;
 		$str = "select kodeorganisasi from ".$dbname.".organisasi where induk in (select induk from ".$dbname.".organisasi where kodeorganisasi = '".$unit."' ) and tipe = 'KANWIL'";
 		$res=fetchdata($str);
+		$ronya='';
 		foreach($res as $key=>$val){
 			$ronya = $val['kodeorganisasi'];
+		}
+		#= unit yang gak punya KANWIL (RO) di struktur organisasinya bikin $ronya kosong - treat sebagai
+		#= "RO-nya ya unit itu sendiri" (match logika fallback $unit==$ronya dibawah), bukan dibiarkan kosong
+		#= (kosong bikin lookup keu_5caco/cek tutup buku ke kodeorg='' yang gak akan pernah ketemu apa-apa)
+		if($ronya==''){
+			$ronya=$unit;
 		}
 
 		$str = "select akunpiutang,akunhutang,jenis from ".$dbname.".keu_5caco where kodeorg='".$ronya."' and jenis = 'intra'";
@@ -1171,15 +1252,98 @@ switch($method){
 			##UBAH FLAG Posting
 			$str="update ".$dbname.".log_noninventory set posting='1', postedby='".$_SESSION['standard']['userid']."', postedtime='".$tglskrg."', tanggalselesai='".$tglselesai."',keterangan='".$keterangan."' where notransaksi='".$notransaksi."'";
 			$owlPDO->exec($str);
-			
+
 			$owlPDO->commit();
+
+			#= info balik ke user, jurnal apa yang baru kebentuk
+			echo bbBannerSukses("Berhasil posting <b>".$notransaksi."</b>. Jurnal yang terbentuk:").bbTabelJurnal($dbname,$notransaksi);
 		}catch(PDOException $e){
 			$owlPDO->rollback();
 			echo "Warning \n" . addslashes($e->getMessage());
 		}
 	break;
-	
-	
+
+	case'unpostinggr':
+		#= akses unposting dicek dari setup_posting kodeaplikasi='gudangnoninventory' - kalau jabatan user gak
+		#= terdaftar disitu, berarti gak punya akses unposting (beda dari akses posting biasa)
+		$jab = getPostingJabatan('gudangnoninventory');
+		if(!in_array($_SESSION['empl']['jabatan'],$jab)){
+			exit("warningsistem:Anda tidak memiliki akses untuk melakukan unposting penerimaan non-inventory, hubungi Admin untuk didaftarkan di setup Posting.");
+		}
+
+		$str="select * from ".$dbname.".log_noninventory where notransaksi='".$notransaksi."'";
+		$res=fetchdata($str);
+		if(count($res)==0){
+			exit("warningsistem:Data transaksi tidak ditemukan.");
+		}
+		$unit=$res[0]['unit'];
+		$tanggal=$res[0]['tanggal'];
+		$nopo=$res[0]['nopo'];
+		$termin=$res[0]['termin'];
+
+		if($res[0]['posting']!=1){
+			exit("warningsistem:Transaksi ini belum diposting.");
+		}
+
+		#= cek apakah penerimaan barang ini sudah dipakai di tagihan (AP invoice) - kalau sudah, jangan boleh
+		#= diunposting karena tagihannya udah bergantung sama jurnal GR ini
+		$strTg="select noinvoice from ".$dbname.".keu_tagihandt where nopo='".$nopo."' and termin='".$termin."' group by noinvoice";
+		$resTg=fetchdata($strTg);
+		if(count($resTg)>0){
+			$listInv=array();
+			foreach($resTg as $rTg){ $listInv[]=$rTg['noinvoice']; }
+			exit("warningsistem:Penerimaan barang ini sudah dipakai di tagihan (".implode(', ',$listInv)."), tidak bisa diunposting. Batalkan/hapus tagihannya dulu sebelum unposting.");
+		}
+
+		#= cek tutup buku, sama seperti pas posting - dicek baik di unit maupun RO (kanwil induknya),
+		#= karena jurnal GR ini juga ngebentuk jurnal GRIR disisi RO
+		$periode=substr($tanggal,0,7);
+		$str = "select kodeorganisasi from ".$dbname.".organisasi where induk in (select induk from ".$dbname.".organisasi where kodeorganisasi = '".$unit."' ) and tipe = 'KANWIL'";
+		$res=fetchdata($str);
+		$ronya='';
+		foreach($res as $val){ $ronya = $val['kodeorganisasi']; }
+
+		$str = "select tutupbuku from ".$dbname.".setup_periodeakuntansi where periode='".$periode."' and kodeorg='".$unit."'";
+		$res=fetchdata($str);
+		if(count($res)>0 and $res[0]['tutupbuku']=='1'){
+			exit("warningsistem:Periode ".$periode." di unit ".$unit." sudah tutup buku, tidak bisa diunposting.");
+		}
+		if($ronya!=''){
+			$str = "select tutupbuku from ".$dbname.".setup_periodeakuntansi where periode='".$periode."' and kodeorg='".$ronya."'";
+			$res=fetchdata($str);
+			if(count($res)>0 and $res[0]['tutupbuku']=='1'){
+				exit("warningsistem:Periode ".$periode." di ".$ronya." sudah tutup buku, tidak bisa diunposting.");
+			}
+		}
+
+		#= ambil dulu rincian jurnal SEBELUM dihapus (sesudah dihapus datanya udah gak ada lagi buat ditampilkan)
+		$tabelJurnal = bbTabelJurnal($dbname,$notransaksi);
+
+		try {
+			$owlPDO->beginTransaction();
+
+			#= hapus header lewat noreferensi=notransaksi (otomatis kena jurnal sisi unit dan sisi RO sekaligus,
+			#= karena keduanya di-insert dengan noreferensi yang sama pas posting) - keu_jurnaldt ikut
+			#= kehapus sendiri lewat FK ON DELETE CASCADE, gak perlu dihapus manual
+			$str="delete from ".$dbname.".keu_jurnalht where noreferensi='".$notransaksi."'";
+			$owlPDO->exec($str);
+
+			#= reset status posting - counter keu_5kelompokjurnal SENGAJA tidak dimundurkan, supaya gak
+			#= tabrakan nomor jurnal kalau sudah ada transaksi lain yang posting pakai counter yang sama
+			$str="update ".$dbname.".log_noninventory set posting='0', postedby='0000000000', postedtime='0000-00-00 00:00:00' where notransaksi='".$notransaksi."'";
+			$owlPDO->exec($str);
+
+			$owlPDO->commit();
+
+			#= info balik ke user, jurnal apa aja yang baru dihapus
+			echo bbBannerSukses("Berhasil unposting <b>".$notransaksi."</b>. Jurnal yang dihapus:").$tabelJurnal;
+		}catch(PDOException $e){
+			$owlPDO->rollback();
+			echo "Warning \n" . addslashes($e->getMessage());
+		}
+	break;
+
+
 	case'postinggrx':
 		$tab.="";
 		
@@ -1362,7 +1526,11 @@ switch($method){
 		$optunit=makeOption($dbname,'organisasi','kodeorganisasi,namaorganisasi',"kodeorganisasi='".$unit."'");
 		$optsupplier=makeOption($dbname,'log_5supplier','supplierid,namasupplier',"supplierid='".$supplier."'");
 		$optpurchaser=makeOption($dbname,'log_poht','nopo,purchaser',"nopo='".$nopo."'");
-		
+
+		#= logo mengikuti PT transaksinya masing-masing (bukan hardcode satu logo), karena PT yang pakai modul ini banyak
+		$hdpt=setheadreport($pt,$pt);
+		$logopt=(file_exists($hdpt['logo']))?$hdpt['logo']:'';
+
 		$pt=$optpt[$pt];
 		$unit=$optunit[$unit];
 		$supplier=$optsupplier[$supplier];
@@ -1370,12 +1538,14 @@ switch($method){
 
 		$tab.="<table cellspacing=0 border=0 width=100% align=center>
 			<tr>
+				<td align=left valign=middle width=70px style='border-bottom:0.1px solid #000'>".($logopt!=''?"<img src='".$logopt."' style='width:50px;height:50px'>":"&nbsp;")."</td>
 				<td align=center style='border-bottom:0.1px solid #000;font-weight:bold'>BUKTI PENERIMAAN BARANG</td>
+				<td width=70px style='border-bottom:0.1px solid #000'>&nbsp;</td>
 			</tr>
 		</table>
 		<table cellspacing=0 cellpadding=0 style='font-size:12px;' width=100%>
 			<tr>
-				<td width=60% style='font-weight:bold'>".$pt."</td>
+				<td width=60% style='font-weight:bold;vertical-align:middle'>".$pt."</td>
 				<td width=40% rowspan=2 style='vertical-align:bottom'>
 				<table>
 					<tr>
@@ -1682,6 +1852,10 @@ switch($method){
 		$optbarang=makeOption($dbname,'log_5masterbarang','kodebarang,namabarang',"kodebarang='".$kodebarang."'");
 		// $optpurchaser=makeOption($dbname,'log_poht','nopo,purchaser',"nopo='".$nopo."'");
 		$optpurchaser=makeOption($dbname,'log_noninventory','notransaksi,createdby', "notransaksi='".$notransaksi."'");
+
+		#= logo mengikuti PT transaksinya masing-masing (bukan hardcode satu logo), karena PT yang pakai modul ini banyak
+		$hdpt=setheadreport($pt,$pt);
+		$logopt=(file_exists($hdpt['logo']))?$hdpt['logo']:'';
 		
 		$alamat=$optalamat[$pt];
 		$pt=$optpt[$pt];
@@ -1692,18 +1866,19 @@ switch($method){
 	
 		$tab.="<table cellspacing=0 border=0 width=100% align=center>
 			<tr>
-				<td align=left width=55px><img src='images/ksp.jpg'  class='zImgOffBtn' style='width:50px;height:50px'></td>
-				<td align=center style='font-weight:bold;font-size:24px'>".$pt."</td>
+				<td align=left valign=middle width=70px>".($logopt!=''?"<img src='".$logopt."' style='width:60px;height:60px'>":"")."</td>
+				<td align=center valign=middle style='font-weight:bold;font-size:24px'>".$pt."</td>
+				<td width=70px>&nbsp;</td>
 			</tr>
 			<tr>
-				<td align=center style='border-bottom:0.1px solid #000;font-size:12px' colspan=2>Alamat : ".$alamat."</td>
+				<td align=center style='border-bottom:0.1px solid #000;font-size:12px' colspan=3>Alamat : ".$alamat."</td>
 			</tr>
 			<br>
 			<tr>
-				<td align=center style='font-weight:bold;padding-top:19px;font-size:19px' colspan=2><u>BERITA ACARA  PENYELESAIAN PEKERJAAN</u></td>
+				<td align=center style='font-weight:bold;padding-top:19px;font-size:19px' colspan=3><u>BERITA ACARA  PENYELESAIAN PEKERJAAN</u></td>
 			</tr>
 			<tr>
-				<td align=center style='font-size:15px' colspan=2>No : ".$notransaksi."</td>
+				<td align=center style='font-size:15px' colspan=3>No : ".$notransaksi."</td>
 			</tr>
 		</table>
 		<table cellspacing=0 cellpadding=0 style='font-size:15px;text-align: justify;' width=100%>
@@ -1794,7 +1969,117 @@ switch($method){
 		}else{
 			file_put_contents($urlefil, $dompdf->output());
 		}
-		
+
+	break;
+
+	case 'excel':
+		#filter sama persis dengan loaddata, supaya tarikan Excel ikut filter yang lagi aktif di form Cari
+		$arrorgdet = getOrgDetail(2);
+		$where = "";
+		if($scnotransaksi!=''){
+			$where.=" and notransaksi like '%".$scnotransaksi."%'";
+		}
+		if($crnopo!=''){
+			$where.=" and nopo like '%".$crnopo."%'";
+		}
+		if($sctanggal!=''){
+			$txt_tgl=tanggalsystemn($sctanggal);
+			$where.=" and tanggal='".$txt_tgl."'";
+		}
+		if($sctipe!=''){
+			$where.=" and tipe='".$sctipe."'";
+		}
+		if($scunit!=''){
+			$where.=" and unit='".$scunit."'";
+		}
+		if($scsupplier!=''){
+			$where.=" and supplierid in (select supplierid from ".$dbname.".log_5supplier where namasupplier like '%".$scsupplier."%')";
+		}
+
+		#kop/logo/ditarik-oleh format standar, pakai org karyawan yang login (data lintas unit, bukan per-unit)
+		$hdpt = setheadreport($_SESSION['empl']['kodeorganisasi'], $_SESSION['empl']['kodeorganisasi']);
+		$logourl = '';
+		if (file_exists($hdpt['logo'])) {
+			$skema = (isset($_SERVER['HTTPS']) and $_SERVER['HTTPS'] != 'off') ? 'https' : 'http';
+			$logourl = $skema . "://" . @$_SERVER['HTTP_HOST'] . rtrim(dirname(@$_SERVER['SCRIPT_NAME']), '/') . "/" . $hdpt['logo'];
+		}
+		$kolom = 16;
+		$stream = "<table>
+			<tr><td colspan=".$kolom." height='70' style='height:52pt'>".($logourl!=''?"<img src='".$logourl."' height='60'>":"")."</td></tr>
+			<tr><td colspan=".$kolom."><b>".htmlspecialchars($hdpt['nama'])."</b></td></tr>
+			<tr><td colspan=".$kolom."><b>PENERIMAAN BARANG NON-INVENTORY</b></td></tr>
+			<tr><td colspan=".$kolom.">Ditarik oleh ".htmlspecialchars($_SESSION['empl']['name'])." (".htmlspecialchars($_SESSION['standard']['username']).") pada ".date('d-m-Y H:i:s')."</td></tr>
+			<tr><td colspan=".$kolom.">&nbsp;</td></tr>
+			</table>";
+
+		$stream .= "<table class=sortable cellspacing=1 cellpadding=3 border=1>
+			<thead><tr>
+				<th align=center>".$_SESSION['lang']['nourut']."</th>
+				<th align=center>".$_SESSION['lang']['notransaksi']."</th>
+				<th align=center>".$_SESSION['lang']['tipe']."</th>
+				<th align=center>".$_SESSION['lang']['perusahaan']."</th>
+				<th align=center>".$_SESSION['lang']['unit']."</th>
+				<th align=center>".$_SESSION['lang']['tanggal']."</th>
+				<th align=center>".$_SESSION['lang']['nopo']."</th>
+				<th align=center>".$_SESSION['lang']['namasupplier']."</th>
+				<th align=center>".$_SESSION['lang']['termin']."</th>
+				<th align=center>".$_SESSION['lang']['dibuat']."</th>
+				<th align=center>Tgl Dibuat</th>
+				<th align=center>".$_SESSION['lang']['approval_status']."</th>
+				<th align=center>".$_SESSION['lang']['posting']."</th>
+				<th align=center>Diposting Oleh</th>
+				<th align=center>Tgl Posting</th>
+			</tr></thead><tbody>";
+
+		$no = 0;
+		$str = "select * from ".$dbname.".log_noninventory where unit in (".$arrorgdet.") ".$where." order by tanggal desc, pt asc, unit asc, nopo asc";
+		$res = fetchdata($str);
+		foreach($res as $val){
+			$no++;
+			$optnamasupplier = makeOption($dbname,'log_5supplier','supplierid,namasupplier',"supplierid='".$val['supplierid']."'");
+
+			if ($val['persetujuan'] == 0) {
+				$statusapp = $_SESSION['lang']['belumdiajukan'];
+			} else {
+				if ($val['persetujuan'] == 1) {
+					$table = "approval"; $whereapp = "status = '1'"; $ket = $_SESSION['lang']['disetujui']; $order = 'DESC';
+				} else if ($val['persetujuan'] == 9) {
+					$table = "approval"; $whereapp = "status = '0'"; $ket = $_SESSION['lang']['wait_approval']; $order = 'DESC';
+				} else if ($val['persetujuan'] == 2) {
+					$table = "approval"; $whereapp = "status = '2'"; $ket = $_SESSION['lang']['ditolak']; $order = 'DESC';
+				}
+				$strApp = "SELECT a.karyawanid, b.namakaryawan FROM ".$dbname.".".$table." a
+						JOIN ".$dbname.".datakaryawan b ON a.karyawanid = b.karyawanid
+						WHERE notransaksi = '".$val['notransaksi']."' AND ".$whereapp."
+						ORDER BY level ".$order." LIMIT 1";
+				$resApp = fetchdata($strApp);
+				$statusapp = $ket." (".$resApp[0]['namakaryawan'].")";
+			}
+
+			$stream .= "<tr>
+				<td align=center>".$no."</td>
+				<td>".$val['notransaksi']."</td>
+				<td>".$val['tipe']." [GRNI".$val['tipe']."]</td>
+				<td align=center>".$val['pt']."</td>
+				<td align=center>".$val['unit']."</td>
+				<td align=center>".tanggalnormal($val['tanggal'])."</td>
+				<td>".$val['nopo']."</td>
+				<td>".@$optnamasupplier[$val['supplierid']]."</td>
+				<td align=center>".($val['termin']=='0'?'':$val['termin'])."</td>
+				<td>".getNamaKaryawan($val['createdby'])."</td>
+				<td align=center>".($val['createtime']=='0000-00-00 00:00:00'?'':tanggalnormald($val['createtime']))."</td>
+				<td>".$statusapp."</td>
+				<td align=center>".($val['posting']=='1'?'Posted':'Not Posted')."</td>
+				<td>".($val['posting']=='1'?getNamaKaryawan($val['postedby']):'')."</td>
+				<td align=center>".($val['posting']=='1' and $val['postedtime']!='0000-00-00 00:00:00'?tanggalnormald($val['postedtime']):'')."</td>
+			</tr>";
+		}
+		$stream .= "</tbody></table>";
+
+		$xls = new HtmlExcel();
+		$xls->addSheet("Penerimaan Non-Inventory", $stream);
+		$xls->headers("PenerimaanNonInventory_".date('YmdHis').".xls");
+		echo $xls->buildFile();
 	break;
 }
 

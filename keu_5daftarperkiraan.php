@@ -3,8 +3,10 @@
 require_once('master_validation.php');
 include('lib/nangkoelib.php');
 echo open_body();
+require_once('lib/zSelect2.php');
 include('master_mainMenu.php');
 include('lib/zLib.php');
+echo "<script src=js/zSelect2.js?ver=1></script>";
 ?>
 <script language=javascript src='js/keu_5daftarperkiraan.js?v=<?php echo time(); ?>'></script>
 <script language="javascript" src="js/zMaster.js"></script>
@@ -71,7 +73,7 @@ echo"<fieldset>";
                     
                     <td>".$_SESSION['lang']['level']."</td>
                     <td>:</td>
-                    <td colspan=4><select id=level style=\"width:200px;\">".$optlevel."</select></td>
+                    <td colspan=4><select class='select2' id=level style=\"width:200px;\">".$optlevel."</select></td>
                     
                     <td>".$_SESSION['lang']['kasbank']." ".$_SESSION['lang']['detail']."</td>
                     <td>:</td>
@@ -95,7 +97,7 @@ echo"<fieldset>";
                     
                     <td>".$_SESSION['lang']['matauang']."</td>
                     <td>:</td>
-                    <td colspan=4><select id=matauang style=\"width:200px;\">".$optCurr."</select></td>
+                    <td colspan=4><select class='select2' id=matauang style=\"width:200px;\">".$optCurr."</select></td>
                     
                     <td>".$_SESSION['lang']['invoice']." AP</td>
                     <td>:</td>
@@ -119,7 +121,7 @@ echo"<fieldset>";
                     
                     <td>".$_SESSION['lang']['pemilik']."</td>
                     <td>:</td>
-                    <td colspan=4><select id=pemilik style=\"width:200px;\">".$optPemilik."</select></td>
+                    <td colspan=4><select class='select2' id=pemilik style=\"width:200px;\">".$optPemilik."</select></td>
                     
                     <td>".$_SESSION['lang']['jurnalmemo']."</td>
                     <td>:</td>
@@ -137,7 +139,7 @@ echo"<fieldset>";
                 <tr>
                     <td>".$_SESSION['lang']['tipeakun']."</td>
                     <td>:</td>
-                    <td><select id=tipeakun style=\"width:200px;\">".$optTipeAkun."</select></td>
+                    <td><select class='select2' id=tipeakun style=\"width:200px;\">".$optTipeAkun."</select></td>
                     
 					<td></td>
 					<td></td>
@@ -181,7 +183,9 @@ echo "<fieldset style=float:left;>
       <td>".$_SESSION['lang']['namaakun']."</td>
       <td>:</td> 
       <td><input type=text id=txtsearch size=25 maxlength=30 class=myinputtext></td>
-	  <td> <button class=mybutton onclick=loadData(0)>".$_SESSION['lang']['find']."</button><button class=mybutton onclick=cancelsearch()>Cancel</button></td></td>
+	  <td> <button class=mybutton onclick=loadData(0)>".$_SESSION['lang']['find']."</button><button class=mybutton onclick=cancelsearch()>Cancel</button>
+	  <button class=mybutton onclick=exportExcel()>".$_SESSION['lang']['excel']."</button>
+	  <button class=mybutton onclick=exportPdf(event)>PDF</button></td></td>
 	  
 	  
 	  </tr>";
@@ -190,7 +194,7 @@ echo "<fieldset style=float:left;>
       // </tr>";
 echo"</table></fieldset></td>
      </tr><div style=clear:both></div>
-        <div id=container class=table-scroll style='height:50vh'>
+        <div id=container class=table-scroll style='height:50vh;transform:translateZ(0);'>
         </div> <script>loadData(0)</script>
     </fieldset>";
 CLOSE_BOX();

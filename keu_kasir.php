@@ -6,7 +6,9 @@ include_once('lib/zLib.php');
 include('lib/zFunction.php');
 include('lib/rTable.php');
 echo open_body();
+require_once('lib/zSelect2.php');
 include('master_mainMenu.php');
+echo "<script src=js/zSelect2.js?ver=1></script>";
 ?>
 <script language=javascript src='js/zReport.js'></script>
 <link rel=stylesheet type=text/css href=style/zTable.css>
@@ -123,15 +125,14 @@ echo"<table>
 			
 			
 			<td>".$_SESSION['lang']['tipe']."</td>
-			<td>:</td>		
+			<td>:</td>
 			<td>
-				<select onchange=loaddata(); id=tipetransaksisch style=\"width:153px;\">'".$opttipe."'</select>
+				<select class=select2 onchange=loaddata(); id=tipetransaksisch style=\"width:153px;\">'".$opttipe."'</select>
 			</td>
 			<td>".$_SESSION['lang']['supplier']."</td>
-			<td>:</td>		
+			<td>:</td>
 			<td>
-				<select onchange=loaddata(); id=suppliersch style=\"width:153px;\">'".$optsupplier."'</select>
-				<img id='suppliersch' onclick=z.elSearch('suppliersch',event) class='resicon' src='images/skyblue/zoom.png' style='position:relative;top:3px;left:3px;'></td>
+				<select class=select2 onchange=loaddata(); id=suppliersch style=\"width:153px;\">'".$optsupplier."'</select>
 			</td>
 			
 			<td>".$_SESSION['lang']['bayarke']."</td>
@@ -169,15 +170,15 @@ echo"<table>
 		</tr>
 		<tr>
 			<td>".$_SESSION['lang']['pembayaran']."</td>
-			<td>:</td>		
+			<td>:</td>
 			<td>
-				<select id=pembayaransch onchange=loaddata(); style=\"width:153px;\">'".$optpembayaran."'</select>
+				<select class=select2 id=pembayaransch onchange=loaddata(); style=\"width:153px;\">'".$optpembayaran."'</select>
 			</td>
-			
+
 			<td>".$_SESSION['lang']['cgttu']."</td>
-			<td>:</td>		
+			<td>:</td>
 			<td>
-				<select id=cgttusch style=\"width:153px;\" onchange=loaddata(); >'".$optctg."'</select>
+				<select class=select2 id=cgttusch style=\"width:153px;\" onchange=loaddata(); >'".$optctg."'</select>
 			</td>
 			
 			<td>No. Bukti Pembayaran</td>
@@ -195,29 +196,33 @@ echo"<table>
 		</tr>
 		<tr>
 			<td>".$_SESSION['lang']['unit']."</td>
-				<td>:</td>		
+				<td>:</td>
 				<td>
-					<select id=kodeorgsch onchange=\"loaddata();\" onblur=getrekeningsch(); style=\"width:154px;\" >'".$optunit."'</select>
+					<select class=select2 id=kodeorgsch onchange=\"loaddata();getrekeningsch();\" style=\"width:154px;\" >'".$optunit."'</select>
 				</td>
-				
+
 				<td>".$_SESSION['lang']['akun']." ".$_SESSION['lang']['kas']."/".$_SESSION['lang']['bank']."</td>
-				<td>:</td>		
+				<td>:</td>
 				<td>
-					<select onchange=\"loaddata()\" onblur=getrekeningsch(); id=noakunsch style=\"width:153px;\" >'".$optnoakun."'</select>
+					<select class=select2 onchange=\"loaddata();getrekeningsch();\" id=noakunsch style=\"width:153px;\" >'".$optnoakun."'</select>
 				</td>
-				
+
 				<td>".$_SESSION['lang']['rekening']."</td>
-				<td>:</td>		
+				<td>:</td>
 				<td>
-					<select id=rekeningsch onchange=loaddata(); style=\"width:154px;\">'".$optrekening."'</select>
-				
+					<select class=select2 id=rekeningsch onchange=loaddata(); style=\"width:154px;\">'".$optrekening."'</select>
+
 				</td>
 				
 		</tr>
 		<tr>
 			<td></td>
 			<td></td>
-			<td><button class=mybutton onclick=loaddata(0) >".$_SESSION['lang']['preview']."</button></td>
+			<td>
+				<button class=mybutton onclick=loaddata(0) >".$_SESSION['lang']['preview']."</button>
+				<button class=mybutton onclick=exportExcel()>".$_SESSION['lang']['excel']."</button>
+				<button class=mybutton onclick=exportPdf(event)>PDF</button>
+			</td>
 		</tr>
 		
 	";

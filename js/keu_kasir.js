@@ -1,3 +1,64 @@
+//select2 gak auto-reinit kalau isi <select>-nya diganti lewat innerHTML (kejadian di rekeningsch via getrekeningsch())
+function ksrJagaSelect2(id) {
+	var el = document.getElementById(id);
+	if (!el || el._ksrObserved || !window.jQuery || !jQuery.fn.select2) { return; }
+	el._ksrObserved = true;
+	new MutationObserver(function () {
+		jQuery(el).select2('destroy');
+		jQuery(el).select2({ dropdownAutoWidth: true });
+	}).observe(el, { childList: true });
+}
+if (window.jQuery) {
+	jQuery(document).ready(function () {
+		ksrJagaSelect2('rekeningsch');
+	});
+}
+
+function getFilterParamKasir() {
+	notransaksi    = document.getElementById('notransaksisch').value;
+	novoucher      = document.getElementById('novouchersch').value;
+	tanggal1       = document.getElementById('tanggalsch1').value;
+	tanggal2       = document.getElementById('tanggalsch2').value;
+	noakun         = document.getElementById('noakunsch').value;
+	bayarke        = document.getElementById('bayarkesch').value;
+	tipetransaksi  = document.getElementById('tipetransaksisch').value;
+	nocek          = document.getElementById('noceksch').value;
+	supplier       = document.getElementById('suppliersch').value;
+	pembayaran     = document.getElementById('pembayaransch').value;
+	cgttu          = document.getElementById('cgttusch').value;
+	kodeorg        = document.getElementById('kodeorgsch').value;
+	rekening       = document.getElementById('rekeningsch').value;
+	keterangan     = document.getElementById('catatansch').value;
+	jumlah         = document.getElementById('jumlahsch').value;
+
+	param  = '&jumlah=' + jumlah;
+	param += '&keterangan=' + keterangan;
+	param += '&nocek=' + nocek;
+	param += '&supplier=' + supplier;
+	param += '&pembayaran=' + pembayaran;
+	param += '&cgttu=' + cgttu;
+	param += '&notransaksi=' + notransaksi;
+	param += '&kodeorg=' + kodeorg;
+	param += '&rekening=' + rekening;
+	param += '&novoucher=' + novoucher;
+	param += '&tanggal1=' + tanggal1;
+	param += '&tanggal2=' + tanggal2;
+	param += '&noakun=' + noakun;
+	param += '&bayarke=' + bayarke;
+	param += '&tipetransaksi=' + tipetransaksi;
+	return param;
+}
+function exportExcel() {
+	param = 'method=excel' + getFilterParamKasir();
+	tujuan = 'keu_kasir_slave.php?' + param;
+	alertify.popup('Report Ms.Excel', "<iframe frameborder=0 style='width:100%;height:100%;overflow:none' src='" + tujuan + "'></iframe>").set({'resizable':true,'overflow':false}).resizeTo('80%','70%');
+}
+function exportPdf(ev) {
+	param = getFilterParamKasir();
+	tujuan = 'keu_kasir_pdf.php?' + param;
+	alertify.popup('Report PDF', "<iframe frameborder=0 style='width:100%;height:100%;overflow:none' src='" + tujuan + "'></iframe>").set({'resizable':true,'overflow':false}).resizeTo('80%','70%');
+}
+
 function viewfile(idfile,sumber) {
 	//formupload();
 	param = 'method=viewfile&idfile=' + idfile;

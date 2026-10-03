@@ -107,10 +107,15 @@ echo "<table>
 					<tr>
 						<td>Unit</td>
 						<td>:</td>
-						<td><select id=unitsch style=\"width:200px;\" onchange=loaddata(0)>" . $optUnitSch . "</select></td>
+						<td><select class=select2 id=unitsch style=\"width:200px;\" onchange=loaddata(0)>" . $optUnitSch . "</select></td>
 						<td style='padding-left:20px;'>" . $_SESSION['lang']['periode'] . "</td>
 						<td>:</td>
-						<td><select id=periodesch data-default='" . $periodeNow . "' style=\"width:200px;\" onchange=loaddata(0)>" . $optPeriodeSch . "</select></td>
+						<td><select class=select2 id=periodesch data-default='" . $periodeNow . "' style=\"width:200px;\" onchange=loaddata(0)>" . $optPeriodeSch . "</select></td>
+					</tr>
+					<tr>
+						<td>Status</td>
+						<td>:</td>
+						<td><select class=select2 id=statussch style=\"width:200px;\" onchange=loaddata(0)><option value=''>" . $_SESSION['lang']['all'] . "</option><option value='1'>Sudah diposting</option><option value='0'>Belum diposting</option></select></td>
 					</tr>
 					<tr>
 						<td colspan=2></td>

@@ -222,6 +222,12 @@ function simpan() {
 		}
 	}
 }
+//select2 gak ikut update tampilannya kalau value select di-set langsung lewat JS, harus di-trigger 'change'
+function syncSelect2(id) {
+	if (window.jQuery && jQuery.fn.select2) {
+		jQuery('#' + id).trigger('change');
+	}
+}
 function cancel() {
 	document.getElementById('noakun').value = '';
 	document.getElementById('noakun').disabled = false;
@@ -232,6 +238,10 @@ function cancel() {
 	document.getElementById('matauang').value = 'IDR';
 	document.getElementById('pemilik').value = 'GLOBAL';
 	document.getElementById('method').value = 'insert';
+	syncSelect2('tipeakun');
+	syncSelect2('level');
+	syncSelect2('matauang');
+	syncSelect2('pemilik');
 
 	document.getElementById('kasbankdetail').checked = false;
 	document.getElementById('kodekegiatan').checked = false;
@@ -283,7 +293,9 @@ function loadData(num) {
 				} else {
 					// alertify.alert("Informasi",con.responseText);
 					document.getElementById('container').innerHTML = con.responseText;
-					leftFixedTable();
+					// leftFixedTable(); dilepas: fungsi ini scan semua baris x kolom tiap load (bikin lemot untuk
+					// tabel lebar ini) dan header stickynya jadi salah nempel karena cuma dihitung sekali (lihat
+					// top:0 baru di .table-scroll thead th, style/zTable.css - sticky asli sudah cukup)
 					// getPage();
 				}
 			} else {
@@ -293,6 +305,26 @@ function loadData(num) {
 		}
 	}
 }
+//#tarikan Excel/PDF, ikut filter txtsearch/txtNoakun yang sedang aktif di form Find
+function getFilterParam() {
+	txtsearch = trim(document.getElementById('txtsearch').value);
+	txtNoakun = trim(document.getElementById('txtNoakun').value);
+	param = '';
+	if (txtsearch != '') param += '&txtsearch=' + txtsearch;
+	if (txtNoakun != '') param += '&txtNoakun=' + txtNoakun;
+	return param;
+}
+function exportExcel() {
+	param = 'method=excel' + getFilterParam();
+	tujuan = 'keu_slave_5daftarperkiraan.php?' + param;
+	alertify.popup('Report Ms.Excel', "<iframe frameborder=0 style='width:100%;height:100%;overflow:none' src='" + tujuan + "'></iframe>").set({'resizable':true,'overflow':false}).resizeTo('80%','70%');
+}
+function exportPdf(ev) {
+	param = getFilterParam();
+	tujuan = 'keu_5daftarperkiraan_pdf.php?' + param;
+	alertify.popup('Report PDF', "<iframe frameborder=0 style='width:100%;height:100%;overflow:none' src='" + tujuan + "'></iframe>").set({'resizable':true,'overflow':false}).resizeTo('80%','70%');
+}
+
 //#searching data
 function previewAkun(nosk, ev) {
 	param = 'table=' + nosk;
@@ -317,6 +349,10 @@ function edit(noakun, namaakun, namaakun1, tipeakun, kasbank, level, matauang, k
 	document.getElementById('matauang').value = matauang;
 	document.getElementById('pemilik').value = pemilik;
 	document.getElementById('method').value = 'update';
+	syncSelect2('tipeakun');
+	syncSelect2('level');
+	syncSelect2('matauang');
+	syncSelect2('pemilik');
 
 	if (kodekegiatan == '1')
 		document.getElementById('kodekegiatan').checked = true;

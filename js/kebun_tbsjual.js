@@ -309,6 +309,36 @@ function excel(notransaksi) {
 	showDialog5(title, content, width, height, 'event');
 }
 
+function pdfdetail(notransaksi) {
+	param = 'method=excel' + '&tipe=pdf' + '&notransaksi=' + notransaksi;
+	tujuan='kebun_tbsjual_slave.php';
+	tujuan = tujuan+'?' + param;
+	content = "<iframe frameborder=0 style='width:100%;height:99%' src='" + tujuan + "'></iframe>";
+	width = '820';
+	height = '500';
+	title = "";
+	showDialog5(title, content, width, height, 'event');
+}
+
+function exportlist(tipe) {
+	notransaksisch=document.getElementById('notransaksisch').value;
+	tanggalmulaisch=document.getElementById('tanggalmulaisch').value;
+	tanggalselesaisch=document.getElementById('tanggalselesaisch').value;
+	kodecustomersch=document.getElementById('kodecustomersch').value;
+	param = 'method=exportlist&tipe=' + tipe;
+	param += '&notransaksisch=' + notransaksisch;
+	param += '&tanggalmulaisch=' + tanggalmulaisch;
+	param += '&tanggalselesaisch=' + tanggalselesaisch;
+	param += '&kodecustomersch=' + kodecustomersch;
+	tujuan = 'kebun_tbsjual_slave.php';
+	tujuan = tujuan+'?' + param;
+	content = "<iframe frameborder=0 style='width:100%;height:99%' src='" + tujuan + "'></iframe>";
+	width = '820';
+	height = '500';
+	title = "";
+	showDialog5(title, content, width, height, 'event');
+}
+
 function posting(notransaksi) {
 	param='method=posting'+'&notransaksi='+notransaksi;
 	tujuan = 'kebun_tbsjual_slave.php';
@@ -498,6 +528,7 @@ function getcust() {
 					
 					isdt = con.responseText;
 					document.getElementById('kodecustomer').innerHTML = isdt;
+					jQuery('#kodecustomer').trigger('change');
 					// document.getElementById('unitinv').innerHTML = isdt[1];
 
 					// isdt = con.responseText.split("####");

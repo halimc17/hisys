@@ -50,15 +50,6 @@ try{
     $language=$_POST['language'];
     $str1 = $owlPDO->prepare("select * from ".$dbname.".user  where namauser=?  and password=PASSWORD(?)");
 	$str1->execute([$uname,$password]);
-	if(isset($_COOKIE['karyawanid'])){
-		if($_COOKIE['karyidlog']==$_COOKIE['karyawanid']){
-			$str1    =$owlPDO->prepare("select * from ".$dbname.".user   where karyawanid=?");
-			$str1->execute([$_COOKIE['karyawanid']]);		
-		}else{
-		    $str1 = $owlPDO->prepare("select * from ".$dbname.".user  where namauser=?  and password=PASSWORD(?)");
-			$str1->execute([$uname,$password]);		
-		}
-	}
     $str1->setFetchMode(PDO::FETCH_OBJ);
     $uid=0;
     $count = $str1->rowCount();
@@ -159,13 +150,11 @@ try{
 	}
 	else
 	{
-		echo "<font color=#AA3322 style='background-color:#FFFFFF'>Wrong username and/or password [EN] Salah user name atau password [IN]</font><br><span   style='background-color:#FFFFFF'>Att: This uses case-sensitif</span>";
-	}	
+		echo "Wrong username and/or password.";
+	}
 }
 catch (PDOException $e) {
-       echo " Gagal, System meet some difficulties to preform your request.\n
-	        Please contact administrator regarding your login problem";	
-       print "Error!: " . $e->getMessage() . "<br/>";
+       echo " Gagal, System meet some difficulties to preform your request. Please contact administrator regarding your login problem";
    die();
 }
 ?>

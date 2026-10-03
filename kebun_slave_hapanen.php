@@ -3,6 +3,7 @@ require_once('master_validation.php');
 require_once('lib/nangkoelib.php');
 require_once('lib/zLib.php');
 include_once('lib/zFunction.php');
+include_once('lib/mharvest/cekpemanenmobile.php');
 
 // ini_set('display_errors', 1);
 // ini_set('display_startup_errors', 1);
@@ -25,6 +26,7 @@ $karyawansch = checkPostGet('karyawansch', '');
 $tglsch    = tanggalsystem(checkPostGet('tglsch', ''));
 $unitsch   = checkPostGet('unitsch', '');
 $periodesch = checkPostGet('periodesch', '');
+$statussch  = checkPostGet('statussch', '');
 $nmorg     = makeOption($dbname, 'organisasi', 'kodeorganisasi,namaorganisasi');
 $nmindk     = makeOption($dbname, 'organisasi', 'indukblok,namaindukblok');
 $nmkar     = makeOption($dbname, 'datakaryawan', 'karyawanid,namakaryawan');
@@ -44,6 +46,13 @@ function hapanenFilterWhere($karyawansch, $tglsch, $unitsch, $periodesch)
     }
     if (preg_match('/^\d{4}-\d{2}$/', $periodesch)) {
         $where .= " and tanggal between '" . $periodesch . "-01' and '" . date('Y-m-t', strtotime($periodesch . '-01')) . "' ";
+    }
+    // Status per grup tanggal + mandor: Sudah diposting = tidak ada baris yang belum posting
+    global $statussch, $dbname;
+    if ($statussch == '1') {
+        $where .= " and (tanggal,nikmandor) not in (select tanggal,nikmandor from " . $dbname . ".kebun_rekaphancakpanen where posting<>'1') ";
+    } elseif ($statussch == '0') {
+        $where .= " and (tanggal,nikmandor) in (select tanggal,nikmandor from " . $dbname . ".kebun_rekaphancakpanen where posting<>'1') ";
     }
     return $where;
 }
@@ -88,6 +97,12 @@ function hapanenFilterInfo($nmorg, $karyawansch, $tglsch, $unitsch, $periodesch)
     }
     if ($karyawansch != '') {
         $info[] = "Mandor: " . $karyawansch;
+    }
+    global $statussch;
+    if ($statussch == '1') {
+        $info[] = "Status: Sudah diposting";
+    } elseif ($statussch == '0') {
+        $info[] = "Status: Belum diposting";
     }
     return implode("   |   ", $info);
 }
@@ -435,6 +450,12 @@ switch ($method) {
         break;
 
     case 'posting':
+        // Posting hanya boleh kalau semua pemanen di mobile sudah didownload
+        $cekMobile = cekPemanenMobile('ha', $tgl2, $nik);
+        $pesanMobile = pesanPemanenKurang($cekMobile, $tgl2, $nik);
+        if ($pesanMobile != '') {
+            exit($pesanMobile);
+        }
         $str = "UPDATE $dbname.kebun_rekaphancakpanen SET posting='1', postingby='" . $_SESSION['standard']['userid'] . "' 
                 WHERE tanggal='" . $tgl2 . "' AND nikmandor='" . $nik . "'";
         try {

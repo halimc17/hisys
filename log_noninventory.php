@@ -23,6 +23,18 @@ OPEN_BOX('','<span class=judul>'.getMenu('log_noninventory.php').'</span>');
 	});
 </script>
 <?php
+## GET UNIT (dipakai bareng filter Cari & form Buat Baru)
+$optunit='';
+$arrorgdet = getOrgDetail(1);
+$no=0;
+foreach($arrorgdet as $key=>$val){
+	$no++;
+	if($no==1){
+		$unitkerja = $key;
+	}
+	$optunit.="<option value='".$key."'>".$key." - ".$val."</option>";
+}
+
 echo"<div id='action_list'>
 	<table>
 		<tr valign=moiddle>
@@ -33,10 +45,49 @@ echo"<div id='action_list'>
 	</td>
 			<td>
 				<fieldset><legend>".$_SESSION['lang']['find']."</legend>
-				".$_SESSION['lang']['notransaksi']." : <input type=text id=scnotransaksi size=25 maxlength=30 class=myinputtext>
-				".$_SESSION['lang']['tanggal']." : <input type=text class=myinputtext id=sctanggal onmousemove=setCalendar(this.id) onkeypress=return false;  size=10 maxlength=10 readonly/>
-				".$_SESSION['lang']['nopo']." : <input type=text id=crnopo size=25 maxlength=30 class=myinputtext>
-				<button class=mybutton onclick=loaddata(0)>".$_SESSION['lang']['find']."</button>
+				<table cellpadding=3>
+				<tr>
+					<td>".$_SESSION['lang']['notransaksi']."</td>
+					<td>:</td>
+					<td><input type=text id=scnotransaksi size=20 maxlength=30 class=myinputtext style='width:150px;'></td>
+					<td>".$_SESSION['lang']['tanggal']."</td>
+					<td>:</td>
+					<td><input type=text class=myinputtext id=sctanggal onmousemove=setCalendar(this.id) onkeypress=return false;  size=10 maxlength=10 readonly style='width:90px;'/></td>
+					<td>".$_SESSION['lang']['nopo']."</td>
+					<td>:</td>
+					<td><input type=text id=crnopo size=20 maxlength=30 class=myinputtext style='width:150px;'></td>
+				</tr>
+				<tr>
+					<td>".$_SESSION['lang']['tipe']."</td>
+					<td>:</td>
+					<td>
+						<select class=select2 id=sctipe onchange=loaddata(0); style='width:150px;'>
+							<option value=''></option>
+							<option value='NO'>NO</option>
+							<option value='SO'>SO</option>
+							<option value='CO'>CO</option>
+						</select>
+					</td>
+					<td>".$_SESSION['lang']['namasupplier']."</td>
+					<td>:</td>
+					<td><input type=text id=scsupplier size=20 maxlength=30 class=myinputtext style='width:150px;'></td>
+					<td>".$_SESSION['lang']['unit']."</td>
+					<td>:</td>
+					<td>
+						<select class=select2 id=scunit onchange=loaddata(0); style='width:150px;'>
+							<option value=''></option>
+							".$optunit."
+						</select>
+					</td>
+				</tr>
+				<tr>
+					<td colspan=9>
+						<button class=mybutton onclick=loaddata(0)>".$_SESSION['lang']['find']."</button>
+						<button class=mybutton onclick=exportExcelGrni()>".$_SESSION['lang']['excel']."</button>
+						<button class=mybutton onclick=exportPdfGrni(event)>PDF</button>
+					</td>
+				</tr>
+				</table>
 				</fieldset>
 			</td>
 		</tr>
@@ -60,8 +111,11 @@ echo"<div id='listdata' class='table-scroll' style=height:65vh>
 				<th>".$_SESSION['lang']['namasupplier']."</th>
 				<th>".$_SESSION['lang']['termin']."</th>
 				<th>".$_SESSION['lang']['dibuat']."</th>
-				<th>".$_SESSION['lang']['approval_status']."</th> 
+				<th>Tgl Dibuat</th>
+				<th>".$_SESSION['lang']['approval_status']."</th>
 				<th>".$_SESSION['lang']['posting']."</th>
+				<th>Diposting Oleh</th>
+				<th>Tgl Posting</th>
 				<th align='center' colspan=5>Action</th>
 			</tr>
 			</thead>
@@ -74,18 +128,6 @@ echo"<div id='listdata' class='table-scroll' style=height:65vh>
 </div>";
 
 echo"<div id=forminput style='display:none'>";
-	
-	## GET UNIT
-	$optunit='';
-	$arrorgdet = getOrgDetail(1);
-	$no=0;
-	foreach($arrorgdet as $key=>$val){
-		$no++;
-		if($no==1){
-			$unitkerja = $key;
-		}
-		$optunit.="<option value='".$key."'>".$key." - ".$val."</option>";	
-	}
 
 	$OPTKAR = makeOption($dbname,'datakaryawan','karyawanid,namakaryawan');
 	$OPTNIK = makeOption($dbname,'datakaryawan','karyawanid,nik');
@@ -180,7 +222,7 @@ echo"<div id=forminput style='display:none'>";
 				<td>
 					<input type='text' id='notransaksi' class='myinputtext' disabled='disabled' style='width:145px;' /> <font color=red>*
 				</td>
-			
+
 				<td>".$_SESSION['lang']['unit']."</td>
 				<td>:</td>
 				<td>
@@ -195,7 +237,7 @@ echo"<div id=forminput style='display:none'>";
 					<select class=select2 id='penerima' style='width:150px;'>".$optkaryawan."</select>
 					<img id='imgpenerima' onclick=z.elSearch('penerima',event) class='resicon' src='images/onebit_02.png' style='position:relative;top:3px;left:3px;'>
 				</td>
-				
+
 				<td>".$_SESSION['lang']['disetujui']."</td>
 				<td>:</td>
 				<td>
@@ -209,7 +251,7 @@ echo"<div id=forminput style='display:none'>";
 				<td>
 					<input type='text' class='myinputtext' id='tanggal' value='".date('d-m-Y')."' readonly='readonly' onmousemove=\"setCalendar(this.id)\" onkeypress=\"return false\"; style='width:80px;text-align:center' />
 				</td>
-			
+
 				<td>".$_SESSION['lang']['nopo']."</td>
 				<td>:</td>
 				<td>
@@ -219,7 +261,7 @@ echo"<div id=forminput style='display:none'>";
 				</td>
 			</tr>
 			<tr>
-				
+
 			<td>".$_SESSION['lang']['suratjalan']."</td>
 			<td>:</td>
 			<td>

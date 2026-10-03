@@ -5,6 +5,7 @@ require_once('master_validation.php');
 require_once('lib/zLib.php');
 require_once('lib/fpdf.php');
 require_once('lib/nangkoelib.php');
+include_once('lib/HtmlExcel.php');
 
 $rekeningbank = checkPostGet('rekeningbank', '');
 $notransaksi  = checkPostGet('notransaksi', '');
@@ -1074,4 +1075,109 @@ switch ($method) {
 			die();
 		}
 		break;
+
+	case 'excel':
+		#filter sama persis dengan loaddata, supaya tarikan Excel ikut filter yang lagi aktif di form Cari
+		$where = "";
+		$optOrg = getOrgDetail(10);
+		ksort($optOrg);
+		$where .= "and kodeorg in ('" . implode("','", $optOrg) . "')";
+		if ($kodeorg != '') { $where .= " and kodeorg = '" . $kodeorg . "'"; }
+		if ($notransaksi != '') { $where .= " and notransaksi like '%" . trim($notransaksi) . "%' "; }
+		if ($novoucher != '') { $where .= " and novoucher like '%" . $novoucher . "%' "; }
+		if ($noakun != '') { $where .= " and noakun = '" . $noakun . "' "; }
+		if ($tipetransaksi != '') { $where .= " and tipetransaksi = '" . $tipetransaksi . "' "; }
+		if ($tanggal1 != '--' and $tanggal2 != '--') { $where .= " and tanggal between '" . $tanggal1 . "' and '" . $tanggal2 . "' "; }
+		if ($supplier != '') { $where .= " and notransaksi in (select notransaksi from " . $dbname . ".keu_kasbankdt where kodesupplier='" . $supplier . "')"; }
+		if ($pembayaran != '') { $where .= " and pembayaran='" . trim($pembayaran) . "'"; }
+		if ($nocek != '') { $where .= " and nocek like '%" . trim($nocek) . "%' "; }
+		if ($cgttu != '') { $where .= " and cgttu='" . trim($cgttu) . "' "; }
+		if ($bayarke != '') { $where .= " and bayarkepada like '%" . trim($bayarke) . "%' "; }
+		if ($rekening != '') { $where .= " and rekening = '" . trim($rekening) . "'"; }
+		$param['jumlah'] = str_replace(",", "", $param['jumlah']);
+		if ($param['jumlah'] != '') { $where .= " and jumlah like '%" . trim($param['jumlah']) . "%'"; }
+		if ($param['keterangan'] != '') { $where .= " and keterangan like '%" . trim($param['keterangan']) . "%'"; }
+
+		$str = "SELECT * from " . $dbname . ".keu_5akunbank_vw";
+		$res = $owlPDO->query($str) or die(print " Gagal: " . PDOException::getMessage());
+		$res->setFetchMode(PDO::FETCH_ASSOC);
+		while ($bar = $res->fetch()) {
+			$norekening[$bar['noakun']] = $bar['rekening'];
+			$namabank[$bar['noakun']] = $bar['namabank'];
+		}
+
+		#kop/logo/ditarik-oleh format standar, pakai org karyawan yang login (data lintas unit, bukan per-PT)
+		$hdpt = setheadreport($_SESSION['empl']['kodeorganisasi'], $_SESSION['empl']['kodeorganisasi']);
+		$logourl = '';
+		if (file_exists($hdpt['logo'])) {
+			$skema = (isset($_SERVER['HTTPS']) and $_SERVER['HTTPS'] != 'off') ? 'https' : 'http';
+			$logourl = $skema . "://" . @$_SERVER['HTTP_HOST'] . rtrim(dirname(@$_SERVER['SCRIPT_NAME']), '/') . "/" . $hdpt['logo'];
+		}
+		$kolom = 18;
+		$stream = "<table>
+			<tr><td colspan=" . $kolom . " height='70' style='height:52pt'>" . ($logourl != '' ? "<img src='" . $logourl . "' height='60'>" : "") . "</td></tr>
+			<tr><td colspan=" . $kolom . "><b>" . htmlspecialchars($hdpt['nama']) . "</b></td></tr>
+			<tr><td colspan=" . $kolom . "><b>KASIR</b></td></tr>
+			<tr><td colspan=" . $kolom . ">Ditarik oleh " . htmlspecialchars($_SESSION['empl']['name']) . " (" . htmlspecialchars($_SESSION['standard']['username']) . ") pada " . date('d-m-Y H:i:s') . "</td></tr>
+			<tr><td colspan=" . $kolom . ">&nbsp;</td></tr>
+			</table>";
+
+		$stream .= "<table class=sortable cellspacing=1 cellpadding=3 border=1>
+			<thead><tr>
+				<th align=center>" . $_SESSION['lang']['nourut'] . "</th>
+				<th align=center>" . $_SESSION['lang']['notransaksi'] . "</th>
+				<th align=center>" . $_SESSION['lang']['unit'] . "</th>
+				<th align=center>" . $_SESSION['lang']['tanggalinput'] . "</th>
+				<th align=center>" . $_SESSION['lang']['tanggal'] . "</th>
+				<th align=center>" . $_SESSION['lang']['noakun'] . "</th>
+				<th align=center>" . $_SESSION['lang']['namabank'] . "</th>
+				<th align=center>" . $_SESSION['lang']['rekening'] . "</th>
+				<th align=center>" . $_SESSION['lang']['tipe'] . "</th>
+				<th align=center>" . $_SESSION['lang']['matauang'] . "</th>
+				<th align=center>" . $_SESSION['lang']['jumlah'] . "</th>
+				<th align=center>" . $_SESSION['lang']['remark'] . "</th>
+				<th align=center>" . $_SESSION['lang']['bayarke'] . "</th>
+				<th align=center>" . $_SESSION['lang']['novoucher'] . "</th>
+				<th align=center>" . $_SESSION['lang']['cgttu'] . "</th>
+				<th align=center>" . $_SESSION['lang']['BuktiPembayaran'] . "</th>
+				<th align=center>" . $_SESSION['lang']['dibuat'] . "</th>
+				<th align=center>Kasir</th>
+			</tr></thead><tbody>";
+
+		$no = 0;
+		$str = "SELECT * from " . $dbname . ".keu_kasbankht where 1=1 and posting=1 " . $where . " order by notransaksi desc, pembayaran asc, novoucher desc";
+		$res = $owlPDO->query($str) or die(print " Gagal: " . PDOException::getMessage());
+		$res->setFetchMode(PDO::FETCH_ASSOC);
+		while ($bar = $res->fetch()) {
+			$nmkarcreate = makeOption($dbname, 'datakaryawan', 'karyawanid,namakaryawan', " karyawanid='" . $bar['createby'] . "'");
+			$nmkarkasir = makeOption($dbname, 'datakaryawan', 'karyawanid,namakaryawan', " karyawanid='" . $bar['kasir'] . "'");
+			$no++;
+			$stream .= "<tr>
+				<td align=center>" . $no . "</td>
+				<td>" . $bar['notransaksi'] . "</td>
+				<td>" . $bar['kodeorg'] . "</td>
+				<td>" . tanggalnormal($bar['tanggalinput']) . "</td>
+				<td>" . tanggalnormal($bar['tanggal']) . "</td>
+				<td>" . $optAkun[$bar['noakun']] . "</td>
+				<td>" . $namabank[$bar['rekening']] . "</td>
+				<td>" . $norekening[$bar['rekening']] . "</td>
+				<td align=center>" . $bar['tipetransaksi'] . "</td>
+				<td align=center>" . $bar['matauang'] . "</td>
+				<td align=right>" . number_format($bar['jumlah']) . "</td>
+				<td>" . $bar['keterangan'] . "</td>
+				<td>" . $bar['bayarkepada'] . "</td>
+				<td>" . $bar['novoucher'] . "</td>
+				<td>" . $bar['cgttu'] . "</td>
+				<td>" . $bar['nocek'] . "</td>
+				<td>" . @$nmkarcreate[$bar['createby']] . "</td>
+				<td>" . @$nmkarkasir[$bar['kasir']] . "</td>
+			</tr>";
+		}
+		$stream .= "</tbody></table>";
+
+		$xls = new HtmlExcel();
+		$xls->addSheet("Kasir", $stream);
+		$xls->headers("Kasir_" . date('YmdHis') . ".xls");
+		echo $xls->buildFile();
+	break;
 }

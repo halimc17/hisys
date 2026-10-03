@@ -7,6 +7,7 @@ include('lib/rTable.php');
 echo open_body();
 include('master_mainMenu.php');
 require_once('pmn_spk_nospk_slave.php');
+require_once('lib/zSelect2.php');
 ?>
 
 <script language=javascript src='js/kebun_tbsjual.js?v=<?php echo time(); ?>'></script>
@@ -16,6 +17,7 @@ require_once('pmn_spk_nospk_slave.php');
 <script language=javascript src=js/zTools.js></script>
 <script language=javascript src=js/zSearch.js></script>
 <script language=javascript1.2 src='js/formTable.js'></script>
+<script language="javascript" src="js/zSelect2.js?ver=1"></script>
 <!--deklarasi untuk option-->
 
 <?php
@@ -96,24 +98,26 @@ echo"<table>
 				</td>
 				
 				<td>".$_SESSION['lang']['tanggal']."</td>
-				<td>:</td>		
+				<td>:</td>
 				<td>
 					<input type=text class=myinputtext id=tanggalmulaisch name=tanggalmulaisch readonly onmousemove=setCalendar(this.id) onkeypress=return false;  maxlength=10 style=width:63px;/>
 					s/d
-					<input type=text class=myinputtext id=tanggalselesaisch name=tanggalselesaisch readonly onmousemove=setCalendar(this.id) onkeypress=return false;  maxlength=10 style=width:63px;/>			
+					<input type=text class=myinputtext id=tanggalselesaisch name=tanggalselesaisch readonly onmousemove=setCalendar(this.id) onkeypress=return false;  maxlength=10 style=width:63px;/>
+				</td>
+
+				<td>".$_SESSION['lang']['customer']."</td>
+				<td>:</td>
+				<td>
+					<select class='select2' id=kodecustomersch data-width=\"155px\" style=\"width:155px;\">'".$optcustomer."'</select>
 				</td>
 			</tr>
-			
+
 			<tr>
-				
-				<td>".$_SESSION['lang']['customer']."</td>
-				<td>:</td>		
-				<td>
-					<select id=kodecustomersch  style=\"width:155px;\">'".$optcustomer."'</select>
-				</td>
-		
-			<tr>
-            <td colspan=3><button class=mybutton onclick=loaddata(0)>".$_SESSION['lang']['find']."</button></td>
+            <td colspan=3>
+				<button class=mybutton onclick=loaddata(0)>".$_SESSION['lang']['find']."</button>
+				<button class=mybutton onclick=\"exportlist('excel')\">".$_SESSION['lang']['excel']."</button>
+				<button class=mybutton onclick=\"exportlist('pdf')\">".$_SESSION['lang']['pdf']."</button>
+			</td>
         </tr>
 	";
         echo "</table>";
@@ -183,7 +187,7 @@ echo "<fieldset style=float:left>
 		<td>No. Kontrak</td>
 		<td>:</td>		
 		<td>
-			<select id=nokontrak  style=\"width:155px;\" onchange='getcust()'>".$optnokontrak."</select>
+			<select class='select2' id=nokontrak data-width=\"155px\" style=\"width:155px;\" onchange='getcust()'>".$optnokontrak."</select>
 		</td>
 		
 		
@@ -210,13 +214,13 @@ echo "<fieldset style=float:left>
 		<td>".$_SESSION['lang']['unit']."</td>
 		<td>:</td>		
 		<td>
-			<select id=unit  style=\"width:155px;\">".$optunit."</select>
+			<select class='select2' id=unit data-width=\"155px\" style=\"width:155px;\">".$optunit."</select>
 		</td>
-		
+
 		<td>".$_SESSION['lang']['customer']."</td>
-		<td>:</td>		
+		<td>:</td>
 		<td>
-			<select id=kodecustomer  style=\"width:155px;\"></select>
+			<select class='select2' id=kodecustomer data-width=\"155px\" style=\"width:155px;\"></select>
 		</td>
 		
 
@@ -227,7 +231,7 @@ echo "<fieldset style=float:left>
 		<td>".$_SESSION['lang']['unit']." ".$_SESSION['lang']['invoice']."</td>
 		<td>:</td>		
 		<td>
-			<select id=kodero  style=\"width:155px;\">".$optunitro."</select>
+			<select class='select2' id=kodero data-width=\"155px\" style=\"width:155px;\">".$optunitro."</select>
 		</td>
 	
 		<td>".$_SESSION['lang']['tanggal']." ".$_SESSION['lang']['dokumen']."</td>
@@ -257,7 +261,7 @@ echo"</div>";
 
 echo "<div id=detail style=display:none>";
 OPEN_BOX('','<span class=judul>'.$_SESSION['lang']['detail'].'</span>');
-echo "<div id=listdatadt class='table-scroll' style='height:1080px;'></div>";
+echo "<div id=listdatadt class='table-scroll' style='height:auto;overflow:visible;'></div>";
 CLOSE_BOX();
 echo"</div>";
 

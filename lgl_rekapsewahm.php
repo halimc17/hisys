@@ -74,12 +74,20 @@
 	}
 
 	$optprd = "<option value=''>" . $_SESSION['lang']['pilihdata'] . "</option>";
-	$optprdscr = "<option value=''>" . $_SESSION['lang']['all'] . "</option>";
 	$sql = "SELECT distinct(substr(tanggal,1,7)) as periode FROM " . $dbname . ".vhc_runht order by periode desc limit 12 ";
 	$qry = $owlPDO->query($sql) or die(print " Gagal: " . PDOException::getMessage());
 	$qry->setFetchMode(PDO::FETCH_ASSOC);
 	while ($bar = $qry->fetch()) {
 		$optprd.="<option value=" . $bar['periode'] . ">" . $bar['periode'] . "</option>";
+	}
+
+	#filter "Bulan" di List Data pakai periode milik lgl_rekapsewahm sendiri (bukan vhc_runht, yang cuma 12 bulan
+	#terakhir punya traksi) - supaya semua periode yang beneran ada rekapnya bisa dicari, bukan cuma yg kebetulan overlap
+	$optprdscr = "<option value=''>" . $_SESSION['lang']['all'] . "</option>";
+	$sql = "SELECT distinct periode FROM " . $dbname . ".lgl_rekapsewahm order by periode desc";
+	$qry = $owlPDO->query($sql) or die(print " Gagal: " . PDOException::getMessage());
+	$qry->setFetchMode(PDO::FETCH_ASSOC);
+	while ($bar = $qry->fetch()) {
 		$optprdscr.="<option value=" . $bar['periode'] . ">" . $bar['periode'] . "</option>";
 	}
 	
@@ -124,17 +132,21 @@
                                         <td>:</td>
                                         <td><select class=select2 id=tglsch  style=\"width:150px;\">" . $optprdscr . "</select></td>
                                     </tr>
-                                    <tr hidden>
-                                        <td>" . $_SESSION['lang']['kontraktor'] . "</td> 
+                                    <tr>
+                                        <td>" . $_SESSION['lang']['notransaksi'] . " Traksi</td>
+                                        <td>:</td>
+                                        <td><input class=myinputtext id=notraksicr onkeypress='enterkey(event,loadData)' style=\"width:150px;\"></td>
+
+                                        <td>" . $_SESSION['lang']['kontraktor'] . "</td>
                                         <td>:</td>
                                         <td><input class=myinputtext id=kontrakcr onkeypress='enterkey(event,loadData)' style=\"width:150px;\"></td>
                                     </tr>
 									<tr>
-										<td></td>
-										<td></td>
-										<td>
+										<td colspan=9 style='padding-top:6px'>
 											<button class=mybutton onclick=loadData(0)>".$_SESSION['lang']['find']."</button>
 											<button class=mybutton onclick=displayList()>".$_SESSION['lang']['cancel']."</button>
+											<button class=mybutton onclick=exportExcel()>".$_SESSION['lang']['excel']."</button>
+											<button class=mybutton onclick=exportPdf(event)>PDF</button>
 										</td>
 									</tr>
 								</table>
@@ -151,8 +163,8 @@
 <?php
 	echo "<div id=listData>";
 	OPEN_BOX();
-	echo "<div class=table-scroll>
-			<table class=sortable cellspacing=1 cellpadding=5 border=0>
+	echo "<div class=table-scroll style='height:70vh;width:100%'>
+			<table class=sortable cellspacing=1 cellpadding=5 border=0 style='width:100%'>
 				<thead>
 					<tr class=rowheader>
 						<th align=center>" . $_SESSION['lang']['nourut'] . "</th>
@@ -163,8 +175,11 @@
 						<th align=center>" . $_SESSION['lang']['notransaksi'] . " Traksi</th>
 						<th align=center>" . $_SESSION['lang']['kontraktor'] . "</th>
 						<th align=center>" . $_SESSION['lang']['rupiah'] . "</th> 
-						<th align=center>No BAPP</th> 
-						<th align=center colspan=3>" . $_SESSION['lang']['action'] . "</th>
+						<th align=center>No BAPP</th>
+						<th align=center>Create By</th>
+						<th align=center>Create Time</th>
+						<th align=center>Posted By</th>
+						<th align=center colspan=6>" . $_SESSION['lang']['action'] . "</th>
 					</tr>
 				</thead>
 				<tbody id=container>
@@ -234,7 +249,7 @@
 
 <!-------------------------- Detail ------------------------------>
 <?php 
-	echo"<div id=detail style='display:none;';>";
+	echo"<div id=detail style='display:none;'>";
 	OPEN_BOX();
 	CLOSE_BOX();
 	echo"</div>";

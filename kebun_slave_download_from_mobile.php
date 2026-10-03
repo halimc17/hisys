@@ -464,6 +464,10 @@ switch ($proses) {
                 $sCek = selectQuery($dbname,"kebun_rekapmutuhancakpanen","*","kodeorg='".$val['kodeorg']."' AND nik='".$val['nik']."' AND tanggal='".$val['tanggal']."' AND nikmandor='".$val['nikmandor']."'");
                 $rCek = fetchData($sCek);
                 $countCek = count($rCek);
+                // Baris yang sudah diposting tidak boleh dihapus/diganti oleh tarikan mobile
+                if ($countCek > 0 && $rCek[0]['posting'] == 1) {
+                    continue;
+                }
                 if ($countCek > 0) {
                     $delCek = deleteQuery($dbname,"kebun_rekapmutuhancakpanen","kodeorg='".$val['kodeorg']."' AND nik='".$val['nik']."' AND tanggal='".$val['tanggal']."' AND nikmandor='".$val['nikmandor']."'");
                     $owlPDO->exec($delCek);
@@ -599,6 +603,10 @@ switch ($proses) {
                 $sCek = selectQuery($dbname,"kebun_rekaphancakpanen","*","kodeorg='".$val['blok']."' AND nik='".$val['pemanen']."' AND tanggal='".$val['tanggal']."' AND nikmandor='".$val['mandor']."'");
                 $rCek = fetchData($sCek);
                 $countCek = count($rCek);
+                // Baris yang sudah diposting tidak boleh dihapus/diganti oleh tarikan mobile
+                if ($countCek > 0 && $rCek[0]['posting'] == 1) {
+                    continue;
+                }
                 if ($countCek > 0) {
                     $delCek = deleteQuery($dbname,"kebun_rekaphancakpanen","kodeorg='".$val['blok']."' AND nik='".$val['pemanen']."' AND tanggal='".$val['tanggal']."' AND nikmandor='".$val['mandor']."'");
                     $owlPDO->exec($delCek);

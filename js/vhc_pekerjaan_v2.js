@@ -108,7 +108,33 @@ function batalcariDataTransaksi() {
   document.getElementById("txtCari").value = "";
   setValue2("kodevhc_cari", null);
   setValue2("kontanan_cari", "%");
+  setValue2("posting_cari", "");
+  setValue2("periode_cari", "");
+  setValue2("operator_cari", "");
   loaddata(0);
+}
+
+function getFilterParamPekerjaan() {
+  var p = "";
+  p += "&tgl_cari=" + document.getElementById("tgl_cari").value;
+  p += "&tgl_carisd=" + document.getElementById("tgl_carisd").value;
+  p += "&txtCari=" + encodeURIComponent(document.getElementById("txtCari").value);
+  p += "&kodevhc_cari=" + encodeURIComponent(document.getElementById("kodevhc_cari").value);
+  p += "&kontanan_cari=" + encodeURIComponent(document.getElementById("kontanan_cari").value);
+  p += "&posting_cari=" + document.getElementById("posting_cari").value;
+  p += "&periode_cari=" + document.getElementById("periode_cari").value;
+  p += "&operator_cari=" + document.getElementById("operator_cari").value;
+  return p;
+}
+function exportExcelPekerjaan() {
+  param = "proses=excel" + getFilterParamPekerjaan();
+  tujuan = "vhc_slave_pekerjaan_v2.php?" + param;
+  alertify.popup("Report Ms.Excel", "<iframe frameborder=0 style='width:100%;height:100%;overflow:none' src='" + tujuan + "'></iframe>").set({'resizable':true,'overflow':false}).resizeTo('80%','70%');
+}
+function exportPdfPekerjaan(ev) {
+  param = getFilterParamPekerjaan();
+  tujuan = "vhc_pekerjaan_v2_pdf.php?" + param;
+  alertify.popup("Report PDF", "<iframe frameborder=0 style='width:100%;height:100%;overflow:none' src='" + tujuan + "'></iframe>").set({'resizable':true,'overflow':false}).resizeTo('80%','70%');
 }
 
 function bersih_form_pekerjaan() {
@@ -922,6 +948,9 @@ function loaddata(num) {
   txtCari = document.getElementById("txtCari").value;
   kodevhc_cari = document.getElementById("kodevhc_cari").value;
   kontan_cari = document.getElementById("kontanan_cari").value;
+  posting_cari = document.getElementById("posting_cari").value;
+  periode_cari = document.getElementById("periode_cari").value;
+  operator_cari = document.getElementById("operator_cari").value;
   param = "proses=loaddata&page=" + num;
   param +=
     "&tgl_cari=" +
@@ -933,7 +962,13 @@ function loaddata(num) {
     "&tgl_carisd=" +
     tgl_carisd +
     "&kontanan_cari=" +
-    kontan_cari;
+    kontan_cari +
+    "&posting_cari=" +
+    posting_cari +
+    "&periode_cari=" +
+    periode_cari +
+    "&operator_cari=" +
+    operator_cari;
   tujuan = "vhc_slave_pekerjaan_v2.php";
   post_response_text(tujuan, param, respog);
   function respog() {

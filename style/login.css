@@ -155,11 +155,32 @@ input:-internal-autofill-selected {
   width: 100%;
   font-size: 12px;
 }
-.form-structor .signup .form-holder .input:last-child {
+.form-structor .signup .form-holder .input:last-child,
+.form-structor .signup .form-holder .pwd-wrap:last-child .input {
   border-bottom: 0;
 }
 .form-structor .signup .form-holder .input::-webkit-input-placeholder {
   color: rgba(0, 0, 0, 0.4);
+}
+.pwd-wrap {
+  position: relative;
+}
+.pwd-wrap .input {
+  padding-right: 40px;
+  box-sizing: border-box;
+}
+.pwd-toggle {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  cursor: pointer;
+  color: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+}
+.pwd-toggle:hover {
+  color: rgba(0, 0, 0, 0.65);
 }
 .form-structor .signup .submit-btn {
   background-color: rgba(0, 0, 0, 0.4);
@@ -354,7 +375,16 @@ input:-internal-autofill-selected {
   opacity:0.8;
 }
 .errortext{
-    color: red;
     font-size: 9pt;
-    position: absolute;
+    position: relative;
+    width: 100%;
+    text-align: center;
+    margin-top: 10px;
+    box-sizing: border-box;
+}
+.errortext:not(:empty){
+    color: #fff;
+    background-color: #e05252;
+    padding: 8px 12px;
+    border-radius: 6px;
 }
