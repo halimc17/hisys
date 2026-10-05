@@ -219,7 +219,8 @@ switch($method){
 		}
 
 		## Cek ada datakaryawan di riwayatjabatan gak
-		$sql_1 = "select karyawanid,mulaiberlaku,darikodeorg,kekodeorg,posting from ".$dbname.".sdm_riwayatjabatan a where (darikodeorg in ('".implode("','",$optNewOrg)."') or kekodeorg in ('".implode("','",$optNewOrg)."')) and posting='2' and darikodeorg!=kekodeorg";
+		## Mutasi karyawan Staff (tipekaryawan 0) tidak ikut menutup posting
+		$sql_1 = "select a.karyawanid,a.mulaiberlaku,a.darikodeorg,a.kekodeorg,a.posting from ".$dbname.".sdm_riwayatjabatan a left join ".$dbname.".datakaryawan k on a.karyawanid=k.karyawanid where (a.darikodeorg in ('".implode("','",$optNewOrg)."') or a.kekodeorg in ('".implode("','",$optNewOrg)."')) and a.posting='2' and a.darikodeorg!=a.kekodeorg and (k.tipekaryawan is null or k.tipekaryawan!='0')";
 		$req_1 = fetchdata($sql_1);
 		foreach($req_1 as $bar){
 			$p = periodelalu(substr($bar['mulaiberlaku'],0,7));
@@ -515,7 +516,7 @@ switch($method){
 		$sql = "select a.karyawanid,b.namakaryawan,a.mulaiberlaku,a.darikodeorg,a.darisubbagian,a.kekodeorg,a.kesubbagian
 				from ".$dbname.".sdm_riwayatjabatan a
 				left join ".$dbname.".datakaryawan b on a.karyawanid=b.karyawanid
-				where (a.darikodeorg='".$kodeorg."' or a.kekodeorg='".$kodeorg."') and a.posting='2' and a.darikodeorg!=a.kekodeorg and substr(a.mulaiberlaku,1,7)='".$periodenext."'
+				where (a.darikodeorg='".$kodeorg."' or a.kekodeorg='".$kodeorg."') and a.posting='2' and a.darikodeorg!=a.kekodeorg and (b.tipekaryawan is null or b.tipekaryawan!='0') and substr(a.mulaiberlaku,1,7)='".$periodenext."'
 				order by b.namakaryawan asc";
 		$res = fetchdata($sql);
 
