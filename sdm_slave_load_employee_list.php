@@ -191,7 +191,8 @@ switch($method){
 
 		$unitfilter = checkPostGet('unitfilter','');
 		$periodefilter = checkPostGet('periodefilter','');
-		$wherefilter = "";
+		#hanya unit yang punya data karyawan (selain ADMINISTRATOR)
+		$wherefilter = " and exists (select 1 from ".$dbname.".datakaryawan k where k.lokasitugas=a.kodeorg and k.namakaryawan not like '%ADMINISTRATOR%')";
 		if($unitfilter!=''){
 			$wherefilter .= " and kodeorg='".$unitfilter."'";
 		}
@@ -219,8 +220,7 @@ switch($method){
 		}
 
 		## Cek ada datakaryawan di riwayatjabatan gak
-		## Mutasi karyawan Staff (tipekaryawan 0) tidak ikut menutup posting
-		$sql_1 = "select a.karyawanid,a.mulaiberlaku,a.darikodeorg,a.kekodeorg,a.posting from ".$dbname.".sdm_riwayatjabatan a left join ".$dbname.".datakaryawan k on a.karyawanid=k.karyawanid where (a.darikodeorg in ('".implode("','",$optNewOrg)."') or a.kekodeorg in ('".implode("','",$optNewOrg)."')) and a.posting='2' and a.darikodeorg!=a.kekodeorg and (k.tipekaryawan is null or k.tipekaryawan!='0')";
+		$sql_1 = "select karyawanid,mulaiberlaku,darikodeorg,kekodeorg,posting from ".$dbname.".sdm_riwayatjabatan a where (darikodeorg in ('".implode("','",$optNewOrg)."') or kekodeorg in ('".implode("','",$optNewOrg)."')) and posting='2' and darikodeorg!=kekodeorg";
 		$req_1 = fetchdata($sql_1);
 		foreach($req_1 as $bar){
 			$p = periodelalu(substr($bar['mulaiberlaku'],0,7));
@@ -290,9 +290,10 @@ switch($method){
 				$statuslabel = "Tidak Ada Data Karyawan";
 				$alasan = "Data Karyawan Tidak Ada";
 				$tombol = "-";
-			}elseif($isposted && !$adatutupbuku && !$adariwayat){
+			}elseif($isposted && !$adatutupbuku){
 				$statuslabel = "Posted";
-				$alasan = "-";
+				#karyawan pindah tidak ikut dihapus saat unposting & dilewati saat posting ulang
+				$alasan = $adariwayat ? "<a href='javascript:void(0)' onclick=\"lihatKaryawanPindah('".$kodeorg."','".$periode."')\">".$jmlriwayat." Karyawan Pindah</a> (tidak ikut di-unposting)" : "-";
 				$tombol = "<button class=mybutton title='Click untuk unposting' style=color:green;border-color:green; onclick=unclosedatakary('".$kodeorg."','".$periode."')>Posted</button>";
 			}elseif($isposted){
 				$statuslabel = "Closed";
@@ -384,7 +385,14 @@ switch($method){
 		
 		#ambil datakaryawan
 		# and (tanggalkeluar>='" . $tanggal1 . "' or tanggalkeluar='0000-00-00') 
-		$query = "select karyawanid from " . $dbname . ".datakaryawan a where lokasitugas='" . $param['kodeorg'] . "' and namakaryawan not like '%ADMINISTRATOR%' group by a.karyawanid";
+		$tglakhirperiode = $resPeriod[0]['tanggalsampai'] ? $resPeriod[0]['tanggalsampai'] : date('Y-m-t', strtotime($param['periode'].'-01'));
+		$datakaryawan = array();
+		#lewati karyawan yang sudah punya data hist periode ini (dibekukan saat unposting, mis. karyawan pindah)
+		#dan karyawan yang baru pindah masuk ke unit ini setelah periode berakhir
+		$query = "select karyawanid from " . $dbname . ".datakaryawan a where lokasitugas='" . $param['kodeorg'] . "' and namakaryawan not like '%ADMINISTRATOR%'
+			and not exists (select 1 from " . $dbname . ".datakaryawan_hist h where h.karyawanid=a.karyawanid and h.lokasitugas='" . $param['kodeorg'] . "' and h.periodegaji='" . $param['periode'] . "' and h.approval_status='8' and h.version_type='B')
+			and not exists (select 1 from " . $dbname . ".sdm_riwayatjabatan r where r.karyawanid=a.karyawanid and r.kekodeorg='" . $param['kodeorg'] . "' and r.darikodeorg!=r.kekodeorg and r.posting='2' and r.mulaiberlaku>'" . $tglakhirperiode . "')
+			group by a.karyawanid";
 		$res = fetchdata($query);
 		foreach($res as $val){
 			$datakaryawan[$val['karyawanid']]=$val['karyawanid'];
@@ -497,7 +505,14 @@ switch($method){
 			throw new PDOException("Periode gaji sudah ditutup.");			
 		}
 		
-		$str = "delete from " . $dbname . ".datakaryawan_hist where  lokasitugas='".$param['kodeorg']."' and periodegaji='".$param['periode']."' and approval_status='8' and version_type='B'";
+		#akhir periode, untuk mengenali karyawan yang pindah unit setelah periode ini
+		$qEnd = selectQuery($dbname, 'sdm_5periodegaji', 'tanggalsampai', "periode='" . $param['periode'] . "' and kodeorg='" . $param['kodeorg'] . "'");
+		$resEnd = fetchData($qEnd);
+		$tglakhirperiode = $resEnd[0]['tanggalsampai'] ? $resEnd[0]['tanggalsampai'] : date('Y-m-t', strtotime($param['periode'].'-01'));
+
+		#karyawan yang pindah keluar dari unit ini setelah periode berakhir tidak dihapus, karena datakaryawan sekarang sudah unit baru dan tidak bisa dibentuk ulang
+		$str = "delete from " . $dbname . ".datakaryawan_hist where  lokasitugas='".$param['kodeorg']."' and periodegaji='".$param['periode']."' and approval_status='8' and version_type='B'
+			and not exists (select 1 from " . $dbname . ".sdm_riwayatjabatan r where r.karyawanid=datakaryawan_hist.karyawanid and r.darikodeorg='".$param['kodeorg']."' and r.kekodeorg!=r.darikodeorg and r.posting='2' and r.mulaiberlaku>'".$tglakhirperiode."')";
 		$owlPDO->exec($str);
 
 		#execute
@@ -516,7 +531,7 @@ switch($method){
 		$sql = "select a.karyawanid,b.namakaryawan,a.mulaiberlaku,a.darikodeorg,a.darisubbagian,a.kekodeorg,a.kesubbagian
 				from ".$dbname.".sdm_riwayatjabatan a
 				left join ".$dbname.".datakaryawan b on a.karyawanid=b.karyawanid
-				where (a.darikodeorg='".$kodeorg."' or a.kekodeorg='".$kodeorg."') and a.posting='2' and a.darikodeorg!=a.kekodeorg and (b.tipekaryawan is null or b.tipekaryawan!='0') and substr(a.mulaiberlaku,1,7)='".$periodenext."'
+				where (a.darikodeorg='".$kodeorg."' or a.kekodeorg='".$kodeorg."') and a.posting='2' and a.darikodeorg!=a.kekodeorg and substr(a.mulaiberlaku,1,7)='".$periodenext."'
 				order by b.namakaryawan asc";
 		$res = fetchdata($sql);
 
