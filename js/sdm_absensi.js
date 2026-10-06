@@ -79,6 +79,7 @@ function displayList() {
 	document.getElementById('headher').style.display = 'none';
 	document.getElementById('detailEntry').style.display = 'none';
 	document.getElementById('kdOrgCari').value = '';
+	$('#kdOrgCari').trigger('change');
 	document.getElementById('tgl_cari').value = '';
 	loadData();
 }
@@ -118,6 +119,7 @@ function findOrg() {
 }
 function setOrg(kdOrg, nmOrg) {
 	document.getElementById('kdOrg').value = kdOrg;
+	$('#kdOrg').trigger('change');
 	document.getElementById('nmOrg').value = nmOrg;
 	closeDialog();
 }
@@ -151,6 +153,7 @@ function findOrg2() {
 }
 function setOrg2(kdOrg, nmOrg) {
 	document.getElementById('kdOrg').value = kdOrg;
+	$('#kdOrg').trigger('change');
 	document.getElementById('txtsearch').value = nmOrg;
 	closeDialog();
 }
@@ -240,8 +243,10 @@ function unlockForm() {
 	document.getElementById('tglAbsen').disabled = false;
 	document.getElementById('periode').disabled = false;
 	document.getElementById('kdOrg').value = '';
+	$('#kdOrg').trigger('change');
 	document.getElementById('tglAbsen').value = '';
 	document.getElementById('periode').value = '';
+	$('#periode').trigger('change');
 }
 status_inputan = 0;
 function addDetail() {
@@ -756,6 +761,9 @@ function loadDetail() {
 function loadData() {
 	kdorg = document.getElementById('kdOrgCari').value;
 	tgl = document.getElementById('tgl_cari').value;
+	// filter yang dipakai list ini, supaya tombol Sebelumnya/Lanjut tetap memakai filter yang sama
+	filterListKdorg = kdorg;
+	filterListTgl = tgl;
 
 
 	param = 'proses=loadNewData';
@@ -781,9 +789,37 @@ function loadData() {
 		}
 	}
 }
+function previewAbsensi(kdorg, tgl, ev) {
+	param = 'proses=previewAbsensi&absnId=' + kdorg + '###' + tgl;
+	tujuan = 'sdm_slave_absensi.php';
+	post_response_text(tujuan, param, respog);
+	function respog() {
+		if (con.readyState == 4) {
+			if (con.status == 200) {
+				busy_off();
+				if (/^(Warning|Error|Gagal)/i.test(con.responseText)) {
+					alert(con.responseText);
+				} else {
+					showDialog1('Preview ' + kdorg + ' - ' + tgl, con.responseText, '800', '420', ev);
+					// tinggi menyesuaikan isi, posisi di tengah layar
+					var dlg = document.getElementById('dynamic1');
+					dlg.style.width = '800px';
+					dlg.lastElementChild.style.height = 'auto';
+					dlg.style.left = Math.max(0, (window.innerWidth - dlg.offsetWidth) / 2 + window.pageXOffset) + 'px';
+					dlg.style.top = Math.max(0, (window.innerHeight - dlg.offsetHeight) / 2 + window.pageYOffset) + 'px';
+				}
+			} else {
+				busy_off();
+				error_catch(con.status);
+			}
+		}
+	}
+}
 function cariBast(num) {
 	param = 'proses=loadNewData';
 	param += '&page=' + num;
+	param += '&kdorg=' + (typeof filterListKdorg == 'undefined' ? '' : filterListKdorg);
+	param += '&tgl=' + (typeof filterListTgl == 'undefined' ? '' : filterListTgl);
 	tujuan = 'sdm_slave_absensi.php';
 	post_response_text(tujuan, param, respog);
 	function respog() {
@@ -794,6 +830,7 @@ function cariBast(num) {
 					alert(con.responseText);
 				} else {
 					document.getElementById('contain').innerHTML = con.responseText;
+					leftFixedTable();
 				}
 			} else {
 				busy_off();
@@ -805,8 +842,10 @@ function cariBast(num) {
 function fillField(kdorg, tgl, period) {
 	tmp = kdorg + "###" + tgl;
 	document.getElementById('kdOrg').value = kdorg;
+	$('#kdOrg').trigger('change');
 	document.getElementById('tglAbsen').value = tgl;
 	document.getElementById('periode').value = period;
+	$('#periode').trigger('change');
 	param = 'absnId=' + tmp;
 	param += "&proses=createTable";
 	param += "&tgAbsn="+tgl;
@@ -1034,16 +1073,39 @@ function saveHariLibur() {
 	tipekary = document.getElementById('tipekary').value;
 	kodeorg = document.getElementById('kodeorghm').value;
 	divisi = document.getElementById('divisihm').value;
-	param = "";
-	param += '&proses=simpan';
-	param += '&jnlibur=' + jnlibur + '&tgllibur=' + tgllibur+'&tipekary='+tipekary+'&kodeorg='+kodeorg;
-	param += '&divisi=' + divisi;
-	// alert(param);
-	// return;
+	paramHariLibur = '';
+	paramHariLibur += '&proses=simpan';
+	paramHariLibur += '&jnlibur=' + jnlibur + '&tgllibur=' + tgllibur+'&tipekary='+tipekary+'&kodeorg='+kodeorg;
+	paramHariLibur += '&divisi=' + divisi;
 	tujuan = 'sdm_slave_absenLibur.php';
-	if (confirm('Are you sure..?')) {
-		post_response_text(tujuan, param, respog);
+	// tahap 1: tampilkan dulu siapa saja yang akan diinput (tidak ada yang disimpan)
+	post_response_text(tujuan, paramHariLibur + '&preview=1', respog);
+	function respog() {
+		if (con.readyState == 4) {
+			if (con.status == 200) {
+				busy_off();
+				if (/^(Warning|Error|Gagal)/i.test(con.responseText)) {
+					alert(con.responseText);
+				} else {
+					showDialog1('Konfirmasi Absensi Hari Libur', con.responseText, '650', '420', event);
+					var dlg = document.getElementById('dynamic1');
+					dlg.style.width = '650px';
+					dlg.lastElementChild.style.height = 'auto';
+					dlg.style.left = Math.max(0, (window.innerWidth - dlg.offsetWidth) / 2 + window.pageXOffset) + 'px';
+					dlg.style.top = Math.max(0, (window.innerHeight - dlg.offsetHeight) / 2 + window.pageYOffset) + 'px';
+				}
+			} else {
+				busy_off();
+				error_catch(con.status);
+			}
+		}
 	}
+}
+
+function prosesSimpanHariLibur() {
+	closeDialog();
+	tujuan = 'sdm_slave_absenLibur.php';
+	post_response_text(tujuan, paramHariLibur, respog);
 	function respog() {
 		if (con.readyState == 4) {
 			if (con.status == 200) {
@@ -1078,6 +1140,7 @@ function getdivisi() {
 					alert(con.responseText);
 				} else {
 					document.getElementById('divisihm').innerHTML=con.responseText;
+					$('#divisihm').trigger('change');
 				}
 			} else {
 				busy_off();

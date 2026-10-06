@@ -591,14 +591,67 @@ switch ($proses) {
         }
         break;
 		
+    case'previewAbsensi':
+        $sPrev = "select a.*, k.namakaryawan, b.keterangan as ketabsen from ".$dbname.".sdm_absensidt a left join ".$dbname.".datakaryawan k on k.karyawanid=a.karyawanid left join ".$dbname.".sdm_5absensi b on b.kodeabsen=a.absensi where a.kodeorg=".$owlPDO->quote($kdOrg)." and a.tanggal=".$owlPDO->quote($tgl)." order by k.namakaryawan asc";
+        $qPrev=$owlPDO->query($sPrev) or die(print " Gagal: ".PDOException::getMessage());
+        $qPrev->setFetchMode(PDO::FETCH_ASSOC);
+        $sHt = "select updateby from ".$dbname.".sdm_absensiht where kodeorg=".$owlPDO->quote($kdOrg)." and tanggal=".$owlPDO->quote($tgl);
+        $qHt=$owlPDO->query($sHt) or die(print " Gagal: ".PDOException::getMessage());
+        $qHt->setFetchMode(PDO::FETCH_ASSOC);
+        $rHt = $qHt->fetch();
+        echo"<div style='padding:4px 6px;font-size:12px;'>Update By : <b>" . strtoupper($nmkarya[$rHt['updateby']]) . "</b></div>";
+        echo"<div style='max-height:380px;overflow:auto;'>
+              <table class=sortable border=0 cellspacing=1 cellpadding=3 style='width:100%'>
+              <thead>
+              <tr class=rowheader>
+              <th align=center>No.</th>
+              <th align=center>" . $_SESSION['lang']['namakaryawan'] . "</th>
+              <th align=center>" . $_SESSION['lang']['absensi'] . "</th>
+              <th align=center>" . $_SESSION['lang']['hk'] . "</th>
+              <th align=center>" . $_SESSION['lang']['premi'] . "</th>
+              <th align=center>" . $_SESSION['lang']['keterangan'] . "</th>
+              </tr>
+              </thead>
+              <tbody>";
+        $noPrev = 0;
+        $totHk = 0;
+        $totPremi = 0;
+        while ($rPrev = $qPrev->fetch()) {
+            $noPrev++;
+            $totHk += $rPrev['hk'];
+            $totPremi += $rPrev['premi'] + $rPrev['insentif'];
+            echo"<tr class=rowcontent>
+                  <td align=center>" . $noPrev . "</td>
+                  <td>" . strtoupper($rPrev['namakaryawan']) . "</td>
+                  <td>" . strtoupper($rPrev['ketabsen']) . "</td>
+                  <td align=right>" . (float)$rPrev['hk'] . "</td>
+                  <td align=right>" . number_format($rPrev['premi'] + $rPrev['insentif']) . "</td>
+                  <td>" . strtoupper($rPrev['penjelasan']) . "</td>
+                  </tr>";
+        }
+        if ($noPrev == 0) {
+            echo"<tr class=rowcontent><td colspan=6 align=center>Data tidak ditemukan</td></tr>";
+        } else {
+            echo"<tr class=rowheader>
+                  <td colspan=3 align=right>Total</td>
+                  <td align=right>" . $totHk . "</td>
+                  <td align=right>" . number_format($totPremi) . "</td>
+                  <td></td>
+                  </tr>";
+        }
+        echo"</tbody></table></div>";
+        break;
+
     case'loadNewData':
         echo"
-                <table class=sortable border=0 cellspacing=1 cellpadding=5 style=min-width:50%>
+                <table class=sortable border=0 cellspacing=1 cellpadding=5 style=width:100%>
                 <thead>
                 <tr class=rowheader style=height:30px>
                 <th align=center>No.</th>
                 <th align=center width=50px>" . $_SESSION['lang']['kodeorganisasi'] . "</th>
                 <th align=center>" . $_SESSION['lang']['namaorganisasi'] . "</th>
+                <th align=center>Karyawan</th>
+                <th align=center>Total Premi</th>
                 <th align=center>" . $_SESSION['lang']['tanggal'] . "</th>
                 <th align=center>" . $_SESSION['lang']['periode'] . "</th>
                 <th align=center>" . $_SESSION['lang']['updateby'] . "</th>
@@ -697,13 +750,21 @@ switch ($proses) {
             $rGp = $qGp->fetch();
 
 			$optNamaKaryawan = makeOption($dbname,"datakaryawan",'karyawanid,namakaryawan',"karyawanid='".$rlvhc['updateby']."'");
-			
+
+			#ringkasan input: jumlah karyawan dan total premi (premi+insentif, sama dengan kolom premi di PDF)
+			$sSum = "select count(distinct karyawanid) as jmlkary, sum(premi+insentif) as totpremi from ".$dbname.".sdm_absensidt where kodeorg='".$rlvhc['kodeorg']."' and tanggal='".$rlvhc['tanggal']."'";
+			$qSum=$owlPDO->query($sSum) or die(print " Gagal: ".PDOException::getMessage());
+			$qSum->setFetchMode(PDO::FETCH_ASSOC);
+			$rSum = $qSum->fetch();
+
             $no+=1;
             echo"
                 <tr class=rowcontent style=min-height:33px>
                 <td align=center>" . $no . "</td>
                 <td>" . $rlvhc['kodeorg'] . "</td>
                 <td>" . $optorg[$rlvhc['kodeorg']] . "</td>
+                <td align=right>" . number_format($rSum['jmlkary']) . "</td>
+                <td align=right>" . number_format($rSum['totpremi']) . "</td>
                 <td align=center>" . tanggalnormal($rlvhc['tanggal']) . "</td>
                 <td align=center>" . substr(tanggalnormal($rlvhc['periode']), 1, 7) . "</td>
                  <td>" . $optNamaKaryawan[$rlvhc['updateby']] . "</td>";
@@ -717,6 +778,9 @@ switch ($proses) {
 					echo"<td width=30px align=center>";
 					echo"<img src=images/pdf.jpg class=zImgBtn  title='Print' onclick=\"masterPDF('sdm_absensiht','" . $rlvhc['kodeorg'] . "," . tanggalnormal($rlvhc['tanggal']) . "','','sdm_absensiPdf',event)\">";
 					echo"</td>";
+					echo"<td width=30px align=center>";
+					echo"<img src=images/zoom.png class=zImgBtn  title='Preview' onclick=\"previewAbsensi('" . $rlvhc['kodeorg'] . "','" . tanggalnormal($rlvhc['tanggal']) . "',event);\">";
+					echo"</td>";
 					// echo"<td width=30px align=center>";
 					// echo"<img src=images/uploader/dwnld8.png class=zImgBtn  title='Download' onclick=\"showuploadperkaryawan('" . $rlvhc['kodeorg'] . "','" . $rlvhc['tanggal'] . "')\">";
 					// echo"</td>";
@@ -725,6 +789,9 @@ switch ($proses) {
 					echo"<td width=30px align=center></td>";
 					echo"<td width=30px align=center>";
 					echo"<img src=images/pdf.jpg class=zImgBtn  title='Print' onclick=\"masterPDF('sdm_absensiht','" . $rlvhc['kodeorg'] . "," . tanggalnormal($rlvhc['tanggal']) . "','','sdm_absensiPdf',event)\">";
+					echo"</td>";
+					echo"<td width=30px align=center>";
+					echo"<img src=images/zoom.png class=zImgBtn  title='Preview' onclick=\"previewAbsensi('" . $rlvhc['kodeorg'] . "','" . tanggalnormal($rlvhc['tanggal']) . "',event);\">";
 					echo"</td>";
 					// echo"<td width=30px align=center>";
 					// echo"<img src=images/uploader/dwnld8.png class=zImgBtn  title='Download' onclick=\"showuploadperkaryawan('" . $rlvhc['kodeorg'] . "','" . $rlvhc['tanggal'] . "')\">";
@@ -735,7 +802,7 @@ switch ($proses) {
                 ";
         }
         echo"
-                <tr class=rowheader><td colspan=9 align=center>
+                <tr class=rowheader><td colspan=12 align=center>
                 " . (($page * $limit) + 1) . " to " . (($page + 1) * $limit) . " Of " . $jlhbrs . "<br />
                 <button class=mybutton onclick=cariBast(" . ($page - 1) . ");>" . $_SESSION['lang']['pref'] . "</button>
                 <button class=mybutton onclick=cariBast(" . ($page + 1) . ");>" . $_SESSION['lang']['lanjut'] . "</button>

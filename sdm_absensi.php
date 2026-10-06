@@ -72,19 +72,7 @@ OPEN_BOX('','<span class=judul>'.getMenu('sdm_absensi').'</span>');
 	   <img class=delliconBig src=images/skyblue/addbig.png title='" . $_SESSION['lang']['new'] . "'><br>" . $_SESSION['lang']['new'] . "</td>
 	 <td  valign=moiddle align=center style='width:100px;cursor:pointer;' onclick=displayList()>
 	   <img class=delliconBig src=images/skyblue/list.png title='" . $_SESSION['lang']['list'] . "'><br>" . $_SESSION['lang']['list'] . "</td>
-	 <td valign=moiddle>
-	 <fieldset><legend>" . $_SESSION['lang']['find'] . "</legend>";
-	 
-    echo"<table border=0>
-	<tr>
-		<td>".$_SESSION['lang']['unitkerja'] . " </td>
-		<td>:</td>
-		<td> <select id=kdOrgCari style='width:100px;' ><option value=''></option>" . $optOrg . "</select><!--<input type=text id=txtsearch size=25 maxlength=30 class=myinputtext onclick=\"cariOrg('" . $_SESSION['lang']['find'] . "','<fieldset style=height:80px><legend>" . $_SESSION['lang']['searchdata'] . "</legend>Find<input type=text class=myinputtext id=crOrg><button class=mybutton onclick=findOrg2()>Find</button></fieldset><div id=container></div>','event')\">-->&nbsp;
-		</td></tr>
-		<tr><td>".$_SESSION['lang']['tanggal'] . " </td>
-		<td>:</td>
-		<td> <input type=text class=myinputtext id=tgl_cari onmousemove=setCalendar(this.id) onkeypress=return false;  style='width:95px;' maxlength=10 readonly/></td></tr><tr><td><td><td>
-		<button class=mybutton onclick=loadData();>" . $_SESSION['lang']['find'] . "</button></tr></table>";
+	 <td>";
 
 	$abs = "<option value=''></option>";
 	$str="select * from ".$dbname.".sdm_5absensi where status='1' and kodeabsen in ('MG','L','LN')";
@@ -127,25 +115,24 @@ OPEN_BOX('','<span class=judul>'.getMenu('sdm_absensi').'</span>');
 		}
 	}
 
-    echo"</fieldset></td>
-		<td>
+    echo"
 			<fieldset><legend>" . $_SESSION['lang']['absenharilibur'] . "</legend>
 				<table>
 					<tr>
 						<td>".$_SESSION['lang']['kodeorg']."</td><td>:</td>
-						<td><select id=kodeorghm onchange=getdivisi(); style=width:100px>".$optorg."</select></td>
+						<td><select id=kodeorghm class=select2 onchange=getdivisi(); style=width:150px>".$optorg."</select></td>
 						
 						<td>".$_SESSION['lang']['divisi']."</td><td>:</td>
-						<td><select id=divisihm style=width:100px></select></td>
+						<td><select id=divisihm class=select2 style=width:150px></select></td>
 						
 						<td>".$_SESSION['lang']['tipekaryawan']."</td><td>:</td>
-						<td><select id=tipekary style=width:100px>".$tp."</select></td>
+						<td><select id=tipekary class=select2 style=width:150px>".$tp."</select></td>
 					</tr>
 					<tr>
 						<td>".$_SESSION['lang']['tanggal']."</td><td>:</td>
-						<td><input type=text class=myinputtext id=tgllibur onmousemove=setCalendar(this.id) onkeypress=return false;  size=10 style=width:95px readonly/></td>
+						<td><input type=text class=myinputtext id=tgllibur onmousemove=setCalendar(this.id) onkeypress=return false;  size=10 style=width:150px readonly/></td>
 						<td>".$_SESSION['lang']['absensi']."</td><td>:</td>
-						<td><select id=jlibur style=width:100px>".$abs."</select></td>
+						<td><select id=jlibur class=select2 style=width:150px>".$abs."</select></td>
 						<td colspan=3>
 						  <button class=mybutton onclick=saveHariLibur()>" . $_SESSION['lang']['save'] . "</button> 
 						</td>
@@ -165,8 +152,21 @@ OPEN_BOX('','<span class=judul>'.getMenu('sdm_absensi').'</span>');
     ?>
 <div id="listData">
     <?php OPEN_BOX() ?>
-    
-        <div id="contain">
+        <fieldset style="margin-bottom:6px;">
+            <legend><?php echo $_SESSION['lang']['find'] ?></legend>
+            <table border=0 cellspacing=0>
+                <tr>
+                    <td><?php echo $_SESSION['lang']['unitkerja'] ?></td>
+                    <td>:</td>
+                    <td><select id=kdOrgCari class=select2 style='width:150px;'><option value=''></option><?php echo $optOrg ?></select></td>
+                    <td style='padding-left:15px;'><?php echo $_SESSION['lang']['tanggal'] ?></td>
+                    <td>:</td>
+                    <td><input type=text class=myinputtext id=tgl_cari onmousemove=setCalendar(this.id) onkeypress=return false; style='width:150px;' maxlength=10 readonly/></td>
+                    <td style='padding-left:15px;'><button class=mybutton onclick=loadData();><?php echo $_SESSION['lang']['find'] ?></button></td>
+                </tr>
+            </table>
+        </fieldset>
+        <div id="contain" class="table-scroll" style="height:calc(100vh - 310px);min-height:300px;">
             <script>loadData();</script>
         </div>
     
@@ -191,7 +191,7 @@ OPEN_BOX('','<span class=judul>'.getMenu('sdm_absensi').'</span>');
                 <td><?php echo $_SESSION['lang']['kodeorg'] ?></td>
                 <td>:</td>
                 <td>
-                    <select id="kdOrg" style="width:150px;" ><option value=""><?php echo $_SESSION['lang']['pilihdata']; ?></option><?php echo $optOrg ?></select>
+                    <select id="kdOrg" class="select2" style="width:150px;" ><option value=""><?php echo $_SESSION['lang']['pilihdata']; ?></option><?php echo $optOrg ?></select>
                 </td>
             </tr>
             <tr>
@@ -205,7 +205,7 @@ OPEN_BOX('','<span class=judul>'.getMenu('sdm_absensi').'</span>');
                 <td><?php echo $_SESSION['lang']['periode'] ?></td>
                 <td>:</td>
                 <td>
-                    <select id="periode" name="periode" style="width:150px;" ><?php echo $optPeriode; ?></select>
+                    <select id="periode" name="periode" class="select2" style="width:150px;" ><?php echo $optPeriode; ?></select>
                 </td>
             </tr>
 				<tr>

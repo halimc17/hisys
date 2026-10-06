@@ -10,6 +10,7 @@ $kodeorg =checkPostGet('kodeorg','');
 $tgllibur=tanggalsystemn(checkPostGet('tgllibur',''));
 $proses  =checkPostGet('proses','');
 $divisi  =checkPostGet('divisi','');
+$preview =checkPostGet('preview','');
 
 switch($proses){
 	case'getdivisi':
@@ -85,12 +86,17 @@ switch($proses){
 		$res=fetchdata($str);
 		$jlhkary=count($res);
 		$no="";
+		$daftar=array();
+		if($preview=='1'){
+			$namaKary=makeOption($dbname,'datakaryawan','karyawanid,namakaryawan');
+		}
 		foreach($res as $bar){
 
 			## DElETE DULU
 			$str1="select * from ".$dbname.".sdm_absensidt where tanggal='".$t."' and kodeorg='".$subbag."' and karyawanid='".$bar['karyawanid']."' and absensi in ('L', 'LN', 'MG')";
 			$res1=fetchdata($str1);
-			if(count($res1)>0){	
+			$diganti=(count($res1)>0);
+			if($diganti){	
 				$delDet = deleteQuery($dbname, "sdm_absensidt","tanggal='".$t."' and kodeorg='".$subbag."' and karyawanid='".$bar['karyawanid']."' and absensi in ('L', 'LN', 'MG') ");
 				$owlPDO->exec($delDet);
 			}
@@ -166,6 +172,9 @@ switch($proses){
                 $cols = array_keys($data);
                 $query = insertQuery($dbname, "sdm_absensidt", $data, $cols);
 				$owlPDO->exec($query);
+				$daftar[]=array('karyawanid'=>$bar['karyawanid'],'status'=>($diganti?'DIGANTI':'BARU'),'absensi'=>$jnlibur,'hk'=>$hk);
+			}else{
+				$daftar[]=array('karyawanid'=>$bar['karyawanid'],'status'=>'DILEWATI','absensi'=>$res[0]['absensi'],'hk'=>$res[0]['hk']);
 			}
 		}
 		if($jlhkary>0){			
@@ -178,6 +187,41 @@ switch($proses){
 			}
 		}
 		
+		#preview: semua proses di atas dijalankan apa adanya, lalu dibatalkan (rollback) dan hanya daftarnya yang ditampilkan
+		if($preview=='1'){
+			$owlPDO->rollback();
+			$jmlBaru=0;$jmlGanti=0;$jmlLewat=0;
+			$baris='';
+			$urut=0;
+			foreach($daftar as $d){
+				$urut++;
+				if($d['status']=='BARU'){$jmlBaru++;}
+				elseif($d['status']=='DIGANTI'){$jmlGanti++;}
+				else{$jmlLewat++;}
+				$baris.="<tr class=rowcontent>
+					<td align=center>".$urut."</td>
+					<td>".strtoupper($namaKary[$d['karyawanid']])."</td>
+					<td align=center>".$d['absensi']."</td>
+					<td align=right>".(float)$d['hk']."</td>
+					<td align=center>".$d['status']."</td>
+					</tr>";
+			}
+			$jmlSimpan=$jmlBaru+$jmlGanti;
+			echo"<div style='padding:6px 8px;font-size:12px;'>
+				Tanggal <b>".$_POST['tgllibur']."</b>, unit <b>".$subbag."</b>. Akan disimpan: <b>".$jmlSimpan."</b> karyawan
+				(baru ".$jmlBaru.", diganti ".$jmlGanti."). Dilewati karena sudah punya absensi lain: <b>".$jmlLewat."</b>.
+				</div>
+				<div style='max-height:320px;overflow:auto;'>
+				<table class=sortable border=0 cellspacing=1 cellpadding=3 style='width:100%'>
+				<thead><tr class=rowheader>
+				<th align=center>No.</th><th align=center>Nama Karyawan</th><th align=center>Absensi</th><th align=center>HK</th><th align=center>Status</th>
+				</tr></thead>
+				<tbody>".($baris!=''?$baris:"<tr class=rowcontent><td colspan=5 align=center>Tidak ada karyawan yang sesuai</td></tr>")."</tbody>
+				</table></div>
+				<div style='padding:8px;text-align:center;'>".($jmlSimpan>0?"<button class=mybutton onclick=prosesSimpanHariLibur()>Simpan</button> ":"")."<button class=mybutton onclick=closeDialog()>Batal</button></div>";
+			break;
+		}
+
 		#execute
 		$owlPDO->commit();
 		} catch (PDOException $e) {$owlPDO->rollback();echo "Error, " . addslashes($e->getMessage());die();}
