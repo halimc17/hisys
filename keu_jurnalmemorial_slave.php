@@ -1944,10 +1944,20 @@ switch ($method) {
 							$dbname,
 							'keu_5kelompokjurnal',
 							'nokounter',
-							"kodekelompok='" . $kodejurnal . "' and kodeunit='" . $param['kodeorg'] . "' and periode='" . $periodejurnal . "'"
+							"kodekelompok='" . $kodejurnal . "' and kodeunit='" . $sheet['I'] . "' and periode='" . $periodejurnal . "'"
 						);
 						$tmpKonter = fetchData($query);
 						$konter = addZero($tmpKonter[0]['nokounter'] + 1, 3);
+
+						#= counter dibaca dari unit di baris Excel (kolom I), sama dengan unit di nomor jurnal.
+						#= lewati nomor yang sudah dipakai jurnal lain (counter bisa tertinggal) supaya approval tidak duplicate entry
+						do {
+							$nojurnalcek = $tglnotrans . "/" . $sheet['I'] . "/" . $kodejurnal . "/" . $konter;
+							$rescek = fetchData("select nojurnal from " . $dbname . ".keu_jurnalht where nojurnal='" . $nojurnalcek . "' union select nojurnal from " . $dbname . ".keu_jurnalmemorial where nojurnal='" . $nojurnalcek . "'");
+							if (count($rescek) > 0) {
+								$konter = addZero((int)$konter + 1, 3);
+							}
+						} while (count($rescek) > 0);
 
 						$validasi  				= "";
 						// $keterangan			    = getNamaKeg($sheet['D'],'namakegiatan');
