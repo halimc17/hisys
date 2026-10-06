@@ -54,11 +54,22 @@ if($kdKel!=''){
    $where.=" and a.kodejurnal='".$kdKel."'  "; 
 }
 
+#= daftar unit diambil dulu lalu ditulis langsung (bukan subquery) - dengan subquery MariaDB memakai index kodeorg saja
+#= dan membaca jurnal semua tahun per unit (ratusan detik); dengan daftar langsung bisa pakai index (kodeorg, tanggal).
 if($regional=='' && $gudang==''){
-   $where.=" and a.kodeorg in (select kodeorganisasi from ".$dbname.".organisasi where induk='".$pt."')";
+   $sUnit="select kodeorganisasi from ".$dbname.".organisasi where induk='".$pt."'";
 }else if($regional!='' && $gudang==''){
-    $where.=" and a.kodeorg in (select kodeunit from ".$dbname.".bgt_regional_assignment where regional='".$regional."'"
-            . " and kodeunit in (select kodeorganisasi from ".$dbname.".organisasi where induk='".$pt."')) "; 
+   $sUnit="select kodeunit from ".$dbname.".bgt_regional_assignment where regional='".$regional."'"
+            . " and kodeunit in (select kodeorganisasi from ".$dbname.".organisasi where induk='".$pt."')";
+}
+if($gudang==''){
+   $listUnit=array();
+   $rUnit=$owlPDO->query($sUnit);
+   $rUnit->setFetchMode(PDO::FETCH_NUM);
+   while($bUnit=$rUnit->fetch()){
+      $listUnit[]=$owlPDO->quote($bUnit[0]);
+   }
+   $where.=" and a.kodeorg in (".(count($listUnit)>0? implode(',',$listUnit): "''").")";
 }else{
     $where.=" and a.kodeorg='".$gudang."'";
 }
@@ -156,6 +167,15 @@ while($bar=$res->fetch()){
 
 
 
+#= kotak Search di preview (DataTables server-side): cari di kolom utama jurnal
+$cariDt = (isset($_POST['search']['value'])? trim($_POST['search']['value']): '');
+if($tipelaporan=='json' && $cariDt!=''){
+	$qCari=$owlPDO->quote('%'.$cariDt.'%');
+	$where.=" and (a.nojurnal like ".$qCari." or a.noakun like ".$qCari." or a.keterangan like ".$qCari."
+		or a.noreferensi like ".$qCari." or a.nodok like ".$qCari." or a.kodeblok like ".$qCari."
+		or a.kodebarang like ".$qCari." or a.kodevhc like ".$qCari.")";
+}
+
 $usingLeanQuery = false;
 $sql="select a.*,b.namaakun,c.novoucher,c.cgttu from ".$dbname.".keu_jurnaldt_vw a
 left join ".$dbname.".keu_5akun b
@@ -177,7 +197,7 @@ if($tipelaporan=='json' && $start!=='' && $length!==''){
 		left join ".$dbname.".keu_jurnalht b on a.nojurnal=b.nojurnal
 		where a.tanggal between '".$periode."' and '".$periode1."'
 		".$kdOrgSch."
-		and a.nojurnal NOT LIKE '%CLSM%' ".$where."
+		and a.nojurnal NOT LIKE '%CLSM%' ".str_replace('a.kodejurnal','b.kodejurnal',$where)."
 		and a.revisi<='".$revisi."'";
 	}else{
 		$sqlCount="select count(*) as cnt from ".$dbname.".keu_jurnaldt a

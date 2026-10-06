@@ -202,7 +202,8 @@ function getLaporanJurnalv2(tipelaporan) {
               serverSide: true,
               processing: true,
               ordering: false,
-              searching: false,
+              searching: true,
+              searchDelay: 1000, // tunggu user selesai mengetik, jangan kirim request tiap huruf
               paging: true,
               iDisplayLength: 50,
               scrollY: "65vh",
@@ -347,6 +348,9 @@ function getLaporanJurnal(tipelaporan) {
   nojurnal = document.getElementById("nojurnal").value;
   nik = document.getElementById("nik").value;
 
+  noakun = document.getElementById("noakun").value;
+  nodok = document.getElementById("nodok").value;
+
   if (ptV == "") {
     alertify.alert("Informasi", "Field PT empty !");
     return;
@@ -378,6 +382,7 @@ function getLaporanJurnal(tipelaporan) {
     nik +
     "&tipelaporan=" +
     tipelaporan;
+  param += "&noakun=" + noakun + "&nodok=" + nodok;
   tujuan = "keu_laporanJurnalxx.php";
 
   if (tipelaporan == "excel") {
