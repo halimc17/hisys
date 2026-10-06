@@ -39,6 +39,9 @@ switch($method){
 
 		$tglhrini=date('Y-m-d');
 
+		$divisisearch=checkPostGet('divisisearch','');
+		$golongansearch=checkPostGet('golongansearch','');
+
 		$where='';
 		if($txtsearch!='')
 		   $where= " and a.namakaryawan like '%".$txtsearch."%'";
@@ -51,6 +54,12 @@ switch($method){
 		   $where .=" and a.kodejabatan='".$jabatansearch."'";
 		if($tipesearch!='')
 		   $where .=" and a.tipekaryawan='".$tipesearch."'";  
+		if($divisisearch=='KANTOR')
+		   $where .=" and (a.subbagian='' or a.subbagian is null)";
+		elseif($divisisearch!='')
+		   $where .=" and a.subbagian='".$divisisearch."'";
+		if($golongansearch!='')
+		   $where .=" and a.kodegolongan='".$golongansearch."'";
 		if($statussearch=='*')
 		   $where .="  and (tanggalkeluar!='0000-00-00' and tanggalkeluar<'".$tglhrini."')";
 		else if($statussearch=='0000-00-00')
@@ -102,7 +111,7 @@ switch($method){
 		$numrows=owlBaris($res);
 		if($numrows<1){
 			echo "<tr class=rowcontent>
-					<td colspan=18 style='text-align:center'>".$_SESSION['lang']['datanotfound']."</td>
+					<td colspan=21 style='text-align:center'>".$_SESSION['lang']['datanotfound']."</td>
 					</tr>";
 		}else{
 			$no=$maxdisplay;
@@ -131,7 +140,7 @@ switch($method){
 					 <td align=center>".$no."</td>
 					 <td align=center><img src='".$urlimage."' style='width:40px;height:40px;object-fit:cover;'></td>
 					 <td>".$bar->nik."</td>
-					 <td>".$bar->namakaryawan."</td>
+					 <td>".strtoupper($bar->namakaryawan)."</td>
 					 <td>".$bar->namajabatan."</td>
 					 <td>".$bar->namagolongan."</td>
 					 <td align=center>".$bar->lokasitugas."</td>

@@ -1931,6 +1931,8 @@ function cariKaryawan(page) {
 	//patam+='&schjk='+schjk;
 	param += '&page=' + page;
 	param += '&noktp=' + noktp;
+	param += '&divisisearch=' + (document.getElementById('schdivisi') ? document.getElementById('schdivisi').value : '');
+	param += '&golongansearch=' + (document.getElementById('schgolongan') ? document.getElementById('schgolongan').value : '');
 
 	//alertify.alert(param);
 

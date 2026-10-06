@@ -10,6 +10,8 @@ require_once('lib/zSelect2.php');
 ?>
 <script language=javascript1.2 src='js/datakaryawan.js?v=<?php echo time(); ?>'></script>
 <script language=javascript1.2 src='js/option.js?v=<?php echo time(); ?>'></script>
+<script language=javascript1.2 src='js/sdm_data_karyawan_export.js?v=<?php echo time(); ?>'></script>
+<script language=javascript1.2 src='js/sdm_data_karyawan_select2.js?v=<?php echo time(); ?>'></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
 <script>
 $(document).ready(function() {
@@ -268,12 +270,30 @@ while($bar=$res->fetch()){
 	$opttipekaryawan.="<option value='".$bar->id."'>".$bar->tipe."</option>";
 }
 
-$optjabatansch="<option value=''>".$_SESSION['lang']['pilihdata']."</option>";
+$optjabatansch='';
 $str = "select * from ".$dbname.".sdm_5jabatan a left join ".$dbname.".sdm_5jabatan_detail b on a.kodejabatan=b.kodejabatan where (b.unittipe='".$_SESSION['empl']['tipelokasitugas']."' or b.unittipe='GLOBAL') and aktif=1 and namajabatan not like '%available' order by namajabatan";
 $res=$owlPDO->query($str) or die(print " Gagal: ".PDOException::getMessage());
 $res->setFetchMode(PDO::FETCH_OBJ);
 while($bar=$res->fetch()){
 	$optjabatansch.="<option value='".$bar->kodejabatan."'>".$bar->namajabatan."</option>";
+}
+
+$opttipesch=str_replace("<option value=''>".$_SESSION['lang']['pilihdata']."</option>",'',$opttipekaryawan);
+
+$optgolsch='';
+$str = "select * from ".$dbname.".sdm_5golongan a left join ".$dbname.".sdm_5golongan_detail b on a.kodegolongan=b.kodegolongan where a.aktif=1 and (b.unittipe='".$_SESSION['empl']['tipelokasitugas']."' or b.unittipe='GLOBAL') order by a.kodegolongan";
+$res=$owlPDO->query($str) or die(print " Gagal: ".PDOException::getMessage());
+$res->setFetchMode(PDO::FETCH_OBJ);
+while($bar=$res->fetch()){
+	$optgolsch.="<option value='".$bar->kodegolongan."'>".$bar->namagolongan."</option>";
+}
+
+$optdivisisch="<option value='KANTOR'>KANTOR</option>";
+$str = "select distinct a.subbagian,o.namaorganisasi from ".$dbname.".datakaryawan a left join ".$dbname.".organisasi o on o.kodeorganisasi=a.subbagian where a.lokasitugas in (".getOrgDetail(2).") and a.subbagian is not null and a.subbagian!='' and a.namakaryawan not like '%ADMINISTRATOR%' order by a.subbagian";
+$res=$owlPDO->query($str) or die(print " Gagal: ".PDOException::getMessage());
+$res->setFetchMode(PDO::FETCH_OBJ);
+while($bar=$res->fetch()){
+	$optdivisisch.="<option value='".$bar->subbagian."'>".$bar->subbagian.($bar->namaorganisasi!='' ? ' - '.$bar->namaorganisasi : '')."</option>";
 }
 
 echo"<table>
@@ -291,13 +311,35 @@ echo"<table>
 			</td>
 			<td>
 				<fieldset><legend>".$_SESSION['lang']['find']."</legend>"; 
-				echo $_SESSION['lang']['nama']." : <input type=text id=txtsearch onkeyup=cariKaryawan(1); size=20 maxlength=30 class=myinputtext> ";
-				echo $_SESSION['lang']['noktp']." : <input type=text id=noktpsch onkeyup=cariKaryawan(1); size=15 maxlength=30 class=myinputtext> ";
-				echo $_SESSION['lang']['lokasitugas']." : <select id=schorg style='width:150px' onchange=cariKaryawan(1);><option value='' >".$_SESSION['lang']['all']."</option>".$optAll."</select> ";
-				echo $_SESSION['lang']['jabatan']." : <select id=schjabatan style='width:150px' onchange=cariKaryawan(1);><option value=''>".$_SESSION['lang']['all']."</option>".$optjabatansch."</select> ";
-				echo $_SESSION['lang']['tipekaryawan']." : <select id=schtipe  style='width:150px' onchange=cariKaryawan(1);><option value=''>".$_SESSION['lang']['all']."</option>".$opttipekaryawan."</select> ";
-				echo $_SESSION['lang']['status']." : <select id=schstatus  style='width:150px' onchange=cariKaryawan(1);><option value=''>".$_SESSION['lang']['all']."</option><option value='0000-00-00'>".$_SESSION['lang']['aktif']."</option><option value='*'>".$_SESSION['lang']['tidakaktif']."</select> ";
-				echo"<button class=mybutton onclick=cariKaryawan(1)>".$_SESSION['lang']['find']."</button>";
+				echo "<table cellspacing=0 cellpadding=2 style='border-collapse:separate;border-spacing:4px 3px;'>
+					<tr>
+						<td>".$_SESSION['lang']['nama']."</td><td>:</td>
+						<td><input type=text id=txtsearch onkeyup=cariKaryawan(1); size=20 maxlength=30 class=myinputtext style='width:150px;'></td>
+						<td>".$_SESSION['lang']['noktp']."</td><td>:</td>
+						<td><input type=text id=noktpsch onkeyup=cariKaryawan(1); size=15 maxlength=30 class=myinputtext style='width:150px;'></td>
+						<td>".$_SESSION['lang']['lokasitugas']."</td><td>:</td>
+						<td><select id=schorg class=select2 style='width:160px' onchange=cariKaryawan(1);><option value='' >".$_SESSION['lang']['all']."</option>".$optAll."</select></td>
+						<td>Divisi</td><td>:</td>
+						<td><select id=schdivisi class=select2 style='width:160px' onchange=cariKaryawan(1);><option value=''>".$_SESSION['lang']['all']."</option>".$optdivisisch."</select></td>
+					</tr>
+					<tr>
+						<td>".$_SESSION['lang']['kodegolongan']."</td><td>:</td>
+						<td><select id=schgolongan class=select2 style='width:150px' onchange=cariKaryawan(1);><option value=''>".$_SESSION['lang']['all']."</option>".$optgolsch."</select></td>
+						<td>".$_SESSION['lang']['jabatan']."</td><td>:</td>
+						<td><select id=schjabatan class=select2 style='width:150px' onchange=cariKaryawan(1);><option value=''>".$_SESSION['lang']['all']."</option>".$optjabatansch."</select></td>
+						<td>".$_SESSION['lang']['tipekaryawan']."</td><td>:</td>
+						<td><select id=schtipe class=select2 style='width:160px' onchange=cariKaryawan(1);><option value=''>".$_SESSION['lang']['all']."</option>".$opttipesch."</select></td>
+						<td>".$_SESSION['lang']['status']."</td><td>:</td>
+						<td><select id=schstatus class=select2 style='width:160px' onchange=cariKaryawan(1);><option value=''>".$_SESSION['lang']['all']."</option><option value='0000-00-00'>".$_SESSION['lang']['aktif']."</option><option value='*'>".$_SESSION['lang']['tidakaktif']."</option></select></td>
+					</tr>
+					<tr>
+						<td colspan=12>
+							<button class=mybutton onclick=cariKaryawan(1)>".$_SESSION['lang']['find']."</button>
+							<button class=mybutton onclick=exportKaryawan('excel')>".$_SESSION['lang']['excel']."</button>
+							<button class=mybutton onclick=exportKaryawan('pdf')>PDF</button>
+						</td>
+					</tr>
+				</table>";
 				echo"</fieldset>
 			</td>
 		</tr>
@@ -556,7 +598,7 @@ $frm[0]="<fieldset style='width:".$widthfieldset."px;text-align:center;'><legend
 		<table border=0 cellspacing=1 style=text-align:left>
 			<tr hidden>
 				<td>No Pengajuan Karyawan</td>
-				<td><select id=noerf   >".$opterf."</select>
+				<td><select class='select2' id=noerf   >".$opterf."</select>
 					<img id='noerf' onclick=z.elSearch('noerf',event) class='resicon' src='images/skyblue/zoom.png' style='position:relative;top:3px;left:3px;'></td>
 				<td colspan='7'></td>
 			</tr>
@@ -584,7 +626,7 @@ $frm[0]="<fieldset style='width:".$widthfieldset."px;text-align:center;'><legend
 			<td><input type=text class=myinputtext id=nik style=width:175px; maxlength=10 onkeypress=\"return tanpa_kutip(event);\" disabled></td>
 			
 			<td>".$_SESSION['lang']['pt']."</td><td>:</td>
-			<td><select  id=kodeorganisasi onchange=getEstateX(this.value,'lokasitugas','pilihdata') style=border-color:red;width:180px; placeholder='Wajib Terisi.'>".$optorganisasi."</select></td>
+			<td><select class='select2 error-highlight'  id=kodeorganisasi onchange=getEstateX(this.value,'lokasitugas','pilihdata') style=border-color:red;width:180px; placeholder='Wajib Terisi.'>".$optorganisasi."</select></td>
 			
 			<td>".$_SESSION['lang']['tanggalmasuk']."</td><td>:</td>
 			<td><input type=text style=border-color:red;width:175px placeholder='Wajib Terisi.' class=myinputtext id=tanggalmasuk  maxlength=10  onmousemove=setCalendar(this) readonly></td> 
@@ -625,7 +667,7 @@ $frm[0]="<fieldset style='width:".$widthfieldset."px;text-align:center;'><legend
 		</tr>
 		<tr>
 			<td>".$_SESSION['lang']['jeniskelamin']."</td><td>:</td>
-			<td><select style=width:180px id=jeniskelamin  >".$optJK."</select></td>
+			<td><select class='select2' style=width:180px id=jeniskelamin  >".$optJK."</select></td>
 			
 			<td hidden>Sub ".$_SESSION['lang']['department']."</td><td hidden>:</td>
 			<td hidden><select class='select2' style=width:180px id=subdept >".$optbagian."</select></td> 
@@ -636,7 +678,7 @@ $frm[0]="<fieldset style='width:".$widthfieldset."px;text-align:center;'><legend
 			<td>".$_SESSION['lang']['statuspajak']."</td><td>:</td>
 			<td>
 				<input type='hidden' id='vstatuspajak' value='".$hasilstatuspajak."'>
-				<select id=statuspajak style=width:180px onchange='getstatuspajak()'>".$optstatuspajak."</select>
+				<select class='select2' id=statuspajak style=width:180px onchange='getstatuspajak()'>".$optstatuspajak."</select>
 			</td>
 		</tr>
 		<tr>            
@@ -648,7 +690,7 @@ $frm[0]="<fieldset style='width:".$widthfieldset."px;text-align:center;'><legend
 			</td>
 			
 			<td>".$_SESSION['lang']['sistemgaji']."</td><td>:</td>
-			<td><select id=sistemgaji style=width:180px>".$optsisgaji."</select></td>
+			<td><select class='select2' id=sistemgaji style=width:180px>".$optsisgaji."</select></td>
 		</tr>
 		<tr> 
 			<td>".$_SESSION['lang']['noktp']."</td><td>:</td>
@@ -659,7 +701,7 @@ $frm[0]="<fieldset style='width:".$widthfieldset."px;text-align:center;'><legend
 			<td><select class='select2 error-highlight' onchange=getdetailtipekary(); id=tipekaryawan style='width:180px;' placeholder='Wajib Terisi.'>".$opttipekaryawan."</select></td> 
 			
 			<td>".$_SESSION['lang']['alokasibiaya']."</td><td>:</td>
-			<td><select disabled id=alokasi style=width:180px> 
+			<td><select class='select2' disabled id=alokasi style=width:180px> 
 					<option value=0>Unit</option>
 					<option value=1>Umum</option>
 				</select>
@@ -684,7 +726,7 @@ $frm[0]="<fieldset style='width:".$widthfieldset."px;text-align:center;'><legend
 			
 			
 			<td>".$_SESSION['lang']['status']." ".$_SESSION['lang']['karyawan']."</td><td>:</td>
-			<td><select  style=border-color:red;width:180px; onchange=gettanggalangkat(); id=statuskaryawan>".$optstatkaryawan."</select></td>
+			<td><select class='select2 error-highlight'  style=border-color:red;width:180px; onchange=gettanggalangkat(); id=statuskaryawan>".$optstatkaryawan."</select></td>
 
 			<td >".$_SESSION['lang']['pembagiancatu']."</td><td>:</td>
 			<td ><select class='select2' style=width:180px id=catu >".$optCatu."</select></td>
@@ -715,10 +757,10 @@ $frm[0].="<fieldset style=text-align:center><legend>Detail Karyawan</legend>
 				</td> 
 
 			<td>".$_SESSION['lang']['statusperkawinan']."</td><td>:</td>
-			<td><select style=\"width:180px;\" id=statusperkawinan >".$optstkawin."</select></td>
+			<td><select class='select2' style=\"width:180px;\" id=statusperkawinan >".$optstkawin."</select></td>
 			
 			<td>".$_SESSION['lang']['namabank']."</td><td>:</td>
-			<td><select id=namabank style=border-color:red;\"width:180px;\">".$optNmBank."</select></td>   
+			<td><select class='select2 error-highlight' id=namabank style=border-color:red;\"width:180px;\">".$optNmBank."</select></td>   
 		</tr>
 		
 		<tr>
@@ -753,7 +795,7 @@ $frm[0].="<fieldset style=text-align:center><legend>Detail Karyawan</legend>
 			</td> 
 			
 			<td>".$_SESSION['lang']['levelpendidikan']."</td><td>:</td>
-			<td><select id=levelpendidikan style=\"width:180px;\">".$optlvlpendidikan."</select></td> 
+			<td><select class='select2' id=levelpendidikan style=\"width:180px;\">".$optlvlpendidikan."</select></td> 
 			
 			
 			<td colspan=3 style='color:gray;padding-left:30px'><b><i>BPJS</i></b></td>
@@ -773,7 +815,7 @@ $frm[0].="<fieldset style=text-align:center><legend>Detail Karyawan</legend>
 			
 			
 			<td>".$_SESSION['lang']['golongandarah']."</td><td>:</td>
-			<td><select id=golongandarah style=\"width:180px;\">".$optGoldar."</select></td>
+			<td><select class='select2' id=golongandarah style=\"width:180px;\">".$optGoldar."</select></td>
 			
 			<td>Tanggal Daftar</td><td>:</td>
 			<td><input type=text class=myinputtext placeholder='Untuk KHL.' id=bulandaftarbpjs style=width:175px; onmousemove=setCalendar(this.id) maxlength=10 onkeypress=\"return false;\" readonly></td>
@@ -794,7 +836,7 @@ $frm[0].="<fieldset style=text-align:center><legend>Detail Karyawan</legend>
 			<td><input type=text class=myinputtext id=nohp2 style=width:175px; maxlength=15 onkeypress=\"return angka_doang(event);\"></td>
 
 			<td>KPP Perusahaan</td><td>:</td>
-			<td><select id=kppnpwp style=\"width:180px;\">".$optkppnpwp."</select></td>  
+			<td><select class='select2' id=kppnpwp style=\"width:180px;\">".$optkppnpwp."</select></td>  
 			
 			<td>".$_SESSION['lang']['bpjs']." ".$_SESSION['lang']['kesehatan']."</td><td>:</td>
 			<td><input type=text id=bpjs style=\"width:150px;\" maxlength=30 class=myinputtext onkeypress=\"return angka_doang(event);\"><fieldset style=float:right;height:10px><img src=images/upload-2-xxl.png class=zImgBtn title=Upload onclick=showupload('event','15')></fieldset>
@@ -813,7 +855,7 @@ $frm[0].="<fieldset style=text-align:center><legend>Detail Karyawan</legend>
 		<tr>
 			
 			<td>".$_SESSION['lang']['agama']."</td><td>:</td>
-			<td><select style=width:180px id=agama >".$optagama."</select></td>
+			<td><select class='select2' style=width:180px id=agama >".$optagama."</select></td>
 			
 			<td>".$_SESSION['lang']['email']." Kantor</td><td>:</td>
 			<td><input type=text class=myinputtext id=emailkantor  style=width:175px; maxlength=45  onkeypress=\"return tanpa_kutip(event);\"></td>
@@ -828,12 +870,12 @@ $frm[0].="<fieldset style=text-align:center><legend>Detail Karyawan</legend>
 		</tr>
 		
 		<tr style=display:none>
-			<td >Sub BPJS</td><td><select id=supbpjs >".$optsup."</select></td>
+			<td >Sub BPJS</td><td><select class='select2' id=supbpjs >".$optsup."</select></td>
 			<td style='display:none;'>".$_SESSION['lang']['lokasi']." ".$_SESSION['lang']['cuti']." </td>
 			<td style='display:none;'><input type=text class=myinputtext id=kota size=27 maxlength=30 onkeypress=\"return tanpa_kutip(event);\" value='-'></td>					
 		</tr>
 		<tr style='display:none'>
-				<td>".$_SESSION['lang']['statusakad']."</td><td><select id=statusakad >
+				<td>".$_SESSION['lang']['statusakad']."</td><td><select class='select2' id=statusakad >
 				<option value='1'>akad</option>
 				<option value='2' selected >non-akad</option>
 				</select></td> 
@@ -881,8 +923,8 @@ $frm[1]="<fieldset style='width:".$widthfieldset."px;'><legend>".$_SESSION['lang
                     <td>".$_SESSION['lang']['bidangusaha']."</td><td><input type=text class=myinputtext id=bidangusaha  style=width:200px maxlength=45 onkeypress=\"return tanpa_kutip(event);\"></td>
                  </tr>
                  <tr>
-                    <td>".$_SESSION['lang']['bulanmasuk']."</td><td><select id=blnmasuk style='width:115px;'>".$optbln."</select>-<select id=thnmasuk style='width:85px;'>".$optthn."</select></td>
-                    <td>".$_SESSION['lang']['bulankeluar']."</td><td><select id=blnkeluar style='width:115px;'>".$optbln."</select>-<select id=thnkeluar style='width:85px;'>".$optthn."</select></td>
+                    <td>".$_SESSION['lang']['bulanmasuk']."</td><td><span style='display:inline-block'><select class='select2' id=blnmasuk style='width:115px;'>".$optbln."</select></span>-<span style='display:inline-block'><select class='select2' id=thnmasuk style='width:85px;'>".$optthn."</select></span></td>
+                    <td>".$_SESSION['lang']['bulankeluar']."</td><td><span style='display:inline-block'><select class='select2' id=blnkeluar style='width:115px;'>".$optbln."</select></span>-<span style='display:inline-block'><select class='select2' id=thnkeluar style='width:85px;'>".$optthn."</select></span></td>
                  </tr>
                  <tr>
 					<td>".$_SESSION['lang']['bagian']."</td><td><input type=text class=myinputtext id=pengalamanbagian  style=width:200px maxlength=45 onkeypress=\"return tanpa_kutip(event);\"><img src=images/obl.png title='Obligatory'></td>	 
@@ -950,12 +992,12 @@ while($bar=$res->fetch()){
 $frm[2]="<fieldset style='width:".$widthfieldset."px;'><legend>".$_SESSION['lang']['educationentry']."</legend>
          <table border=0 cellspacing=1>
                  <tr>
-                    <td>".$_SESSION['lang']['edulevel']."</td><td><select id=levelpendidikan2 style='width:190px;'>".$optpendidikan."</select></td>
+                    <td>".$_SESSION['lang']['edulevel']."</td><td><select class='select2' id=levelpendidikan2 style='width:190px;'>".$optpendidikan."</select></td>
                     <td>".$_SESSION['lang']['jurusan']."</td><td><input type=text class=myinputtext id=spesialisasi style=width:185px maxlength=30 onkeypress=\"return tanpa_kutip(event);\"></td>
                  </tr>
                  <tr>
                     <td>".$_SESSION['lang']['gelar']."</td><td><input type=text class=myinputtext id=gelar style=width:185px maxlength=20 onkeypress=\"return tanpa_kutip(event);\"></td>
-                    <td>".$_SESSION['lang']['tahunlulus']."</td><td><select id=tahunlulus style='width:190px;'>".$optthn."</select></td>
+                    <td>".$_SESSION['lang']['tahunlulus']."</td><td><select class='select2' id=tahunlulus style='width:190px;'>".$optthn."</select></td>
                  </tr>
                  <tr>
                         <td>".$_SESSION['lang']['namasekolah']."</td><td><input type=text class=myinputtext id=namasekolah style=width:185px maxlength=45 onkeypress=\"return tanpa_kutip(event);\"><img src=images/obl.png title='Obligatory'></td>
@@ -1015,7 +1057,7 @@ foreach($rJnsTraining as $val){
 $frm[3]="<fieldset style='width:".$widthfieldset."px;'><legend>".$_SESSION['lang']['traininginternal']."</legend>
          <table border=0 cellspacing=1>
                  <tr>
-                    <td>".$_SESSION['lang']['jeniskursus']."</td><td><select id=jenistraining style='width:205px;'>".$optJnsTraining."</select></td>
+                    <td>".$_SESSION['lang']['jeniskursus']."</td><td><select class='select2' id=jenistraining style='width:205px;'>".$optJnsTraining."</select></td>
                     <td>".$_SESSION['lang']['legend']."</td><td><input type=text class=myinputtext id=judultraining style='width:200px;' maxlength=45 onkeypress=\"return tanpa_kutip(event);\"><img src=images/obl.png title='Obligatory'></td>
                     
                  </tr>
@@ -1026,7 +1068,7 @@ $frm[3]="<fieldset style='width:".$widthfieldset."px;'><legend>".$_SESSION['lang
                  </tr>
                  <tr>
                         <td>".$_SESSION['lang']['penyelenggara']."</td><td><input type=text class=myinputtext id=penyelenggara style='width:200px;' maxlength=45 onkeypress=\"return tanpa_kutip(event);\"><img src=images/obl.png title='Obligatory'></td>
-                        <td>".$_SESSION['lang']['sertifikat']."</td><td><select id=sertifikat style='width:205px;'><option value=0>".$_SESSION['lang']['no']."</option><option value=1>".$_SESSION['lang']['yes']."</option></select></td>	 
+                        <td>".$_SESSION['lang']['sertifikat']."</td><td><select class='select2' id=sertifikat style='width:205px;'><option value=0>".$_SESSION['lang']['no']."</option><option value=1>".$_SESSION['lang']['yes']."</option></select></td>	 
                         <td></td><td></td>
                  </tr> 
                  <tr>
@@ -1124,18 +1166,18 @@ $frm[4]="<fieldset style='width:".$widthfieldset."px;'><legend>".$_SESSION['lang
          <table border=0 cellspacing=1>
                  <tr>
                     <td>".$_SESSION['lang']['nama']."</td><td><input type=text class=myinputtext id=keluarganama style=width:200px maxlength=45 onkeypress=\"return tanpa_kutip(event);\"><img src=images/obl.png title='Obligatory'></td>
-                    <td>".$_SESSION['lang']['jeniskelamin']."</td><td><select id=keluargajk  style='width:205px;'>".$optJK."</select></td>
+                    <td>".$_SESSION['lang']['jeniskelamin']."</td><td><select class='select2' id=keluargajk  style='width:205px;'>".$optJK."</select></td>
                  </tr>
                  <tr>
                     <td>".$_SESSION['lang']['tempatlahir']."</td><td><input type=text class=myinputtext id=keluargatmplahir  style=width:200px maxlength=30 onkeypress=\"return tanpa_kutip(event);\"></td>
                     <td>".$_SESSION['lang']['tanggallahir']."</td><td><input type=text class=myinputtext id=keluargatgllahir  style=width:200px onmousemove=setCalendar(this.id) size=10 maxlength=10 onkeypress=\"return false;\" readonly></td>
                  </tr>
                  <tr>
-                        <td>".$_SESSION['lang']['hubungan']."</td><td><select id=hubungankeluarga  style='width:205px;'>".$opthubk."</select></td>
-                        <td>".$_SESSION['lang']['statusperkawinan']."</td><td><select id=keluargastatus style='width:205px;'>".$optstk."</select></td>	 
+                        <td>".$_SESSION['lang']['hubungan']."</td><td><select class='select2' id=hubungankeluarga  style='width:205px;'>".$opthubk."</select></td>
+                        <td>".$_SESSION['lang']['statusperkawinan']."</td><td><select class='select2' id=keluargastatus style='width:205px;'>".$optstk."</select></td>	 
                  </tr> 
                  <tr>
-                        <td>".$_SESSION['lang']['pendidikan']."</td><td><select id=keluargapendidikan  style='width:205px;'>".$optpendidikan."</select></td>
+                        <td>".$_SESSION['lang']['pendidikan']."</td><td><select class='select2' id=keluargapendidikan  style='width:205px;'>".$optpendidikan."</select></td>
                     <td>".$_SESSION['lang']['pekerjaan']."</td><td><input type=text class=myinputtext id=keluargapekerjaan  style=width:200px maxlength=30 onkeypress=\"return tanpa_kutip(event);\"></td>
                  </tr>	
                  <tr>
@@ -1144,8 +1186,8 @@ $frm[4]="<fieldset style='width:".$widthfieldset."px;'><legend>".$_SESSION['lang
                    
                  </tr>			 	 
                  <tr>
-                        <td>".$_SESSION['lang']['tanggungan']."</td><td><select id=keluargatanggungan style='width:205px;'><option value=0>".$_SESSION['lang']['no']."</option><option value=1>".$_SESSION['lang']['yes']."</option></select></td>
-                        <td>".$_SESSION['lang']['emplasment']."</td><td><select id=keluargaemplasment style='width:205px;'><option value=0>".$_SESSION['lang']['no']."</option><option value=1>".$_SESSION['lang']['yes']."</option></select></td>
+                        <td>".$_SESSION['lang']['tanggungan']."</td><td><select class='select2' id=keluargatanggungan style='width:205px;'><option value=0>".$_SESSION['lang']['no']."</option><option value=1>".$_SESSION['lang']['yes']."</option></select></td>
+                        <td>".$_SESSION['lang']['emplasment']."</td><td><select class='select2' id=keluargaemplasment style='width:205px;'><option value=0>".$_SESSION['lang']['no']."</option><option value=1>".$_SESSION['lang']['yes']."</option></select></td>
                  </tr>
                  <tr>
 					<td>Nomor BPJS Tanggungan</td><td><input type=text class=myinputtext id=keluargabpjstanggungan  style=width:200px maxlength=45 onkeypress=\"return tanpa_kutip(event);\"></td>
@@ -1196,7 +1238,7 @@ $frm[5]="<fieldset style='width:".$widthfieldset."px;'><legend>".$_SESSION['lang
                     <td>".$_SESSION['lang']['kota']."</td><td><input type=text class=myinputtext id=alamatkota style='width:205px;' maxlength=45 onkeypress=\"return tanpa_kutip(event);\"></td>
                  </tr>
                  <tr>
-                        <td>".$_SESSION['lang']['province']."</td><td><select id=alamatprovinsi style='width:210px;'>".$optProvinsi."</select></td> 
+                        <td>".$_SESSION['lang']['province']."</td><td><select class='select2' id=alamatprovinsi style='width:210px;'>".$optProvinsi."</select></td> 
                  </tr>
                  <tr>
                     <td>".$_SESSION['lang']['kodepos']."</td><td><input type=text class=myinputtext id=alamatkodepos style='width:205px;' maxlength=5 onkeypress=\"return angka_doang(event);\"></td>
@@ -1204,7 +1246,7 @@ $frm[5]="<fieldset style='width:".$widthfieldset."px;'><legend>".$_SESSION['lang
                  </tr> 
                  <tr>
                     <td>".$_SESSION['lang']['emplasmen']."</td><td><input type=text class=myinputtext id=alamatemplasement style='width:205px;' maxlength=45 onkeypress=\"return tanpa_kutip(event);\"></td>
-                        <td>".$_SESSION['lang']['alamataktif']."</td><td colspan=3><select id=alamatstatus  style='width:210px;'><option value='0'>".$_SESSION['lang']['no']."</option><option value='1'>".$_SESSION['lang']['yes']."</option></select></td>
+                        <td>".$_SESSION['lang']['alamataktif']."</td><td colspan=3><select class='select2' id=alamatstatus  style='width:210px;'><option value='0'>".$_SESSION['lang']['no']."</option><option value='1'>".$_SESSION['lang']['yes']."</option></select></td>
                  </tr>				 	 
                  <tr><td><td>
                  <button id=btnalamat disabled class=mybutton onclick=simpanAlamat()>".$_SESSION['lang']['save']."</button>
@@ -1265,8 +1307,8 @@ $frm[8]="<fieldset style='width:".$widthfieldset."px;'>
 					<td align=left width=200>".$_SESSION['lang']['jenis']." ".$_SESSION['lang']['potongan']." ".$_SESSION['lang']['karyawan']." : <img src='images/obl.png' title='Obligatory'></td>
                  </tr>
 				 <tr>
-                    <td align=left ><select id='listkoperasi' style='width:99%;'>$optSupplier</select></td>
-					<td align=left ><select id='jenispotongan' style='width:99%;'>$optJenisPotongan</select></td>
+                    <td align=left ><select class='select2' id='listkoperasi' style='width:99%;'>$optSupplier</select></td>
+					<td align=left ><select class='select2' id='jenispotongan' style='width:99%;'>$optJenisPotongan</select></td>
                  </tr>
 				 <tr>
 					<td align=left width=50>".$_SESSION['lang']['tahun']." : <img src='images/obl.png' title='Obligatory'></td>
@@ -1416,7 +1458,7 @@ echo"</div>";
 
 echo"<div style='display:none;'>".$_SESSION['lang']['daftarkaryawan']." ".$_SESSION['empl']['lokasitugas'].":<span id=cap1></span>-<span id=cap2></span>";
 echo"</div>";
-echo"<div class='table-scroll' id='searchplace' style='display:none;'>";
+echo"<div class='table-scroll' id='searchplace' style='display:none;height:calc(100vh - 230px);min-height:300px;'>";
 echo"
 		<table class=sortable border=0 cellspacing=1 cellpadding=7 width=100%>
          <thead>
@@ -1443,13 +1485,12 @@ echo"
            </tr>
          </thead>
          <tbody id=searchplaceresult>
-			<script>displayList();</script>
          </tbody>
          <tfoot>
-         <tr><td colspan=20>
+         <tr><td colspan=21>
 			<center><button class=mybutton value=0 onclick=prefDatakaryawan(this,this.value) id=prefbtn>< Prev</button> 
 					<button class=mybutton value=2 onclick=nextDatakaryawan(this,this.value) id=nextbtn> Next ></button>         
-			</center>
+			</center></td></tr>
          </tfoot>
 		</table>
      </div>";
@@ -1461,9 +1502,9 @@ foreach($resPeriodePosting as $bar){
 }
 
 echo"<div id='postingdata' style='display:none;height:450px;'>";
-echo"<fieldset style='width:400px;'><legend>".$_SESSION['lang']['find']."</legend>
-		".$_SESSION['lang']['lokasitugas']." : <select id=unitfilterposting style='width:150px' onchange=listpostingdata(0);><option value=''>".$_SESSION['lang']['all']."</option>".$optAll."</select>
-		".$_SESSION['lang']['periode']." : <select id=periodefilterposting style='width:100px' onchange=listpostingdata(0);>".$optPeriodePosting."</select>
+echo"<fieldset style='width:520px;'><legend>".$_SESSION['lang']['find']."</legend>
+		".$_SESSION['lang']['lokasitugas']." : <span style='display:inline-block'><select id=unitfilterposting class=select2 style='width:160px' onchange=listpostingdata(0);><option value=''>".$_SESSION['lang']['all']."</option>".$optAll."</select></span>
+		".$_SESSION['lang']['periode']." : <span style='display:inline-block'><select id=periodefilterposting class=select2 style='width:160px' onchange=listpostingdata(0);>".$optPeriodePosting."</select></span>
 	</fieldset>";
 echo"
 		<table class=sortable border=0 cellspacing=1 cellpadding=2 width=100%>
@@ -1488,6 +1529,8 @@ echo"
 		</table>
      </div>";
 
+#panggil setelah semua elemen (searchplace, postingdata, frminput) ada di halaman
+echo"<script>displayList();</script>";
 
 CLOSE_BOX();
 close_body('');
