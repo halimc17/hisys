@@ -910,8 +910,19 @@ switch ($method) {
 				);
 				$tmpKonter = fetchData($query);
 				$konter = addZero($tmpKonter[0]['nokounter'] + 1, 3);
+
+				#= lewati nomor yang sudah dipakai jurnal lain (counter bisa tertinggal) supaya approval tidak duplicate entry
+				$prefixnojurnal = str_replace('-', '', tanggalsystemn($param['tanggal'])) . "/" . $param['kodeorg'] . "/" . $kodejurnal . "/";
+				do {
+					$nojurnalcek = $prefixnojurnal . $konter;
+					$rescek = fetchData("select nojurnal from " . $dbname . ".keu_jurnalht where nojurnal='" . $nojurnalcek . "' union select nojurnal from " . $dbname . ".keu_jurnalmemorial where nojurnal='" . $nojurnalcek . "'");
+					if (count($rescek) > 0) {
+						$konter = addZero((int)$konter + 1, 3);
+					}
+				} while (count($rescek) > 0);
+
 				# Prep No Jurnal
-				$param['nojurnal'] = str_replace('-', '', tanggalsystemn($param['tanggal'])) . "/" . $param['kodeorg'] . "/" . $kodejurnal . "/" . $konter;
+				$param['nojurnal'] = $prefixnojurnal . $konter;
 
 
 				$str = "insert into " . $dbname . "." . $table . " (nojurnal,kodejurnal,tanggal,tanggalentry,noreferensi,matauang,kurs,createby,createtime,updateby,autojurnal,kodeorg,revisi) 
