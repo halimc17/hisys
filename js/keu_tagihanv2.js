@@ -1778,6 +1778,11 @@ function deletedt(noinvoice, nourut, notransaksi, nopo, noakun, indukblok) {
 
           //     document.getElementById('nilaiinvoice').value=nilai[1];
           // }
+          // tagihan Kontraktor: nilai invoice header dihitung ulang dari detail
+          nilai = parseFloat(con.responseText);
+          if (nilai > 0) {
+            document.getElementById("nilaiinvoice").value = nilai;
+          }
           showDetail();
         }
       } else {

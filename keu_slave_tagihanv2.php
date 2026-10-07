@@ -2454,6 +2454,7 @@ switch ($proses) {
 			echo $nilai;
 		}
 
+		echo updatenilaiinvoicek($noinvoice);
 
 		break;
 
@@ -2618,6 +2619,7 @@ switch ($proses) {
 
 
 		// echo headerupdate($noinvoice,$noakun,$nilai,$proses);
+		echo updatenilaiinvoicek($noinvoice);
 
 		break;
 
@@ -2658,6 +2660,7 @@ switch ($proses) {
 		}
 
 		// echo headerupdate($noinvoice,$noakun,$nilai,$proses);
+		echo updatenilaiinvoicek($noinvoice);
 		break;
 
 	case 'showformfp':
@@ -7835,6 +7838,25 @@ switch ($proses) {
 		echo $param['noinvoice'];
 
 		break;
+}
+
+#= tagihan Kontraktor: nilai invoice header ikut total detail setelah detail ditambah/diubah/dihapus
+#= (mis. potongan pemakaian barang diinput manual), DPP tidak berubah, baris uang muka tidak dihitung (sama dengan validasi posting)
+function updatenilaiinvoicek($noinvoice)
+{
+	global $dbname;
+	global $owlPDO;
+
+	$res = fetchdata("select tipeinvoice from " . $dbname . ".keu_tagihanht where noinvoice='" . $noinvoice . "'");
+	if ($noinvoice == '' || $res[0]['tipeinvoice'] != 'k') {
+		return '';
+	}
+
+	$res = fetchdata("select sum(nilai) as nilai from " . $dbname . ".keu_tagihandt where noinvoice='" . $noinvoice . "' and noakun not like '11801%'");
+	$nilai = round($res[0]['nilai'], 2);
+	$owlPDO->exec("update " . $dbname . ".keu_tagihanht set nilaiinvoice='" . $nilai . "' where noinvoice='" . $noinvoice . "'");
+
+	return $nilai;
 }
 
 function insertefillinv($noinvoice, $tipeinvoice)
