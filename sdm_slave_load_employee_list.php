@@ -395,6 +395,11 @@ switch($method){
 		#ambil datakaryawan
 		# and (tanggalkeluar>='" . $tanggal1 . "' or tanggalkeluar='0000-00-00') 
 		$tglakhirperiode = $resPeriod[0]['tanggalsampai'] ? $resPeriod[0]['tanggalsampai'] : date('Y-m-t', strtotime($param['periode'].'-01'));
+
+		#karyawan pindah yang diparkir saat unposting (version_type F) dikembalikan jadi data posting
+		$str = "update " . $dbname . ".datakaryawan_hist set version_type='B' where lokasitugas='" . $param['kodeorg'] . "' and periodegaji='" . $param['periode'] . "' and approval_status='8' and version_type='F'";
+		$owlPDO->exec($str);
+
 		$datakaryawan = array();
 		#lewati karyawan yang sudah punya data hist periode ini (dibekukan saat unposting, mis. karyawan pindah)
 		#dan karyawan yang baru pindah masuk ke unit ini setelah periode berakhir
@@ -520,8 +525,12 @@ switch($method){
 		$tglakhirperiode = $resEnd[0]['tanggalsampai'] ? $resEnd[0]['tanggalsampai'] : date('Y-m-t', strtotime($param['periode'].'-01'));
 
 		#karyawan yang pindah keluar dari unit ini setelah periode berakhir tidak dihapus, karena datakaryawan sekarang sudah unit baru dan tidak bisa dibentuk ulang
-		$str = "delete from " . $dbname . ".datakaryawan_hist where  lokasitugas='".$param['kodeorg']."' and periodegaji='".$param['periode']."' and approval_status='8' and version_type='B'
-			and not exists (select 1 from " . $dbname . ".sdm_riwayatjabatan r where r.karyawanid=datakaryawan_hist.karyawanid and r.darikodeorg='".$param['kodeorg']."' and r.kekodeorg!=r.darikodeorg and r.posting='2' and r.mulaiberlaku>'".$tglakhirperiode."')";
+		#datanya diparkir (version_type F) agar tidak terbaca sebagai data posting oleh modul lain, dan dikembalikan saat posting ulang
+		$str = "update " . $dbname . ".datakaryawan_hist set version_type='F' where  lokasitugas='".$param['kodeorg']."' and periodegaji='".$param['periode']."' and approval_status='8' and version_type='B'
+			and exists (select 1 from " . $dbname . ".sdm_riwayatjabatan r where r.karyawanid=datakaryawan_hist.karyawanid and r.darikodeorg='".$param['kodeorg']."' and r.kekodeorg!=r.darikodeorg and r.posting='2' and r.mulaiberlaku>'".$tglakhirperiode."')";
+		$owlPDO->exec($str);
+
+		$str = "delete from " . $dbname . ".datakaryawan_hist where  lokasitugas='".$param['kodeorg']."' and periodegaji='".$param['periode']."' and approval_status='8' and version_type='B'";
 		$owlPDO->exec($str);
 
 		#execute
