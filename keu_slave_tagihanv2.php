@@ -3826,9 +3826,11 @@ switch ($proses) {
 					# Nilai SPK / BAPP dikurangkan dengan Pemakaian Barang
 
 					// $dtnilaikontrak[$dtnospk] 	= $dtnilaikontrak[$dtnospk]-$hargadetail[$dtnospk];
-					$dtnilaibaspk[$dtnospk] 		= $dtnilaibaspk[$dtnospk] - $hargadetail[$dtnospk];
-					$dtnilaidppinvoice[$dtnospk] 	= ($dtnilaidppinvoice[$dtnospk] > 0 ? $dtnilaidppinvoice[$dtnospk] - $hargadetail[$dtnospk] : $dtnilaidppinvoice[$dtnospk]);
-					$dtnilaiinvoice[$dtnospk] 		= ($dtnilaiinvoice[$dtnospk] > 0 ? $dtnilaiinvoice[$dtnospk] - $hargadetail[$dtnospk] : $dtnilaiinvoice[$dtnospk]);
+					// $dtnilaibaspk[$dtnospk] 		= $dtnilaibaspk[$dtnospk] - $hargadetail[$dtnospk];
+					// $dtnilaidppinvoice[$dtnospk] 	= ($dtnilaidppinvoice[$dtnospk] > 0 ? $dtnilaidppinvoice[$dtnospk] - $hargadetail[$dtnospk] : $dtnilaidppinvoice[$dtnospk]);
+					// $dtnilaiinvoice[$dtnospk] 		= ($dtnilaiinvoice[$dtnospk] > 0 ? $dtnilaiinvoice[$dtnospk] - $hargadetail[$dtnospk] : $dtnilaiinvoice[$dtnospk]);
+
+					# Nilai BA dan DPP tetap full, potongan pemakaian barang diinput manual
 
 					# END
 					#========================#
@@ -6184,7 +6186,16 @@ switch ($proses) {
 
 							#= untuk data awal yang sudah pernah di-insert, karna detail sebelumnya tidak insert nobaspk
 							// $nilaisisa[$dtnobaspk][$dtkodekegiatan]=$dtjumlahrealisasi[$dtnobaspk][$dtkodekegiatan]-$dtnilainotransaksiada[$dtnobaspk][substr($dtkodekegiatan,0,7)][$dttermin[$dtnobaspk][$dtkodekegiatan]];
-							$nilaisisa[$dtnobaspk][$dtkodekegiatan] = round($dtjumlahrealisasi[$dtnobaspk][$dtkodekegiatan], 2) - round($dtnilainotransaksiada[$dtnobaspk][substr($dtkodekegiatan, 0, 7)][$dttermin[$dtnobaspk][$dtkodekegiatan]], 2) - round($hargadetail[$dttanggal[$dtnobaspk]], 2);
+							// $nilaisisa[$dtnobaspk][$dtkodekegiatan] = round($dtjumlahrealisasi[$dtnobaspk][$dtkodekegiatan], 2) - round($dtnilainotransaksiada[$dtnobaspk][substr($dtkodekegiatan, 0, 7)][$dttermin[$dtnobaspk][$dtkodekegiatan]], 2) - round($hargadetail[$dttanggal[$dtnobaspk]], 2);
+
+							# DPP tetap full (tidak dikurangi pemakaian barang), potongan pemakaian barang diinput manual
+							# Invoice lama yang DPP-nya sudah dikurangi pemakaian barang dianggap sudah lunas ditagih
+							$nilaisudahtagih = round($dtnilainotransaksiada[$dtnobaspk][substr($dtkodekegiatan, 0, 7)][$dttermin[$dtnobaspk][$dtkodekegiatan]], 2);
+							$nilaimaterial = round($hargadetail[$dttanggal[$dtnobaspk]], 2);
+							$nilaisisa[$dtnobaspk][$dtkodekegiatan] = round($dtjumlahrealisasi[$dtnobaspk][$dtkodekegiatan], 2) - $nilaisudahtagih;
+							if ($nilaisudahtagih != 0 && $nilaimaterial != 0 && abs($nilaisisa[$dtnobaspk][$dtkodekegiatan] - $nilaimaterial) < 1) {
+								$nilaisisa[$dtnobaspk][$dtkodekegiatan] = 0;
+							}
 							if ($_SESSION['standard']['username'] == 'tim.owl') {
 								// exit("Warning: " . $dtjumlahrealisasi[$dtnobaspk][$dtkodekegiatan] . " - " . $dtnilainotransaksiada[$dtnobaspk][substr($dtkodekegiatan, 0, 7)][$dttermin[$dtnobaspk][$dtkodekegiatan]] . " - " . $hargadetail[$dttanggal[$dtnobaspk]]);
 							}
@@ -6199,7 +6210,7 @@ switch ($proses) {
 							// echo "hasil pengurang : ".$nilaisisa[$dtnobaspk][$dtkodekegiatan]."<br/><br/>";
 
 							$stream .= "<td style=cursor:pointer align=right id=nilaidt" . $no . ">" . @number_format($nilaisisa[$dtnobaspk][$dtkodekegiatan], 2) . "</td>";
-							$stream .= "<td style=cursor:pointer align=right id=nilaidt" . $no . ">" . @number_format($hargadetail[$dttanggal[$dtnobaspk]], 2) . "</td>";
+							$stream .= "<td style=cursor:pointer align=right id=nilaipemakaiandt" . $no . ">" . @number_format($hargadetail[$dttanggal[$dtnobaspk]], 2) . "</td>";
 							$stream .= "<td style=cursor:pointer align=right><input type=text class=myinputtextnumber id=nilailaindt" . $no . " onkeyup=\"z.numberFormat('nilailaindt" . $no . "',2);\" value=0  onkeypress=return angka_doang(event); style=width:70px; /></td>";
 							$stream .= "<td style=cursor:pointer align=right id=noaruskasdt" . $no . ">" . $dtnoaruskas[$dtnoakun[$dtkodekegiatan]] . "</td>";
 							$stream .= "<td style=cursor:pointer align=right id=noakundt" . $no . ">" . $dtnoakun[$dtkodekegiatan] . "</td>";
