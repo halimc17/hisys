@@ -4,7 +4,15 @@ include('lib/nangkoelib.php');
 echo open_body();
 include('master_mainMenu.php');
 include_once('lib/zLib.php');
+require_once('lib/zSelect2.php');
 ?>
+<script>
+	$(document).ready(function() {
+		$('.select2').select2({
+			dropdownAutoWidth: true
+		});
+	});
+</script>
 <script language=javascript1.2 src='js/sdm_3pl.js?v=<?php echo time(); ?>'></script>
 <script language=javascript src='js/zReport.js'></script>
 <link rel=stylesheet type=text/css href=style/zTable.css>
@@ -70,6 +78,24 @@ while ($bar = $res->fetch()) {
 	$optJns .= "<option value='" . $bar['id'] . "'>" . $bar['name'] . "</option>";
 }
 $optJns .= "<option value='1'>Gaji Pokok KHL/PHL</option>";
+##filter pencarian: kode organisasi dan jenis pendapatan yang ada di data (sesuai PT yang login)
+$optOrgSch = $optKomSch = "<option value=''>" . $_SESSION['lang']['all'] . "</option>";
+$whrSch = "left(kodeorg,4) in (select kodeorganisasi from " . $dbname . ".organisasi where induk='" . $_SESSION['empl']['kodeorganisasi'] . "')";
+$resSch = fetchData("select distinct kodeorg from " . $dbname . ".sdm_pendapatanlainht where " . $whrSch . " order by kodeorg");
+foreach ($resSch as $barSch) {
+	$optOrgSch .= "<option value='" . $barSch['kodeorg'] . "'>" . $barSch['kodeorg'] . " - " . $nmOrg[$barSch['kodeorg']] . "</option>";
+}
+$nmKomSch = makeOption($dbname, 'sdm_ho_component', 'id,name');
+$arrKomSch = array();
+$resSch = fetchData("select distinct idkomponen from " . $dbname . ".sdm_pendapatanlainht where " . $whrSch);
+foreach ($resSch as $barSch) {
+	$arrKomSch[$barSch['idkomponen']] = $nmKomSch[$barSch['idkomponen']];
+}
+$optPostSch = "<option value=''>" . $_SESSION['lang']['all'] . "</option><option value='1'>Posted</option><option value='0'>Belum Posting</option>";
+asort($arrKomSch);
+foreach ($arrKomSch as $idKomSch => $namaKomSch) {
+	$optKomSch .= "<option value='" . $idKomSch . "'>" . $namaKomSch . "</option>";
+}
 ##karyawan
 $iKar = "select namakaryawan,karyawanid,nik,subbagian,lokasitugas from " . $dbname . ".datakaryawan where  1=1 and tipekaryawan not in ('0')  order by namakaryawan";
 $nKar = $owlPDO->query($iKar) or die(print " Gagal: " . PDOException::getMessage());
@@ -95,14 +121,27 @@ echo "<td align=center style='width:100px;cursor:pointer;' onclick=displayList()
 		<fieldset id=formpencarianheader><legend>" . $_SESSION['lang']['find'] . "</legend> 
         <table>
 		<tr>
-			<td>" . $_SESSION['lang']['periode'] . "</td>
+			<td nowrap>" . $_SESSION['lang']['kodeorg'] . "</td>
 			<td>:</td>
-			<td><input type=text class=myinputtext id=perSch nkeypress=\"return_tanpa_kutip(event);\" style=\"width:150px;\" onkeypress='enterkey(event,loadData)' />
+			<td><select id=orgSch class=select2 onchange='loadData(0)' style=width:180px;>" . $optOrgSch . "</select></td>
+			<td nowrap>" . $_SESSION['lang']['periode'] . "</td>
+			<td>:</td>
+			<td><input type=text class=myinputtext id=perSch nkeypress=\"return_tanpa_kutip(event);\" style=\"width:180px;\" onkeypress='enterkey(event,loadData)' />
 			</td>
+		</tr>
+		<tr>
+			<td nowrap>Jenis Pendapatan</td>
+			<td>:</td>
+			<td><select id=komSch class=select2 onchange='loadData(0)' style=width:180px;>" . $optKomSch . "</select></td>
+			<td nowrap>Status Posting</td>
+			<td>:</td>
+			<td><select id=postSch class=select2 onchange='loadData(0)' style=width:180px;>" . $optPostSch . "</select></td>
 		</tr>";
 echo "<tr>
-		<td colspan=2></td>
-		<td><button class=mybutton onclick=loadData(0)>" . $_SESSION['lang']['find'] . "</button>
+		<td colspan=6>
+			<button class=mybutton onclick=loadData(0)>" . $_SESSION['lang']['find'] . "</button>
+			<button class=mybutton onclick=exportExcel3pl()>" . $_SESSION['lang']['excel'] . "</button>
+			<button class=mybutton onclick=exportPdf3pl()>PDF</button>
 			<button onclick=batallist() class=mybutton name=btnBatal id=btnBatal>" . $_SESSION['lang']['cancel'] . "</button>
 		</td>
 	</tr>
@@ -152,14 +191,13 @@ echo "<fieldset><legend><b>Form</b></legend>
 		<td>" . $_SESSION['lang']['kodeorg'] . "</td> 
 		<td>:</td>
 		<td>
-			<select id=org style=\"width:150px;\" onchange=getPrd() >" . $optOrg . "</select>
+			<select id=org class=select2 style=\"width:180px;\" onchange=getPrd() >" . $optOrg . "</select>
 		</td>
 
 		<td>" . $_SESSION['lang']['jabatan'] . "</td> 
 		<td>:</td>
 		<td>
-			<select id=jabatan style=\"width:150px;\">" . $optjab . "</select>
-			<img id='jabatan' onclick=z.elSearch('jabatan',event) class='resicon' src='images/onebit_02.png' style='position:relative;top:3px;left:3px;'>
+			<select id=jabatan class=select2 style=\"width:180px;\">" . $optjab . "</select>
 		</td>
 	</tr> 
 
@@ -167,20 +205,18 @@ echo "<fieldset><legend><b>Form</b></legend>
 		<td>" . $_SESSION['lang']['tipekaryawan'] . "</td> 
 		<td>:</td>
 		<td>
-			<select id=tipekar style=\"width:150px;\">" . $opttpkar . "</select>
-			<img id='tipekar' onclick=z.elSearch('tipekar',event) class='resicon' src='images/onebit_02.png' style='position:relative;top:3px;left:3px;'>
+			<select id=tipekar class=select2 style=\"width:180px;\">" . $opttpkar . "</select>
 		</td>
 
 		<td>" . $_SESSION['lang']['periodegaji'] . "</td> 
 		<td>:</td>
-		<td><select id=per style=\"width:150px;\">" . $optPer . "</select></td>
+		<td><select id=per class=select2 style=\"width:180px;\">" . $optPer . "</select></td>
 	</tr> 
 	<tr>
 		<td>" . $_SESSION['lang']['jenis'] . "</td> 
 		<td>:</td>
 		<td>
-			<select id=kom style=\"width:150px;\">" . $optJns . "</select>
-			<img id='kom' onclick=z.elSearch('kom',event) class='resicon' src='images/onebit_02.png' style='position:relative;top:3px;left:3px;'>
+			<select id=kom class=select2 style=\"width:180px;\">" . $optJns . "</select>
 
 		</td>
 
@@ -211,14 +247,13 @@ echo "<div id='inputdetail' style=display:none>
 
 		<tr class=rowcontent>
 			<td align=center> 
-				<select style='width:70%;' id=kar>" . $optKar . "</select>
-				<img id='kar' onclick=z.elSearch('kar',event) class='resicon' src='images/onebit_02.png' style='position:relative;top:3px;left:3px;'>
+				<select style='width:320px;' id=kar class=select2>" . $optKar . "</select>
 			</td>
 			<td align=center>
-				<input type=number class=myinputtextnumber style='width:100%;' id=jum onkeypress='return angka_doang(event)'>
+				<input type=text maxlength=20 class=myinputtextnumber style='width:100%;' id=jum onkeypress='return angka_doang(event)' onkeyup=\"if(this.value!=''){z.numberFormat(this.id,2);}\">
 			</td>
 			<td align=center>
-				<input type=text class=myinputtext style='width:100%;' id=ket>
+				<input type=text maxlength=100 class=myinputtext style='width:100%;' id=ket>
 			</td>
 		</tr>	
 		<tr>	

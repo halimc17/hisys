@@ -22,6 +22,7 @@ function add_upload() {
           document.getElementById("displayupload").style.display = "block";
           document.getElementById("formuploaddata").innerHTML =
             con.responseText;
+          $("#formuploaddata .select2").select2({ dropdownAutoWidth: true });
         }
       } else {
         busy_off();
@@ -193,6 +194,9 @@ function displayList() {
 
 function batallist() {
   document.getElementById("perSch").value = "";
+  document.getElementById("orgSch").value = "";
+  document.getElementById("komSch").value = "";
+  document.getElementById("postSch").value = "";
   document.getElementById("org").value = "";
   document.getElementById("jabatan").value = "";
   document.getElementById("per").value = "";
@@ -238,7 +242,8 @@ function PDF(ev, per, kom, org) {
 }
 
 function bataldetail() {
-  document.getElementById("kar").selectedIndex = 0;
+  setValue2("kar", "");
+  document.getElementById("kar").disabled = false;
   document.getElementById("jum").value = "";
   document.getElementById("ket").value = "";
   document.getElementById("saveDetail").value = "saveDetail";
@@ -258,6 +263,7 @@ function getPrd() {
           alert(con.responseText);
         } else {
           document.getElementById("per").innerHTML = con.responseText;
+          $("#per").trigger("change.select2");
         }
       } else {
         busy_off();
@@ -281,6 +287,7 @@ function getPrd2() {
           alert(con.responseText);
         } else {
           document.getElementById("periode2").innerHTML = con.responseText;
+          $("#periode2").trigger("change.select2");
         }
       } else {
         busy_off();
@@ -294,10 +301,19 @@ function saveDetail() {
   per = document.getElementById("per").value;
   kom = document.getElementById("kom").value;
   kar = document.getElementById("kar").value;
-  jum = document.getElementById("jum").value;
+  jum = remove_comma_var(document.getElementById("jum").value);
   org = document.getElementById("org").value;
   ket = document.getElementById("ket").value;
   met = document.getElementById("saveDetail").value;
+
+  if (kar == "") {
+    alert("Warning : Karyawan wajib dipilih.");
+    return;
+  }
+  if (jum == "" || isNaN(jum) || parseFloat(jum) <= 0) {
+    alert("Warning : Jumlah wajib diisi dengan angka lebih dari 0.");
+    return;
+  }
 
   param =
     "method=" +
@@ -382,8 +398,12 @@ function cancel() {
   document.getElementById("tipekar").value = "";
 }
 function editdetail(kar, jum, ket) {
-  document.getElementById("kar").value = kar;
+  setValue2("kar", kar);
+  document.getElementById("kar").disabled = true;
   document.getElementById("jum").value = jum;
+  if (jum !== "") {
+    z.numberFormat("jum", 2);
+  }
   document.getElementById("ket").value = ket;
   document.getElementById("saveDetail").value = "updatedetail";
 }
@@ -396,9 +416,14 @@ function edit(per, kom, org) {
   document.getElementById("listData").style.display = "none";
   document.getElementById("formpencarianheader").style.display = "none";
 
-  document.getElementById("per").value = per;
-  document.getElementById("kom").value = kom;
-  document.getElementById("org").value = org;
+  setValue2("per", per);
+  setValue2("kom", kom);
+  //org punya onchange getPrd() yang mengganti isi periode, jadi dimatikan sebentar saat nilai diisi
+  elOrg = document.getElementById("org");
+  handlerOrg = elOrg.onchange;
+  elOrg.onchange = null;
+  setValue2("org", org);
+  elOrg.onchange = handlerOrg;
   // document.getElementById('displayall').style.display = 'block';
   // document.getElementById('detailForm').style.display='block';
   lockHeader(org, "", "");
@@ -410,6 +435,11 @@ function saveHeader() {
   org = document.getElementById("org").value;
   per = document.getElementById("per").value;
   kom = document.getElementById("kom").value;
+
+  if (org == "" || per == "" || kom == "") {
+    alert("Warning : Kode Organisasi, Periode Gaji, Jenis wajib diisi !");
+    return;
+  }
 
   param =
     "per=" +
@@ -482,12 +512,30 @@ function savedt() {
   per = document.getElementById("per").value;
   kom = document.getElementById("kom").value;
   totRow = document.getElementById("totrows").value;
+  var adaIsi = false;
+  for (dwc = 0; dwc < totRow; dwc++) {
+    nilai = remove_comma_var(document.getElementById("jum_" + dwc).value);
+    if (nilai == "") {
+      continue;
+    }
+    if (isNaN(nilai) || parseFloat(nilai) < 0) {
+      alert("Warning : Jumlah tidak valid pada baris ke-" + (dwc + 1) + ". Isi dengan angka.");
+      return;
+    }
+    if (parseFloat(nilai) > 0) {
+      adaIsi = true;
+    }
+  }
+  if (!adaIsi) {
+    alert("Warning : Isi Jumlah minimal untuk satu karyawan.");
+    return;
+  }
   var allData = "";
   for (dwc = 0; dwc < totRow; dwc++) {
     allData +=
       "&kar[" + dwc + "]=" + document.getElementById("kar_" + dwc).value;
     allData +=
-      "&jum[" + dwc + "]=" + document.getElementById("jum_" + dwc).value;
+      "&jum[" + dwc + "]=" + remove_comma_var(document.getElementById("jum_" + dwc).value);
     allData +=
       "&ket[" + dwc + "]=" + document.getElementById("ket_" + dwc).value;
   }
@@ -573,6 +621,43 @@ function cariBast(num) {
   }
 }
 
+//filter pencarian yang aktif, dipakai oleh list, Excel, dan PDF supaya hasilnya sama
+function getFilterParam3pl() {
+  var p = "";
+  p += "&perSch=" + encodeURIComponent(document.getElementById("perSch").value);
+  p += "&orgSch=" + encodeURIComponent(document.getElementById("orgSch").value);
+  p += "&komSch=" + encodeURIComponent(document.getElementById("komSch").value);
+  p += "&postSch=" + document.getElementById("postSch").value;
+  return p;
+}
+
+function exportExcel3pl() {
+  param = "method=excellist" + getFilterParam3pl();
+  tujuan = "sdm_slave_3pl.php?" + param;
+  alertify
+    .popup(
+      "Report Ms.Excel",
+      "<iframe frameborder=0 style='width:100%;height:100%;overflow:none' src='" +
+        tujuan +
+        "'></iframe>",
+    )
+    .set({ resizable: true, maximizable: true, overflow: false })
+    .resizeTo("80%", "70%");
+}
+
+function exportPdf3pl() {
+  tujuan = "sdm_3pl_pdf.php?" + getFilterParam3pl().substring(1);
+  alertify
+    .popup(
+      "Report PDF",
+      "<iframe frameborder=0 style='width:100%;height:100%;overflow:none' src='" +
+        tujuan +
+        "'></iframe>",
+    )
+    .set({ resizable: true, maximizable: true, overflow: false })
+    .resizeTo("80%", "70%");
+}
+
 function getPage() {
   pg = document.getElementById("pages");
   pg = pg.options[pg.selectedIndex].value;
@@ -582,7 +667,7 @@ function getPage() {
 
 function loadData(page) {
   perSch = document.getElementById("perSch").value;
-  param = "method=loadData" + "&perSch=" + perSch + "&page=" + page;
+  param = "method=loadData" + "&page=" + page + getFilterParam3pl();
   //alert(param);
   tujuan = "sdm_slave_3pl.php";
   post_response_text(tujuan, param, respog);

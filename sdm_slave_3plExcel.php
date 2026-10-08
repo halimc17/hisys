@@ -27,9 +27,7 @@ switch($method)
 {
 	case'excel':
 	
-		$stream.="Periode : ".$per."<br>";
-		$stream.="Komponen : ".$nmKom[$kom]."<br>";
-	
+
 		$stream.="<br /><table class=sortable border=1 cellspacing=1 cellpadding=5>
 			 <thead>
 				<tr>
@@ -51,6 +49,43 @@ switch($method)
                    } 
                 
                 
+		#status posting diambil dari header (bisa lebih dari satu unit untuk KANWIL)
+		$rPost=fetchData("select posting from ".$dbname.".sdm_pendapatanlainht where idkomponen='".$kom."' and periodegaji='".$per."' ".$orgSort." ");
+		$jmlPost=0;
+		foreach($rPost as $rp){
+			if($rp['posting']==1){
+				$jmlPost+=1;
+			}
+		}
+		if(count($rPost)==0){
+			$statusPost='-';
+		}elseif($jmlPost==count($rPost)){
+			$statusPost='Posted';
+		}elseif($jmlPost==0){
+			$statusPost='Belum Posting';
+		}else{
+			$statusPost='Sebagian Posted';
+		}
+
+		#kop/logo/ditarik-oleh format standar, pakai org karyawan yang login
+		$hdpt=setheadreport($_SESSION['empl']['kodeorganisasi'],$_SESSION['empl']['kodeorganisasi']);
+		$logourl='';
+		if(file_exists($hdpt['logo'])){
+			$skema=(isset($_SERVER['HTTPS']) and $_SERVER['HTTPS']!='off')?'https':'http';
+			$logourl=$skema."://".@$_SERVER['HTTP_HOST'].rtrim(str_replace(chr(92),'/',dirname(@$_SERVER['SCRIPT_NAME'])),'/')."/".$hdpt['logo'];
+		}
+		$kop="<table>
+			<tr><td colspan=6 height='70' style='height:52pt'>".($logourl!=''?"<img src='".$logourl."' height='60'>":"")."</td></tr>
+			<tr><td colspan=6><b>".htmlspecialchars($hdpt['nama'])."</b></td></tr>
+			<tr><td colspan=6><b>PENDAPATAN LAIN</b></td></tr>
+			<tr><td colspan=6>Periode : ".$per."</td></tr>
+			<tr><td colspan=6>Komponen : ".$nmKom[$kom]."</td></tr>
+			<tr><td colspan=6>Status Posting : ".$statusPost."</td></tr>
+			<tr><td colspan=6>Ditarik oleh ".htmlspecialchars($_SESSION['empl']['name'])." (".htmlspecialchars($_SESSION['standard']['username']).") pada ".date('d-m-Y H:i:s')."</td></tr>
+			<tr><td colspan=6>&nbsp;</td></tr>
+			</table>";
+		$stream=$kop.$stream;
+
 		$iDet="select * from ".$dbname.".sdm_pendapatanlaindt where idkomponen='".$kom."' and periodegaji='".$per."' ".$orgSort." ";
 		$nDet=$owlPDO->query($iDet) or die(print " Gagal: ".PDOException::getMessage());
 			$nDet->setFetchMode(PDO::FETCH_ASSOC);
@@ -79,7 +114,7 @@ switch($method)
 
 
 
-$stream.="</tbody></table>Print Time:".date('YmdHis')."<br>By:".$_SESSION['empl']['name'];	
+$stream.="</tbody></table>";	
 $dte=date("Hms");
 $nop_="Laporan_Pendapatan_Lain";
 if(strlen($stream)>0){

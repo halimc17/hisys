@@ -5,6 +5,7 @@ require_once('lib/nangkoelib.php');
 require_once('lib/zLib.php');
 include_once('lib/zLib.php');
 include_once('lib/zFunction.php');
+include_once('lib/HtmlExcel.php');
 
 require_once('dompdf/autoload.inc.php');
 require_once 'dompdf/PHPExcel.php';
@@ -28,6 +29,8 @@ $tipekar        = checkPostGet('tipekar', '');
 $txtBarang      = checkPostGet('txtBarang', '');
 $perSch = checkPostGet('perSch', '');
 $komSch = checkPostGet('komSch', '');
+$orgSch = checkPostGet('orgSch', '');
+$postSch = checkPostGet('postSch', '');
 
 $nmKom = makeOption($dbname, 'sdm_ho_component', 'id,name');
 $nmKar = makeOption($dbname, 'datakaryawan', 'karyawanid,namakaryawan');
@@ -38,6 +41,67 @@ $optLok = makeOption($dbname, 'datakaryawan', 'karyawanid,subbagian', "karyawani
 $optLoknull = makeOption($dbname, 'datakaryawan', 'karyawanid,lokasitugas', "karyawanid='" . $kar . "'");
 
 $path    = "fileupload/sdm_pendapatanlain/";
+
+#validasi simpan/ubah data Pendapatan Lain, pesan berawalan "Warning" supaya tampil sebagai peringatan di halaman
+function val3plWajib($org, $per, $kom)
+{
+    if ($org == '' || $per == '' || $kom == '') {
+        exit("Warning : Kode Organisasi, Periode Gaji, Jenis wajib diisi !");
+    }
+}
+
+#periode gaji yang sudah ditutup tidak boleh diubah
+function val3plPeriodeBuka($org, $per)
+{
+    global $dbname;
+    $res = fetchData("select periode from " . $dbname . ".sdm_5periodegaji where kodeorg='" . addslashes(substr($org, 0, 4)) . "' and periode='" . addslashes($per) . "' and sudahproses='1'");
+    if (count($res) > 0) {
+        exit("Warning : Periode gaji " . $per . " sudah ditutup, data tidak bisa diubah.");
+    }
+}
+
+#detail hanya bisa ditambah/diubah kalau header sudah ada dan belum diposting
+function val3plHeaderBisaDiubah($org, $per, $kom)
+{
+    global $dbname;
+    $res = fetchData("select posting from " . $dbname . ".sdm_pendapatanlainht where kodeorg='" . addslashes($org) . "' and periodegaji='" . addslashes($per) . "' and idkomponen='" . addslashes($kom) . "'");
+    if (count($res) == 0) {
+        exit("Warning : Header (Kode Organisasi, Periode Gaji, Jenis) belum ada, simpan header terlebih dahulu.");
+    }
+    if ($res[0]['posting'] == 1) {
+        exit("Warning : Data sudah diposting, tidak bisa diubah. Lakukan unposting terlebih dahulu.");
+    }
+}
+
+#karyawan wajib dipilih dan harus ada di data karyawan
+function val3plKaryawan($kar, $ket = '')
+{
+    global $dbname;
+    $kar = trim($kar);
+    if ($kar == '' || !preg_match('/^[0-9]+$/', $kar) || (int)$kar == 0) {
+        exit("Warning : Karyawan wajib dipilih" . $ket . ".");
+    }
+    $res = fetchData("select karyawanid from " . $dbname . ".datakaryawan where karyawanid='" . $kar . "'");
+    if (count($res) == 0) {
+        exit("Warning : Karyawan tidak ditemukan di data karyawan" . $ket . ".");
+    }
+}
+
+#jumlah wajib diisi, hanya angka (boleh desimal) dan lebih dari 0; koma ribuan dibuang dulu
+function val3plJumlah($jum, $ket = '')
+{
+    $jum = str_replace(',', '', trim($jum));
+    if ($jum == '') {
+        exit("Warning : Jumlah wajib diisi" . $ket . ".");
+    }
+    if (!preg_match('/^[0-9]+(\.[0-9]{1,10})?$/', $jum)) {
+        exit("Warning : Jumlah tidak valid" . $ket . ". Isi dengan angka.");
+    }
+    if ((float)$jum <= 0) {
+        exit("Warning : Jumlah harus lebih besar dari 0" . $ket . ".");
+    }
+    return $jum;
+}
 
 switch ($method) {
     case 'loadKar':
@@ -175,7 +239,7 @@ switch ($method) {
                     <td align=center>" . $nmgolongan[$dKar['kodegolongan']] . "</td>
                     <td>" . $nmjabatan[$dKar['kodejabatan']] . "</td>
                     <td align=center>" . $dKar['bagian'] . "</td>
-                    <td align=center><input type=text maxlength=20 id=jum_" . $no2 . " onkeypress=\"return angka_doang(event);\"   class=myinputtextnumber style=\"width:150px;\"></td>
+                    <td align=center><input type=text maxlength=20 id=jum_" . $no2 . " onkeypress=\"return angka_doang(event);\" onkeyup=\"if(this.value!=''){z.numberFormat(this.id,2);}\"   class=myinputtextnumber style=\"width:150px;\"></td>
 					<td align=center><input type=text maxlength=50 id=ket_" . $no2 . " class=myinputtext style=\"width:100%;\"></td>
                 </tr>";
                 $no2 += 1;
@@ -190,35 +254,61 @@ switch ($method) {
         break;
 
     case 'savedt':
-        $str = "INSERT INTO " . $dbname . ".`sdm_pendapatanlainht` (`kodeorg`,`periodegaji`, `idkomponen`, `updateby`) values ('" . $org . "','" . $per . "','" . $kom . "','" . $_SESSION['standard']['userid'] . "')";
+        val3plWajib($org, $per, $kom);
+        val3plPeriodeBuka($org, $per);
+
+        #header baru: tidak boleh sudah ada (sama seperti saat simpan header)
+        $resCek = fetchData("select posting from " . $dbname . ".sdm_pendapatanlainht where periodegaji='" . addslashes($per) . "' and idkomponen='" . addslashes($kom) . "' and kodeorg='" . addslashes($org) . "'");
+        if (count($resCek) > 0) {
+            exit("Warning : Data sudah pernah di input, silahkan cek pada Tab List Data.");
+        }
+
+        #semua baris divalidasi dulu sebelum ada yang disimpan
+        $baris = array();
+        $totRow = (int)$_POST['totRow'];
+        for ($arDt = 0; $arDt < $totRow; $arDt++) {
+            $jumRow = str_replace(',', '', trim($_POST['jum'][$arDt]));
+            if ($jumRow == '' || (is_numeric($jumRow) && (float)$jumRow == 0)) {
+                continue;
+            }
+            $karRow = trim($_POST['kar'][$arDt]);
+            $ketRow = " pada baris ke-" . ($arDt + 1);
+            val3plKaryawan($karRow, $ketRow);
+            $jumRow = val3plJumlah($jumRow, $ketRow . " (" . @$nmKar[$karRow] . ")");
+            if (isset($baris[$karRow])) {
+                exit("Warning : Karyawan " . @$nmKar[$karRow] . " terisi lebih dari satu kali" . $ketRow . ".");
+            }
+            $baris[$karRow] = array($jumRow, substr(trim($_POST['ket'][$arDt]), 0, 100));
+        }
+        if (count($baris) == 0) {
+            exit("Warning : Isi Jumlah minimal untuk satu karyawan.");
+        }
+
         try {
+            $owlPDO->beginTransaction();
+            $str = "INSERT INTO " . $dbname . ".`sdm_pendapatanlainht` (`kodeorg`,`periodegaji`, `idkomponen`, `updateby`) values ('" . addslashes($org) . "','" . addslashes($per) . "','" . addslashes($kom) . "','" . $_SESSION['standard']['userid'] . "')";
             $owlPDO->exec($str);
 
-            $awl = 0;
             $sDet = "insert into " . $dbname . ".sdm_pendapatanlaindt (`kodeorg`, `periodegaji`, `karyawanid`, `idkomponen`, `jumlah`, `pengali`,`keterangan`, `updateby`) values ";
-            for ($arDt = 0; $arDt < $_POST['totRow']; $arDt++) {
-                if (($_POST['jum'][$arDt] != '') && ($_POST['jum'][$arDt] != 0)) {
-                    if ($awl == 0) {
-                        $awl = 1;
-                        $sDet .= " ('" . $org . "','" . $per . "','" . $_POST['kar'][$arDt] . "','" . $kom . "','" . $_POST['jum'][$arDt] . "','1','" . $_POST['ket'][$arDt] . "','" . $_SESSION['standard']['userid'] . "')";
-                    } else {
-                        $sDet .= ",('" . $org . "','" . $per . "','" . $_POST['kar'][$arDt] . "','" . $kom . "','" . $_POST['jum'][$arDt] . "','1','" . $_POST['ket'][$arDt] . "','" . $_SESSION['standard']['userid'] . "')";
-                    }
-                }
+            $awl = 0;
+            foreach ($baris as $karId => $v) {
+                $sDet .= ($awl == 0 ? " " : ",") . "('" . addslashes($org) . "','" . addslashes($per) . "','" . $karId . "','" . addslashes($kom) . "','" . $v[0] . "','1','" . addslashes($v[1]) . "','" . $_SESSION['standard']['userid'] . "')";
+                $awl = 1;
             }
-            try {
-                // exit('warning : '.$sDet);
-                $owlPDO->exec($sDet);
-            } catch (PDOException $e) {
-                echo " Gagal " . addslashes($e->getMessage() . "__" . $sDet);
-            }
+            $owlPDO->exec($sDet);
+            $owlPDO->commit();
         } catch (PDOException $e) {
+            $owlPDO->rollBack();
             print " Gagal  !: " . $e->getMessage() . "\n";
             die();
         }
         break;
-
     case 'saveDetail':
+        val3plWajib($org, $per, $kom);
+        val3plKaryawan($kar);
+        $jum = val3plJumlah($jum);
+        val3plPeriodeBuka($org, $per);
+        val3plHeaderBisaDiubah($org, $per, $kom);
 
         $str1 = "select count(*) as jumlah from " . $dbname . ".`sdm_pendapatanlaindt` 
         where periodegaji='" . $per . "' and idkomponen ='" . $kom . "' and kodeorg = '" . $org . "' and karyawanid = '" . $kar . "'";
@@ -244,6 +334,15 @@ switch ($method) {
 
         break;
     case 'updatedetail':
+        val3plWajib($org, $per, $kom);
+        val3plKaryawan($kar);
+        $jum = val3plJumlah($jum);
+        val3plPeriodeBuka($org, $per);
+        val3plHeaderBisaDiubah($org, $per, $kom);
+        $resAda = fetchData("select karyawanid from " . $dbname . ".sdm_pendapatanlaindt where periodegaji='" . addslashes($per) . "' and idkomponen='" . addslashes($kom) . "' and kodeorg='" . addslashes($org) . "' and karyawanid='" . $kar . "'");
+        if (count($resAda) == 0) {
+            exit("Warning : Data karyawan ini tidak ditemukan pada detail, tidak bisa diubah.");
+        }
         $str = "update " . $dbname . ".sdm_pendapatanlaindt set jumlah='" . $jum . "', keterangan='" . $ket . "', updateby ='" . $_SESSION['standard']['userid'] . "' where periodegaji='" . $per . "' and idkomponen ='" . $kom . "' and kodeorg = '" . $org . "' and karyawanid = '" . $kar . "'";
         try {
             $owlPDO->exec($str);
@@ -384,17 +483,17 @@ switch ($method) {
                 <tr>
                     <td>" . $_SESSION['lang']['kodeorg'] . "</td> 
                     <td>:</td>
-                    <td><select id=kodeorg2 style=\"width:235px;\" onchange=getPrd2()>" . $optOrg . "</select></td>
+                    <td><select id=kodeorg2 class=select2 style=\"width:235px;\" onchange=getPrd2()>" . $optOrg . "</select></td>
                 </tr> 
                 <tr>
                     <td>" . $_SESSION['lang']['periode'] . "</td> 
                     <td>:</td>
-                    <td><select id=periode2 style=\"width:235px;\">" . $optPeriode . "</select></td>
+                    <td><select id=periode2 class=select2 style=\"width:235px;\">" . $optPeriode . "</select></td>
                 </tr> 
                 <tr>
                     <td>" . $_SESSION['lang']['jenis'] . " Pendapatan</td> 
                     <td>:</td>
-                    <td><select id=kom2 style=\"width:235px;\">" . $optJns . "</select></td>
+                    <td><select id=kom2 class=select2 style=\"width:235px;\">" . $optJns . "</select></td>
                 </tr> 
                 <tr>
                     <td>Get Karyawan</td> 
@@ -703,6 +802,15 @@ switch ($method) {
         } else {
             $perSch = "";
         }
+        if ($orgSch != '') {
+            $perSch .= " and kodeorg='" . addslashes($orgSch) . "'";
+        }
+        if ($komSch != '') {
+            $perSch .= " and idkomponen='" . addslashes($komSch) . "'";
+        }
+        if (in_array($postSch, array('0', '1'), true)) {
+            $perSch .= " and posting='" . $postSch . "'";
+        }
 
         $limit = 20;
         $page = 0;
@@ -803,6 +911,91 @@ switch ($method) {
 
         echo $tab . "####" . $footd;
         break;
+    case 'excellist':
+        #filter sama persis dengan loadData, supaya tarikan Excel ikut filter yang lagi aktif di form Cari
+        $orgSort = " left(kodeorg,4) in (select kodeorganisasi from " . $dbname . ".organisasi where induk='" . $_SESSION['empl']['kodeorganisasi'] . "')";
+        $filter = "";
+        if ($perSch != '') {
+            $filter .= " and periodegaji='" . addslashes($perSch) . "'";
+        }
+        if ($orgSch != '') {
+            $filter .= " and kodeorg='" . addslashes($orgSch) . "'";
+        }
+        if ($komSch != '') {
+            $filter .= " and idkomponen='" . addslashes($komSch) . "'";
+        }
+        if (in_array($postSch, array('0', '1'), true)) {
+            $filter .= " and posting='" . $postSch . "'";
+        }
+
+        $resH = fetchData("select h.*,
+                (select sum(d.jumlah) from " . $dbname . ".sdm_pendapatanlaindt d where d.idkomponen=h.idkomponen and d.periodegaji=h.periodegaji and d.kodeorg=h.kodeorg) as jumlah,
+                (select count(*) from " . $dbname . ".sdm_pendapatanlaindt d where d.idkomponen=h.idkomponen and d.periodegaji=h.periodegaji and d.kodeorg=h.kodeorg) as jmlkar
+            from " . $dbname . ".sdm_pendapatanlainht h where " . $orgSort . " " . $filter . " order by periodegaji desc, kodeorg, idkomponen");
+
+        #kop/logo/ditarik-oleh format standar, pakai org karyawan yang login (data lintas unit)
+        $hdpt = setheadreport($_SESSION['empl']['kodeorganisasi'], $_SESSION['empl']['kodeorganisasi']);
+        $logourl = '';
+        if (file_exists($hdpt['logo'])) {
+            $skema = (isset($_SERVER['HTTPS']) and $_SERVER['HTTPS'] != 'off') ? 'https' : 'http';
+            $logourl = $skema . "://" . @$_SERVER['HTTP_HOST'] . rtrim(str_replace(chr(92), '/', dirname(@$_SERVER['SCRIPT_NAME'])), '/') . "/" . $hdpt['logo'];
+        }
+        $infoFilter = "Kode Organisasi: " . ($orgSch != '' ? $orgSch . " - " . $nmOrg[$orgSch] : "Semua")
+            . " | Periode: " . ($perSch != '' ? $perSch : "Semua")
+            . " | Jenis Pendapatan: " . ($komSch != '' ? $nmKom[$komSch] : "Semua")
+            . " | Status Posting: " . ($postSch === '1' ? "Posted" : ($postSch === '0' ? "Belum Posting" : "Semua"));
+        $kolom = 9;
+        $stream = "<table>
+            <tr><td colspan=" . $kolom . " height='70' style='height:52pt'>" . ($logourl != '' ? "<img src='" . $logourl . "' height='60'>" : "") . "</td></tr>
+            <tr><td colspan=" . $kolom . "><b>" . htmlspecialchars($hdpt['nama']) . "</b></td></tr>
+            <tr><td colspan=" . $kolom . "><b>PENDAPATAN LAIN</b></td></tr>
+            <tr><td colspan=" . $kolom . ">" . htmlspecialchars($infoFilter) . "</td></tr>
+            <tr><td colspan=" . $kolom . ">Ditarik oleh " . htmlspecialchars($_SESSION['empl']['name']) . " (" . htmlspecialchars($_SESSION['standard']['username']) . ") pada " . date('d-m-Y H:i:s') . "</td></tr>
+            <tr><td colspan=" . $kolom . ">&nbsp;</td></tr>
+            </table>";
+
+        $stream .= "<table class=sortable cellspacing=1 cellpadding=3 border=1>
+            <thead><tr>
+                <th align=center>" . $_SESSION['lang']['nourut'] . "</th>
+                <th align=center>" . $_SESSION['lang']['kodeorg'] . "</th>
+                <th align=center>" . $_SESSION['lang']['periodegaji'] . "</th>
+                <th align=center>Jenis Pendapatan</th>
+                <th align=center>Jumlah Karyawan</th>
+                <th align=center>" . $_SESSION['lang']['jumlah'] . "</th>
+                <th align=center>" . $_SESSION['lang']['dibuat'] . "</th>
+                <th align=center>" . $_SESSION['lang']['updatetime'] . "</th>
+                <th align=center>Status Posting</th>
+            </tr></thead><tbody>";
+
+        $no = 0;
+        $ttl = 0;
+        foreach ($resH as $r) {
+            $no++;
+            $ttl += $r['jumlah'];
+            $stream .= "<tr>
+                <td align=center>" . $no . "</td>
+                <td>" . $r['kodeorg'] . " - " . @$nmOrg[$r['kodeorg']] . "</td>
+                <td align=center>" . $r['periodegaji'] . "</td>
+                <td>" . @$nmKom[$r['idkomponen']] . "</td>
+                <td align=right>" . $r['jmlkar'] . "</td>
+                <td align=right>" . round($r['jumlah']) . "</td>
+                <td>" . @$nmKar[$r['updateby']] . "</td>
+                <td align=center>" . $r['updatetime'] . "</td>
+                <td align=center>" . ($r['posting'] == 1 ? 'Posted' : 'Belum Posting') . "</td>
+            </tr>";
+        }
+        $stream .= "<tr>
+                <td colspan=5 align=right><b>Total</b></td>
+                <td align=right><b>" . round($ttl) . "</b></td>
+                <td colspan=3></td>
+            </tr>";
+        $stream .= "</tbody></table>";
+
+        $xls = new HtmlExcel();
+        $xls->addSheet("Pendapatan Lain", $stream);
+        $xls->headers("Pendapatan_Lain_" . date('YmdHis') . ".xls");
+        echo $xls->buildFile();
+        break;
     case 'PDF':
         $tab = "<style>
                 body {
@@ -830,12 +1023,26 @@ switch ($method) {
                 }
                 </style>";
 
+        #status posting dari header, kop/logo/ditarik-oleh format standar (org karyawan yang login)
+        $rPostPdf = fetchData("select posting from " . $dbname . ".sdm_pendapatanlainht where kodeorg='" . addslashes($org) . "' and periodegaji='" . addslashes($per) . "' and idkomponen='" . addslashes($kom) . "'");
+        $statusPostPdf = count($rPostPdf) == 0 ? '-' : ($rPostPdf[0]['posting'] == 1 ? 'Posted' : 'Belum Posting');
+        $hdptPdf = setheadreport($_SESSION['empl']['kodeorganisasi'], $_SESSION['empl']['kodeorganisasi']);
+        $logoPdf = file_exists($hdptPdf['logo']) ? str_replace(chr(92), '/', realpath($hdptPdf['logo'])) : '';
+        $tab .= "<table style='border:none;'><tr>";
+        $tab .= "<td style='border:none;text-align:left;width:70px;'>" . ($logoPdf != '' ? "<img src='" . $logoPdf . "' style='height:55px;'>" : "") . "</td>";
+        $tab .= "<td style='border:none;text-align:left;'><b style='font-size:13px;'>" . htmlspecialchars($hdptPdf['nama']) . "</b><br>";
+        $tab .= "<b style='font-size:15px;'>PENDAPATAN LAIN</b><br>";
+        $tab .= "<span style='font-size:9px;'>Ditarik oleh " . htmlspecialchars($_SESSION['empl']['name']) . " (" . htmlspecialchars($_SESSION['standard']['username']) . ") pada " . date('d-m-Y H:i:s') . "</span></td>";
+        $tab .= "</tr></table>";
+        $tab .= "<br>";
+
         $tab .= "<table>";
         $tab .= "<thead>";
         $tab .= "<tr bgcolor=#CCCCCC class='rowheader'>";
         $tab .= "<th>Kode Organisasi</th>";
         $tab .= "<th>Periode</th>";
         $tab .= "<th>Tipe Pendapatan Lain</th>";
+        $tab .= "<th>Status Posting</th>";
         $tab .= "</tr>";
         $tab .= "</tr>";
         $tab .= "</thead>";
@@ -844,6 +1051,7 @@ switch ($method) {
                         <td>" . getNamaOrg($org) . "</td>
                         <td>" . $per . "</td>
                         <td>" . getNamaKomponenGaji($kom) . "</td>
+                        <td>" . $statusPostPdf . "</td>
                     </tr>";
         $tab .= "</tbody>";
         $tab .= "</table>";
