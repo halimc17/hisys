@@ -267,25 +267,58 @@ $pathnonpalma='images/logo/KOP INVOICE.png';
 
 		if ($kodept=='PPP'){
 
-			$tab.="<table style='width:95%;margin:0 auto!important;' cellpadding=".$cellpadding." cellspacing=0 border='0'>";
+			# Lokasi penjual (alamat dan tempat tanda tangan) mengikuti kebun asal kontrak, mis. 0002/PPPE/VIII/2026 -> PPPE
+			# sesuai identitas penjual di faktur pajak. Jika kebun tidak ditemukan, tetap Jakarta seperti sebelumnya
+			$kotattd = 'Jakarta';
+			$alamatunit = '';
+			$segkontrak = explode('/', $nokontrak);
+			if (isset($segkontrak[1]) && preg_match('/^[A-Za-z0-9]+$/', $segkontrak[1])) {
+				$str = "select alamat,wilayahkota,kodepos from ".$dbname.".organisasi where kodeorganisasi='".$segkontrak[1]."' and tipe='KEBUN'";
+				$res = $owlPDO->query($str) or die(print " Gagal: " . PDOException::getMessage());
+				$res->setFetchMode(PDO::FETCH_ASSOC);
+				$bar = $res->fetch();
+				if ($bar && trim($bar['wilayahkota']) != '') {
+					$kotattd = trim($bar['wilayahkota']);
+					$alamatunit = trim($bar['alamat']);
+					if (trim($bar['kodepos']) != '') {
+						$alamatunit .= ' ' . trim($bar['kodepos']);
+					}
+				}
+			}
+
+			# Header simetris: logo di kiri, judul tepat di tengah halaman, kolom kanan kosong sebagai penyeimbang
+			$tab.="<table style='width:90%;margin:0 auto!important;' cellpadding=".$cellpadding." cellspacing=0 border='0'>";
 			$tab.="<tr>";
-			$tab.="<td align=center style='width:180px;'><img src='".$path."' style='width:180px;height:100px;' /></td>"; 
-			$tab.="<td style='font-weight;text-align:center;font-size:16px;margin-top:30px!important;'><b>I N V O I C E</b><p style='font-weight;text-align:center;font-size:14px;'>No : $noinvoice</p></td>"; 
+			$tab.="<td align=left style='width:30%;'><img src='".$path."' style='width:180px;height:100px;' /></td>";
+			$tab.="<td align=center valign=middle style='width:40%;text-align:center;font-size:16px;'><b>I N V O I C E</b><p style='text-align:center;font-size:14px;'>No : $noinvoice</p></td>";
+			$tab.="<td style='width:30%;'></td>";
 			$tab.="</tr>";
 			$tab.="<tr>";
-			if($kodepospt==''){
-				$tab.="<td style='font-weight;text-align:left;font-size:12px'>".$wilayahkotapt."</td>"; 
-                $tab.="<td></td>";
+			if($alamatunit!=''){
+				$tab.="<td colspan=2 style='text-align:left;font-size:12px'>".$alamatunit."</td>";
+				$tab.="<td></td>";
 			}else{
-				$tab.="<td style='font-weight;text-align:left;font-size:12px'>".$wilayahkotapt." - ".$kodepospt."</td>"; 
-                $tab.="<td></td>";
+				if($kodepospt==''){
+					$tab.="<td style='text-align:left;font-size:12px'>".$wilayahkotapt."</td>";
+				}else{
+					$tab.="<td style='text-align:left;font-size:12px'>".$wilayahkotapt." - ".$kodepospt."</td>";
+				}
+				$tab.="<td></td>";
+				$tab.="<td></td>";
 			}
 			$tab.="</tr>";
+			# NPWP penjual (npwpunit pada header invoice)
+			if(trim($npwppt)!=''){
+				$tab.="<tr>";
+				$tab.="<td colspan=2 style='text-align:left;font-size:12px'>NPWP : ".trim($npwppt)."</td>";
+				$tab.="<td></td>";
+				$tab.="</tr>";
+			}
 			$tab.="</table>";
-        
+
 			$tab.="<br/>";
         
-			$tab.="<table style='width:95%;margin:0 auto!important;' cellpadding=".$cellpadding." cellspacing=0 border='0'>";
+			$tab.="<table style='width:90%;margin:0 auto!important;' cellpadding=".$cellpadding." cellspacing=0 border='0'>";
             $tab.="<tr>";
 				$tab.="<td style='font-size: 14px;'>Kepada Yth:</td>";
 			$tab.="</tr>";
@@ -311,7 +344,7 @@ $pathnonpalma='images/logo/KOP INVOICE.png';
 
 			if ($hariX <= 15) {
 					$periodeX = "Periode 1";
-					$periodeXY = "Periode 1- 15 ".namabulaninvoice." ".$tahuninvoice."";
+					$periodeXY = "Periode 1 - 15 ".$namabulaninvoice." ".$tahuninvoice."";
 			} else {
 					$periodeX = "Periode 2";
 					$periodeXY = "Periode 16 - ".$hariX." ".$namabulaninvoice." ".$tahuninvoice."";
@@ -356,6 +389,12 @@ $pathnonpalma='images/logo/KOP INVOICE.png';
                 $tab.="<tr>";
                     $tab.="<td colspan=5 align=center>Tidak Ada Data</td>";
                 $tab.="</tr>";
+                # tidak ada rincian di keu_penagihandt: total diambil dari header invoice
+                $total['dpp']=$nilaiinvoice;
+                $total['ppn']=$nilaippn;
+                $total['pph22']=$total['dpp']*(0.25/100);
+                $total['ttlinv']=$total['dpp']+$total['ppn']-$total['pph22'];
+
                 foreach($arrpotpen as $key => $val) {
 
                     if($key=='ttlinv') {
@@ -363,10 +402,26 @@ $pathnonpalma='images/logo/KOP INVOICE.png';
                     }
 
                     $tab.="<tr id=datapenambah>";
-					$tab.="<td colspan=3></td>";
-					$tab.="<td $bold>$val</td>";
-                        $tab.="<td $bold></td>";
-						$tab.="</tr>";
+                        $tab.="<td 
+                        style='
+                        border-right:none!important;
+                        border-left:none!important;
+                        border-top:none!important;
+                        border-bottom:none!important;
+                        border:none!important;
+                        box-shadow:none!important;
+                        outline:none!important;' 
+                        colspan=3></td>";
+                        $tab.="<td $bold>$val</td>";
+                        $tab.="<td $bold>";
+                            $tab.="<table width=100%;>";
+                                $tab.="<tr>";
+                                    $tab.="<td align=left>Rp</td>";
+                                    $tab.="<td align=right>".hidezerodecimal($total[$key])."</td>";
+                                $tab.="</tr>";
+                            $tab.="</table>";
+                        $tab.="</td>";
+                    $tab.="</tr>";
                 }
             } else {
                 $no=0;
@@ -462,13 +517,13 @@ $pathnonpalma='images/logo/KOP INVOICE.png';
 			$tab.="</table>";   
 			
 			# Tanda Tangan
-			$tab.="<table style='width:100%;margin:0 auto!important;' cellpadding=".$cellpadding." cellspacing=0 border='0'>";
+			$tab.="<table style='width:90%;margin:0 auto!important;' cellpadding=".$cellpadding." cellspacing=0 border='0'>";
 						$tab.="<tr>";
 								$tab.="<td><br></td>";
             $tab.="</tr>";
             $tab.="<tr id=tandatangan>";
                 $tab.="<td style='color:#fff;' align=center>Jakarta, ".$tanggalinvoice."</td>";
-                $tab.="<td style='font-wight:bold;font-size:14px;' align=center>Jakarta, ".substr($tanggalinvoice,8,2)." ".$namabulaninvoice." ".$tahuninvoice."</td>";
+                $tab.="<td style='font-wight:bold;font-size:14px;' align=center>".$kotattd.", ".substr($tanggalinvoice,8,2)." ".$namabulaninvoice." ".$tahuninvoice."</td>";
             $tab.="</tr>";
             $tab.="<tr id=kolomttd>";
                 $tab.="<td style='color:#fff;' align=center>Jakarta, ".$tanggalinvoice."</td>";
@@ -476,10 +531,15 @@ $pathnonpalma='images/logo/KOP INVOICE.png';
             $tab.="</tr>";
             $tab.="<tr id=namattd>";
                 $tab.="<td style='color:#fff;' align=center>Jakarta, ".$tanggalinvoice."</td>";
-                $tab.="<td style='font-wight:bold;font-size:14px;' align=center>".$namakaryawan."</td>";
+                # garis di bawah nama penandatangan
+                $tab.="<td style='font-size:14px;' align=center>";
+                    $tab.="<table style='width:50%;margin:0 auto!important;' cellpadding=0 cellspacing=0 border='0'>";
+                        $tab.="<tr><td align=center style='font-size:14px;border-bottom:1px solid #000;padding-bottom:2px;'>".$namakaryawan."</td></tr>";
+                    $tab.="</table>";
+                $tab.="</td>";
             $tab.="</tr>";
             $tab.="<tr id=jabatanttd>";
-                $tab.="<td style='color:#fff;' align=center>Jakarta, ".substr($tanggalinvoice,8,2)." ".$namabulaninvoice." ".$tahuninvoice."</td>";
+                $tab.="<td style='color:#fff;' align=center>".$kotattd.", ".substr($tanggalinvoice,8,2)." ".$namabulaninvoice." ".$tahuninvoice."</td>";
                 $tab.="<td style='font-wight:bold;font-size:14px;' align=center>".getNamaJabatan(getKary($ttd,"kodejabatan"))."</td>";
 				$tab.="</tr>";
 				$tab.="</table>";
