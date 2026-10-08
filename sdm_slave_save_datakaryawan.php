@@ -632,11 +632,13 @@ switch ($method) {
 
 		validasiktp($noktp);
 
-		$str = "select version_type from " . $dbname . ".datakaryawan_hist where karyawanid='" . $karyawanid . "' and nourut='" . $nourut . "'";
+		$str = "select version_type,approval_status from " . $dbname . ".datakaryawan_hist where karyawanid='" . $karyawanid . "' and nourut='" . $nourut . "'";
 		$res = $owlPDO->query($str) or die(print " Gagal: " . PDOException::getMessage());
 		$res->setFetchMode(PDO::FETCH_ASSOC);
 		$bar = $res->fetch();
 		$versiontype = $bar['version_type'];
+		#karyawan baru yang belum di-approve (hist N status 0): edit mengubah baris hist N itu sendiri, bukan membuat hist C
+		$editpendingbaru = ($nourut != '' and $versiontype == 'N' and $bar['approval_status'] == '0');
 
 
 		$periodexxx = '';
@@ -684,6 +686,8 @@ switch ($method) {
 
 		if ($nourut != '' and $versiontype == 'B') {
 			$qData = selectQuery($dbname, 'datakaryawan_hist', '*', "karyawanid='" . $karyawanid . "' and nourut='" . $nourut . "' and approval_status=7 ");
+		} elseif ($editpendingbaru) {
+			$qData = selectQuery($dbname, 'datakaryawan_hist', '*', "karyawanid='" . $karyawanid . "' and nourut='" . $nourut . "' and approval_status=0 ");
 		} else {
 			$qData = selectQuery($dbname, 'datakaryawan', '*', "karyawanid='" . $karyawanid . "'");
 		}
@@ -856,6 +860,8 @@ switch ($method) {
 			// 	$statusnonapproval='nonapproval';
 			// }elseif($_SESSION['empl']['tipelokasitugas']=='KANWIL' and ($tipeloktugaskary != 'KANWIL' and $tipeloktugaskary != 'HOLDING')){
 			$statusnonapproval = 'nonapproval';
+			#tanggal keluar sementara (1990-01-01) di datakaryawan dipertahankan sampai karyawan baru di-approve
+			$tanggalkeluarlive = $editpendingbaru ? '1990-01-01' : $tanggalkeluar;
 			// }else{
 			// 	$statusnonapproval='approval';
 			// }
@@ -892,7 +898,7 @@ switch ($method) {
 						`tanggalmasuk`       ='" . $tanggalmasuk . "',
 						`tanggalpengangkatan`='" . $tanggalpengangkatan . "',
 						`tanggalpengangkatannonstaff`='" . $tanggalpengangkatannonstaff . "',
-						`tanggalkeluar`      ='" . $tanggalkeluar . "',
+						`tanggalkeluar`      ='" . $tanggalkeluarlive . "',
 						`tipekaryawan`       ='" . $tipekaryawan . "',
 						`jumlahanak`         ='" . $jumlahanak . "',
 						`jumlahtanggungan`   ='" . $jumlahtanggungan . "',
@@ -977,6 +983,11 @@ switch ($method) {
 						  'C','" . $textchange . "','" . $periodeakhirgaji . "',
 						  '" . $param['kabupaten'] . "','" . $param['kecamatan'] . "','" . $param['desa'] . "','" . $_SESSION['standard']['userid'] . "',
 						  '" . $param['bulandaftarbpjs'] . "','" . $param['levelkaryawan'] . "','" . $tanggalpengangkatannonstaff . "')";
+
+					#karyawan baru belum di-approve: perubahan disimpan di baris hist N (tanggal keluar asli ada di sini), bukan hist C
+					if ($editpendingbaru) {
+						$strxhist = updateQuery($dbname, 'datakaryawan_hist', $arrdatabaru + array('updateby' => $_SESSION['standard']['userid']), "karyawanid='" . $karyawanid . "' and nourut='" . $nourut . "' and version_type='N' and approval_status='0'");
+					}
 					break;
 				default:
 					$strhist = "select karyawanid,version_type,version,periodegaji,approval_status from " . $dbname . ".datakaryawan_hist where karyawanid = '" . $karyawanid . "' and approval_status='0' and version='' and periodegaji='" . $periodegaji . "' ";

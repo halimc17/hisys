@@ -789,7 +789,8 @@ function form_ajukan_dtk(nourut, tipekaryawan,lokasitugas,namakaryawan,karyawani
 					alertify.alert(con.responseText);
 				} else {
 					//document.getElementById('containeraju').innerHTML = con.responseText;
-					alertify.popup2("Approval",con.responseText).set({'resizable':true,'maximizable':true}).resizeTo('350px','300px');
+					//jendela terpisah (popup3) agar tidak ikut maksimal seperti popup History (popup2)
+					alertify.popup3("Approval",con.responseText).set({'resizable':true,'maximizable':true,'startMaximized':false}).resizeTo('350px','300px');
 				}
 			} else {
 				busy_off();
@@ -818,6 +819,7 @@ function ajukan(karyawanid) {
 					alertify.alert(con.responseText);
 				} else {
 					displayList();
+					alertify.popup3().destroy();
 					alertify.popup2().destroy();
 					alertify.popup().destroy();
 					//closeDialog();
