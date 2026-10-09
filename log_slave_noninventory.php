@@ -1996,16 +1996,10 @@ switch($method){
 			$where.=" and supplierid in (select supplierid from ".$dbname.".log_5supplier where namasupplier like '%".$scsupplier."%')";
 		}
 
-		#kop/logo/ditarik-oleh format standar, pakai org karyawan yang login (data lintas unit, bukan per-unit)
+		#kop/ditarik-oleh format standar, pakai org karyawan yang login (data lintas unit, bukan per-unit)
 		$hdpt = setheadreport($_SESSION['empl']['kodeorganisasi'], $_SESSION['empl']['kodeorganisasi']);
-		$logourl = '';
-		if (file_exists($hdpt['logo'])) {
-			$skema = (isset($_SERVER['HTTPS']) and $_SERVER['HTTPS'] != 'off') ? 'https' : 'http';
-			$logourl = $skema . "://" . @$_SERVER['HTTP_HOST'] . rtrim(dirname(@$_SERVER['SCRIPT_NAME']), '/') . "/" . $hdpt['logo'];
-		}
 		$kolom = 16;
 		$stream = "<table>
-			<tr><td colspan=".$kolom." height='70' style='height:52pt'>".($logourl!=''?"<img src='".$logourl."' height='60'>":"")."</td></tr>
 			<tr><td colspan=".$kolom."><b>".htmlspecialchars($hdpt['nama'])."</b></td></tr>
 			<tr><td colspan=".$kolom."><b>PENERIMAAN BARANG NON-INVENTORY</b></td></tr>
 			<tr><td colspan=".$kolom.">Ditarik oleh ".htmlspecialchars($_SESSION['empl']['name'])." (".htmlspecialchars($_SESSION['standard']['username']).") pada ".date('d-m-Y H:i:s')."</td></tr>

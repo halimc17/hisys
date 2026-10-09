@@ -2445,16 +2445,10 @@ switch($proses){
 		// $tab.="</div>";
 		echo $tab;
 	} else {
-		#kop: logo PT, judul, dan informasi cetak
+		#kop: judul, dan informasi cetak
 		$ptkode=getindukPT($rShwData2['kodeorg']);
 		$hd=setheadreport($ptkode,$ptkode);
-		$logourl='';
-		if(file_exists($hd['logo'])){
-			$skema=(isset($_SERVER['HTTPS']) and $_SERVER['HTTPS']!='off') ? 'https' : 'http';
-			$logourl=$skema."://".@$_SERVER['HTTP_HOST'].rtrim(dirname(@$_SERVER['SCRIPT_NAME']),'/')."/".$hd['logo'];
-		}
 		$kop="<table>
-			<tr><td colspan=10 height='70' style='height:52pt'>".($logourl!='' ? "<img src='".$logourl."' height='60'>" : "")."</td></tr>
 			<tr><td colspan=10><b>".$hd['nama']."</b></td></tr>
 			<tr><td colspan=10><b>DETAIL SURAT PENGANTAR BUAH</b></td></tr>
 			<tr><td colspan=10>Dicetak: ".date('d-m-Y H:i:s')." oleh ".$_SESSION['empl']['name']."</td></tr>

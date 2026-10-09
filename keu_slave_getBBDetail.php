@@ -200,14 +200,8 @@ $stream.="</tbody><tfoot></tfoot></table>";
 if($tipe=='excel')
 {
 	$hdpt = setheadreport($pt, $pt);
-	$logourl = '';
-	if (file_exists($hdpt['logo'])) {
-		$skema = (isset($_SERVER['HTTPS']) and $_SERVER['HTTPS'] != 'off') ? 'https' : 'http';
-		$logourl = $skema . "://" . @$_SERVER['HTTP_HOST'] . rtrim(dirname(@$_SERVER['SCRIPT_NAME']), '/') . "/" . $hdpt['logo'];
-	}
 	$kolom = 13;
 	$kop = "<table>
-		<tr><td colspan=" . $kolom . " height='70' style='height:52pt'>" . ($logourl != '' ? "<img src='" . $logourl . "' height='60'>" : "") . "</td></tr>
 		<tr><td colspan=" . $kolom . "><b>" . htmlspecialchars($hdpt['nama']) . "</b></td></tr>
 		<tr><td colspan=" . $kolom . "><b>DETAIL JURNAL</b></td></tr>
 		<tr><td colspan=" . $kolom . ">" . htmlspecialchars($infofilter) . "</td></tr>

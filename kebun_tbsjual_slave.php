@@ -40,26 +40,14 @@ function getKopHeaderTbsjual($dbname, $unitKode, $tipe = 'pdf') {
 	$ptKode = getindukPT($unitKode);
 	$hd = setheadreport($ptKode, $ptKode);
 
+	# Logo hanya untuk PDF (dompdf baca file di server). Excel tanpa logo karena gambar di .xls butuh url http absolut
+	# dan sering tidak muncul di komputer lain.
 	$logoSrc = '';
-	if (file_exists($hd['logo'])) {
-			if ($tipe == 'excel') {
-					# Excel buka file .xls ini sebagai dokumen HTML lepas dari server (bisa
-					# di komputer lain), jadi logo-nya HARUS url http absolut supaya Excel
-					# yang nge-fetch gambarnya sendiri - base64/path lokal bikin gak kebuka.
-					$skema = (isset($_SERVER['HTTPS']) and $_SERVER['HTTPS'] != 'off') ? 'https' : 'http';
-					$logoSrc = $skema."://".@$_SERVER['HTTP_HOST'].rtrim(dirname(@$_SERVER['SCRIPT_NAME']), '/')."/".$hd['logo'];
-			} else {
-					# PDF dirender dompdf di server, jadi cukup path lokal langsung.
-					$logoSrc = $hd['logo'];
-			}
+	if ($tipe != 'excel' and file_exists($hd['logo'])) {
+		$logoSrc = $hd['logo'];
 	}
 
-	# Logo & alamat ditumpuk (bukan 2 kolom sejajar pakai class CSS) - sama
-	# persis pola log_realisasispkx_excel.php. Excel gak dikasih <style> block
-	# kita (cuma dipasang di dompdf), jadi class CSS semacam kop-logo/kop-table
-	# gak ada artinya di Excel - logonya dulu malah render ukuran asli filenya
-	# dan nabrak/numpuk konten lain. Pakai atribut height= langsung di <img>
-	# supaya ukurannya kekontrol di Excel maupun PDF tanpa perlu CSS sama sekali.
+	# Logo (PDF), nama PT, dan alamat ditumpuk. Ukuran logo lewat atribut height= langsung di <img>, tanpa class CSS.
 	$out = "<table>";
 	if ($logoSrc != '') {
 			$out .= "<tr><td height='60' style='height:45pt;'><img src='".$logoSrc."' height='50'></td></tr>";

@@ -135,19 +135,13 @@ switch ($method) {
 				(select count(*) from " . $dbname . ".sdm_potongandt d where d.kodeorg=h.kodeorg and d.periodegaji=h.periodegaji and d.tipepotongan=h.tipepotongan) as jmlkar
 			from " . $dbname . ".sdm_potonganht h where " . potWhereList($kdOrgCr, $periodecr, $tipePotCr) . " order by periodegaji desc, kodeorg asc");
 
-		#kop/logo/ditarik-oleh format standar, pakai org karyawan yang login (data lintas unit)
+		#kop/ditarik-oleh format standar, pakai org karyawan yang login (data lintas unit)
 		$hdpt = setheadreport($_SESSION['empl']['kodeorganisasi'], $_SESSION['empl']['kodeorganisasi']);
-		$logourl = '';
-		if (file_exists($hdpt['logo'])) {
-			$skema = (isset($_SERVER['HTTPS']) and $_SERVER['HTTPS'] != 'off') ? 'https' : 'http';
-			$logourl = $skema . "://" . @$_SERVER['HTTP_HOST'] . rtrim(str_replace(chr(92), '/', dirname(@$_SERVER['SCRIPT_NAME'])), '/') . "/" . $hdpt['logo'];
-		}
 		$infoFilter = "Unit: " . ($kdOrgCr != '' ? $kdOrgCr . " - " . $nmOrg[$kdOrgCr] : "Semua")
 			. " | Periode: " . ($periodecr != '' ? $periodecr : "Semua")
 			. " | Potongan: " . ($tipePotCr != '' ? $optNmPotongan[$tipePotCr] : "Semua");
 		$kolom = 7;
 		$stream = "<table>
-			<tr><td colspan=" . $kolom . " height='70' style='height:52pt'>" . ($logourl != '' ? "<img src='" . $logourl . "' height='60'>" : "") . "</td></tr>
 			<tr><td colspan=" . $kolom . "><b>" . htmlspecialchars($hdpt['nama']) . "</b></td></tr>
 			<tr><td colspan=" . $kolom . "><b>POTONGAN</b></td></tr>
 			<tr><td colspan=" . $kolom . ">" . htmlspecialchars($infoFilter) . "</td></tr>

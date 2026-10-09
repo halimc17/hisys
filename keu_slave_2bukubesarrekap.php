@@ -154,17 +154,11 @@ if($gudang==''){
 }
 $infofilter = 'PT: '.$pt.' | Unit: '.$infoUnit.' | Periode: '.$periode.' s/d '.$periode1.' | Revisi: '.$revisi;
 
-#kop/logo/ditarik-oleh format standar (sama seperti laporan lain), hanya untuk export Excel, bukan preview html
+#kop/ditarik-oleh format standar (sama seperti laporan lain), hanya untuk export Excel, bukan preview html
 if($tipelaporan=='excel'){
 	$hdpt = setheadreport($pt, $pt);
-	$logourl = '';
-	if (file_exists($hdpt['logo'])) {
-		$skema = (isset($_SERVER['HTTPS']) and $_SERVER['HTTPS'] != 'off') ? 'https' : 'http';
-		$logourl = $skema . "://" . @$_SERVER['HTTP_HOST'] . rtrim(dirname(@$_SERVER['SCRIPT_NAME']), '/') . "/" . $hdpt['logo'];
-	}
 	$kolom = 7;
 	$stream .= "<table>
-		<tr><td colspan=" . $kolom . " height='70' style='height:52pt'>" . ($logourl != '' ? "<img src='" . $logourl . "' height='60'>" : "") . "</td></tr>
 		<tr><td colspan=" . $kolom . "><b>" . htmlspecialchars($hdpt['nama']) . "</b></td></tr>
 		<tr><td colspan=" . $kolom . "><b>NERACA SALDO</b></td></tr>
 		<tr><td colspan=" . $kolom . ">" . htmlspecialchars($infofilter) . "</td></tr>

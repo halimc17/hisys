@@ -920,16 +920,10 @@ switch ($proses) {
         $nmJenis = makeOption($dbname, 'vhc_5jenisvhc', 'jenisvhc,namajenisvhc');
         $nmBbm   = makeOption($dbname, 'log_5masterbarang', 'kodebarang,namabarang', "kodebarang in (select distinct jenisbbm from " . $dbname . ".vhc_runht)");
 
-        #kop/logo/ditarik-oleh format standar, pakai org karyawan yang login (data lintas unit)
+        #kop/ditarik-oleh format standar, pakai org karyawan yang login (data lintas unit)
         $hdpt = setheadreport($_SESSION['empl']['kodeorganisasi'], $_SESSION['empl']['kodeorganisasi']);
-        $logourl = '';
-        if (file_exists($hdpt['logo'])) {
-            $skema = (isset($_SERVER['HTTPS']) and $_SERVER['HTTPS'] != 'off') ? 'https' : 'http';
-            $logourl = $skema . "://" . @$_SERVER['HTTP_HOST'] . rtrim(dirname(@$_SERVER['SCRIPT_NAME']), '/') . "/" . $hdpt['logo'];
-        }
         $kolom = 19;
         $stream = "<table>
-            <tr><td colspan=" . $kolom . " height='70' style='height:52pt'>" . ($logourl != '' ? "<img src='" . $logourl . "' height='60'>" : "") . "</td></tr>
             <tr><td colspan=" . $kolom . "><b>" . htmlspecialchars($hdpt['nama']) . "</b></td></tr>
             <tr><td colspan=" . $kolom . "><b>PEKERJAAN</b></td></tr>
             <tr><td colspan=" . $kolom . ">Ditarik oleh " . htmlspecialchars($_SESSION['empl']['name']) . " (" . htmlspecialchars($_SESSION['standard']['username']) . ") pada " . date('d-m-Y H:i:s') . "</td></tr>
