@@ -5,6 +5,7 @@ require_once('config/connection.php');
 require_once('lib/nangkoelib.php');
 include_once('lib/zLib.php');
 include_once('lib/zFunction.php');
+include_once('lib/HtmlExcel.php');
 
 require_once('dompdf/autoload.inc.php');
 require_once 'dompdf/PHPExcel.php';
@@ -49,7 +50,149 @@ $tgl = date("Y-m-d");
 $optTipe =  makeOption($dbname, 'organisasi', 'kodeorganisasi,tipe');
 $nmOrg = makeOption($dbname, 'organisasi', 'kodeorganisasi,namaorganisasi');
 
+#validasi simpan/ubah/hapus data Potongan, pesan berawalan "Warning" supaya tampil sebagai peringatan di halaman
+function valPotWajib($org, $per, $tipe)
+{
+	if ($org == '' || $per == '' || $tipe == '') {
+		exit("Warning : Unit Kerja, Periode, Potongan wajib diisi !");
+	}
+}
+
+#periode gaji yang sudah ditutup tidak boleh diubah
+function valPotPeriodeBuka($org, $per)
+{
+	global $dbname;
+	$res = fetchData("select periode from " . $dbname . ".sdm_5periodegaji where kodeorg='" . addslashes(substr($org, 0, 4)) . "' and periode='" . addslashes($per) . "' and sudahproses='1'");
+	if (count($res) > 0) {
+		exit("Warning : Periode gaji " . $per . " sudah ditutup, data tidak bisa diubah.");
+	}
+}
+
+#data milik user lain hanya boleh diubah pembuatnya (atau bagian FIN/IT), sama seperti tombol Edit di list
+function valPotMilik($org, $per, $tipe)
+{
+	global $dbname;
+	$res = fetchData("select updateby from " . $dbname . ".sdm_potonganht where kodeorg='" . addslashes($org) . "' and periodegaji='" . addslashes($per) . "' and tipepotongan='" . addslashes($tipe) . "'");
+	if (count($res) > 0 && (int)$res[0]['updateby'] != (int)$_SESSION['standard']['userid'] && !in_array($_SESSION['empl']['bagian'], array('FIN', 'IT'))) {
+		exit("Warning : Data ini dibuat oleh user lain, hanya pembuatnya yang bisa mengubah.");
+	}
+}
+
+#karyawan wajib dipilih dan harus ada di data karyawan
+function valPotKaryawan($kar, $ket = '')
+{
+	global $dbname;
+	$kar = trim($kar);
+	if ($kar == '' || !preg_match('/^[0-9]+$/', $kar) || (int)$kar == 0) {
+		exit("Warning : Karyawan wajib dipilih" . $ket . ".");
+	}
+	$res = fetchData("select karyawanid from " . $dbname . ".datakaryawan where karyawanid='" . $kar . "'");
+	if (count($res) == 0) {
+		exit("Warning : Karyawan tidak ditemukan di data karyawan" . $ket . ".");
+	}
+}
+
+#jumlah wajib diisi, hanya angka (boleh desimal) dan lebih dari 0; koma ribuan dibuang dulu
+function valPotJumlah($jum, $ket = '')
+{
+	$jum = str_replace(',', '', trim($jum));
+	if ($jum == '') {
+		exit("Warning : Potongan wajib diisi" . $ket . ".");
+	}
+	if (!preg_match('/^[0-9]+(\.[0-9]{1,10})?$/', $jum)) {
+		exit("Warning : Potongan tidak valid" . $ket . ". Isi dengan angka.");
+	}
+	if ((float)$jum <= 0) {
+		exit("Warning : Potongan harus lebih besar dari 0" . $ket . ".");
+	}
+	return $jum;
+}
+
+#filter list tarikan Excel/PDF, sama persis dengan list (case loadNewData)
+function potWhereList($org, $per, $tipe)
+{
+	$whr = "substring(kodeorg,1,4) in ('" . implode("','", array_map('addslashes', array_keys(getOrgDetail(1)))) . "')";
+	if ($per != '') {
+		$whr .= " and periodegaji like '%" . addslashes($per) . "%'";
+	}
+	if ($tipe != '') {
+		$whr .= " and tipepotongan= '" . addslashes($tipe) . "'";
+	}
+	if ($org != '') {
+		$whr .= " and kodeorg= '" . addslashes($org) . "'";
+	}
+	return $whr;
+}
+
 switch ($method) {
+	case 'excellist':
+		$kdOrgCr = checkPostGet('kdOrgCr', '');
+		$periodecr = checkPostGet('periodecr', '');
+		$tipePotCr = checkPostGet('tipePotCr', '');
+
+		$resH = fetchData("select h.*,
+				(select sum(d.jumlahpotongan) from " . $dbname . ".sdm_potongandt d where d.kodeorg=h.kodeorg and d.periodegaji=h.periodegaji and d.tipepotongan=h.tipepotongan) as jumlah,
+				(select count(*) from " . $dbname . ".sdm_potongandt d where d.kodeorg=h.kodeorg and d.periodegaji=h.periodegaji and d.tipepotongan=h.tipepotongan) as jmlkar
+			from " . $dbname . ".sdm_potonganht h where " . potWhereList($kdOrgCr, $periodecr, $tipePotCr) . " order by periodegaji desc, kodeorg asc");
+
+		#kop/logo/ditarik-oleh format standar, pakai org karyawan yang login (data lintas unit)
+		$hdpt = setheadreport($_SESSION['empl']['kodeorganisasi'], $_SESSION['empl']['kodeorganisasi']);
+		$logourl = '';
+		if (file_exists($hdpt['logo'])) {
+			$skema = (isset($_SERVER['HTTPS']) and $_SERVER['HTTPS'] != 'off') ? 'https' : 'http';
+			$logourl = $skema . "://" . @$_SERVER['HTTP_HOST'] . rtrim(str_replace(chr(92), '/', dirname(@$_SERVER['SCRIPT_NAME'])), '/') . "/" . $hdpt['logo'];
+		}
+		$infoFilter = "Unit: " . ($kdOrgCr != '' ? $kdOrgCr . " - " . $nmOrg[$kdOrgCr] : "Semua")
+			. " | Periode: " . ($periodecr != '' ? $periodecr : "Semua")
+			. " | Potongan: " . ($tipePotCr != '' ? $optNmPotongan[$tipePotCr] : "Semua");
+		$kolom = 7;
+		$stream = "<table>
+			<tr><td colspan=" . $kolom . " height='70' style='height:52pt'>" . ($logourl != '' ? "<img src='" . $logourl . "' height='60'>" : "") . "</td></tr>
+			<tr><td colspan=" . $kolom . "><b>" . htmlspecialchars($hdpt['nama']) . "</b></td></tr>
+			<tr><td colspan=" . $kolom . "><b>POTONGAN</b></td></tr>
+			<tr><td colspan=" . $kolom . ">" . htmlspecialchars($infoFilter) . "</td></tr>
+			<tr><td colspan=" . $kolom . ">Ditarik oleh " . htmlspecialchars($_SESSION['empl']['name']) . " (" . htmlspecialchars($_SESSION['standard']['username']) . ") pada " . date('d-m-Y H:i:s') . "</td></tr>
+			<tr><td colspan=" . $kolom . ">&nbsp;</td></tr>
+			</table>";
+
+		$stream .= "<table class=sortable cellspacing=1 cellpadding=3 border=1>
+			<thead><tr>
+				<th align=center>" . $_SESSION['lang']['nourut'] . "</th>
+				<th align=center>" . $_SESSION['lang']['unit'] . "</th>
+				<th align=center>" . $_SESSION['lang']['periodegaji'] . "</th>
+				<th align=center>" . $_SESSION['lang']['potongan'] . "</th>
+				<th align=center>Jumlah Karyawan</th>
+				<th align=center>" . $_SESSION['lang']['total'] . "</th>
+				<th align=center>" . $_SESSION['lang']['updateby'] . "</th>
+			</tr></thead><tbody>";
+
+		$no = 0;
+		$ttl = 0;
+		foreach ($resH as $r) {
+			$no++;
+			$ttl += $r['jumlah'];
+			$stream .= "<tr>
+				<td align=center>" . $no . "</td>
+				<td>" . $r['kodeorg'] . " - " . @$nmOrg[$r['kodeorg']] . "</td>
+				<td align=center>" . $r['periodegaji'] . "</td>
+				<td>" . @$optNmPotongan[$r['tipepotongan']] . "</td>
+				<td align=right>" . $r['jmlkar'] . "</td>
+				<td align=right>" . round($r['jumlah']) . "</td>
+				<td>" . @$optNmKar[$r['updateby']] . "</td>
+			</tr>";
+		}
+		$stream .= "<tr>
+				<td colspan=5 align=right><b>Total</b></td>
+				<td align=right><b>" . round($ttl) . "</b></td>
+				<td></td>
+			</tr>";
+		$stream .= "</tbody></table>";
+
+		$xls = new HtmlExcel();
+		$xls->addSheet("Potongan", $stream);
+		$xls->headers("Potongan_" . date('YmdHis') . ".xls");
+		echo $xls->buildFile();
+		exit;
 	case 'submitfile':
 		$tgl = date("YmdHis");
 		$his = date("His");
@@ -503,72 +646,58 @@ switch ($param['proses']) {
 		break;
 
 	case 'saveData':
-		if (($param['rupPot'] == 0) || ($param['rupPot'] == '')) {
-			exit("error: " . $_SESSION['lang']['potongan'] . " can't empty");
-		}
-		if ($param['krywnId'] == '') {
-			exit("error: " . $_SESSION['lang']['namakaryawan'] . " can't empty");
-		}
+		valPotWajib($param['kdOrg'], $param['periode'], $param['tipePot']);
+		valPotPeriodeBuka($param['kdOrg'], $param['periode']);
+		valPotKaryawan($param['krywnId']);
+		$rupPot = valPotJumlah($param['rupPot']);
+		valPotMilik($param['kdOrg'], $param['periode'], $param['tipePot']);
+		$ketPot = addslashes(substr(trim($param['ketPot']), 0, 50));
 
-		$optData = makeOption($dbname, 'sdm_potonganht', 'periodegaji,tipepotongan', $whrPrdData);
-		$scek = "select distinct * from " . $dbname . ".sdm_potonganht where periodegaji='" . $param['periode'] . "' "
-			. " and tipepotongan='" . $param['tipePot'] . "' and kodeorg='" . $param['kdOrg'] . "'";
-		$qcek = $owlPDO->query($scek) or die(print " Gagal: " . PDOException::getMessage());
-		$rcek = owlBaris($qcek);
-		$sInsHt = "insert into " . $dbname . ".sdm_potonganht (`kodeorg`,`periodegaji`,`tipepotongan`,`updateby`) values ";
-		$sDet = "insert into " . $dbname . ".sdm_potongandt (`kodeorg`,`periodegaji`,`keterangan`,`nik`,`jumlahpotongan`,`tipepotongan`,`updateby`) values";
-		$whr = "nik='" . $param['krywnId'] . "' and tipepotongan='" . $param['tipePot'] . "' and periodegaji='" . $param['periode'] . "'";
+		$whr = "nik='" . $param['krywnId'] . "' and tipepotongan='" . addslashes($param['tipePot']) . "' and periodegaji='" . addslashes($param['periode']) . "'";
 		$optAdKgk = makeOption($dbname, 'sdm_potongandt', 'nik,tipepotongan', $whr);
-
 		if ($optAdKgk[$param['krywnId']] != '') {
 			exit('warning :' . $_SESSION['lang']['exist']);
 		}
-		if ($rcek < 1) {
+		$resHt = fetchData("select kodeorg from " . $dbname . ".sdm_potonganht where periodegaji='" . addslashes($param['periode']) . "' and tipepotongan='" . addslashes($param['tipePot']) . "' and kodeorg='" . addslashes($param['kdOrg']) . "'");
 
-			$sInsHt .= "('" . $param['kdOrg'] . "','" . $param['periode'] . "','" . $param['tipePot'] . "','" . $_SESSION['standard']['userid'] . "')";
-			try {
-				$owlPDO->exec($sInsHt);
-
-				$sDet .= "('" . $param['kdOrg'] . "','" . $param['periode'] . "','" . $param['ketPot'] . "','" . $param['krywnId'] . "','" . $param['rupPot'] . "'
-						,'" . $param['tipePot'] . "','" . $_SESSION['standard']['userid'] . "')";
-				try {
-					$owlPDO->exec($sDet);
-				} catch (PDOException $e) {
-					exit("error: DB Error " . $e->getMessage() . "___" . $sDet);
-				}
-			} catch (PDOException $e) {
-				exit("error: DB Error " . $e->getMessage() . "___" . $sInsHt);
-				die();
+		try {
+			$owlPDO->beginTransaction();
+			if (count($resHt) < 1) {
+				$owlPDO->exec("insert into " . $dbname . ".sdm_potonganht (`kodeorg`,`periodegaji`,`tipepotongan`,`updateby`) values ('" . addslashes($param['kdOrg']) . "','" . addslashes($param['periode']) . "','" . addslashes($param['tipePot']) . "','" . $_SESSION['standard']['userid'] . "')");
 			}
-		} else {
-			$sDet .= "('" . $param['kdOrg'] . "','" . $param['periode'] . "','" . $param['ketPot'] . "','" . $param['krywnId'] . "','" . $param['rupPot'] . "'
-					,'" . $param['tipePot'] . "','" . $_SESSION['standard']['userid'] . "')";
-			try {
-				$owlPDO->exec($sDet);
-			} catch (PDOException $e) {
-				exit("error: DB Error " . $e->getMessage() . "___" . $sDet);
-				die();
-			}
+			$owlPDO->exec("insert into " . $dbname . ".sdm_potongandt (`kodeorg`,`periodegaji`,`keterangan`,`nik`,`jumlahpotongan`,`tipepotongan`,`updateby`) values ('" . addslashes($param['kdOrg']) . "','" . addslashes($param['periode']) . "','" . $ketPot . "','" . $param['krywnId'] . "','" . $rupPot . "','" . addslashes($param['tipePot']) . "','" . $_SESSION['standard']['userid'] . "')");
+			$owlPDO->commit();
+		} catch (PDOException $e) {
+			$owlPDO->rollBack();
+			exit("error: DB Error " . $e->getMessage());
 		}
 		break;
 
 	case 'updateDetail':
-		if (($param['rupPot'] == '') || (intval($param['rupPot']) == '0')) {
-			exit("error: " . $_SESSION['lang']['potongan'] . " can't empty");
+		valPotWajib($param['kdOrg'], $param['periode'], $param['tipePot']);
+		valPotPeriodeBuka($param['kdOrg'], $param['periode']);
+		valPotKaryawan($param['krywnId']);
+		$rupPot = valPotJumlah($param['rupPot']);
+		valPotMilik($param['kdOrg'], $param['periode'], $param['tipePot']);
+		$ketPot = addslashes(substr(trim($param['ketPot']), 0, 50));
+
+		$whrDt = "tipepotongan='" . addslashes($param['tipePot']) . "' and nik='" . $param['krywnId'] . "' and kodeorg='" . addslashes($param['kdOrg']) . "' and periodegaji='" . addslashes($param['periode']) . "'";
+		$resAda = fetchData("select nik from " . $dbname . ".sdm_potongandt where " . $whrDt);
+		if (count($resAda) == 0) {
+			exit("Warning : Data karyawan ini tidak ditemukan pada detail, tidak bisa diubah.");
 		}
-		$sUpd = "update " . $dbname . ".sdm_potongandt set";
-		$sUpd .= " jumlahpotongan='" . $param['rupPot'] . "',keterangan='" . $param['ketPot'] . "',updateby='" . $_SESSION['standard']['userid'] . "'";
-		$sUpd .= " where tipepotongan='" . $param['tipePot'] . "' and nik='" . $param['krywnId'] . "' 
-				 and kodeorg='" . $optLokasiTugas[$param['krywnId']] . "' and periodegaji='" . $param['periode'] . "'";
+		$sUpd = "update " . $dbname . ".sdm_potongandt set jumlahpotongan='" . $rupPot . "',keterangan='" . $ketPot . "',updateby='" . $_SESSION['standard']['userid'] . "' where " . $whrDt;
 		try {
 			$owlPDO->exec($sUpd);
 		} catch (PDOException $e) {
-			exit("error: db error" . $e->getMessage() . "___" . $sUpd);
-			die();
+			exit("error: db error" . $e->getMessage());
 		}
 		break;
 
 	case 'delData':
+		valPotWajib($param['kdOrg'], $param['periode'], $param['tipePot']);
+		valPotPeriodeBuka($param['kdOrg'], $param['periode']);
+		valPotMilik($param['kdOrg'], $param['periode'], $param['tipePot']);
 		$sDel = "delete from " . $dbname . ".sdm_potonganht where " . $whrPrdData . ""; // echo "___".$sDel;exit();
 		try {
 			$owlPDO->exec($sDel);
@@ -594,7 +723,10 @@ switch ($param['proses']) {
 		break;
 
 	case 'delDetail':
-		$sDel = "delete from " . $dbname . ".sdm_potongandt where " . $whrPrdDataDetail . " and nik='" . $param['krywnId'] . "'";
+		valPotWajib($param['kdOrg'], $param['periode'], $param['tipePot']);
+		valPotPeriodeBuka($param['kdOrg'], $param['periode']);
+		valPotMilik($param['kdOrg'], $param['periode'], $param['tipePot']);
+		$sDel = "delete from " . $dbname . ".sdm_potongandt where " . $whrPrdDataDetail . " and kodeorg='" . addslashes($param['kdOrg']) . "' and nik='" . addslashes($param['krywnId']) . "'";
 		try {
 			$owlPDO->exec($sDel);
 		} catch (PDOException $e) {
@@ -605,7 +737,7 @@ switch ($param['proses']) {
 
 	case 'createTable':
 
-		if (isset($param['statUpdate']) and $param['statUpdate'] != 1) {
+		if (!isset($param['statUpdate']) or $param['statUpdate'] != 1) {
 			if ($param['kdOrg'] == '') {
 				exit('warning : ' . $_SESSION['lang']['unitkerja'] . ' ' . $_SESSION['lang']['kosong']);
 			}
@@ -622,8 +754,10 @@ switch ($param['proses']) {
 			if ($optPeriodeAkn[$param['periode']] == 1) {
 				exit("Error: Accounting period has been closed");
 			}
-			if (!empty($optData[$param['periode']])) {
-				exit("error: This date and Organization Name already exist");
+			valPotPeriodeBuka($param['kdOrg'], $param['periode']);
+			$resAda = fetchData("select kodeorg from " . $dbname . ".sdm_potonganht where kodeorg='" . addslashes($param['kdOrg']) . "' and periodegaji='" . addslashes($param['periode']) . "' and tipepotongan='" . addslashes($param['tipePot']) . "'");
+			if (count($resAda) > 0) {
+				exit("Warning : Data unit, periode, dan potongan ini sudah pernah di input, silahkan cek pada List dan gunakan Edit.");
 			}
 		}
 
@@ -656,11 +790,9 @@ switch ($param['proses']) {
 		</tr></thead>
 		<tbody id='detailBody'>";
 		$table .= "<tr class=rowcontent>
-		<td><select id=krywnId name=krywnId style='width:220px'>" . $optKry . "</select>
-		<img class='zImgBtn' style='position:relative;top:5px' src='images/onebit_02.png' onclick=\"getKary('Search : ','1',event);\"  />
-		</td>
-		<td><input type=text class='myinputtextnumber' id=rpPot style=width:100px onkeypress='return angka_doang(event)' /></td>
-		<td><input type=text class=myinputtext id=ketPot style=width:200px onkeypress='return tanpa_kutip(event)' /></td>
+		<td><select id=krywnId name=krywnId class=select2 style='width:300px'>" . $optKry . "</select></td>
+		<td><input type=text maxlength=20 class='myinputtextnumber' id=rpPot style=width:120px onkeypress='return angka_doang(event)' onkeyup=\"if(this.value!=''){z.numberFormat(this.id,2);}\" /></td>
+		<td><input type=text maxlength=50 class=myinputtext id=ketPot style=width:200px onkeypress='return tanpa_kutip(event)' /></td>
 		<td align=center><img id='detail_add' title='Simpan' class=zImgBtn onclick=\"addDetail()\" src='images/save.png'/></td>
 		</tr>
 		";
@@ -699,7 +831,7 @@ switch ($param['proses']) {
 			$tab .= "<td>" . $rDet['keterangan'] . "</td>";
 			$tab .= "<td>" . $optNmKar[$rDet['updateby']] . "</td>";
 			$tab .= "<td align=center>
-				<img src=images/application/application_edit.png class=resicon  title='Edit' onclick=\"editDetail('" . $rDet['nik'] . "','" . $rDet['jumlahpotongan'] . "','" . $rDet['keterangan'] . "');\">
+				<img src=images/application/application_edit.png class=resicon  title='Edit' onclick=\"editDetail('" . $rDet['nik'] . "','" . $rDet['jumlahpotongan'] . "','" . htmlspecialchars(addslashes($rDet['keterangan']), ENT_QUOTES) . "');\">
 				<img src=images/application/application_delete.png class=resicon  title='Delete' onclick=\"delDetail('" . $rDet['kodeorg'] . "','" . $rDet['periodegaji'] . "','" . $rDet['nik'] . "','" . $rDet['tipepotongan'] . "');\" >	</td>";
 			$tab .= "</tr>";
 			$tot += $rDet['jumlahpotongan'];

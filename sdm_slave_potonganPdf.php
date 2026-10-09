@@ -43,6 +43,17 @@ $tppot = $tmp[2];
         }
         </style>";
 
+        #kop/logo/ditarik-oleh format standar (org karyawan yang login)
+        $hdptPdf = setheadreport($_SESSION['empl']['kodeorganisasi'], $_SESSION['empl']['kodeorganisasi']);
+        $logoPdf = file_exists($hdptPdf['logo']) ? str_replace(chr(92), '/', realpath($hdptPdf['logo'])) : '';
+        $tab .= "<table style='border:none;'><tr>";
+        $tab .= "<td style='border:none;text-align:left;width:70px;'>" . ($logoPdf != '' ? "<img src='" . $logoPdf . "' style='height:55px;'>" : "") . "</td>";
+        $tab .= "<td style='border:none;text-align:left;'><b style='font-size:13px;'>" . htmlspecialchars($hdptPdf['nama']) . "</b><br>";
+        $tab .= "<b style='font-size:15px;'>POTONGAN</b><br>";
+        $tab .= "<span style='font-size:9px;'>Ditarik oleh " . htmlspecialchars($_SESSION['empl']['name']) . " (" . htmlspecialchars($_SESSION['standard']['username']) . ") pada " . date('d-m-Y H:i:s') . "</span></td>";
+        $tab .= "</tr></table>";
+        $tab .= "<br>";
+
         $tab .= "<table>";
         $tab .= "<thead>";
         $tab .= "<tr bgcolor=#CCCCCC class='rowheader'>";
@@ -80,6 +91,7 @@ $tppot = $tmp[2];
         $tab .= "<tbody>";
 
         $no=0;
+        $ttl=0;
         $str="select * from ".$dbname.".sdm_potongandt where kodeorg = '".$kdOrg."' and periodegaji = '".$tgl."' and tipepotongan= '".$tppot."'";
         $res = fetchdata($str);
         foreach($res as $bar){

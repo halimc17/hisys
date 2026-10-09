@@ -5,7 +5,15 @@ include('lib/nangkoelib.php');
 echo open_body();
 include('master_mainMenu.php');
 include_once('lib/zLib.php');
+require_once('lib/zSelect2.php');
 ?>
+<script>
+    $(document).ready(function() {
+        $('.select2').select2({
+            dropdownAutoWidth: true
+        });
+    });
+</script>
 <link rel=stylesheet type=text/css href="style/zTable.css">
 <script language="javascript" src="js/zMaster.js"></script>
 <script language=javascript src='js/zReport.js'></script>
@@ -15,6 +23,7 @@ include_once('lib/zLib.php');
         document.getElementById('headher').style.display = "block";
         document.getElementById('listData').style.display = "none";
         document.getElementById('detailEntry').style.display = "none";
+        document.getElementById('displayupload').style.display = "none";
         unlockForm();
         document.getElementById('contentDetail').innerHTML = '';
         statFrm = 0;
@@ -61,20 +70,62 @@ OPEN_BOX('', '<span class=judul>' . getMenu('sdm_potongan') . '</span>');
         $optPeriode .= "<option value=" . $rGet['periode'] . ">" . $rGet['periode'] . "</option>";
     }
 
-    // echo $sGet;
+    ##opsi filter pencarian: unit, periode, dan jenis potongan yang ada di data (sesuai unit yang boleh dilihat user)
+    $nmOrgSch = makeOption($dbname, 'organisasi', 'kodeorganisasi,namaorganisasi');
+    $nmPotSch = makeOption($dbname, 'sdm_ho_component', 'id,name');
+    $whrSch = "substring(kodeorg,1,4) in ('" . implode("','", array_keys($optOrg2)) . "')";
+    $optOrgSch = $optPerSch = $optPotSch = "<option value=''>" . $_SESSION['lang']['all'] . "</option>";
+    $resSch = fetchData("select distinct kodeorg from " . $dbname . ".sdm_potonganht where " . $whrSch . " order by kodeorg");
+    foreach ($resSch as $barSch) {
+        $optOrgSch .= "<option value='" . $barSch['kodeorg'] . "'>" . $barSch['kodeorg'] . " - " . $nmOrgSch[$barSch['kodeorg']] . "</option>";
+    }
+    $resSch = fetchData("select distinct periodegaji from " . $dbname . ".sdm_potonganht where " . $whrSch . " order by periodegaji desc");
+    foreach ($resSch as $barSch) {
+        $optPerSch .= "<option value='" . $barSch['periodegaji'] . "'>" . $barSch['periodegaji'] . "</option>";
+    }
+    $arrPotSch = array();
+    $resSch = fetchData("select distinct tipepotongan from " . $dbname . ".sdm_potonganht where " . $whrSch);
+    foreach ($resSch as $barSch) {
+        $arrPotSch[$barSch['tipepotongan']] = $nmPotSch[$barSch['tipepotongan']];
+    }
+    asort($arrPotSch);
+    foreach ($arrPotSch as $idPotSch => $namaPotSch) {
+        $optPotSch .= "<option value='" . $idPotSch . "'>" . $namaPotSch . "</option>";
+    }
 
     echo "<table cellspacing=1 border=0>
      <tr valign=moiddle>
 	 <td align=center style='width:100px;cursor:pointer;' onclick=add_new_data()>
 	   <img class=delliconBig src=images/skyblue/addbig.png title='" . $_SESSION['lang']['new'] . "'><br>" . $_SESSION['lang']['new'] . "</td>
+	 <td align=center style='width:100px;cursor:pointer;' onclick=add_upload()>
+	   <img class=delliconBig src=images/skyblue/upload.png title='" . $_SESSION['lang']['upload'] . "'><br>" . $_SESSION['lang']['upload'] . " Data </td>
 	 <td align=center style='width:100px;cursor:pointer;' onclick=displayList()>
 	   <img class=delliconBig src=images/skyblue/list.png title='" . $_SESSION['lang']['list'] . "'><br>" . $_SESSION['lang']['list'] . "</td>
-	 <td><fieldset><legend>" . $_SESSION['lang']['find'] . "</legend>";
-    echo $_SESSION['lang']['unit'] . " : <select id=kdOrgCr style=width:150px; >" . $optOrg . "</select>&nbsp;";
-    echo $_SESSION['lang']['periode'] . " : <select id=tgl_cari>" . $optPeriode . "</select>&nbsp";
-    echo $_SESSION['lang']['potongan'] . " : <select id=tpPotCr  style=width:150px; >" . $optTipePot . "</select>&nbsp;";
-    echo "<button class=mybutton onclick=loadData(0)>" . $_SESSION['lang']['find'] . "</button>";
-    echo "</fieldset></td>
+	 <td><fieldset><legend>" . $_SESSION['lang']['find'] . "</legend>
+	 <table>
+	 <tr>
+		<td nowrap>" . $_SESSION['lang']['unit'] . "</td>
+		<td>:</td>
+		<td><select id=kdOrgCr class=select2 onchange='loadData(0)' style=width:180px;>" . $optOrgSch . "</select></td>
+		<td nowrap>" . $_SESSION['lang']['periode'] . "</td>
+		<td>:</td>
+		<td><select id=tgl_cari class=select2 onchange='loadData(0)' style=width:180px;>" . $optPerSch . "</select></td>
+	 </tr>
+	 <tr>
+		<td nowrap>" . $_SESSION['lang']['potongan'] . "</td>
+		<td>:</td>
+		<td><select id=tpPotCr class=select2 onchange='loadData(0)' style=width:180px;>" . $optPotSch . "</select></td>
+	 </tr>
+	 <tr>
+		<td colspan=6>
+			<button class=mybutton onclick=loadData(0)>" . $_SESSION['lang']['find'] . "</button>
+			<button class=mybutton onclick=exportExcelPot()>" . $_SESSION['lang']['excel'] . "</button>
+			<button class=mybutton onclick=exportPdfPot()>PDF</button>
+			<button class=mybutton onclick=displayList()>" . $_SESSION['lang']['cancel'] . "</button>
+		</td>
+	 </tr>
+	 </table>
+	 </fieldset></td>
 	 </tr>
 	 </table> ";
     ?>
@@ -104,19 +155,19 @@ CLOSE_BOX();
                 <td><?php echo $_SESSION['lang']['unitkerja'] ?></td>
                 <td>:</td>
                 <td>
-                    <select id="kdOrg" name="kdOrg" style="width:200px;"
+                    <select id="kdOrg" name="kdOrg" class="select2" style="width:200px;"
                         onchange="getPrd()"><?php echo $optOrg; ?></select>
                 </td>
             </tr>
             <tr>
                 <td><?php echo $_SESSION['lang']['periode'] ?></td>
                 <td>:</td>
-                <td><select id="tglAbsen" style="width:200px"><? echo $optPeriode ?></select></td>
+                <td><select id="tglAbsen" class="select2" style="width:200px"><? echo $optPeriode ?></select></td>
             </tr>
             <tr>
                 <td><?php echo $_SESSION['lang']['potongan'] ?></td>
                 <td>:</td>
-                <td><select id="tpPotongan" name="tpPotongan" style="width:200px;"><?php echo $optTipePot; ?></select>
+                <td><select id="tpPotongan" name="tpPotongan" class="select2" style="width:200px;"><?php echo $optTipePot; ?></select>
                 </td>
             </tr>
             <tr>
@@ -134,6 +185,14 @@ CLOSE_BOX();
         </table>
     </fieldset>
 
+    <?php
+    CLOSE_BOX();
+    ?>
+</div>
+<div id="displayupload" style="display:none">
+    <?php
+    OPEN_BOX();
+    ?>
     <fieldset style="float:left">
         <legend><?php echo "Upload File" ?></legend>
         <table cellspacing="1" border="0">
@@ -141,19 +200,19 @@ CLOSE_BOX();
                 <td><?php echo $_SESSION['lang']['unitkerja'] ?></td>
                 <td>:</td>
                 <td>
-                    <select id="kodeorg2" name="kodeorg2" style="width:240px;"
+                    <select id="kodeorg2" name="kodeorg2" class="select2" style="width:240px;"
                         onchange="getPrd2()"><?php echo $optOrg; ?></select>
                 </td>
             </tr>
             <tr>
                 <td><?php echo $_SESSION['lang']['periode'] ?></td>
                 <td>:</td>
-                <td><select id="periode2" style="width:240px"><? echo $optPeriode ?></select></td>
+                <td><select id="periode2" class="select2" style="width:240px"><? echo $optPeriode ?></select></td>
             </tr>
             <tr>
                 <td><?php echo $_SESSION['lang']['potongan'] ?></td>
                 <td>:</td>
-                <td><select id="potongan2" name="potongan2" style="width:240px;"><?php echo $optTipePot; ?></select></td>
+                <td><select id="potongan2" name="potongan2" class="select2" style="width:240px;"><?php echo $optTipePot; ?></select></td>
             </tr>
             <tr>
                 <td><?php echo "Get Karyawan" ?></td>
