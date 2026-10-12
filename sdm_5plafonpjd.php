@@ -4,45 +4,35 @@ include('lib/nangkoelib.php');
 include('lib/zLib.php');
 include('lib/zFunction.php');
 echo open_body();
+require_once('lib/zSelect2.php');
 ?>
 <script language=javascript src='js/zMaster.js'></script>
 <script language=javascript src='js/zTools.js'></script>
 <script language=javascript1.2 src='js/sdm_5plafonpjd.js?v=<?php echo time(); ?>'></script>
-<script>
-
-</script>
 <?
 include('master_mainMenu.php');
 
 OPEN_BOX('','<span class=judul>'.getMenu('sdm_5plafonpjd').'</span><br>');
+
+#akses sesuai detail unit user (sama seperti halaman lain): unit = lokasi tugas + detail unit user, PT = induk unit-unit tersebut
+$unitAkses = getOrgDetail(1);
+$ptAkses = getOrgDetail(3);
+
 $optRegional="<option value=''>".$_SESSION['lang']['pilihdata']."</option>";
 $optRegionalx="<option value=''>".$_SESSION['lang']['all']."</option>";
 $optptx="<option value=''>".$_SESSION['lang']['all']."</option>";
 $optunx="<option value=''>".$_SESSION['lang']['all']."</option>";
 
-if($_SESSION['empl']['tipelokasitugas']=='HOLDING'){
-	$where.="";
-}else{
-	$where.=" and kodeorganisasi = '".$_SESSION['empl']['kodeorganisasi']."'";
-	$wherex.=" and kodeorg = '".$_SESSION['empl']['kodeorganisasi']."'";
-}
-
-$optpt="<option value=''>Pilih Data</option>";
-$str = "select namaorganisasi,kodeorganisasi from ".$dbname.".organisasi where tipe='PT' ".$where." order by namaorganisasi asc ";
-$res = $owlPDO->query($str)or die(print " Gagal: ".PDOException::getMessage());
-$res->setFetchMode(PDO::FETCH_ASSOC);
-while ($bar = $res->fetch()) {
-	$optpt.="<option value=".$bar['kodeorganisasi'].">".$bar['kodeorganisasi']." - ".$bar['namaorganisasi']."</option>";
-	$optptx.="<option value=".$bar['kodeorganisasi'].">".$bar['kodeorganisasi']." - ".$bar['namaorganisasi']."</option>";
+$optpt = "<option value=''>Pilih Data</option>";
+foreach($ptAkses as $kodept=>$namapt){
+	$optpt.="<option value='".$kodept."'>".$kodept." - ".$namapt."</option>";
+	$optptx.="<option value='".$kodept."'>".$kodept." - ".$namapt."</option>";
 }
 
 $optun = "<option value=''>".$_SESSION['lang']['pilihdata']."</option>";
-$str="select namaorganisasi,kodeorganisasi from ".$dbname.".organisasi where length(kodeorganisasi)=4 order by namaorganisasi asc ";
-$res=$owlPDO->query($str) or die(print " Gagal: ".PDOException::getMessage());
-$res->setFetchMode(PDO::FETCH_ASSOC);
-while($bar=$res->fetch()){
-	$optun.="<option value=".$bar['kodeorganisasi'].">".$bar['kodeorganisasi']." - ".$bar['namaorganisasi']."</option>";
-	$optunx.="<option value=".$bar['kodeorganisasi'].">".$bar['kodeorganisasi']." - ".$bar['namaorganisasi']."</option>";
+foreach($unitAkses as $kodeunit=>$namaunit){
+	$optun.="<option value='".$kodeunit."'>".$kodeunit." - ".$namaunit."</option>";
+	$optunx.="<option value='".$kodeunit."'>".$kodeunit." - ".$namaunit."</option>";
 }
 
 $sql="select distinct(regional) as regional, nama from ".$dbname.".sdm_5regionalpjd";
@@ -91,33 +81,8 @@ $optJenis="<option value=''>".$_SESSION['lang']['pilihdata']."</option>";
 $str="select * from ".$dbname.".sdm_5jenisbiayapjdinas order by id asc";
 $res=fetchdata($str);
 foreach($res as $bar){
-	$optJenis.="<option value=".$bar['id'].">".$bar['id']." - ".$bar['keterangan']."</option>";
-	$optJenisx.="<option value=".$bar['id'].">".$bar['id']." - ".$bar['keterangan']."</option>";
-}
-
-$optjab="<option value=''></option>";
-$optjab2="<option value=''>".$_SESSION['lang']['all']."</option>";
-$str="select * from ".$dbname.".sdm_5jabatan where namajabatan like '%driver%' order by namajabatan asc";
-$res=fetchdata($str);
-foreach($res as $bar){
-	$optjab.="<option value=".$bar['kodejabatan'].">".$bar['namajabatan']."</option>";
-	$optjab2.="<option value=".$bar['kodejabatan'].">".$bar['namajabatan']."</option>";
-}
-
-$opttujuan="<option value=''></option>";
-$optumdriver="<option value=''></option>";
-$opttujuanx="<option value=''>".$_SESSION['lang']['all']."</option>";
-$optumdriverx="<option value=''>".$_SESSION['lang']['all']."</option>";
-$str="select * from ".$dbname.".sdm_5setupdinasdriver where status = '1' order by id asc";
-$res=fetchdata($str);
-foreach($res as $bar){
-	if($bar['jenis']=='tujuan'){		
-		$opttujuan.="<option value=".$bar['id'].">".$bar['keterangan']."</option>";
-		$opttujuanx.="<option value=".$bar['id'].">".$bar['keterangan']."</option>";
-	}else{
-		$optumdriver.="<option value=".$bar['id'].">".$bar['keterangan']."</option>";
-		$optumdriverx.="<option value=".$bar['id'].">".$bar['keterangan']."</option>";
-	}
+	$optJenis.="<option value='".$bar['id']."'>".$bar['id']." - ".$bar['keterangan']."</option>";
+	$optJenisx.="<option value='".$bar['id']."'>".$bar['id']." - ".$bar['keterangan']."</option>";
 }
 
 echo"<fieldset>
@@ -126,57 +91,42 @@ echo"<fieldset>
 		<tr>
 			<td>".$_SESSION['lang']['pt']."</td>
 			<td>:</td>
-			<td><select id='pt' onchange=getunit() style='width:200px'>".$optpt."</select></td>
+			<td><select id='pt' class='select2' onchange=getunit() style='width:200px'>".$optpt."</select></td>
 		</tr>
 		<tr>
 			<td>".$_SESSION['lang']['unit']."</td>
 			<td>:</td>
-			<td><select id='unit' style='width:200px'>".$optun."</select></td>
+			<td><select id='unit' class='select2' style='width:200px'>".$optun."</select></td>
 		</tr>
 		<tr>
 			<td>".$_SESSION['lang']['regional']." ".$_SESSION['lang']['tujuan']."</td>
 			<td>:</td>
-			<td><select id='regional' style='width:200px'>".$optRegional."</select></td>
+			<td><select id='regional' class='select2' style='width:200px'>".$optRegional."</select></td>
 		</tr>
 		<tr>
 			<td>".$_SESSION['lang']['tipekaryawan']." </td>
 			<td>:</td>
-			<td><select id='tipekaryawan' style='width:200px'>".$optTipe."</select></td>
+			<td><select id='tipekaryawan' class='select2' style='width:200px'>".$optTipe."</select></td>
 		</tr>
 		<tr>
 			<td>Level ".$_SESSION['lang']['karyawan']."</td>
 			<td>:</td>
-			<td><select id='levelkaryawan' style='width:200px'>".$optLevel."</select></td>
+			<td><select id='levelkaryawan' class='select2' style='width:200px'>".$optLevel."</select></td>
 		</tr>
 		<tr>
 			<td>".$_SESSION['lang']['kodegolongan']." </td>
 			<td>:</td>
-			<td><select id='kodegolongan' style='width:200px'>".$optgol."</select></td>
+			<td><select id='kodegolongan' class='select2' style='width:200px'>".$optgol."</select></td>
 		</tr>
 		<tr>
 			<td style='vertical-align:top;'>".$_SESSION['lang']['jenis']."</td>
 			<td style='vertical-align:top;'>:</td>
-			<td><select id='jenis' style='width:200px'>".$optJenis."</select></td>
-		</tr>
-		<tr hidden>
-			<td style='vertical-align:top;'>".$_SESSION['lang']['jabatan']."</td>
-			<td style='vertical-align:top;'>:</td>
-			<td><select id='jabatan' style='width:200px'>".$optjab."</select></td>
-		</tr>
-		<tr hidden>
-			<td style='vertical-align:top;'>".$_SESSION['lang']['tujuan']." Driver</td>
-			<td style='vertical-align:top;'>:</td>
-			<td><select id='tujuan' style='width:200px'>".$opttujuan."</select></td>
-		</tr>
-		<tr hidden>
-			<td style='vertical-align:top;'>Uang Makan & Premi Driver</td>
-			<td style='vertical-align:top;'>:</td>
-			<td><select id='uangmakandriver' style='width:200px'>".$optumdriver."</select></td>
+			<td><select id='jenis' class='select2' style='width:200px'>".$optJenis."</select></td>
 		</tr>
 		<tr>
 			<td>".$_SESSION['lang']['rupiah']." (Rp)</td>
 			<td>:</td>
-			<td><input type='text' style='width:195px' id='rupiah' class='myinputtextnumber' onKeyPress='return angka_doang(event);' value='0' /></td>
+			<td><input type='text' style='width:195px' id='rupiah' maxlength='20' class='myinputtextnumber' onKeyPress='return angka_doang(event);' onkeyup=\"if(this.value!=''){z.numberFormat(this.id,2);}\" value='0' /></td>
 		</tr>
 		<tr>
 			<td colspan='2'></td>
@@ -189,7 +139,7 @@ echo"<fieldset>
 	 </table>
 	 <span>Kosongkan nilai rupiah jika plafon berupa voucher atau yang tidak bernilai rupiah.</span>
      </fieldset>";
- 
+
 CLOSE_BOX();
 OPEN_BOX();
 echo"<fieldset>
@@ -198,52 +148,36 @@ echo"<fieldset>
 		<tr>
 			<td>".$_SESSION['lang']['pt']."</td>
 			<td>:</td>
-			<td><select id='ptsch' onchange=loadData() style='width:150px'>".$optptx."</select></td>
+			<td><select id='ptsch' class='select2' onchange=loadData(0) style='width:150px'>".$optptx."</select></td>
 
 			<td>".$_SESSION['lang']['unit']."</td>
 			<td>:</td>
-			<td><select id='unitsch' onchange=loadData() style='width:150px'>".$optunx."</select></td>
+			<td><select id='unitsch' class='select2' onchange=loadData(0) style='width:150px'>".$optunx."</select></td>
 
 			<td>".$_SESSION['lang']['regional']." ".$_SESSION['lang']['tujuan']."</td>
 			<td>:</td>
-			<td><select id='regionalsch' onchange=loadData() style='width:150px'>".$optRegionalx."</select></td>
+			<td><select id='regionalsch' class='select2' onchange=loadData(0) style='width:150px'>".$optRegionalx."</select></td>
 
 			<td>".$_SESSION['lang']['tipekaryawan']." </td>
 			<td>:</td>
-			<td><select id='tipekaryawansch' onchange=loadData() style='width:150px'>".$optTipex."</select></td>
+			<td><select id='tipekaryawansch' class='select2' onchange=loadData(0) style='width:150px'>".$optTipex."</select></td>
 
 			<td>Level ".$_SESSION['lang']['karyawan']." </td>
 			<td>:</td>
-			<td><select id='levelkaryawansch' onchange=loadData() style='width:150px'>".$optLevelx."</select></td>
-		
+			<td><select id='levelkaryawansch' class='select2' onchange=loadData(0) style='width:150px'>".$optLevelx."</select></td>
+
 			<td>".$_SESSION['lang']['kodegolongan']." </td>
 			<td>:</td>
-			<td><select id='kodegolongansch' onchange=loadData() style='width:150px'>".$optgolx."</select></td>
-		
+			<td><select id='kodegolongansch' class='select2' onchange=loadData(0) style='width:150px'>".$optgolx."</select></td>
+
 			<td style='vertical-align:top;'>".$_SESSION['lang']['jenis']."</td>
 			<td style='vertical-align:top;'>:</td>
-			<td><select id='jenissch' onchange=loadData() style='width:150px'>".$optJenisx."</select></td>
-		</tr>
-		<tr>
-			<td hidden>".$_SESSION['lang']['jabatan']."</td>
-			<td hidden>:</td>
-			<td hidden><select id='jabatansch' onchange=loadData() style='width:150px'>".$optjab2."</select></td>
-		
-			<td hidden>".$_SESSION['lang']['tujuan']." Driver</td>
-			<td hidden>:</td>
-			<td hidden><select id='tujuansch' onchange=loadData() style='width:150px'>".$opttujuanx."</select></td>
-		
-			<td hidden style='vertical-align:top;'>Uang Makan & Premi Driver</td>
-			<td hidden style='vertical-align:top;'>:</td>
-			<td hidden><select id='umpremisch' onchange=loadData() style='width:150px'>".$optumdriverx."</select></td>
+			<td><select id='jenissch' class='select2' onchange=loadData(0) style='width:150px'>".$optJenisx."</select></td>
 		</tr>
 		<tr>
 			<td colspan=2></td>
-			<td><button class=mybutton onclick=loadData()>".$_SESSION['lang']['preview']."</button></td>
+			<td><button class=mybutton onclick=loadData(0)>".$_SESSION['lang']['preview']."</button></td>
 		</tr>
-		
-		
-	
 	</table><hr>
 	<div class='table-scroll' style=height:60vh>
 	<table class=sortable cellspacing=1 border=0 cellpadding=3 style='width:100%;'>
@@ -257,11 +191,8 @@ echo"<fieldset>
 			<th>Level ".$_SESSION['lang']['karyawan']."</th>
 			<th>".$_SESSION['lang']['kodegolongan']."</th>
 			<th>".$_SESSION['lang']['jenis']."</th>
-			<th hidden>".$_SESSION['lang']['jabatan']."</th>
-			<th hidden>".$_SESSION['lang']['tujuan']." Driver</th>
-			<th hidden>Uang Makan & Premi Driver</th>
 			<th>".$_SESSION['lang']['rupiah']." (Rp)</th>
-			<th colspan=2 style='text-align:center'>".$_SESSION['lang']['action']."</th>    
+			<th colspan=2 style='text-align:center'>".$_SESSION['lang']['action']."</th>
 	  </tr>
 	 </thead>
 	 <tbody id=container>";
