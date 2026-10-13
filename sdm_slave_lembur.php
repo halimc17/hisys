@@ -2194,11 +2194,12 @@ switch ($proses) {
 		echo $optBlok;
 	break;
     case'createTable':
+        $tgl_db = substr($tgl, 0, 4) . '-' . substr($tgl, 4, 2) . '-' . substr($tgl, 6, 2);
         if (strlen($kdOrg) > 4) {
-            $where = " subbagian='" . $kdOrg . "'   and statuskaryawan != 'Keluar' and ((tanggalkeluar>" . $tgl . " or tanggalkeluar='0000-00-00') OR (tanggalkeluar!='0000-00-00' AND statuskaryawan = 'Percobaan'))";
+            $where = " ((subbagian='" . $kdOrg . "' AND karyawanid NOT IN (SELECT karyawanid FROM ".$dbname.".sdm_riwayatjabatan WHERE kesubbagian='".$kdOrg."' AND mulaiberlaku > '".$tgl_db."')) OR karyawanid IN (SELECT karyawanid FROM ".$dbname.".sdm_riwayatjabatan WHERE darisubbagian='".$kdOrg."' AND mulaiberlaku > '".$tgl_db."')) and statuskaryawan != 'Keluar' and ((tanggalkeluar>" . $tgl . " or tanggalkeluar='0000-00-00') OR (tanggalkeluar!='0000-00-00' AND statuskaryawan = 'Percobaan'))";
         } else {
-            $where = " lokasitugas='" . $kdOrg . "'  and statuskaryawan != 'Keluar' and (subbagian IS NULL or subbagian='0' or subbagian='') and ((tanggalkeluar>" . $tgl . " or tanggalkeluar='0000-00-00') OR (tanggalkeluar!='0000-00-00' AND statuskaryawan = 'Percobaan'))";
-        }//namakaryawan,karyawanid,nik
+            $where = " ((lokasitugas='" . $kdOrg . "' AND karyawanid NOT IN (SELECT karyawanid FROM ".$dbname.".sdm_riwayatjabatan WHERE kekodeorg='".$kdOrg."' AND mulaiberlaku > '".$tgl_db."')) OR karyawanid IN (SELECT karyawanid FROM ".$dbname.".sdm_riwayatjabatan WHERE darikodeorg='".$kdOrg."' AND mulaiberlaku > '".$tgl_db."')) and statuskaryawan != 'Keluar' and (subbagian IS NULL or subbagian='0' or subbagian='') and ((tanggalkeluar>" . $tgl . " or tanggalkeluar='0000-00-00') OR (tanggalkeluar!='0000-00-00' AND statuskaryawan = 'Percobaan'))";
+        }
 
         $optTipeKar = makeOption($dbname, 'sdm_5tipekaryawan', 'id,tipe');
 
@@ -2433,11 +2434,12 @@ switch ($proses) {
 
     case'createTableall':
         $where = "";
+        $tgl_db = substr($tgl, 0, 4) . '-' . substr($tgl, 4, 2) . '-' . substr($tgl, 6, 2);
         //exit('warning : '.$kdOrg);
         if (strlen($kdOrg) > 4) {
-            $where = " subbagian='" . $kdOrg . "'  and (tanggalkeluar>='" . $tgl . "' or tanggalkeluar='0000-00-00')";
+            $where = " ((subbagian='" . $kdOrg . "' AND karyawanid NOT IN (SELECT karyawanid FROM ".$dbname.".sdm_riwayatjabatan WHERE kesubbagian='".$kdOrg."' AND mulaiberlaku > '".$tgl_db."')) OR karyawanid IN (SELECT karyawanid FROM ".$dbname.".sdm_riwayatjabatan WHERE darisubbagian='".$kdOrg."' AND mulaiberlaku > '".$tgl_db."')) and (tanggalkeluar>='" . $tgl . "' or tanggalkeluar='0000-00-00')";
         } else {
-            $where = " lokasitugas='" . $kdOrg . "' and (subbagian IS NULL or subbagian='0' or subbagian='') and (tanggalkeluar>='" . $tgl . "' or tanggalkeluar='0000-00-00')";
+            $where = " ((lokasitugas='" . $kdOrg . "' AND karyawanid NOT IN (SELECT karyawanid FROM ".$dbname.".sdm_riwayatjabatan WHERE kekodeorg='".$kdOrg."' AND mulaiberlaku > '".$tgl_db."')) OR karyawanid IN (SELECT karyawanid FROM ".$dbname.".sdm_riwayatjabatan WHERE darikodeorg='".$kdOrg."' AND mulaiberlaku > '".$tgl_db."')) and (subbagian IS NULL or subbagian='0' or subbagian='') and (tanggalkeluar>='" . $tgl . "' or tanggalkeluar='0000-00-00')";
         }
 
         if ($tipekar != '') {
