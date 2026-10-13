@@ -700,7 +700,7 @@ switch ($proses) {
         }
 
         if ($data['tanggal'] == '') {
-            exit("Warning : ".$_SESSION['lang']['tanggalterima']." ".$_SESSION['lang']['kosong']);
+            exit("Warning : ".$_SESSION['lang']['tanggalinvoice']." ".$_SESSION['lang']['kosong']);
         }
 
         if ($data['jenissupplier'] == '') {
@@ -1385,7 +1385,7 @@ switch ($proses) {
 		$data = $_POST;
 
 		if ($data['tanggalinvoice'] == '') {
-			exit('warning : Invoice Date is obligatory');
+			exit('Warning : Tanggal Terima Dokumen masih kosong');
 		}
 
 		if ($data['keterangan2'] == '') {
@@ -2813,8 +2813,8 @@ switch ($proses) {
 					<td>" . $bar['noakun'] . "</td>
                     <td>" . $bar['kodeorg'] . "</td>
                     <td>" . $bar['unit'] . "</td>
-                    <td>" . tanggalnormal($bar['tanggalinvoice']) . "</td>
                     <td>" . tanggalnormal($bar['tanggal']) . "</td>
+                    <td>" . tanggalnormal($bar['tanggalinvoice']) . "</td>
                     <td>" . $bar['nopo'] . "</td>
                     <td>" . $optSup[$bar['kodesupplier']] . "</td>
                     
@@ -7744,12 +7744,17 @@ switch ($proses) {
 		}
 
 		if ($param['tanggalinvoice'] == '') {
-			exit("Warning:Tanggal Invoice masih kosong");
+			exit("Warning:Tanggal Terima Dokumen masih kosong");
 		}
 
 		if ($param['tanggal'] == '') {
-			exit("Warning:Tanggal Dokumen masih kosong");
+			exit("Warning:Tanggal Invoice masih kosong");
 		}
+
+			#tanggal terima dokumen tidak mungkin lebih awal dari tanggal invoice
+			if (tanggalsystemn($param['tanggalinvoice']) < tanggalsystemn($param['tanggal'])) {
+				exit("Warning:Tanggal Terima Dokumen (" . $param['tanggalinvoice'] . ") tidak boleh lebih awal dari Tanggal Invoice (" . $param['tanggal'] . ")");
+			}
 
 		if ($param['noinvoicesupplier'] == '') {
 			exit("Warning:No. Invoice Supplier masih kosong");

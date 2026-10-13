@@ -2541,7 +2541,7 @@ function getnodok() {
   unit = trim(document.getElementById("unit").value);
 
   if (tanggalinvoice == "") {
-    alert("Tanggal Invoice Tidak boleh kosong");
+    alert("Tanggal Terima Dokumen tidak boleh kosong");
     return;
   }
 
@@ -2829,6 +2829,17 @@ function saveht(parameter) {
       param += passP[i] + "=" + getValue(passP[i]);
     } else {
       param += "&" + passP[i] + "=" + getValue(passP[i]);
+    }
+  }
+  //tanggal terima dokumen tidak boleh lebih awal dari tanggal invoice
+  var tglInvoice = getValue("tanggal");
+  var tglTerima = getValue("tanggalinvoice");
+  if (tglInvoice != "" && tglTerima != "") {
+    var pInv = tglInvoice.split("-");
+    var pTrm = tglTerima.split("-");
+    if (new Date(pTrm[2], pTrm[1] - 1, pTrm[0]) < new Date(pInv[2], pInv[1] - 1, pInv[0])) {
+      alertify.alert("Informasi", "Tanggal Terima Dokumen (" + tglTerima + ") tidak boleh lebih awal dari Tanggal Invoice (" + tglInvoice + ")");
+      return;
     }
   }
   param += "&proses=" + proses;
