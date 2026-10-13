@@ -2901,3 +2901,8 @@ function detailBlokKecilDt(noht) {
     }
   });
 }
+
+//popup rincian asal angka Rupiah Gudang dan Rupiah Total pada grid transaksi
+function tampilRincianNilai(el) {
+  alertify.alert("Sumber Nilai", el.getAttribute("data-rincian"));
+}
