@@ -1,3 +1,26 @@
+//select2 untuk dropdown halaman ini (zSelect2.js tidak dimuat)
+$(document).ready(function () {
+	$('.select2').select2({dropdownAutoWidth: true});
+	//daftar pilihan select2 harus tampil di atas popup/dialog
+	$('<style>.select2-container--open .select2-dropdown{z-index:100000;}</style>').appendTo('head');
+});
+
+//select2 untuk dropdown yang dibuat setelah halaman tampil (form detail)
+function initSelectBNS(selector) {
+	if ($(selector).length > 0 && typeof $.fn.select2 === 'function') {
+		$(selector).select2({dropdownAutoWidth: true, width: '100%'});
+	}
+}
+
+//set nilai select2 tanpa memicu onchange bawaan select
+//onchange inline dimatikan sebentar karena trigger jQuery ikut menjalankannya
+function setSel(id, v) {
+	var el = document.getElementById(id);
+	var handler = el.onchange;
+	el.onchange = null;
+	$('#' + id).val(v === null ? '' : v).trigger('change.select2');
+	el.onchange = handler;
+}
 function add_new_data() {
 	document.getElementById('header').style.display = 'block';
 	document.getElementById('listData').style.display = 'none';
@@ -95,9 +118,8 @@ function form() {
 	showDialog1(title, content, width, height, ev);
 }
 function previewexcelbansos(notransaksi, kodeorg, periode, tipe) {
-	param = 'method=html' + '&kodeorg=' + kodeorg + '&periode=' + periode + '&notransaksi=' + notransaksi + '&tipe=' + tipe;
-	tujuan = 'lgl_slave_bansos.php' + "?" + param;
-	printnopopup(tujuan + '?' + param)
+	//Excel satu bansos
+	tampilTarikanBNS('Report Ms.Excel', 'lgl_slave_bansos.php?method=excelBNS&notransaksi=' + encodeURIComponent(notransaksi));
 }
 function html(notransaksi, kodeorg, periode, tipe) {
 	width = '';
@@ -139,37 +161,37 @@ function pdf(notransaksi, kodeorg, periode, tipe) {
 }
 
 function displayList() {
-	document.getElementById('divsch').value = '';
+	setSel('divsch', '');
 	document.getElementById('namasrc').value = '';
 	document.getElementById('tanggalmulai').value = '';
 	document.getElementById('tanggalsampai').value = '';
 	document.getElementById('kasbanksrc').value = '';
-	document.getElementById('ptsrc').value = '';
-	document.getElementById('status').value = '';
+	setSel('ptsrc', '');
+	setSel('status', '');
 	document.getElementById('listData').style.display = 'block';
 	document.getElementById('header').style.display = 'none';
 	document.getElementById('detail').style.display = 'none';
 	loaddata(0);
 }
 function edit(kodeorg, tanggal, notransaksi, kategori, namapemesan, lokasipemesan, tujuan, rekening, tipebayar, atasnama, npwp) {
-	document.getElementById('tipebayar').value = tipebayar;
+	setSel('tipebayar', tipebayar);
 	document.getElementById('atasnama').value = atasnama;
 	document.getElementById('npwp').value = npwp;
 	document.getElementById('notransaksi').value = notransaksi;
-	document.getElementById('kodeorg').value = kodeorg;
+	setSel('kodeorg', kodeorg);
 	document.getElementById('tanggal').value = tanggal;
-	document.getElementById('kategori').value = kategori;
+	setSel('kategori', kategori);
 	document.getElementById('namapemesan').value = namapemesan;
-	document.getElementById('lokasipemesan').value = lokasipemesan;
+	setSel('lokasipemesan', lokasipemesan);
 	document.getElementById('tujuan').value = tujuan;
-	document.getElementById('rekening').value = rekening;
+	setSel('rekening', rekening);
 	document.getElementById('listData').style.display = 'none';
 	document.getElementById('header').style.display = 'block';
 	//document.getElementById('detail').style.display='block';
 	detail(notransaksi, kodeorg, tanggal);
 }
-function deletedetail(notransaksi, kodeorg, kategori, tujuan, deskripsi, tanggal, satuan) {
-	param = 'method=deletedetail' + '&notransaksi=' + notransaksi + '&kodeorg=' + kodeorg + '&kategori=' + kategori + '&tujuan=' + tujuan + '&deskripsi=' + deskripsi + '&tanggal=' + tanggal + '&satuan=' + satuan;
+function deletedetail(notransaksi, deskripsi, satuan) {
+	param = 'method=deletedetail' + '&notransaksi=' + encodeURIComponent(notransaksi) + '&deskripsi=' + encodeURIComponent(deskripsi) + '&satuan=' + encodeURIComponent(satuan);
 	tujuan = 'lgl_slave_bansos.php';
 	if (confirm('Anda yakin ???')) {
 		post_response_text(tujuan, param, respog);
@@ -233,8 +255,8 @@ function detail() {
 	document.getElementById('lokasipemesan').disabled = true;
 	param = 'method=detail';
 	param += '&tanggal=' + tanggal + '&kodeorg=' + kodeorg;
-	param += '&kategori=' + kategori + '&namapemesan=' + namapemesan + '&lokasipemesan=' + lokasipemesan;
-	param += '&tujuan=' + tujuan;
+	param += '&kategori=' + kategori + '&namapemesan=' + encodeURIComponent(namapemesan) + '&lokasipemesan=' + lokasipemesan;
+	param += '&tujuan=' + encodeURIComponent(tujuan);
 	param += '&rekening=' + rekening;
 	tujuan = 'lgl_slave_bansos.php';
 	post_response_text(tujuan, param, respog);
@@ -247,6 +269,7 @@ function detail() {
 				} else {
 					document.getElementById('detail').style.display = 'block';
 					document.getElementById('detail').innerHTML = con.responseText;
+					initSelectBNS('#satuan');
 					loaddatadetail(notransaksi);
 				}
 			} else {
@@ -279,7 +302,7 @@ function loaddata(page, tipe = 'html') {
 		param += '&divsch=' + divsch;
 	}
 	if (namasrc != '') {
-		param += '&namasrc=' + namasrc;
+		param += '&namasrc=' + encodeURIComponent(namasrc);
 	}
 	if (status != '') {
 		param += '&status=' + status;
@@ -323,16 +346,16 @@ function cancel() {
 	document.getElementById('tanggal').disabled = false;
 	document.getElementById('tanggal').value = '';
 	document.getElementById('kodeorg').disabled = false;
-	document.getElementById('kodeorg').value = '';
+	setSel('kodeorg', '');
 	document.getElementById('notransaksi').value = '';
-	document.getElementById('kategori').value = '';
-	document.getElementById('lokasipemesan').value = '';
+	setSel('kategori', '');
+	setSel('lokasipemesan', '');
 	document.getElementById('namapemesan').value = '';
-	document.getElementById('tipebayar').value = '';
+	setSel('tipebayar', '');
 	document.getElementById('atasnama').value = '';
 	document.getElementById('npwp').value = '';
 	document.getElementById('tujuan').value = '';
-	document.getElementById('rekening').value = '';
+	setSel('rekening', '');
 	document.getElementById('kategori').disabled = false;
 	document.getElementById('lokasipemesan').disabled = false;
 }
@@ -391,15 +414,15 @@ function savedetail() {
 	param += '&tanggal=' + tanggal;
 	param += '&notransaksi=' + notransaksi;
 	param += '&kategori=' + kategori;
-	param += '&namapemesan=' + namapemesan;
+	param += '&namapemesan=' + encodeURIComponent(namapemesan);
 	param += '&lokasipemesan=' + lokasipemesan;
-	param += '&tujuan=' + tujuan;
-	param += '&deskripsi=' + deskripsi;
+	param += '&tujuan=' + encodeURIComponent(tujuan);
+	param += '&deskripsi=' + encodeURIComponent(deskripsi);
 	param += '&satuan=' + satuan;
 	param += '&rupiah=' + rupiah;
 	param += '&rekening=' + rekening;
-	param += '&atasnama=' + atasnama;
-	param += '&npwp=' + npwp;
+	param += '&atasnama=' + encodeURIComponent(atasnama);
+	param += '&npwp=' + encodeURIComponent(npwp);
 	param += '&tipebayar=' + tipebayar;
 	param += '&method=' + method;
 	tujuan = 'lgl_slave_bansos.php';
@@ -424,7 +447,7 @@ function savedetail() {
 }
 function cleardetail() {
 	document.getElementById('deskripsi').value = '';
-	document.getElementById('satuan').value = '';
+	setSel('satuan', '');
 	document.getElementById('rupiah').value = '';
 	document.getElementById('method').value = 'insert';
 }
@@ -459,7 +482,17 @@ function submitfile() {
 	formdata.append("file", file);
 	formdata.append("notransaksi", notransaksi);
 	if (getValue('upload') == "") {
-		alert("warning : Upload file has been empty.");
+		alert("Warning : Silahkan pilih file yang akan diupload.");
+		return false;
+	}
+	var formatOk = ['jpeg', 'jpg', 'png', 'pdf', 'xls', 'xlsx', 'doc', 'docx'];
+	var extFile = file.name.split('.').pop().toLowerCase();
+	if (file.name.indexOf('.') < 0 || formatOk.indexOf(extFile) < 0) {
+		alert("Warning : Format file upload harus ." + formatOk.join(', .') + ".");
+		return false;
+	}
+	if (file.size > 10 * 1024 * 1024) {
+		alert("Warning : Ukuran file melebihi batas, maksimal 10 MB.");
 		return false;
 	}
 	if (notransaksi == "") {
@@ -467,6 +500,8 @@ function submitfile() {
 		return false;
 	}
 	var con = createXMLHttpRequest();
+	document.getElementById('btnsubmit').disabled = true;
+	busy_on();
 	con.open("POST", "lgl_slave_bansos.php?method=submitfile", true);
 	con.onreadystatechange = eval(respon);
 	con.send(formdata);
@@ -475,15 +510,18 @@ function submitfile() {
 			if (con.status == 200) {
 				busy_off();
 				if (!isSaveResponse(con.responseText)) {
+					document.getElementById('btnsubmit').disabled = false;
 					alert(con.responseText);
 				} else {
 					//=== Success Response
 					alert('Uploaded Success.');
+					document.getElementById('btnsubmit').disabled = false;
 					document.getElementById("upload").value = "";
 					loadfiles(notransaksi);
 				}
 			} else {
 				busy_off();
+				document.getElementById('btnsubmit').disabled = false;
 				error_catch(con.status);
 			}
 		}
@@ -517,7 +555,7 @@ function loadfiles(notransaksi) {
 function deletefile(notransaksi, namafile) {
 	param = "method=deletefile";
 	param += "&notransaksi=" + notransaksi;
-	param += "&namafile=" + namafile;
+	param += "&namafile=" + encodeURIComponent(namafile);
 	tujuan = 'lgl_slave_bansos.php';
 
 	if (confirm('Apakah anda yakin menghapus?')) {
@@ -540,8 +578,8 @@ function deletefile(notransaksi, namafile) {
 	}
 }
 function viewfile(ev, namafile) {
-	ext = namafile.split(".");
-	if (trim(ext[1]) == 'jpg' || trim(ext[1]) == 'jpeg' || trim(ext[1]) == 'png') {
+	var extFile = namafile.split('.').pop().toLowerCase();
+	if (extFile == 'jpg' || extFile == 'jpeg' || extFile == 'png') {
 		width = '';
 		height = '';
 		content = "<fieldset style=\"width:97%;\"><div id=contviewx style=\"width:100%;height:100%;overflow:auto;\"></div></fieldset>";
@@ -587,7 +625,7 @@ function getrekening() {
 				} else {
 					if (tipebayar == 'transfer') {
 						document.getElementById('rekening').innerHTML = trim(con.responseText);
-						document.getElementById('rekening').value = '';
+					setSel('rekening', '');
 						document.getElementById('atasnama').value = '';
 						document.getElementById('rekening').disabled = false;
 						document.getElementById('atasnama').disabled = true;
@@ -676,4 +714,29 @@ function unposting(kodeorg, tanggal, notransaksi) {
 			}
 		}
 	}
+}
+
+//parameter filter daftar untuk tarikan Excel/PDF
+function getFilterParamBNS() {
+	var p = '';
+	p += '&divsch=' + encodeURIComponent(document.getElementById('divsch').value);
+	p += '&ptsrc=' + encodeURIComponent(document.getElementById('ptsrc').value);
+	p += '&katsrc=' + encodeURIComponent(document.getElementById('katsrc').value);
+	p += '&status=' + encodeURIComponent(document.getElementById('status').value);
+	p += '&namasrc=' + encodeURIComponent(document.getElementById('namasrc').value.trim());
+	p += '&tanggalmulai=' + encodeURIComponent(document.getElementById('tanggalmulai').value);
+	p += '&tanggalsampai=' + encodeURIComponent(document.getElementById('tanggalsampai').value);
+	return p;
+}
+
+function tampilTarikanBNS(judul, tujuan) {
+	alertify.popup(judul, "<iframe frameborder=0 style='width:100%;height:100%;overflow:none' src='" + tujuan + "'></iframe>").set({'resizable': true, 'maximizable': true, 'overflow': false}).resizeTo('80%', '70%');
+}
+
+function exportExcelBNS() {
+	tampilTarikanBNS('Report Ms.Excel', 'lgl_slave_bansos.php?method=excellist' + getFilterParamBNS());
+}
+
+function exportPdfBNS() {
+	tampilTarikanBNS('Report PDF', 'lgl_slave_bansos.php?method=pdflist' + getFilterParamBNS());
 }
