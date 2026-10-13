@@ -208,7 +208,9 @@ switch ($method) {
 					} else {
 						$grid .= "align='right'";
 					}
-					if ($head == 'jumlahrp' or $head == 'hk' or $head == 'hasilkerjajumlah') {
+					if ($head == 'hk' or $head == 'hasilkerjajumlah') {
+						$grid .= ">" . angkaPisah($cont) . "</td>";
+					} elseif ($head == 'jumlahrp') {
 						$grid .= ">" . number_format($cont) . "</td>";
 					} elseif ($head == 'satuan') {
 						$grid .= ">" . $cont . "</td>";
@@ -2066,7 +2068,7 @@ switch ($method) {
 			$tab .= "<td align=left hidden id=kegpost" . $no . ">" . $val['kodekegiatan'] . "</td>";
 			$tab .= "<td align=left >" . ($optAct[$val['kodekegiatan']] == '' ? $optActv[$val['kodekegiatan']] : $optAct[$val['kodekegiatan']]) . "</td>";
 			$tab .= "<td align=right id=hkpost" . $no . ">" . number_format($val['hkrealisasi']) . "</td>";
-			$tab .= "<td align=right id=hslkerjapost" . $no . ">" . number_format($val['hasilkerjarealisasi']) . "</td>";
+			$tab .= "<td align=right id=hslkerjapost" . $no . ">" . angkaPisah($val['hasilkerjarealisasi']) . "</td>";
 			$tab .= "<td align=right  id=realpost" . $no . ">" . number_format($val['jumlahrealisasi'], 2) . "</td>";
 			$tab .= "</tr>";
 			@$ttl += $val['jumlahrealisasi'];
@@ -2313,7 +2315,7 @@ switch ($method) {
 			$tab .= "<td>" . $bar['kodekegiatan'] . "-" . @$nmkeg[$bar['kodekegiatan']] . "</td>";
 			$tab .= "<td>" . @$nmsat[$bar['kodekegiatan']] . "</td>";
 			$tab .= "<td>" . @$nmblok[$bar['kodeblok']] . "</td>";
-			$tab .= "<td align=right>" . number_format($bar['hasilkerjarealisasi']) . "</td>";
+			$tab .= "<td align=right>" . angkaPisah($bar['hasilkerjarealisasi']) . "</td>";
 			$tab .= "<td align=right>" . @number_format($bar['jumlahrealisasi'] / $bar['hasilkerjarealisasi'], 1) . "</td>";
 			$tab .= "<td align=right>" . number_format($bar['jumlahrealisasi']) . "</td>";
 			$tab .= "<td>" . $bar['keterangan'] . "</td>";
@@ -2328,7 +2330,7 @@ switch ($method) {
 						<td>" . @$nmkeg[$bar['kodekegiatan']] . "</td>
 						<td>" . @$nmsat[$bar['kodekegiatan']] . "</td>
 						<td>" . @$nmblok[$bar['kodeblok']] . "</td>
-						<td align=right>" . number_format($valx['hasilkerjarealisasi']) . "</td>
+						<td align=right>" . angkaPisah($valx['hasilkerjarealisasi']) . "</td>
 						<td align=right>" . number_format($valx['jumlahrealisasi'] / $valx['hasilkerjarealisasi']) . "</td>
 						<td align=right>" . number_format($valx['jumlahrealisasi']) . "</td>
 						<td>" . $valx['keterangan2'] . "</td>
