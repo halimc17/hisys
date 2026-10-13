@@ -16,15 +16,12 @@ require_once('lib/zSelect2Lite.php');
 <script language=javascript src=js/zSearch.js></script>
 <script language=javascript1.2 src=js/formTable.js></script>
 <script language=javascript src=js/sdm_angsuran.js?v=<?php echo time(); ?>></script>
-<script>
-	getSelect2();
-</script>
 
 <?php
 
 	OPEN_BOX('','<span class=judul>'.getMenu('sdm_angsuran').'</span>');
 	echo"<div>";
-	$optlokasitugas="<option value=''>".$_SESSION['lang']['pilihdata']."</option>";
+	$optlokasitugas="<option value=''>".$_SESSION['lang']['all']."</option>";
 	$arrorgdet  = getOrgDetail(2);
 
 	// $optjenisangsuran="<option value=''>".$_SESSION['lang']['pilihdata']."</option>";
@@ -35,11 +32,14 @@ require_once('lib/zSelect2Lite.php');
 	} 
 
 	
-	$str="select komponengaji,jenisangsuran from ".$dbname.".sdm_angsuran_komponen where status='1'";
+	#jenis angsuran hanya milik PT user (komponengaji 120 dipakai semua PT)
+	$optjenisangsuran="<option value=''>".$_SESSION['lang']['all']."</option>";
+	$str="select distinct komponengaji,jenisangsuran from ".$dbname.".sdm_angsuran_komponen where status='1' and kodeorg in (".getOrgDetail(4).")";
 	$res=fetchdata($str);
 	foreach($res as $val){
 		$optjenisangsuran.="<option value='".$val['komponengaji']."'>".$val['jenisangsuran']."</option>";
 	}
+	$optstatus="<option value=''>".$_SESSION['lang']['all']."</option><option value='belum'>Belum Lunas</option><option value='lunas'>Lunas</option>";
 	echo   "<table cellspacing=1 border=0>
 				<tbody>
 					<tr valign=middle>
@@ -55,34 +55,38 @@ require_once('lib/zSelect2Lite.php');
 						<td>
 							<fieldset style='width:auto;'>
 								<legend>".$_SESSION['lang']['find']."</legend>
-								<table>
-									<tr>
-										<td align=left>".$_SESSION['lang']['notransaksi']."</td>
-										<td>:</td>
-										<td><input type=text id=notransaksisch onkeyup=loadData(); maxlength=20 class=myinputtext size=26 style=\"width:200px;\"></td>
+									<table>
+										<tr>
+											<td nowrap>".$_SESSION['lang']['notransaksi']."</td>
+											<td>:</td>
+											<td><input type=text id=notransaksisch onkeyup=loadData(); maxlength=20 class=myinputtext style=\"width:180px;\"></td>
 
-										<td align=left>".$_SESSION['lang']['nama']."</td>
-										<td>:</td>
-										<td><input type=text id=namasch onkeyup=loadData(); maxlength=30 class=myinputtext size=26 style=\"width:200px;\"></td>
+											<td nowrap>".$_SESSION['lang']['nama']."</td>
+											<td>:</td>
+											<td><input type=text id=namasch onkeyup=loadData(); maxlength=30 class=myinputtext style=\"width:180px;\"></td>
 
-										<td align=left>".$_SESSION['lang']['lokasitugas']."</td>
-										<td>:</td>
-										<td>
-										<select style='width:100px;' id='lokasitugassch' onchange='loadData()'>".$optlokasitugas."</select></td>
+											<td nowrap>".$_SESSION['lang']['lokasitugas']."</td>
+											<td>:</td>
+											<td><select id=lokasitugassch class=select2 onchange=loadData() style=width:180px;>".$optlokasitugas."</select></td>
+										</tr>
+										<tr>
+											<td nowrap>".$_SESSION['lang']['jenis']." Angsuran</td>
+											<td>:</td>
+											<td><select id=jenisangsuransch class=select2 onchange=loadData() style=width:180px;>".$optjenisangsuran."</select></td>
 
-										<td align=left>".$_SESSION['lang']['jenis']." Angsuran</td>
-										<td>:</td>
-										<td>
-										<select style='width:100px;' id='jenisangsuransch' onchange='loadData()'>".$optjenisangsuran."</select></td>
-
-										<td></td>
-										<td></td>
-										<td>
-											<button class=mybutton onclick=loadData()>".$_SESSION['lang']['find']."</button>
-											<button class=mybutton onclick=displayList()>".$_SESSION['lang']['cancel']."</button>
-										</td>
-									</tr>
-								</table>
+											<td nowrap>".$_SESSION['lang']['status']."</td>
+											<td>:</td>
+											<td><select id=statussch class=select2 onchange=loadData() style=width:180px;>".$optstatus."</select></td>
+										</tr>
+										<tr>
+											<td colspan=9>
+												<button class=mybutton onclick=loadData()>".$_SESSION['lang']['find']."</button>
+												<button class=mybutton onclick=exportExcelAng()>".$_SESSION['lang']['excel']."</button>
+												<button class=mybutton onclick=exportPdfAng()>PDF</button>
+												<button class=mybutton onclick=displayList()>".$_SESSION['lang']['cancel']."</button>
+											</td>
+										</tr>
+									</table>
 							</fieldset>
 						</td>
 					</tr>
@@ -190,13 +194,13 @@ echo"<input type='hidden' id='method' name='method' value='insert'  />
 			<td>".$_SESSION['lang']['total']." ".$_SESSION['lang']['hutang']." <font size=2px style=color:red><b>*</b></font></td>
 			<td>:</td>
 			<td>
-				<input type=text id=tothutang style='width:240px;'  class=myinputtextnumber size=9  onkeypress=\"return angka_doang(event);\" value=0 onblur=change_number(this)>
+				<input type=text id=tothutang style='width:240px;'  class=myinputtextnumber size=9  onkeypress=\"return angka_doang(event);\" value=0 onkeyup=\"if(this.value!=''){z.numberFormat(this.id,2);}\">
 			</td>
 
 			<td>".$_SESSION['lang']['rupiah']."/".$_SESSION['lang']['bulan']." <font size=2px style=color:red><b>*</b></font></td>
 			<td>:</td>
 			<td>
-				<input type=text id=rpbulan  style='width:240px;'  class=myinputtextnumber size=9  onkeypress=\"return angka_doang(event);\" value=0 onblur=change_number(this) onkeyup='hitungbulan()'>
+				<input type=text id=rpbulan  style='width:240px;'  class=myinputtextnumber size=9  onkeypress=\"return angka_doang(event);\" value=0 onkeyup=\"if(this.value!=''){z.numberFormat(this.id,2);} hitungbulan();\">
 			</td>
 		</tr>
 
@@ -248,9 +252,12 @@ echo"<fieldset style='width:auto;'>
 								<td align=center>".$_SESSION['lang']['tipe']." Angsuran</td>
 								<td align=center>".$_SESSION['lang']['bulan']." ".$_SESSION['lang']['awal']."</td>
 								<td align=center>".$_SESSION['lang']['bulan']." ".$_SESSION['lang']['akhir']."</td>
+								<td align=center>Total Hutang</td>
+								<td align=center>Sudah Dibayar</td>
 								<td align=center>".$_SESSION['lang']['keterangan']."</td>
+								<td align=center>Dibuat Oleh</td>
 								<td align=center>".$_SESSION['lang']['status']."</td>
-								<td align=center colspan=5 >Action</td>
+								<td align=center colspan=7 >Action</td>
 							</tr>
 						</thead>
 						<tbody id=container>
