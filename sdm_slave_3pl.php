@@ -933,20 +933,14 @@ switch ($method) {
                 (select count(*) from " . $dbname . ".sdm_pendapatanlaindt d where d.idkomponen=h.idkomponen and d.periodegaji=h.periodegaji and d.kodeorg=h.kodeorg) as jmlkar
             from " . $dbname . ".sdm_pendapatanlainht h where " . $orgSort . " " . $filter . " order by periodegaji desc, kodeorg, idkomponen");
 
-        #kop/logo/ditarik-oleh format standar, pakai org karyawan yang login (data lintas unit)
+        #kop/ditarik-oleh format standar, pakai org karyawan yang login (data lintas unit)
         $hdpt = setheadreport($_SESSION['empl']['kodeorganisasi'], $_SESSION['empl']['kodeorganisasi']);
-        $logourl = '';
-        if (file_exists($hdpt['logo'])) {
-            $skema = (isset($_SERVER['HTTPS']) and $_SERVER['HTTPS'] != 'off') ? 'https' : 'http';
-            $logourl = $skema . "://" . @$_SERVER['HTTP_HOST'] . rtrim(str_replace(chr(92), '/', dirname(@$_SERVER['SCRIPT_NAME'])), '/') . "/" . $hdpt['logo'];
-        }
         $infoFilter = "Kode Organisasi: " . ($orgSch != '' ? $orgSch . " - " . $nmOrg[$orgSch] : "Semua")
             . " | Periode: " . ($perSch != '' ? $perSch : "Semua")
             . " | Jenis Pendapatan: " . ($komSch != '' ? $nmKom[$komSch] : "Semua")
             . " | Status Posting: " . ($postSch === '1' ? "Posted" : ($postSch === '0' ? "Belum Posting" : "Semua"));
         $kolom = 9;
         $stream = "<table>
-            <tr><td colspan=" . $kolom . " height='70' style='height:52pt'>" . ($logourl != '' ? "<img src='" . $logourl . "' height='60'>" : "") . "</td></tr>
             <tr><td colspan=" . $kolom . "><b>" . htmlspecialchars($hdpt['nama']) . "</b></td></tr>
             <tr><td colspan=" . $kolom . "><b>PENDAPATAN LAIN</b></td></tr>
             <tr><td colspan=" . $kolom . ">" . htmlspecialchars($infoFilter) . "</td></tr>

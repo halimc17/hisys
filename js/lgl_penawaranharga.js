@@ -1,3 +1,57 @@
+//select2 untuk dropdown halaman ini (zSelect2.js tidak dimuat)
+$(document).ready(function () {
+    $('.select2').not('#kodeorgsch, #statussch').select2({dropdownAutoWidth: true});
+    $('#kodeorgsch, #statussch').select2({dropdownAutoWidth: true, width: '180px'});
+    //dropdown select2 harus tampil di atas popup (preview/upload)
+    $('<style>.select2-container--open .select2-dropdown{z-index:100000;}</style>').appendTo('head');
+});
+
+//select2 untuk dropdown di dalam popup (dibuat setelah popup tampil)
+function initSelectPopup(selector) {
+    $(selector).select2({dropdownAutoWidth: true, width: '250px'});
+}
+
+//set nilai select2 tanpa memicu onchange bawaan select (loadData)
+//onchange inline dimatikan sebentar karena trigger jQuery ikut menjalankannya
+function setSel(id, v) {
+    var el = document.getElementById(id);
+    var handler = el.onchange;
+    el.onchange = null;
+    //nilai yang belum ada di pilihan (mis. project yang sudah diposting) ditambahkan dulu supaya tetap terpilih
+    if (v !== '' && v !== null && $('#' + id + ' option').filter(function () { return this.value == v; }).length == 0) {
+        $('#' + id).append($('<option>').val(v).text(v));
+    }
+    $('#' + id).val(v === null ? '' : v).trigger('change.select2');
+    el.onchange = handler;
+}
+
+//parameter filter daftar (sama dengan yang dipakai loadData) untuk tarikan Excel/PDF
+function getFilterParamPH() {
+    var p = '';
+    p += '&notransaksisch=' + encodeURIComponent(document.getElementById('notransaksisch').value.trim());
+    p += '&tanggalsch=' + encodeURIComponent(document.getElementById('tanggalsch').value.trim());
+    p += '&kodeorgsch=' + encodeURIComponent(document.getElementById('kodeorgsch').value);
+    p += '&statussch=' + encodeURIComponent(document.getElementById('statussch').value);
+    return p;
+}
+
+function tampilTarikan(judul, tujuan) {
+    alertify.popup(judul, "<iframe frameborder=0 style='width:100%;height:100%;overflow:none' src='" + tujuan + "'></iframe>").set({'resizable': true, 'maximizable': true, 'overflow': false}).resizeTo('80%', '70%');
+}
+
+function exportExcelPH() {
+    tampilTarikan('Report Ms.Excel', 'lgl_slave_penawaranharga.php?method=excellist' + getFilterParamPH());
+}
+
+function exportPdfPH() {
+    tampilTarikan('Report PDF', 'lgl_slave_penawaranharga.php?method=pdflist' + getFilterParamPH());
+}
+
+//tarikan satu perbandingan harga
+function exportPH(notransaksi, jenis) {
+    tampilTarikan(jenis == 'excel' ? 'Report Ms.Excel' : 'Report PDF', 'lgl_slave_penawaranharga.php?method=' + (jenis == 'excel' ? 'excelPH' : 'pdfPH') + '&notransaksi=' + encodeURIComponent(notransaksi));
+}
+
 function createNew(){
     document.getElementById('addNew').style.display ='block';
     document.getElementById('detail').style.display ='none';
@@ -21,16 +75,16 @@ function displayList(){
 function batalcari(){
 	document.getElementById('notransaksisch').value='';
 	document.getElementById('tanggalsch').value='';
-	document.getElementById('kodeorgsch').value='';
-	document.getElementById('statussch').value='';
+	setSel('kodeorgsch','');
+	setSel('statussch','');
 }
 
 function bersih(){
 	setValue('notransaksi','');
 	setValue('notransaksidt','');
 	setValue('tanggal','');
-	setValue('nama','');
-	setValue('supplierid','');
+	setSel('nama','');
+	setSel('supplierid','');
 	setValue('halaman','0');
 	setValue('methodht','saveheader');
     document.getElementById('tanggal').disabled=false;
@@ -52,16 +106,16 @@ function loadData(num){
 
     param   ='method=loadData&page=' + num;
     if(notransaksisch != ''){      
-        param  +='&notransaksisch=' + notransaksisch.trim();
+        param  +='&notransaksisch=' + encodeURIComponent(notransaksisch.trim());
     }
     if(tanggalsch != ''){
-        param  +='&tanggalsch=' + tanggalsch.trim();
+        param  +='&tanggalsch=' + encodeURIComponent(tanggalsch.trim());
     }
     if(kodeorgsch != ''){
-        param  +='&kodeorgsch=' + kodeorgsch.trim();
+        param  +='&kodeorgsch=' + encodeURIComponent(kodeorgsch.trim());
     }
     if(statussch != ''){
-        param  +='&statussch=' + statussch.trim();
+        param  +='&statussch=' + encodeURIComponent(statussch.trim());
     }
     tujuan  ='lgl_slave_penawaranharga.php';
     post_response_text(tujuan, param, respog);
@@ -98,7 +152,7 @@ function fillField(notransaksi,tanggal,nama){
     document.getElementById('nama').disabled = true;
     setValue('notransaksi',notransaksi);
     setValue('tanggal',tanggal);
-    setValue('nama',nama);
+    setSel('nama',nama);
     opendetail(notransaksi);
 }
 
@@ -144,14 +198,14 @@ function saveheader(){
 	}
 	else if(supplierid=='')
     {
-        alert('Supplierid');return;
+        alert('Harap memilih kontraktor.');return;
 	}
 	
     param   ='method=' + method;
-    param  +='&notransaksi=' + notransaksi;
-    param  +='&tanggal=' + tanggal;
-    param  +='&nama=' + nama;
-    param  +='&supplierid=' + supplierid;
+    param  +='&notransaksi=' + encodeURIComponent(notransaksi);
+    param  +='&tanggal=' + encodeURIComponent(tanggal);
+    param  +='&nama=' + encodeURIComponent(nama);
+    param  +='&supplierid=' + encodeURIComponent(supplierid);
     tujuan  ='lgl_slave_penawaranharga.php';
     post_response_text(tujuan, param, respog);		
 
@@ -165,7 +219,7 @@ function saveheader(){
                     alert(con.responseText);
                 }else{
                     setValue('notransaksi',con.responseText);
-                    setValue('supplierid',null);
+                    setSel('supplierid','');
                     document.getElementById('tanggal').disabled = true;
                     document.getElementById('nama').disabled = true;
                     document.getElementById('btnnext').style.display ='';
@@ -180,7 +234,7 @@ function saveheader(){
 }
 
 function hapus(notransaksi,supplierid,nmsup){
-    param   ='method=delete'+'&notransaksi='+notransaksi+'&supplierid='+supplierid;
+    param   ='method=delete'+'&notransaksi='+encodeURIComponent(notransaksi)+'&supplierid='+encodeURIComponent(supplierid);
     tujuan  ='lgl_slave_penawaranharga.php';
 
 	alertify.confirm("Informasi","Anda Yakin Menghapus : "+notransaksi+" dan supplier "+nmsup+" ???",
@@ -223,7 +277,7 @@ function hapus(notransaksi,supplierid,nmsup){
 }
 
 function del(notransaksi,page){
-    param   ='method=del'+'&notransaksi='+notransaksi;
+    param   ='method=del'+'&notransaksi='+encodeURIComponent(notransaksi);
     tujuan  ='lgl_slave_penawaranharga.php';
 
 	alertify.confirm("Informasi","Anda Yakin ingin Menghapus : "+notransaksi+" ?",
@@ -549,10 +603,21 @@ function phitungtax(max){
 
 
 function simpandetail(max){
-    if(remove_comma_var(document.getElementById('varrp_1').innerHTML) == '' || remove_comma_var(document.getElementById('varrp_1').innerHTML) == '0')
+    //isian pokok wajib diisi; nominal dan selisih dihitung ulang di server, kontraktor tanpa negosiasi memakai harga penawaran
+    if(isNaN(parseFloat(remove_comma_var(getValue('luas')))) || parseFloat(remove_comma_var(getValue('luas'))) <= 0)
     {
-        alertify.alert('Informasi','Harap lengkapi pengisian.');return;
-	}
+        alertify.alert('Informasi','Luas (fisik) harus diisi.');return;
+    }
+    if(isNaN(parseFloat(remove_comma_var(getValue('rpsat')))) || parseFloat(remove_comma_var(getValue('rpsat'))) <= 0)
+    {
+        alertify.alert('Informasi','Rp/Sat RAT harus diisi.');return;
+    }
+    for (let i = 1; i <= max; i++) {
+        if(isNaN(parseFloat(remove_comma_var(getValue('rpsatoff_'+i)))) || parseFloat(remove_comma_var(getValue('rpsatoff_'+i))) <= 0)
+        {
+            alertify.alert('Informasi','Rp/Sat penawaran kontraktor ke-'+i+' harus diisi.');return;
+        }
+    }
 
     method      = getValue('methoddt');
     rpsat       = getValue('rpsat');
@@ -620,7 +685,8 @@ function html(notransaksi,max) {
 					alertify.alert('Info',con.responseText);
 				} else {
 					alertify.popup().set({'title':'Detail Perbandingan Harga Project','resizable':true,'maximizable':true,'startMaximized':false,'message':con.responseText}).resizeTo('85%','55%').show();
-                    phitungtax(max)
+                    phitungtax(max);
+                    initSelectPopup('select[id^=kepada]');
 				}
 			} else {
 				busy_off();
@@ -635,11 +701,12 @@ function ajukan() {
     jumlahlevel = document.getElementById('numrow').value;
     kepada = '';
     for (var i = 1; i <= jumlahlevel; i++) {
-        if (kepada == '') {
-            kepada = document.getElementById('kepada' + i).value;
-        } else {
-            kepada += '###' + document.getElementById('kepada' + i).value;
+        var penyetuju = document.getElementById('kepada' + i).value;
+        if (penyetuju == '') {
+            alert('Isikan nama penyetuju untuk approval ke-' + i + '.');
+            return;
         }
+        kepada += (kepada == '' ? '' : '###') + penyetuju;
     }
     notransaksi 		= document.getElementById('notran_aju').innerHTML;
     jenispersetujuanx 	= document.getElementById('jenispersetujuanx').value;
@@ -696,6 +763,7 @@ function showupload(notrans,jenisupload){
 					alert(con.responseText);
 				}else {
 					alertify.popup().set({'title':'Upload File Perbandingan Harg Project','resizable':true,'maximizable':true,'startMaximized':false,'message':con.responseText}).resizeTo('25%','25%').show();
+                    initSelectPopup('#kriteriaefil');
                     // document.getElementById('contUpload').innerHTML=con.responseText;
 					loadfiles(notransaksi,jenisupload);
 				}
@@ -722,7 +790,17 @@ function submitfile(notrans,jenisupload) {
 	formdata.append("kriteriaefil", kriteriaefil);
 	formdata.append("jenisupload", jenisupload);
 	if (getValue('upload') == "") {
-		alert("warning : Upload file has been empty.");
+		alert("Warning : Silahkan pilih file yang akan diupload.");
+		return false;
+	}
+	var formatOk = ['jpeg', 'jpg', 'png', 'pdf', 'xls', 'xlsx', 'doc', 'docx'];
+	var extFile = file.name.split('.').pop().toLowerCase();
+	if (file.name.indexOf('.') < 0 || formatOk.indexOf(extFile) < 0) {
+		alert("Warning : Format file upload harus ." + formatOk.join(', .') + ".");
+		return false;
+	}
+	if (file.size > 5 * 1024 * 1024) {
+		alert("Warning : Ukuran file melebihi batas, maksimal 5 MB.");
 		return false;
 	}
 
@@ -741,6 +819,7 @@ function submitfile(notrans,jenisupload) {
 			if (con.status == 200) {
 				busy_off();
 				if (!isSaveResponse(con.responseText)) {
+					document.getElementById('btnsubmit').disabled=false;
 					alert(con.responseText);
 				} else {
 					//=== Success Response
@@ -751,6 +830,7 @@ function submitfile(notrans,jenisupload) {
 				}
 			} else {
 				busy_off();
+				document.getElementById('btnsubmit').disabled=false;
 				error_catch(con.status);
 			}
 		}
@@ -837,7 +917,7 @@ function deletefile(notransaksi, namafile,jenisupload) {
 
 function viewfile(ev, namafile) {
 	ext = namafile.split(".");
-	if (ext[1].trim() == 'jpg' || ext[1].trim() == 'jpeg' || ext[1].trim() == 'png') {
+	if (ext[ext.length - 1].trim().toLowerCase() == 'jpg' || ext[ext.length - 1].trim().toLowerCase() == 'jpeg' || ext[ext.length - 1].trim().toLowerCase() == 'png') {
 		param = 'method=viewfile&namafile=' + namafile;
 		tujuan = 'lgl_slave_penawaranharga.php';
 		post_response_text(tujuan, param, respog);

@@ -4,6 +4,7 @@
 	include_once('lib/zLib.php');
 	include('lib/zFunction.php');
 	echo open_body();
+	require_once('lib/zSelect2.php');
 	include('master_mainMenu.php');
 ?>
 
@@ -27,6 +28,17 @@
 		$optsup	.="<option value='".$v['supplierid']."'>".$v['namasupplier']."</option>";
 	}
 
+	#opsi filter daftar: unit sesuai detail akses user, status dari kamus status
+	$optunitsch = "<option value=''>".$_SESSION['lang']['all']."</option>";
+	foreach (getOrgDetail(1) as $kodeunit=>$namaunit)
+	{
+		$optunitsch .= "<option value='".$kodeunit."'>".$kodeunit." - ".$namaunit."</option>";
+	}
+	$optstatussch = "<option value=''>".$_SESSION['lang']['all']."</option>";
+	foreach ($arrstatus as $kodestatus=>$namastatus)
+	{
+		$optstatussch .= "<option value='".$kodestatus."'>".strip_tags($namastatus)."</option>";
+	}
 	$str=selectQuery($dbname,'project','*',"posting='0' and pekerjaan='External'");
 	$res=fetchData($str);
 	foreach ($res as $v)
@@ -52,34 +64,37 @@
 							<td>
 						</td>
 						<td>
-							<fieldset style='width:auto;'>
-								<legend>".$_SESSION['lang']['find']."</legend>
-								<table>
-									<tr>
-										<td align=left>".$_SESSION['lang']['notransaksi']."</td>
-										<td>:</td>
-										<td><input type=text id=notransaksisch onkeyup=loadData(); maxlength=20 class=myinputtext size=26 style=\"width:200px;\"></td>
+								<fieldset style='width:auto;'>
+									<legend>".$_SESSION['lang']['find']."</legend>
+									<table>
+										<tr>
+											<td nowrap>".$_SESSION['lang']['notransaksi']."</td>
+											<td>:</td>
+											<td><input type=text id=notransaksisch onkeyup=loadData(0); maxlength=30 class=myinputtext style=\"width:180px;box-sizing:border-box;\"></td>
 
-										<td hidden>".$_SESSION['lang']['tanggal']."</td>
-										<td hidden>:</td>		
-										<td hidden><input type=text class=myinputtext id=tanggalsch name=tanggalsch onmousemove=setCalendar(this.id) onkeypress=return false; onchange=loadData();  maxlength=10 style=width:58px; readonly/></td>
+											<td nowrap>".$_SESSION['lang']['tanggal']."</td>
+											<td>:</td>
+											<td><input type=text class=myinputtext id=tanggalsch name=tanggalsch onmousemove=setCalendar(this.id) onkeypress=return false; onchange=loadData(0); maxlength=10 style=\"width:180px;box-sizing:border-box;\" readonly/></td>
+										</tr>
+										<tr>
+											<td nowrap>".$_SESSION['lang']['unit']."</td>
+											<td>:</td>
+											<td><select id=kodeorgsch class=select2 onchange=loadData(0) style=width:180px;>".$optunitsch."</select></td>
 
-										<td hidden align=left>".$_SESSION['lang']['kodeorganisasi']."</td>
-										<td hidden>:</td>
-										<td hidden><select id=kodeorgsch onchange=loadData(); style='width:300px;'>".$optxxx."</select></td>
-
-										<td hidden align=left>".$_SESSION['lang']['status']."</td>
-										<td hidden>:</td>
-										<td hidden><select id=statussch onchange=loadData() style='width:80px;'>".$optStat."</select></td>
-
-										<td></td>
-										<td></td>
-										<td>
-											<button class=mybutton onclick=displayList()>".$_SESSION['lang']['cancel']."</button>
-										</td>
-									</tr>
-								</table>
-							</fieldset>
+											<td nowrap>".$_SESSION['lang']['status']."</td>
+											<td>:</td>
+											<td><select id=statussch class=select2 onchange=loadData(0) style=width:180px;>".$optstatussch."</select></td>
+										</tr>
+										<tr>
+											<td colspan=6>
+												<button class=mybutton onclick=loadData(0)>".$_SESSION['lang']['find']."</button>
+												<button class=mybutton onclick=exportExcelPH()>".$_SESSION['lang']['excel']."</button>
+												<button class=mybutton onclick=exportPdfPH()>PDF</button>
+												<button class=mybutton onclick=displayList()>".$_SESSION['lang']['cancel']."</button>
+											</td>
+										</tr>
+									</table>
+								</fieldset>
 						</td>
 					</tr>
 				</tbody>
@@ -95,7 +110,7 @@
 	echo " 	<fieldset style='width:auto;'>
 				<legend>" . $_SESSION['lang']['list'] . "</legend>
 				<div>
-					<table class=sortable cellspacing=1 cellpadding=5 border=0 width=50%>
+					<table class=sortable cellspacing=1 cellpadding=5 border=0 style='width:100%;'>
 						<thead>
 							<tr class=rowheader>
 								<td align=center>" . $_SESSION['lang']['nourut'] . "</td>
@@ -104,7 +119,7 @@
 								<td align=center>" . $_SESSION['lang']['nama'] . " ".$_SESSION['lang']['project']."</td>
 								<td align=center>" . $_SESSION['lang']['harga'] . "</td>
 								<td align=center>" . $_SESSION['lang']['status'] . "</td>
-								<td align=center colspan=5>" . $_SESSION['lang']['action'] . "</td>
+								<td align=center colspan=7>" . $_SESSION['lang']['action'] . "</td>
 							</tr>
 						</thead>
 						<tbody id=container>
@@ -123,32 +138,31 @@
 <?php
 	echo "<div id=addNew style=display:none>";
 	OPEN_BOX();
-	echo 	"<fieldset style='float:left; widht:auto;'>
-				<legend>" . $_SESSION['lang']['form'] . " ".$_SESSION['lang']['input']."</b></legend> 
-				<table border=0 cellpadding=1 cellspacing=1 style='display: inline-block;vertical-align:middle'>
-					<tr>
-						<td align=left>".$_SESSION['lang']['notransaksi']."</td>
-						<td>:</td>
-						<td><input type=text id=notransaksi maxlength=20 class=myinputtext size=26 style=\"width:150px;\" disabled></td>
-						
-						<td>".$_SESSION['lang']['tanggal']."</td>
-						<td>:</td>		
-						<td><input type=text class=myinputtext id=tanggal name=tanggal onmousemove=setCalendar(this.id) onkeypress=return false; maxlength=10 style=width:58px; readonly/></td>
+	echo 	"<fieldset style='float:left; width:auto;'>
+				<legend>" . $_SESSION['lang']['form'] . " ".$_SESSION['lang']['input']."</legend> 
+				<table border=0 cellpadding=2 cellspacing=1>
+						<tr>
+							<td align=left>".$_SESSION['lang']['notransaksi']."</td>
+							<td>:</td>
+							<td><input type=text id=notransaksi maxlength=20 class=myinputtext style=\"width:250px;box-sizing:border-box;\" disabled></td>
 
-						<td>" . $_SESSION['lang']['nama'] . " ".$_SESSION['lang']['project']."</td>
-						<td>:</td>
-						<td><select id=nama style='width:150px;'>".$optproj."</select>
-						</td>
-						
-						<td>" . $_SESSION['lang']['kodesupplier']."</td>
-						<td>:</td>
-						<td><select id=supplierid style='width:150px;'>".$optsup."</select>&nbsp;&nbsp;
-							<input type=hidden id=methodht value='saveheader'><input type=hidden id=halaman value='0'><img title=\"Add File Upload\" class=\"zImgBtn\" onclick=\"saveheader()\" src=\"images/plus.png\" style='vertical-align:middle'>
-							
-							<button id=btnnext class=mybutton onclick=bukaharga() style='display:none'>".$_SESSION['lang']['lanjut']."</button>
-						</td>
-					</tr>
-				</table>
+							<td style='padding-left:20px'>".$_SESSION['lang']['tanggal']."</td>
+							<td>:</td>
+							<td><input type=text class=myinputtext id=tanggal name=tanggal onmousemove=setCalendar(this.id) onkeypress=return false; maxlength=10 style=\"width:250px;box-sizing:border-box;\" readonly/></td>
+						</tr>
+						<tr>
+							<td>" . $_SESSION['lang']['nama'] . " ".$_SESSION['lang']['project']."</td>
+							<td>:</td>
+							<td><select id=nama class='select2' style='width:250px;'>".$optproj."</select></td>
+
+							<td style='padding-left:20px'>" . $_SESSION['lang']['kodesupplier']."</td>
+							<td>:</td>
+							<td nowrap><select id=supplierid class='select2' style='width:250px;'>".$optsup."</select>&nbsp;&nbsp;
+								<input type=hidden id=methodht value='saveheader'><input type=hidden id=halaman value='0'><img title=\"Tambah Kontraktor\" class=\"zImgBtn\" onclick=\"saveheader()\" src=\"images/plus.png\" style='vertical-align:middle'>
+								<button id=btnnext class=mybutton onclick=bukaharga() style='display:none'>".$_SESSION['lang']['lanjut']."</button>
+							</td>
+						</tr>
+					</table>
 			</fieldset>";
 			CLOSE_BOX();
 		echo"</div>";

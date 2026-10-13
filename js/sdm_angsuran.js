@@ -1,3 +1,133 @@
+//true saat form sedang diisi lewat kode (edit/hapus): handler isian tidak boleh ikut berjalan
+var isiForm = false;
+
+//halaman ini tidak memuat js/zSelect2.js, jadi select2 diinisialisasi di sini
+$(document).ready(function () {
+    $('.select2').select2({dropdownAutoWidth: true});
+
+    //isian apa pun yang diubah sesudah detail diproses menyembunyikan Simpan lagi, detail harus diproses ulang
+    $('#karyawanid, #jenisangsuran, #ket, #tothutang, #rpbulan').on('change input', function () {
+        if (!isiForm) {
+            cekdataubah();
+        }
+    });
+    //tipe nominal: bulan akhir dihitung ulang bila bulan awal atau total hutang berubah
+    $('#bulandari, #tothutang').on('change', function () {
+        if (!isiForm) {
+            hitungulangbulan();
+        }
+    });
+});
+
+//pilihan bawaan select (opsi yang bertanda selected di halaman) tanpa memicu onchange
+function setSelAwal(id) {
+    var el = document.getElementById(id);
+    var v = el.options.length ? el.options[0].value : '';
+    for (var i = 0; i < el.options.length; i++) {
+        if (el.options[i].defaultSelected) {
+            v = el.options[i].value;
+            break;
+        }
+    }
+    setSel(id, v);
+}
+
+//hitung ulang bulan akhir (tipe nominal) tanpa alert kalau total hutang atau rupiah/bulan belum diisi
+function hitungulangbulan() {
+    var tot = parseFloat(document.getElementById('tothutang').value.replace(/,/gi, ''));
+    var rp = parseFloat(document.getElementById('rpbulan').value.replace(/,/gi, ''));
+    if (document.getElementById('tipeangsuran').value != 'angsurannominal' || document.getElementById('tothutang').disabled) {
+        return;
+    }
+    if (isNaN(tot) || tot <= 0 || isNaN(rp) || rp <= 0) {
+        return;
+    }
+    hitungbulan();
+}
+
+//validasi isian header sebelum detail diproses/disimpan
+function cekIsianAngsuran() {
+    var tipe = document.getElementById('tipeangsuran').value;
+    var tot = parseFloat(document.getElementById('tothutang').value.replace(/,/gi, ''));
+    var rp = parseFloat(document.getElementById('rpbulan').value.replace(/,/gi, ''));
+    var bd = document.getElementById('bulandari').value;
+    var bs = document.getElementById('bulansampai').value;
+    if (isNaN(tot) || tot <= 0) {
+        alert('Warning : Total hutang harus lebih besar dari 0');
+        return false;
+    }
+    if (tipe == 'angsurannominal') {
+        if (isNaN(rp) || rp <= 0) {
+            alert('Warning : Rupiah/bulan harus lebih besar dari 0');
+            return false;
+        }
+        if (rp > tot) {
+            alert('Warning : Rupiah/bulan tidak boleh lebih besar dari total hutang');
+            return false;
+        }
+    }
+    if (bs < bd) {
+        alert('Warning : Bulan akhir tidak boleh lebih kecil dari bulan awal');
+        return false;
+    }
+    return true;
+}
+
+//validasi detail per bulan sebelum disimpan: angka tidak negatif dan jumlahnya sama dengan total hutang
+function cekDetailAngsuran() {
+    var n = parseInt(document.getElementById('totaldetail').value);
+    var tot = parseFloat(document.getElementById('tothutang').value.replace(/,/gi, ''));
+    var jml = 0;
+    for (var i = 1; i <= n; i++) {
+        var v = document.getElementById('rpdetailx_' + i).value.replace(/,/gi, '');
+        if (v == '' || isNaN(v) || parseFloat(v) < 0) {
+            alert('Warning : Nilai angsuran bulan ke-' + i + ' tidak valid');
+            return false;
+        }
+        jml += parseFloat(v);
+    }
+    if (Math.abs(jml - tot) > 0.5) {
+        alert('Warning : Total detail (' + jml.toLocaleString('en-US') + ') tidak sama dengan total hutang (' + tot.toLocaleString('en-US') + ')');
+        return false;
+    }
+    return true;
+}
+//set nilai select2 tanpa memicu onchange bawaan select (loadData)
+//onchange inline dimatikan sebentar karena trigger jQuery ikut menjalankannya
+function setSel(id, v) {
+    var el = document.getElementById(id);
+    var handler = el.onchange;
+    el.onchange = null;
+    $('#' + id).val(v).trigger('change.select2');
+    el.onchange = handler;
+}
+
+function getFilterParamAng() {
+    var p = '';
+    p += '&notransaksisch=' + encodeURIComponent(document.getElementById('notransaksisch').value);
+    p += '&namasch=' + encodeURIComponent(document.getElementById('namasch').value);
+    p += '&lokasitugassch=' + encodeURIComponent(document.getElementById('lokasitugassch').value);
+    p += '&jenisangsuransch=' + encodeURIComponent(document.getElementById('jenisangsuransch').value);
+    p += '&statussch=' + encodeURIComponent(document.getElementById('statussch').value);
+    return p;
+}
+
+function exportExcelAng() {
+    tujuan = 'sdm_slave_angsuran.php?method=excellist' + getFilterParamAng();
+    alertify.popup('Report Ms.Excel', "<iframe frameborder=0 style='width:100%;height:100%;overflow:none' src='" + tujuan + "'></iframe>").set({'resizable': true, 'maximizable': true, 'overflow': false}).resizeTo('80%', '70%');
+}
+
+function exportPdfAng() {
+    tujuan = 'sdm_slave_angsuran.php?method=pdflist' + getFilterParamAng();
+    alertify.popup('Report PDF', "<iframe frameborder=0 style='width:100%;height:100%;overflow:none' src='" + tujuan + "'></iframe>").set({'resizable': true, 'maximizable': true, 'overflow': false}).resizeTo('80%', '70%');
+}
+
+//tarikan Excel/PDF per transaksi
+function exportTrx(notransaksi, jenis) {
+    tujuan = 'sdm_slave_angsuran.php?method=' + (jenis == 'excel' ? 'excelTrx' : 'pdfTrx') + '&notransaksi=' + encodeURIComponent(notransaksi);
+    alertify.popup(jenis == 'excel' ? 'Report Ms.Excel' : 'Report PDF', "<iframe frameborder=0 style='width:100%;height:100%;overflow:none' src='" + tujuan + "'></iframe>").set({'resizable': true, 'maximizable': true, 'overflow': false}).resizeTo('80%', '70%');
+}
+
 function createNew(){
     document.getElementById('tmblHeader').innerHTML="<button class=mybutton id=dtlForm onclick=getdetail()>Proses List Detail</button><button class=mybutton id=cancelForm onclick=cancelForm()>Batal</button>";
     document.getElementById('addNew').style.display ='block';
@@ -32,10 +162,11 @@ function loadData(num){
   jenisangsuransch= document.getElementById('jenisangsuransch').value;
 
     param   ='method=loadData&page=' + num;     
-    param  +='&notransaksisch=' + notransaksisch;
-    param  +='&namasch=' + namasch;
-    param  +='&lokasitugassch=' + lokasitugassch;
-    param  +='&jenisangsuransch=' + jenisangsuransch;
+    param  +='&notransaksisch=' + encodeURIComponent(notransaksisch);
+    param  +='&namasch=' + encodeURIComponent(namasch);
+    param  +='&lokasitugassch=' + encodeURIComponent(lokasitugassch);
+    param  +='&jenisangsuransch=' + encodeURIComponent(jenisangsuransch);
+    param  +='&statussch=' + encodeURIComponent(document.getElementById('statussch').value);
     tujuan  ='sdm_slave_angsuran.php';
     post_response_text(tujuan, param, respog);
     function respog()
@@ -64,23 +195,33 @@ function loadData(num){
 function hapus(){
     document.getElementById('notransaksisch').value='';
     document.getElementById('namasch').value='';
-    document.getElementById('lokasitugassch').value='';
+    setSel('lokasitugassch','');
+    setSel('jenisangsuransch','');
+    setSel('statussch','');
     document.getElementById('notransaksi').value='';
     document.getElementById('method').value='insert';
 
-    document.getElementById('karyawanid').disabled=false;
-    document.getElementById('jenisangsuran').disabled=false;
-    document.getElementById('rpbulan').disabled=false;
-    document.getElementById('bulandari').disabled=false;
+    //edit angsuran aktif mengunci sebagian isian: semuanya dibuka lagi dan dikembalikan ke nilai awal
+    isiForm=true;
+    var kunci=['karyawanid','jenisangsuran','tipeangsuran','bulandari','bulansampai','tothutang','rpbulan','ket'];
+    for(var k=0;k<kunci.length;k++){
+        document.getElementById(kunci[k]).disabled=false;
+    }
     document.getElementById('ket').value='';
 
     document.getElementById('notransaksi').value='';
     document.getElementById('tothutang').value='0';
     document.getElementById('rpbulan').value='0';
     document.getElementById('jenisangsuran').innerHTML="<option value=''>Pilih Data</option>";
+    $('#jenisangsuran').trigger('change.select2');
+    setSelAwal('tipeangsuran');
+    setSelAwal('bulandari');
+    setSelAwal('bulansampai');
     document.getElementById('datadetail').innerHTML="";
     document.getElementById('datasblm').value='';
     setValue2('karyawanid','');
+    isiForm=false;
+    disableinputan();
     document.getElementById('tmblHeader').innerHTML="<button class=mybutton id=dtlForm onclick=getdetail()>Proses List Detail</button><button class=mybutton id=cancelForm onclick=cancelForm()>Batal</button>";
     
 }
@@ -288,7 +429,13 @@ function loadjenisangsuran(){
     notransaksi  = document.getElementById('notransaksi').value;
 
 
-    param   ='method=loadjenisangsuran';     
+    //karyawan belum dipilih (mis. form dikosongkan): tidak perlu ke server
+    if(karyawanid==''){
+        document.getElementById("jenisangsuran").innerHTML = "<option value=''>Pilih Data</option>";
+        return;
+    }
+
+    param   ='method=loadjenisangsuran';
     param  +='&karyawanid=' + karyawanid;
     tujuan  ='sdm_slave_angsuran.php';
     if(notransaksi==''){
@@ -571,9 +718,10 @@ function getdetail(){
     }
     else if(ket =='')
     {
-        alert('Harap Mengisi Total Keterangan');return;
+        alert('Harap Mengisi Keterangan');return;
     }
     
+        if(!cekIsianAngsuran()){return;}
         method='getdetail';
         //pengganti tidak boleh kosong di batasi di Slave
         param   ='notransaksi=' + notransaksi;
@@ -584,7 +732,7 @@ function getdetail(){
         param  +='&bulansampai=' + bulansampai;
         param  +='&tothutang=' + tothutang;
         param  +='&rpbulan=' + rpbulan;
-        param  +='&ket=' + ket;
+        param  +='&ket=' + encodeURIComponent(ket);
         param  +='&method=' + method;
         tujuan  ='sdm_slave_angsuran.php';
 
@@ -673,13 +821,14 @@ function saveForm(){
     }
     else if(ket =='')
     {
-        alert('Harap Mengisi Total Keterangan');return;
+        alert('Harap Mengisi Keterangan');return;
     }
     else if(totalcountdetail =='' || totalcountdetail ==0)
     {
         alert('Data detail masih kosong');return;
     }
     
+        if(!cekIsianAngsuran() || !cekDetailAngsuran()){return;}
         //pengganti tidak boleh kosong di batasi di Slave
         param   ='notransaksi=' + notransaksi;
         for (var i = 1; i <= totalcountdetail; i++) {
@@ -693,7 +842,7 @@ function saveForm(){
         param  +='&bulansampai=' + bulansampai;
         param  +='&tothutang=' + tothutang;
         param  +='&rpbulan=' + rpbulan;
-        param  +='&ket=' + ket;
+        param  +='&ket=' + encodeURIComponent(ket);
         param  +='&totalcountdetail=' + totalcountdetail;
         param  +='&method=' + method;
         tujuan  ='sdm_slave_angsuran.php';
@@ -916,6 +1065,7 @@ function edit(notransaksi,status){
                 if (!isSaveResponse(con.responseText)){
                     alert('ERROR TRANSACTION,\n' + con.responseText);
                 }else{
+                    isiForm = true;
                     arrx    = con.responseText.split("$$$");
                     dataht  =arrx[0].split('###');
                     datadt  =arrx[1];
@@ -924,20 +1074,24 @@ function edit(notransaksi,status){
                     document.getElementById('notransaksi').value=trim(dataht[0]);
 
                     setValue2('karyawanid',trim(dataht[1]));
+                    document.getElementById("jenisangsuran").innerHTML = arrjenisangsuran;
                     setValue('jenisangsuran',trim(dataht[2]));
                     setValue2('tipeangsuran',trim(dataht[3]));
                     setValue2('bulandari',trim(dataht[4]));
                     setValue2('bulansampai',trim(dataht[5]));
                     document.getElementById('tothutang').value=dataht[6];
                     document.getElementById('rpbulan').value=dataht[7];
+                    //nominal diberi pemisah ribuan seperti saat diketik
+                    if(trim(dataht[6])!=''){ z.numberFormat('tothutang',2); }
+                    if(trim(dataht[7])!=''){ z.numberFormat('rpbulan',2); }
                     document.getElementById('ket').value=dataht[8];
+                    isiForm = false;
                     document.getElementById('karyawanid').disabled=true;
                     document.getElementById('jenisangsuran').disabled=true;
                     document.getElementById('bulandari').disabled=true;
 
 
                     document.getElementById('datadetail').innerHTML=datadt;
-                    // document.getElementById("jenisangsuran").innerHTML = arrjenisangsuran;
                     
                     if(status==1){
                         document.getElementById('bulansampai').disabled=false;

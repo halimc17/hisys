@@ -412,17 +412,11 @@ switch ($method) {
 			$where = " and noakun LIKE '%" . $txtNoakun . "%'";
 		}
 
-		#kop/logo/ditarik-oleh format standar (sama seperti laporan lain), pakai org karyawan yang login
+		#kop/ditarik-oleh format standar (sama seperti laporan lain), pakai org karyawan yang login
 		#karena daftar perkiraan ini data bersama (bukan per-PT)
 		$hdpt = setheadreport($_SESSION['empl']['kodeorganisasi'], $_SESSION['empl']['kodeorganisasi']);
-		$logourl = '';
-		if (file_exists($hdpt['logo'])) {
-			$skema = (isset($_SERVER['HTTPS']) and $_SERVER['HTTPS'] != 'off') ? 'https' : 'http';
-			$logourl = $skema . "://" . @$_SERVER['HTTP_HOST'] . rtrim(dirname(@$_SERVER['SCRIPT_NAME']), '/') . "/" . $hdpt['logo'];
-		}
 		$kolom = 20;
 		$stream = "<table>
-			<tr><td colspan=" . $kolom . " height='70' style='height:52pt'>" . ($logourl != '' ? "<img src='" . $logourl . "' height='60'>" : "") . "</td></tr>
 			<tr><td colspan=" . $kolom . "><b>" . htmlspecialchars($hdpt['nama']) . "</b></td></tr>
 			<tr><td colspan=" . $kolom . "><b>" . strtoupper($_SESSION['lang']['daftarperkiraan']) . "</b></td></tr>
 			<tr><td colspan=" . $kolom . ">Ditarik oleh " . htmlspecialchars($_SESSION['empl']['name']) . " (" . htmlspecialchars($_SESSION['standard']['username']) . ") pada " . date('d-m-Y H:i:s') . "</td></tr>

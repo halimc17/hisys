@@ -23,9 +23,18 @@ switch ($method) {
 		$nHead->setFetchMode(PDO::FETCH_ASSOC);
         $dHead = $nHead->fetch();
 
-        $stream = "Kode Organisasi : " . $kodeorg . "<br>";
-        $stream.="Periode : " . $periodegaji . "<br>";
-        $stream.="Tipe Potongan : " . $optTipePot[$tipepotongan] . "<br>";
+        #kop/ditarik-oleh format standar, pakai org karyawan yang login
+        $nmOrgKop = makeOption($dbname, 'organisasi', 'kodeorganisasi,namaorganisasi');
+        $hdpt = setheadreport($_SESSION['empl']['kodeorganisasi'], $_SESSION['empl']['kodeorganisasi']);
+        $stream = "<table>
+			<tr><td colspan=7><b>" . htmlspecialchars($hdpt['nama']) . "</b></td></tr>
+			<tr><td colspan=7><b>POTONGAN</b></td></tr>
+			<tr><td colspan=7>Unit : " . $kodeorg . " - " . @$nmOrgKop[$kodeorg] . "</td></tr>
+			<tr><td colspan=7>Periode : " . $periodegaji . "</td></tr>
+			<tr><td colspan=7>Potongan : " . $optTipePot[$tipepotongan] . "</td></tr>
+			<tr><td colspan=7>Ditarik oleh " . htmlspecialchars($_SESSION['empl']['name']) . " (" . htmlspecialchars($_SESSION['standard']['username']) . ") pada " . date('d-m-Y H:i:s') . "</td></tr>
+			<tr><td colspan=7>&nbsp;</td></tr>
+			</table>";
 
         $stream.="<br /><table class=sortable border=1 cellspacing=1>
 			 <thead>
@@ -44,7 +53,7 @@ switch ($method) {
             $iDet = "select a.* from " . $dbname . ".sdm_potongandt a
 					left join datakaryawan b on a.nik=b.karyawanid
 					where periodegaji='" . $periodegaji . "' "
-                    . "and kodeorg='" . $_SESSION['empl']['lokasitugas'] . "'
+                    . "and kodeorg='" . addslashes($kodeorg) . "'
                       and tipepotongan='" . $tipepotongan . "'  order by b.namakaryawan asc";
         
 		
@@ -78,7 +87,7 @@ switch ($method) {
 					</tr></table>";
 					
 
-        $stream.="</tbody></table>Print Time:" . date('YmdHis') . "<br>By:" . $_SESSION['empl']['name'];
+        $stream.="</tbody></table>";
         $dte = date("Hms");
         setIt($dHead['kode'], '');
         $nop_ = "Laporan_Potongan_" . $dHead['kode'];

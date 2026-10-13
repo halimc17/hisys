@@ -1660,13 +1660,7 @@ switch($proses){
 				$pdf->Output('Premi_Pemanen_'.date('YmdHis').'.pdf','I');
 				exit;
 			}
-			$logourl='';
-			if(file_exists($hd['logo'])){
-				$skema=(isset($_SERVER['HTTPS']) and $_SERVER['HTTPS']!='off') ? 'https' : 'http';
-				$logourl=$skema."://".@$_SERVER['HTTP_HOST'].rtrim(dirname(@$_SERVER['SCRIPT_NAME']),'/\\')."/".$hd['logo'];
-			}
 			$hdrexcel="<table>
-				<tr><td colspan='10' height='70' style='height:52pt'>".($logourl!='' ? "<img src='".$logourl."' height='60'>" : "")."</td></tr>
 			<tr><td colspan='10'><b>".$hd['nama']."</b></td></tr>
 				<tr><td colspan='10'><b>".$judulcetak."</b></td></tr>
 				<tr><td colspan='10'>".$infocetak."</td></tr>

@@ -2,7 +2,7 @@
 require_once('master_validation.php');
 include('lib/nangkoelib.php');
 include('lib/zLib.php');
-echo open_body();
+echo open_body(); require_once('lib/zSelect2.php');
 ?>
 
 <script language=javascript1.2 src='js/sdm_5periodegajiunit.js?v=<?php echo time(); ?>'></script>
@@ -41,15 +41,15 @@ foreach($arrUnit as $key=>$val){
 echo"<fieldset style=float:left><legend>Form</legend><table>
 <tr>
 	<td>".$_SESSION['lang']['unitkerja']."</td>
-	<td><select id=kodeorg style=\"width:200px;\">".$optUnit."</select></td>
+	<td><select id=kodeorg class=select2 style=\"width:200px;\">".$optUnit."</select></td>
 </tr>
 <tr>
 	<td>".$_SESSION['lang']['metodepanggajian']."</td>
-	<td><select id=metodepenggajian style='width:200px;'>".$metodepenggajian."</select></td>
+	<td><select id=metodepenggajian class=select2 style='width:200px;'>".$metodepenggajian."</select></td>
 </tr>
 <tr>
 	<td>".$_SESSION['lang']['periode']."</td>
-	<td><select id=periode name=periode style='width:200px;'>".$optPrd."</select></td>
+	<td><select id=periode name=periode class=select2 style='width:200px;'>".$optPrd."</select></td>
 </tr>
 <tr>
 	<td>".$_SESSION['lang']['tanggalmulai']."</td>
@@ -84,10 +84,10 @@ OPEN_BOX();
 	echo"<fieldset style=float:left><legend>Filter Pencarian</legend>
 	<table>
 	<tr><td>".$_SESSION['lang']['unit']."</td><td>:</td>
-		<td><select id=unitcari style=width:180px onchange=cariData()>".$optUnit."</select></td>
+		<td><select id=unitcari class=select2 style=width:180px onchange=cariData()>".$optUnit."</select></td>
 		
 		<td>".$_SESSION['lang']['periode']."</td><td>:</td>
-		<td><select id=periodecari style=width:180px onchange=cariData()>".$optPrd."</select></td>
+		<td><select id=periodecari class=select2 style=width:180px onchange=cariData()>".$optPrd."</select></td>
 	";
 	$arrDt=array("0"=>"Tidak","1"=>"Iya");
 	 
@@ -95,7 +95,7 @@ OPEN_BOX();
 		$optStat.="<option value='".$rw."'>".$isi."</option>";
 	}
 	echo"<td>".$_SESSION['lang']['tutup']."</td><td>:</td>
-		<td><select id=statcari style=width:80px onchange=cariData()>".$optStat."</select></td>
+		<td><select id=statcari class=select2 style=width:100px onchange=cariData()>".$optStat."</select></td>
 		<td><button class=mybutton onclick=bersihkanform()>".$_SESSION['lang']['clear']."</button></td>
 	</tr>";
 	echo"</table>";
@@ -115,7 +115,7 @@ echo "<div class='table-scroll'>";
                         <th hidden>".$_SESSION['lang']['harga']."</th>
                         <th>".$_SESSION['lang']['tutup']."</th>
                         <th hidden>".$_SESSION['lang']['natura']."</th>
-                        <th style='width:30px;' colspan=2>Action</th></tr>
+                        <th style='width:30px;' colspan=3>Action</th></tr>
                  </thead>
                  <tbody id=container>
 				 <script>loaddata()</script>

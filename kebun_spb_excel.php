@@ -55,17 +55,11 @@ $orgData2 = fetchData($query2);
 			$strx="select a.tanggal,b.* from ".$dbname.".kebun_spbht a inner join ".$dbname.".kebun_spbdt b on a.nospb=b.nospb 
 		where a.tanggal like '".$periode."-%' and ".$wherepilih." order by a.tanggal asc "; 
 //		echo"warning:".$strx;exit();
-			#kop: logo PT, judul, informasi tarikan, dan waktu cetak
+			#kop: judul, informasi tarikan, dan waktu cetak
 			$ptkode=getindukPT(($pt!='') ? substr($pt,0,4) : $_SESSION['empl']['lokasitugas']);
 			$hd=setheadreport($ptkode,$ptkode);
-			$logourl='';
-			if(file_exists($hd['logo'])){
-				$skema=(isset($_SERVER['HTTPS']) and $_SERVER['HTTPS']!='off') ? 'https' : 'http';
-				$logourl=$skema."://".@$_SERVER['HTTP_HOST'].rtrim(dirname(@$_SERVER['SCRIPT_NAME']),'/')."/".$hd['logo'];
-			}
 			$stream="
 			<table>
-			<tr><td colspan=12 height='70' style='height:52pt'>".($logourl!='' ? "<img src='".$logourl."' height='60'>" : "")."</td></tr>
 			<tr><td colspan=12><b>".$hd['nama']."</b></td></tr>
 			<tr><td colspan=12><b>".strtoupper($_SESSION['lang']['listSpb'])."</b></td></tr>
 			<tr><td colspan=12>".$_SESSION['lang']['unit'].": ".($pt!='' ? $pt." - ".$orgData2[0]['namaorganisasi'] : "Seluruhnya")." | ".$_SESSION['lang']['periode'].": ".$periode.$infofilter."</td></tr>

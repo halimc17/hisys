@@ -3,6 +3,7 @@ require_once('master_validation.php');
 require_once('config/connection.php');
 include_once('lib/nangkoelib.php');
 include_once('lib/zLib.php');
+include_once('lib/HtmlExcel.php');
 require_once('dompdf/autoload.inc.php');
 use Dompdf\Dompdf;
 $method   = checkPostGet('method', '');
@@ -11,8 +12,282 @@ $arrtipeangsuran=array('angsuranjangkawaktu'=>'Angsuran Jangka Waktu','angsurann
 
 $path	= "fileupload/angsurankaryawan/";
 
+#akses unit sesuai detail unit user (sama seperti halaman lain): setiap aksi per transaksi/karyawan dicek ke lokasi tugas karyawannya
+$unitAkses = getOrgDetail(1);
+
+#format parameter dicek sebelum dipakai di query
+foreach (array('notransaksi', 'nomotopup') as $kunciParam) {
+	if (isset($param[$kunciParam]) && $param[$kunciParam] !== '' && (!is_string($param[$kunciParam]) || !preg_match('/^[A-Za-z0-9\/_\-]{1,50}$/', $param[$kunciParam]))) {
+		exit("Warning : Parameter " . $kunciParam . " tidak valid.");
+	}
+}
+foreach (array('karyawanid', 'jenisangsuran') as $kunciParam) {
+	if (isset($param[$kunciParam]) && $param[$kunciParam] !== '' && (!is_string($param[$kunciParam]) || !preg_match('/^[0-9]{1,10}$/', $param[$kunciParam]))) {
+		exit("Warning : Parameter " . $kunciParam . " tidak valid.");
+	}
+}
+foreach (array('bulandari', 'bulansampai', 'bulanmulaiperubahan', 'bulansampaitopup', 'periodeakhir') as $kunciParam) {
+	if (isset($param[$kunciParam]) && $param[$kunciParam] !== '' && (!is_string($param[$kunciParam]) || !preg_match('/^[0-9]{4}-[0-9]{2}$/', $param[$kunciParam]))) {
+		exit("Warning : Parameter " . $kunciParam . " tidak valid.");
+	}
+}
+if (isset($param['tipeangsuran']) && $param['tipeangsuran'] !== '' && (!is_string($param['tipeangsuran']) || !isset($arrtipeangsuran[$param['tipeangsuran']]))) {
+	exit("Warning : Tipe angsuran tidak valid.");
+}
+
+#lokasi tugas karyawan harus termasuk unit yang boleh diakses user
+function cekAksesKaryawan($karyawanid)
+{
+	global $owlPDO, $dbname, $unitAkses;
+	$stmt = $owlPDO->prepare("select lokasitugas from " . $dbname . ".datakaryawan where karyawanid=?");
+	$stmt->execute(array($karyawanid));
+	$lokasi = $stmt->fetchColumn();
+	if ($lokasi === false || !isset($unitAkses[$lokasi])) {
+		exit("Warning : Karyawan tidak sesuai hak akses unit Anda.");
+	}
+	return $lokasi;
+}
+
+#baris angsuran berdasarkan nomor transaksi, sekaligus cek akses unit karyawannya
+function barisAngsuran($notransaksi)
+{
+	global $owlPDO, $dbname;
+	$stmt = $owlPDO->prepare("select * from " . $dbname . ".sdm_angsuran where notransaksi=?");
+	$stmt->execute(array($notransaksi));
+	$baris = $stmt->fetch(PDO::FETCH_ASSOC);
+	if (!$baris) {
+		exit("Warning : Data angsuran tidak ditemukan.");
+	}
+	cekAksesKaryawan($baris['karyawanid']);
+	return $baris;
+}
+
+#bulan awal angsuran tidak boleh di periode gaji yang sudah ditutup (cicilan bulan itu tidak akan pernah terpotong)
+function cekBulanTutup($lokasitugas, $bulanList)
+{
+	global $owlPDO, $dbname;
+	$q = array();
+	foreach ($bulanList as $bulan) {
+		$q[$bulan] = $owlPDO->quote($bulan);
+	}
+	if (count($q) == 0) {
+		return;
+	}
+	$res = fetchdata("select distinct periode from " . $dbname . ".sdm_5periodegaji where kodeorg=" . $owlPDO->quote($lokasitugas) . " and sudahproses='1' and periode in (" . implode(',', $q) . ") order by periode");
+	if (count($res) > 0) {
+		exit("Warning : Periode gaji " . $res[0]['periode'] . " unit " . $lokasitugas . " sudah ditutup, bulan awal angsuran tidak boleh di periode yang sudah tutup.");
+	}
+}
+
+#detail per bulan dari parameter (bulanN, rpbulandetN), bulan dan nilai divalidasi
+function detailAngsuranDariParam($param)
+{
+	$jumlah = isset($param['totalcountdetail']) ? $param['totalcountdetail'] : '';
+	if (!is_string($jumlah) || !preg_match('/^[0-9]{1,3}$/', $jumlah) || intval($jumlah) < 1) {
+		exit("Warning : Data detail masih kosong.");
+	}
+	$detail = array();
+	for ($i = 1; $i <= intval($jumlah); $i++) {
+		$bulan = isset($param['bulan' . $i]) ? $param['bulan' . $i] : '';
+		$rp = isset($param['rpbulandet' . $i]) ? str_replace(',', '', $param['rpbulandet' . $i]) : '';
+		if (!is_string($bulan) || !preg_match('/^[0-9]{4}-[0-9]{2}$/', $bulan) || !is_numeric($rp) || $rp < 0) {
+			exit("Warning : Detail angsuran ke-" . $i . " tidak valid.");
+		}
+		if (!isset($detail[$bulan])) {
+			$detail[$bulan] = 0;
+		}
+		$detail[$bulan] += doubleval($rp);
+	}
+	return $detail;
+}
+
+#komponen angsuran (nama jenis dan inisial nomor) per PT: komponengaji yang sama (120) dipakai semua PT, jadi harus dipilih per PT
+function komponenAngsuranPT($pt, $komponengaji)
+{
+	global $owlPDO, $dbname;
+	$stmt = $owlPDO->prepare("select jenisangsuran,inisial,status from " . $dbname . ".sdm_angsuran_komponen where kodeorg=? and komponengaji=?");
+	$stmt->execute(array($pt, $komponengaji));
+	$baris = $stmt->fetch(PDO::FETCH_ASSOC);
+	return $baris ? $baris : array('jenisangsuran' => '', 'inisial' => '', 'status' => '0');
+}
+
+#filter daftar angsuran, dipakai daftar, Excel, dan PDF supaya isinya sama
+function whereListAngsuran($param)
+{
+	global $owlPDO;
+	$where = '';
+	if (isset($param['notransaksisch']) && $param['notransaksisch'] !== '') {
+		$where .= " and a.notransaksi like " . $owlPDO->quote('%' . $param['notransaksisch'] . '%');
+	}
+	if (isset($param['namasch']) && $param['namasch'] !== '') {
+		$where .= " and b.namakaryawan like " . $owlPDO->quote('%' . $param['namasch'] . '%');
+	}
+	if (isset($param['lokasitugassch']) && $param['lokasitugassch'] !== '') {
+		$where .= " and b.lokasitugas = " . $owlPDO->quote($param['lokasitugassch']);
+	}
+	if (isset($param['jenisangsuransch']) && $param['jenisangsuransch'] !== '') {
+		$where .= " and a.jenis = " . $owlPDO->quote($param['jenisangsuransch']);
+	}
+	if (isset($param['statussch'])) {
+		if ($param['statussch'] == 'belum') {
+			$where .= " and a.status in (0,1)";
+		} elseif ($param['statussch'] == 'lunas') {
+			$where .= " and a.status = 3";
+		}
+	}
+	return $where;
+}
+
+#seluruh baris daftar (tanpa paging) untuk tarikan Excel/PDF, batas unit sama dengan daftar
+function dataExportAngsuran($param)
+{
+	global $dbname;
+	return fetchdata("SELECT a.*,b.nik,b.lokasitugas,b.namakaryawan,b.kodeorganisasi FROM " . $dbname . ".sdm_angsuran a
+		left join " . $dbname . ".datakaryawan b on a.karyawanid=b.karyawanid
+		WHERE b.lokasitugas in (" . getOrgDetail(2) . ") " . whereListAngsuran($param) . " ORDER BY a.start DESC, a.notransaksi ASC");
+}
+
+function labelStatusAngsuran($status)
+{
+	$label = array('0' => 'Belum Aktif/Berjalan', '1' => 'Aktif/Sudah Berjalan', '3' => 'Sudah Lunas');
+	return isset($label[$status]) ? $label[$status] : '';
+}
+
+#keterangan filter yang aktif untuk kop tarikan
+function infoFilterAngsuran($param)
+{
+	global $owlPDO, $dbname, $unitAkses;
+	$info = array();
+	$lokasi = (isset($param['lokasitugassch']) && $param['lokasitugassch'] !== '') ? $param['lokasitugassch'] : '';
+	$info[] = 'Lokasi Tugas: ' . ($lokasi != '' ? $lokasi . (isset($unitAkses[$lokasi]) ? ' - ' . $unitAkses[$lokasi] : '') : 'Semua');
+	$jenis = 'Semua';
+	if (isset($param['jenisangsuransch']) && $param['jenisangsuransch'] !== '') {
+		$rj = fetchdata("select jenisangsuran from " . $dbname . ".sdm_angsuran_komponen where komponengaji=" . $owlPDO->quote($param['jenisangsuransch']) . " and kodeorg in (" . getOrgDetail(4) . ") limit 1");
+		$jenis = isset($rj[0]['jenisangsuran']) ? $rj[0]['jenisangsuran'] : $param['jenisangsuransch'];
+	}
+	$info[] = 'Jenis: ' . $jenis;
+	$statusSch = isset($param['statussch']) ? $param['statussch'] : '';
+	$info[] = 'Status: ' . ($statusSch == 'belum' ? 'Belum Lunas' : ($statusSch == 'lunas' ? 'Lunas' : 'Semua'));
+	if (isset($param['notransaksisch']) && $param['notransaksisch'] !== '') {
+		$info[] = 'No Transaksi: ' . $param['notransaksisch'];
+	}
+	if (isset($param['namasch']) && $param['namasch'] !== '') {
+		$info[] = 'Nama: ' . $param['namasch'];
+	}
+	return implode(' | ', $info);
+}
+
+#nama karyawan untuk sekumpulan id (mis. pembuat transaksi), satu query; kunci = id sebagai angka
+function namaKaryawanById($ids)
+{
+	global $owlPDO, $dbname;
+	$q = array();
+	foreach ($ids as $id) {
+		if ($id !== '' && $id !== null) {
+			$q[$id] = $owlPDO->quote($id);
+		}
+	}
+	$peta = array();
+	if (count($q) == 0) {
+		return $peta;
+	}
+	foreach (fetchdata("select karyawanid,namakaryawan from " . $dbname . ".datakaryawan where karyawanid in (" . implode(',', $q) . ")") as $r) {
+		$peta[intval($r['karyawanid'])] = $r['namakaryawan'];
+	}
+	return $peta;
+}
+
+#jumlah yang sudah dibayar per transaksi = potongan gaji (komponen jenis angsuran, periode dalam rentang angsuran) + pembayaran kas/bank,
+#sama dengan "Data Angsuran telah dibayar" di preview; dihitung per kumpulan baris dengan beberapa query, bukan per baris
+function terbayarAngsuran($rows)
+{
+	global $owlPDO, $dbname;
+	$hasil = array();
+	if (count($rows) == 0) {
+		return $hasil;
+	}
+	$idKar = array();
+	$idJenis = array();
+	$idTrx = array();
+	$karTrx = array();
+	foreach ($rows as $r) {
+		$idKar[$r['karyawanid']] = $owlPDO->quote($r['karyawanid']);
+		$idJenis[$r['jenis']] = $owlPDO->quote($r['jenis']);
+		$idTrx[] = $owlPDO->quote($r['notransaksi']);
+		$karTrx[$r['notransaksi']] = intval($r['karyawanid']);
+		$hasil[$r['notransaksi']] = 0;
+	}
+	$gaji = array();
+	foreach (fetchdata("select karyawanid,idkomponen,periodegaji,sum(jumlah) as jumlah from " . $dbname . ".sdm_gaji where idkomponen in (" . implode(',', $idJenis) . ") and karyawanid in (" . implode(',', $idKar) . ") group by karyawanid,idkomponen,periodegaji") as $g) {
+		$gaji[intval($g['karyawanid']) . '|' . $g['idkomponen']][$g['periodegaji']] = $g['jumlah'];
+	}
+	foreach ($rows as $r) {
+		$kunci = intval($r['karyawanid']) . '|' . $r['jenis'];
+		if (isset($gaji[$kunci])) {
+			foreach ($gaji[$kunci] as $periode => $jml) {
+				if ($periode >= $r['start'] && $periode <= $r['end']) {
+					$hasil[$r['notransaksi']] += $jml;
+				}
+			}
+		}
+	}
+	foreach (fetchdata("select nodok,nik,sum(jumlah) as jumlah from " . $dbname . ".keu_kasbankdt where nodok in (" . implode(',', $idTrx) . ") group by nodok,nik") as $k) {
+		if (isset($karTrx[$k['nodok']]) && intval($k['nik']) == $karTrx[$k['nodok']]) {
+			$hasil[$k['nodok']] += $k['jumlah'];
+		}
+	}
+	return $hasil;
+}
+
+#data satu transaksi untuk tarikan Excel/PDF: header, jadwal per bulan, potongan gaji dan kas/bank per bulan, sisa berjalan
+function dataTransaksiAngsuran($notransaksi)
+{
+	global $owlPDO, $dbname;
+	barisAngsuran($notransaksi);
+	$h = fetchdata("select a.*,b.nik,b.namakaryawan,b.lokasitugas,b.kodeorganisasi from " . $dbname . ".sdm_angsuran a left join " . $dbname . ".datakaryawan b on a.karyawanid=b.karyawanid where a.notransaksi=" . $owlPDO->quote($notransaksi));
+	$hdr = $h[0];
+	$komp = komponenAngsuranPT($hdr['kodeorganisasi'], $hdr['jenis']);
+	$hdr['namajenis'] = $komp['jenisangsuran'];
+	$nm = namaKaryawanById(array($hdr['updateby']));
+	$hdr['pembuat'] = isset($nm[intval($hdr['updateby'])]) ? $nm[intval($hdr['updateby'])] : '';
+
+	$bulanData = array();
+	foreach (fetchdata("select bulan,jumlah from " . $dbname . ".sdm_angsurandt where notransaksi=" . $owlPDO->quote($notransaksi)) as $r) {
+		$bulanData[$r['bulan']]['jadwal'] = $r['jumlah'];
+	}
+	foreach (fetchdata("select periodegaji as bulan,sum(jumlah) as jumlah from " . $dbname . ".sdm_gaji where karyawanid=" . $owlPDO->quote($hdr['karyawanid']) . " and idkomponen=" . $owlPDO->quote($hdr['jenis']) . " and periodegaji>=" . $owlPDO->quote($hdr['start']) . " and periodegaji<=" . $owlPDO->quote($hdr['end']) . " group by periodegaji") as $r) {
+		$bulanData[$r['bulan']]['gaji'] = $r['jumlah'];
+	}
+	foreach (fetchdata("select substr(tanggal,1,7) as bulan,sum(jumlah) as jumlah from " . $dbname . ".keu_kasbankdt where nodok=" . $owlPDO->quote($notransaksi) . " and nik=" . $owlPDO->quote($hdr['karyawanid']) . " group by substr(tanggal,1,7)") as $r) {
+		$bulanData[$r['bulan']]['kas'] = $r['jumlah'];
+	}
+	ksort($bulanData);
+
+	$baris = array();
+	$sisa = $hdr['totalpinjaman'];
+	$tot = array('jadwal' => 0, 'gaji' => 0, 'kas' => 0, 'dibayar' => 0);
+	foreach ($bulanData as $bulan => $d) {
+		$jadwal = isset($d['jadwal']) ? $d['jadwal'] : 0;
+		$gaji = isset($d['gaji']) ? $d['gaji'] : 0;
+		$kas = isset($d['kas']) ? $d['kas'] : 0;
+		$sisa -= ($gaji + $kas);
+		$baris[] = array('bulan' => $bulan, 'jadwal' => $jadwal, 'gaji' => $gaji, 'kas' => $kas, 'dibayar' => $gaji + $kas, 'sisa' => $sisa);
+		$tot['jadwal'] += $jadwal;
+		$tot['gaji'] += $gaji;
+		$tot['kas'] += $kas;
+		$tot['dibayar'] += $gaji + $kas;
+	}
+	return array('hdr' => $hdr, 'baris' => $baris, 'tot' => $tot, 'sisa' => $hdr['totalpinjaman'] - $tot['dibayar']);
+}
+
 switch ($method) {
 	case'loadjenisangsuran':
+		#karyawan belum dipilih (form dikosongkan): cukup pilihan kosong, bukan peringatan akses
+		if (!isset($param['karyawanid']) || $param['karyawanid'] === '') {
+			echo "<option value=''>".$_SESSION['lang']['pilihdata']."</option>";
+			break;
+		}
+		cekAksesKaryawan($param['karyawanid']);
 
 		$arrlokasitugas=makeOption($dbname, 'datakaryawan', 'karyawanid,kodeorganisasi'," karyawanid='".$param['karyawanid']."'");
         $lokasitugas=$arrlokasitugas[$param['karyawanid']];
@@ -32,6 +307,9 @@ switch ($method) {
         if($rpbulan>$totalhutang){
             exit('Warning : Total hutang lebih kecil dari rupiah/bulan');
         }
+        if($rpbulan<=0){
+            exit('Warning : Rupiah/bulan harus lebih besar dari 0');
+        }
         $jumlahbulan=ceil($totalhutang/$rpbulan)-1;
 
         $tglx=$param['bulandari'].'-01';
@@ -41,6 +319,13 @@ switch ($method) {
     break;
 
 	case'getdetail':
+		$lokasiKar = cekAksesKaryawan(isset($param['karyawanid']) ? $param['karyawanid'] : '');
+		if (!empty($param['notransaksi'])) {
+			$hdrAkses = barisAngsuran($param['notransaksi']);
+			if (intval($hdrAkses['karyawanid']) != intval($param['karyawanid'])) {
+				exit("Warning : Karyawan tidak sesuai dengan data angsuran.");
+			}
+		}
 		
         $strApp="select * from ".$dbname.".sdm_angsuran where karyawanid='".$param['karyawanid']."' and jenis='".$param['jenisangsuran']."' and (status='1' or status='0') and notransaksi!='".$param['notransaksi']."' ";
         $resApp=fetchData($strApp);
@@ -148,9 +433,16 @@ switch ($method) {
 
                     $tab.="<input hidden id=totaldetail value=".$no."></tbody>";
             }else{
+                    cekBulanTutup($lokasiKar, array($param['bulandari']));
                  $totalhutang=doubleval(str_replace(',', '', $param['tothutang']));
                     $rpbulan=doubleval(str_replace(',', '',$param['rpbulan']));
                     $rangebulan = month_inbetween($param['bulandari'],$param['bulansampai']);
+                    if($totalhutang<=0){
+                        exit("Warning : Total hutang harus lebih besar dari 0");
+                    }
+                    if($param['tipeangsuran']=='angsurannominal' and $rpbulan<=0){
+                        exit("Warning : Rupiah/bulan harus lebih besar dari 0");
+                    }
                     
                     if($param['tipeangsuran']=='angsurannominal'){
                         $nilaiperbulan=$rpbulan;
@@ -244,26 +536,25 @@ switch ($method) {
 	
     case'insert':
         
+        $lokasiKar = cekAksesKaryawan(isset($param['karyawanid']) ? $param['karyawanid'] : '');
+        cekBulanTutup($lokasiKar, array($param['bulandari']));
         $strApp="select * from ".$dbname.".sdm_angsuran where karyawanid='".$param['karyawanid']."' and jenis='".$param['jenisangsuran']."' and (status='1' or status='0') ";
         $resApp=fetchData($strApp);
         if(count($resApp) > 0){
             exit("Warning : Sudah ada data yang tersimpan atas karyawan dan jenis angsuran ini yang belum lunas/belum diposting , silahkan edit data yang belum diposting");
         }
         $totalhutang=doubleval(str_replace(',', '', $param['tothutang']));
-        $totaldetail=0;
-        $arrdetail=array();
-        for ($i=1; $i <=$param['totalcountdetail']; $i++) { 
-            if(!isset($arrdetail[$param['bulan'.$i]])){
-                $arrdetail[$param['bulan'.$i]]=0;
-            }
-            $totaldetail+=doubleval(str_replace(',', '', $param['rpbulandet'.$i]));
-            $arrdetail[$param['bulan'.$i]]+=doubleval(str_replace(',', '', $param['rpbulandet'.$i]));
-        }
+        $arrdetail=detailAngsuranDariParam($param);
+        $totaldetail=array_sum($arrdetail);
         if($totalhutang!=$totaldetail){
             exit("Warning : Total hutang dengan total detail tidak sama dengan varian : ".($totalhutang-$totaldetail)."<br> silahkan dilakukan pengecekan kembali");
         }
-        $optptkar = makeOption($dbname,'datakaryawan','karyawanid,kodeorganisasi');
-        $arrjenisangsuran=makeOption($dbname,'sdm_angsuran_komponen','komponengaji,inisial');
+        #nama jenis dan inisial nomor diambil dari komponen milik PT karyawan (komponengaji 120 dipakai semua PT)
+        $ptKar = fetchdata("select kodeorganisasi from ".$dbname.".datakaryawan where karyawanid='".$param['karyawanid']."'");
+        $komponenKar = komponenAngsuranPT($ptKar[0]['kodeorganisasi'], $param['jenisangsuran']);
+        if($komponenKar['status'] != '1'){
+            exit("Warning : Jenis angsuran tidak sesuai dengan PT karyawan.");
+        }
         #bulanawal/jenisangsuran/counter dimana counter per periode tahun-bulan dan jenis angsuran
         $str    = "SELECT max(right(notransaksi,5)) as jmlhrow FROM " . $dbname . ".sdm_angsuran 
         WHERE notransaksi like '".str_replace('-', '', $param['bulandari'])."%' and jenis = '".$param['jenisangsuran']."'";
@@ -271,33 +562,40 @@ switch ($method) {
         $jlhbrs     = $res[0]['jmlhrow'];
         $counterid  = intval($res[0]['jmlhrow'])+1;
         $idbaru = addZero($counterid,5);
-        $notransaksi=str_replace('-', '', $param['bulandari'])."/".str_replace(' ', '', $arrjenisangsuran[$param['jenisangsuran']])."/".$idbaru;
+        #inisial dibersihkan ke huruf/angka saja supaya nomor transaksi selalu lolos validasi parameter; kosong -> ANG
+        $inisialNo = preg_replace('/[^A-Za-z0-9]/', '', $komponenKar['inisial']);
+        if ($inisialNo == '') {
+            $inisialNo = 'ANG';
+        }
+        $notransaksi=str_replace('-', '', $param['bulandari'])."/".$inisialNo."/".$idbaru;
 
-        $insertht     = "INSERT INTO " . $dbname . ".sdm_angsuran 
-        (`notransaksi`,`karyawanid`,`jenis`,`tipe`,`start`,`end`,`total`,`totalpinjaman`,`bulanan`,`keterangan`,`status`,`updatetime`,`updateby`)
-        VALUES 
-        ('" . $notransaksi . "','" . $param['karyawanid']. "','" . $param['jenisangsuran']. "','" . $param['tipeangsuran']. "','" . $param['bulandari']. "','" . $param['bulansampai']. "','" . doubleval(str_replace(',', '', $param['tothutang'])). "','" . doubleval(str_replace(',', '', $param['tothutang'])). "','" . doubleval(str_replace(',', '', $param['rpbulan'])). "','" . $param['ket']. "','0','".date('Y-m-d H:i:s')."','".$_SESSION['standard']['userid']."')";
+        $owlPDO->beginTransaction();
         try{
-            $owlPDO->exec($insertht);
+            $insertht = $owlPDO->prepare("INSERT INTO " . $dbname . ".sdm_angsuran 
+            (`notransaksi`,`karyawanid`,`jenis`,`tipe`,`start`,`end`,`total`,`totalpinjaman`,`bulanan`,`keterangan`,`status`,`updatetime`,`updateby`)
+            VALUES (?,?,?,?,?,?,?,?,?,?,'0',?,?)");
+            $insertht->execute(array($notransaksi, $param['karyawanid'], $param['jenisangsuran'], $param['tipeangsuran'], $param['bulandari'], $param['bulansampai'], doubleval(str_replace(',', '', $param['tothutang'])), doubleval(str_replace(',', '', $param['tothutang'])), doubleval(str_replace(',', '', $param['rpbulan'])), $param['ket'], date('Y-m-d H:i:s'), $_SESSION['standard']['userid']));
         }catch (PDOException $e) {
+            $owlPDO->rollBack();
             print " Gagal  !: " . $e->getMessage() . "\n";
             die();
         }
 
-        foreach ($arrdetail as $key => $val) {
-            $insertdt     = "INSERT INTO " . $dbname . ".sdm_angsurandt 
-            (`notransaksi`,`bulan`,`jumlah`) VALUES ('" . $notransaksi . "','" . $key. "','" . $val. "')";
-            //echo $insertdt;
-            try{
-                $owlPDO->exec($insertdt);
-            }catch (PDOException $e) {
-                print " Gagal  !: " . $e->getMessage() . "\n";
-                die();
+        try{
+            $insertdt = $owlPDO->prepare("INSERT INTO " . $dbname . ".sdm_angsurandt (`notransaksi`,`bulan`,`jumlah`) VALUES (?,?,?)");
+            foreach ($arrdetail as $key => $val) {
+                $insertdt->execute(array($notransaksi, $key, $val));
             }
+            $owlPDO->commit();
+        }catch (PDOException $e) {
+            $owlPDO->rollBack();
+            print " Gagal  !: " . $e->getMessage() . "\n";
+            die();
         }
 
     break;
     case'inserttopup':
+        barisAngsuran(isset($param['notransaksi']) ? $param['notransaksi'] : '');
         $rpbulantopup=$param['rpbulantopup'];
         $tothutangtopup=$param['tothutangtopup'];
         if($rpbulantopup>$tothutangtopup and $param['tipeangsuran']=='angsurannominal'){
@@ -352,9 +650,9 @@ switch ($method) {
 		
         $tab        ="";
         $footer     ="";
-		$limit      = 10;
+		$limit      = 25;
         $page       = 0;
-        $colspan    = 15;
+        $colspan    = 17;
 
 		if (isset($_POST['page'])) {
             $page = $_POST['page'];
@@ -367,18 +665,7 @@ switch ($method) {
         $no         =((floatval($page) * $limit));
         $arrorgdet  = getOrgDetail(2);
 		
-        if($param['notransaksisch'] != ''){
-            $where.=" and notransaksi like '%".$param['notransaksisch']."%'";
-        }
-        if($param['namasch'] != ''){
-            $where.=" and namakaryawan like '%".$param['namasch']."%'";
-        }
-        if($param['lokasitugassch'] != ''){
-            $where.=" and lokasitugas = '".$param['lokasitugassch']."'";
-        }
-        if($param['jenisangsuransch'] != ''){
-            $where.=" and jenis = '".$param['jenisangsuransch']."'";
-        }
+        $where = whereListAngsuran($param);
         $str        = "SELECT COUNT(*) AS jmlhrow FROM ".$dbname.".sdm_angsuran a 
         left join ".$dbname.".datakaryawan b on a.karyawanid=b.karyawanid 
         WHERE b.lokasitugas in (".$arrorgdet.")  ".$where." ORDER BY start DESC";
@@ -414,6 +701,8 @@ switch ($method) {
         left join ".$dbname.".datakaryawan b on a.karyawanid=b.karyawanid 
         WHERE b.lokasitugas in (".$arrorgdet.")  ".$where." ORDER BY start DESC LIMIT ".$offset.",".$limit." ";
             $hasil  = fetchdata($iList);
+            $bayar = terbayarAngsuran($hasil);
+            $namaPembuat = namaKaryawanById(array_column($hasil, 'updateby'));
             foreach ($hasil as $dList){
                 if($dList['status'] == 0){
                     $status = "Belum Aktif/Berjalan";
@@ -424,7 +713,8 @@ switch ($method) {
                 elseif ($dList['status'] == 3) {
                     $status = 'Sudah Lunas';
                 }
-                $arrjenisangsuran=makeOption($dbname,'sdm_angsuran_komponen','komponengaji,jenisangsuran');
+                $komponenRow = komponenAngsuranPT($dList['kodeorganisasi'], $dList['jenis']);
+                $arrjenisangsuran = array($dList['jenis'] => $komponenRow['jenisangsuran']);
                 $no+=1;
                 $tab.="<tr class=rowcontent>";
                     $tab.="<td align=left>".$dList['notransaksi']."</td>";
@@ -433,8 +723,13 @@ switch ($method) {
                     $tab.="<td align=center>".$arrtipeangsuran[$dList['tipe']]."</td>";
                     $tab.="<td align=center>".$dList['start']."</td>";
                     $tab.="<td align=center>".$dList['end']."</td>";
+                    $tab.="<td align=right>".number_format($dList['totalpinjaman'])."</td>";
+                    $tab.="<td align=right>".number_format($bayar[$dList['notransaksi']])."</td>";
                     $tab.="<td align=center>".$dList['keterangan']."</td>";
-                    $tab.="<td align=center>".$status."</td>";
+                    $tab.="<td align=center>".(isset($namaPembuat[intval($dList['updateby'])]) ? $namaPembuat[intval($dList['updateby'])] : '')."</td>";
+                    #warna status: belum aktif kuning, aktif biru, lunas hijau
+                    $warnaStatus = array('0' => '#fff59d', '1' => '#90caf9', '3' => '#a5d6a7');
+                    $tab.="<td align=center style=\"background-color:".(isset($warnaStatus[$dList['status']]) ? $warnaStatus[$dList['status']] : '')."\">".$status."</td>";
 
                     if($dList['status']==0){
                         $tab.="<td align=center>
@@ -471,6 +766,8 @@ switch ($method) {
                         $tab.="<td align=center><img title='".$_SESSION['lang']['upload']."' class=zImgBtn onclick=\"showupload(event,'".$dList['notransaksi']."','".$dList['karyawanid']."')\" src='images/upload-2-xxl.png'/></td>";
                     }                
 
+                $tab.="<td align=center><img src=images/excel.jpg class=zImgBtn title='Excel' onclick=\"exportTrx('".$dList['notransaksi']."','excel');\"></td>";
+                $tab.="<td align=center><img src=images/pdf.jpg class=zImgBtn title='PDF' onclick=\"exportTrx('".$dList['notransaksi']."','pdf');\"></td>";
                 $tab.="</tr></tbody>";
             }
             $footer .= "<tr>
@@ -493,7 +790,415 @@ switch ($method) {
         echo $tab."####".$footer;
     break;
 
+    case 'excellist':
+        $rows = dataExportAngsuran($param);
+        $bayar = terbayarAngsuran($rows);
+        $namaPembuat = namaKaryawanById(array_column($rows, 'updateby'));
+        #kop/ditarik-oleh format standar, pakai org karyawan yang login (data lintas unit)
+        $hdpt = setheadreport($_SESSION['empl']['kodeorganisasi'], $_SESSION['empl']['kodeorganisasi']);
+        $kolom = 16;
+        $stream = "<table>
+            <tr><td colspan=" . $kolom . "><b>" . htmlspecialchars($hdpt['nama']) . "</b></td></tr>
+            <tr><td colspan=" . $kolom . "><b>ANGSURAN KARYAWAN</b></td></tr>
+            <tr><td colspan=" . $kolom . ">" . htmlspecialchars(infoFilterAngsuran($param)) . "</td></tr>
+            <tr><td colspan=" . $kolom . ">Ditarik oleh " . htmlspecialchars($_SESSION['empl']['name']) . " (" . htmlspecialchars($_SESSION['standard']['username']) . ") pada " . date('d-m-Y H:i:s') . "</td></tr>
+            <tr><td colspan=" . $kolom . ">&nbsp;</td></tr>
+            </table>";
+        $stream .= "<table class=sortable cellspacing=1 cellpadding=3 border=1>
+            <thead><tr>
+                <th align=center bgcolor=#CCCCCC>No</th>
+                <th align=center bgcolor=#CCCCCC>No Transaksi</th>
+                <th align=center bgcolor=#CCCCCC>NIK</th>
+                <th align=center bgcolor=#CCCCCC>Nama</th>
+                <th align=center bgcolor=#CCCCCC>Lokasi Tugas</th>
+                <th align=center bgcolor=#CCCCCC>Jenis Angsuran</th>
+                <th align=center bgcolor=#CCCCCC>Tipe Angsuran</th>
+                <th align=center bgcolor=#CCCCCC>Bulan Awal</th>
+                <th align=center bgcolor=#CCCCCC>Bulan Akhir</th>
+                <th align=center bgcolor=#CCCCCC>Total Hutang</th>
+                <th align=center bgcolor=#CCCCCC>Sudah Dibayar</th>
+                <th align=center bgcolor=#CCCCCC>Sisa Hutang</th>
+                <th align=center bgcolor=#CCCCCC>Rupiah/Bulan</th>
+                <th align=center bgcolor=#CCCCCC>Status</th>
+                <th align=center bgcolor=#CCCCCC>Dibuat Oleh</th>
+                <th align=center bgcolor=#CCCCCC>Keterangan</th>
+            </tr></thead><tbody>";
+        $no = 0;
+        $ttl = 0;
+        $ttlBayar = 0;
+        foreach ($rows as $r) {
+            $no++;
+            $ttl += $r['totalpinjaman'];
+            $ttlBayar += $bayar[$r['notransaksi']];
+            $komponenRow = komponenAngsuranPT($r['kodeorganisasi'], $r['jenis']);
+            $stream .= "<tr>
+                <td align=center>" . $no . "</td>
+                <td>" . $r['notransaksi'] . "</td>
+                <td>" . $r['nik'] . "</td>
+                <td>" . htmlspecialchars($r['namakaryawan']) . "</td>
+                <td align=center>" . $r['lokasitugas'] . "</td>
+                <td>" . htmlspecialchars($komponenRow['jenisangsuran']) . "</td>
+                <td>" . (isset($arrtipeangsuran[$r['tipe']]) ? $arrtipeangsuran[$r['tipe']] : '') . "</td>
+                <td align=center>" . $r['start'] . "</td>
+                <td align=center>" . $r['end'] . "</td>
+                <td align=right>" . round($r['totalpinjaman']) . "</td>
+                <td align=right>" . round($bayar[$r['notransaksi']]) . "</td>
+                <td align=right>" . round($r['totalpinjaman'] - $bayar[$r['notransaksi']]) . "</td>
+                <td align=right>" . round($r['bulanan']) . "</td>
+                <td>" . labelStatusAngsuran($r['status']) . "</td>
+                <td>" . htmlspecialchars(isset($namaPembuat[intval($r['updateby'])]) ? $namaPembuat[intval($r['updateby'])] : '') . "</td>
+                <td>" . htmlspecialchars($r['keterangan']) . "</td>
+            </tr>";
+        }
+        if ($no == 0) {
+            $stream .= "<tr><td colspan=" . $kolom . " align=center>Data tidak ditemukan</td></tr>";
+        } else {
+            $stream .= "<tr>
+                <td colspan=9 align=right><b>Total</b></td>
+                <td align=right><b>" . round($ttl) . "</b></td>
+                <td align=right><b>" . round($ttlBayar) . "</b></td>
+                <td align=right><b>" . round($ttl - $ttlBayar) . "</b></td>
+                <td colspan=4></td>
+            </tr>";
+        }
+        $stream .= "</tbody></table>";
+
+        $xls = new HtmlExcel();
+        $xls->addSheet("Angsuran", $stream);
+        $xls->headers("Angsuran_" . date('YmdHis') . ".xls");
+        echo $xls->buildFile();
+        exit;
+
+    case 'pdflist':
+        require_once('lib/fpdf.php');
+        $rows = dataExportAngsuran($param);
+        $bayar = terbayarAngsuran($rows);
+        $namaPembuat = namaKaryawanById(array_column($rows, 'updateby'));
+        $hdpt = setheadreport($_SESSION['empl']['kodeorganisasi'], $_SESSION['empl']['kodeorganisasi']);
+        $infoFilter = infoFilterAngsuran($param);
+
+        #teks yang kepanjangan dipotong dan diberi "..." supaya tidak tumpang tindih ke kolom sebelah
+        function angFitTeks($pdf, $txt, $w, $f = 7)
+        {
+            $txt = utf8_decode($txt);
+            $pdf->SetFont('Arial', '', $f);
+            if ($pdf->GetStringWidth($txt) <= $w - 2) {
+                return $txt;
+            }
+            while (strlen($txt) > 1 && $pdf->GetStringWidth($txt . '...') > $w - 2) {
+                $txt = substr($txt, 0, -1);
+            }
+            return rtrim($txt) . '...';
+        }
+
+        class PDFAngsuran extends FPDF
+        {
+            public $colW = array();
+
+            function Header()
+            {
+                global $hdpt, $infoFilter;
+                $width = $this->w - $this->lMargin - $this->rMargin;
+                if (file_exists($hdpt['logo'])) {
+                    $this->Image($hdpt['logo'], $this->lMargin, $this->tMargin, 18);
+                }
+                $this->SetFont('Arial', 'B', 11);
+                $this->SetXY($this->lMargin + 22, $this->tMargin + 2);
+                $this->Cell(160, 6, utf8_decode($hdpt['nama']), 0, 1, 'L');
+                $this->SetY($this->tMargin + 15);
+                $this->SetFont('Arial', 'B', 13);
+                $this->Cell($width, 7, 'ANGSURAN KARYAWAN', 0, 1, 'C');
+                $this->SetFont('Arial', '', 8);
+                $this->Cell($width, 5, utf8_decode($infoFilter), 0, 1, 'C');
+                $this->Cell($width, 5, utf8_decode('Ditarik oleh ' . $_SESSION['empl']['name'] . ' (' . $_SESSION['standard']['username'] . ') pada ' . date('d-m-Y H:i:s')), 0, 1, 'C');
+                $this->Ln(1);
+
+                $this->SetFillColor(220, 220, 220);
+                $this->SetFont('Arial', 'B', 8);
+                $judul = array('No', 'No Transaksi', 'Nama', 'Lokasi', 'Awal', 'Akhir', 'Total Hutang', 'Sudah Dibayar', 'Sisa Hutang', 'Status', 'Dibuat Oleh', 'Keterangan');
+                foreach ($judul as $i => $j) {
+                    $this->Cell($this->colW[$i], 6, $j, 1, 0, 'C', true);
+                }
+                $this->Ln();
+            }
+
+            function Footer()
+            {
+                $this->SetY(-12);
+                $this->SetFont('Arial', 'I', 7);
+                $this->Cell(0, 8, 'Halaman ' . $this->PageNo() . ' / {nb}', 0, 0, 'R');
+            }
+        }
+
+        $pdf = new PDFAngsuran('L', 'mm', 'A4');
+        $pdf->AliasNbPages();
+        #pindah halaman manual per baris (margin bawah hanya batas), supaya aman untuk data banyak dan tidak menimpa footer
+        $pdf->SetAutoPageBreak(false, 16);
+        $width = $pdf->w - $pdf->lMargin - $pdf->rMargin;
+        $colFixed = array(7, 33, 36, 13, 14, 14, 22, 22, 22, 26, 40); #semua kolom kecuali Keterangan
+        $pdf->colW = array_merge($colFixed, array($width - array_sum($colFixed)));
+        $pdf->AddPage();
+        $h = 6;
+        $no = 0;
+        $ttl = 0;
+        $ttlBayar = 0;
+        foreach ($rows as $r) {
+            $no++;
+            $ttl += $r['totalpinjaman'];
+            $ttlBayar += $bayar[$r['notransaksi']];
+            if ($pdf->GetY() + $h > $pdf->h - $pdf->bMargin) {
+                $pdf->AddPage();
+            }
+            $c = $pdf->colW;
+            $pdf->SetFont('Arial', '', 7);
+            $pdf->Cell($c[0], $h, $no, 1, 0, 'C');
+            $pdf->Cell($c[1], $h, $r['notransaksi'], 1, 0, 'L');
+            $pdf->Cell($c[2], $h, angFitTeks($pdf, $r['namakaryawan'], $c[2]), 1, 0, 'L');
+            $pdf->Cell($c[3], $h, $r['lokasitugas'], 1, 0, 'C');
+            $pdf->Cell($c[4], $h, $r['start'], 1, 0, 'C');
+            $pdf->Cell($c[5], $h, $r['end'], 1, 0, 'C');
+            $pdf->Cell($c[6], $h, number_format($r['totalpinjaman']), 1, 0, 'R');
+            $pdf->Cell($c[7], $h, number_format($bayar[$r['notransaksi']]), 1, 0, 'R');
+            $pdf->Cell($c[8], $h, number_format($r['totalpinjaman'] - $bayar[$r['notransaksi']]), 1, 0, 'R');
+            $pdf->Cell($c[9], $h, angFitTeks($pdf, labelStatusAngsuran($r['status']), $c[9]), 1, 0, 'L');
+            $pdf->Cell($c[10], $h, angFitTeks($pdf, isset($namaPembuat[intval($r['updateby'])]) ? $namaPembuat[intval($r['updateby'])] : '', $c[10]), 1, 0, 'L');
+            $pdf->Cell($c[11], $h, angFitTeks($pdf, $r['keterangan'], $c[11]), 1, 1, 'L');
+        }
+        if ($no == 0) {
+            $pdf->SetFont('Arial', '', 9);
+            $pdf->Cell($width, 8, 'Data tidak ditemukan', 1, 1, 'C');
+        } else {
+            if ($pdf->GetY() + $h > $pdf->h - $pdf->bMargin) {
+                $pdf->AddPage();
+            }
+            $c = $pdf->colW;
+            $pdf->SetFont('Arial', 'B', 7);
+            $pdf->Cell($c[0] + $c[1] + $c[2] + $c[3] + $c[4] + $c[5], $h, 'Total', 1, 0, 'R');
+            $pdf->Cell($c[6], $h, number_format($ttl), 1, 0, 'R');
+            $pdf->Cell($c[7], $h, number_format($ttlBayar), 1, 0, 'R');
+            $pdf->Cell($c[8], $h, number_format($ttl - $ttlBayar), 1, 0, 'R');
+            $pdf->Cell($c[9] + $c[10] + $c[11], $h, '', 1, 1, 'L');
+        }
+        $pdf->Output();
+        exit;
+
+    case 'excelTrx':
+        $d = dataTransaksiAngsuran(isset($param['notransaksi']) ? $param['notransaksi'] : '');
+        $hdr = $d['hdr'];
+        $hdpt = setheadreport($_SESSION['empl']['kodeorganisasi'], $_SESSION['empl']['kodeorganisasi']);
+        $kolom = 7;
+        $info = array(
+            'No Transaksi' => $hdr['notransaksi'],
+            'Nama / NIK' => $hdr['namakaryawan'] . ' / ' . $hdr['nik'],
+            'Lokasi Tugas' => $hdr['lokasitugas'],
+            'Jenis Angsuran' => $hdr['namajenis'],
+            'Tipe Angsuran' => isset($arrtipeangsuran[$hdr['tipe']]) ? $arrtipeangsuran[$hdr['tipe']] : '',
+            'Periode' => $hdr['start'] . ' s/d ' . $hdr['end'],
+            'Total Hutang Awal' => number_format($hdr['total']),
+            'Total Hutang' => number_format($hdr['totalpinjaman']),
+            'Sudah Dibayar' => number_format($d['tot']['dibayar']),
+            'Sisa Hutang' => number_format($d['sisa']),
+            'Status' => labelStatusAngsuran($hdr['status']),
+            'Dibuat Oleh' => $hdr['pembuat'],
+            'Keterangan' => $hdr['keterangan']
+        );
+        $stream = "<table>
+            <tr><td colspan=" . $kolom . "><b>" . htmlspecialchars($hdpt['nama']) . "</b></td></tr>
+            <tr><td colspan=" . $kolom . "><b>ANGSURAN KARYAWAN</b></td></tr>
+            <tr><td colspan=" . $kolom . ">Ditarik oleh " . htmlspecialchars($_SESSION['empl']['name']) . " (" . htmlspecialchars($_SESSION['standard']['username']) . ") pada " . date('d-m-Y H:i:s') . "</td></tr>
+            <tr><td colspan=" . $kolom . ">&nbsp;</td></tr>";
+        foreach ($info as $label => $nilai) {
+            $stream .= "<tr><td colspan=2><b>" . $label . "</b></td><td colspan=" . ($kolom - 2) . ">" . htmlspecialchars($nilai) . "</td></tr>";
+        }
+        $stream .= "<tr><td colspan=" . $kolom . ">&nbsp;</td></tr></table>";
+        $stream .= "<table class=sortable cellspacing=1 cellpadding=3 border=1>
+            <thead><tr>
+                <th align=center bgcolor=#CCCCCC>No</th>
+                <th align=center bgcolor=#CCCCCC>Bulan</th>
+                <th align=center bgcolor=#CCCCCC>Jadwal Angsuran</th>
+                <th align=center bgcolor=#CCCCCC>Potongan Gaji</th>
+                <th align=center bgcolor=#CCCCCC>Kas/Bank</th>
+                <th align=center bgcolor=#CCCCCC>Total Dibayar</th>
+                <th align=center bgcolor=#CCCCCC>Sisa Hutang</th>
+            </tr></thead><tbody>";
+        $no = 0;
+        foreach ($d['baris'] as $r) {
+            $no++;
+            $stream .= "<tr>
+                <td align=center>" . $no . "</td>
+                <td align=center>" . $r['bulan'] . "</td>
+                <td align=right>" . round($r['jadwal']) . "</td>
+                <td align=right>" . round($r['gaji']) . "</td>
+                <td align=right>" . round($r['kas']) . "</td>
+                <td align=right>" . round($r['dibayar']) . "</td>
+                <td align=right>" . round($r['sisa']) . "</td>
+            </tr>";
+        }
+        if ($no == 0) {
+            $stream .= "<tr><td colspan=" . $kolom . " align=center>Data tidak ditemukan</td></tr>";
+        } else {
+            $stream .= "<tr>
+                <td colspan=2 align=right><b>Total</b></td>
+                <td align=right><b>" . round($d['tot']['jadwal']) . "</b></td>
+                <td align=right><b>" . round($d['tot']['gaji']) . "</b></td>
+                <td align=right><b>" . round($d['tot']['kas']) . "</b></td>
+                <td align=right><b>" . round($d['tot']['dibayar']) . "</b></td>
+                <td align=right><b>" . round($d['sisa']) . "</b></td>
+            </tr>";
+        }
+        $stream .= "</tbody></table>";
+
+        $xls = new HtmlExcel();
+        $xls->addSheet("Angsuran", $stream);
+        $xls->headers("Angsuran_" . str_replace('/', '-', $hdr['notransaksi']) . ".xls");
+        echo $xls->buildFile();
+        exit;
+
+    case 'pdfTrx':
+        require_once('lib/fpdf.php');
+        $d = dataTransaksiAngsuran(isset($param['notransaksi']) ? $param['notransaksi'] : '');
+        $hdr = $d['hdr'];
+        $hdpt = setheadreport($_SESSION['empl']['kodeorganisasi'], $_SESSION['empl']['kodeorganisasi']);
+
+        #teks yang kepanjangan dipotong dan diberi "..." supaya tidak tumpang tindih ke kolom sebelah
+        function angFitTeks($pdf, $txt, $w, $f = 8)
+        {
+            $txt = utf8_decode($txt);
+            $pdf->SetFont('Arial', '', $f);
+            if ($pdf->GetStringWidth($txt) <= $w - 2) {
+                return $txt;
+            }
+            while (strlen($txt) > 1 && $pdf->GetStringWidth($txt . '...') > $w - 2) {
+                $txt = substr($txt, 0, -1);
+            }
+            return rtrim($txt) . '...';
+        }
+
+        class PDFTrxAngsuran extends FPDF
+        {
+            public $colW = array();
+
+            function Header()
+            {
+                global $hdpt;
+                $width = $this->w - $this->lMargin - $this->rMargin;
+                if (file_exists($hdpt['logo'])) {
+                    $this->Image($hdpt['logo'], $this->lMargin, $this->tMargin, 18);
+                }
+                $this->SetFont('Arial', 'B', 11);
+                $this->SetXY($this->lMargin + 22, $this->tMargin + 2);
+                $this->Cell(150, 6, utf8_decode($hdpt['nama']), 0, 1, 'L');
+                $this->SetY($this->tMargin + 15);
+                $this->SetFont('Arial', 'B', 13);
+                $this->Cell($width, 7, 'ANGSURAN KARYAWAN', 0, 1, 'C');
+                $this->SetFont('Arial', '', 8);
+                $this->Cell($width, 5, utf8_decode('Ditarik oleh ' . $_SESSION['empl']['name'] . ' (' . $_SESSION['standard']['username'] . ') pada ' . date('d-m-Y H:i:s')), 0, 1, 'C');
+                $this->Ln(2);
+            }
+
+            function Footer()
+            {
+                $this->SetY(-12);
+                $this->SetFont('Arial', 'I', 7);
+                $this->Cell(0, 8, 'Halaman ' . $this->PageNo() . ' / {nb}', 0, 0, 'R');
+            }
+        }
+
+        function angTrxJudul($pdf)
+        {
+            $pdf->SetFillColor(220, 220, 220);
+            $pdf->SetFont('Arial', 'B', 8);
+            $judul = array('No', 'Bulan', 'Jadwal Angsuran', 'Potongan Gaji', 'Kas/Bank', 'Total Dibayar', 'Sisa Hutang');
+            foreach ($judul as $i => $j) {
+                $pdf->Cell($pdf->colW[$i], 6, $j, 1, 0, 'C', true);
+            }
+            $pdf->Ln();
+        }
+
+        $pdf = new PDFTrxAngsuran('P', 'mm', 'A4');
+        $pdf->AliasNbPages();
+        $pdf->SetAutoPageBreak(false, 16);
+        $pdf->colW = array(10, 25, 31, 31, 31, 31, 31);
+        $pdf->AddPage();
+        $width = $pdf->w - $pdf->lMargin - $pdf->rMargin;
+
+        #info transaksi: dua kolom label : nilai
+        $kiri = array(
+            'No Transaksi' => $hdr['notransaksi'],
+            'Nama' => $hdr['namakaryawan'],
+            'NIK' => $hdr['nik'],
+            'Lokasi Tugas' => $hdr['lokasitugas'],
+            'Jenis Angsuran' => $hdr['namajenis'],
+            'Tipe Angsuran' => isset($arrtipeangsuran[$hdr['tipe']]) ? $arrtipeangsuran[$hdr['tipe']] : '',
+            'Periode' => $hdr['start'] . ' s/d ' . $hdr['end']
+        );
+        $kanan = array(
+            'Total Hutang Awal' => number_format($hdr['total']),
+            'Total Hutang' => number_format($hdr['totalpinjaman']),
+            'Sudah Dibayar' => number_format($d['tot']['dibayar']),
+            'Sisa Hutang' => number_format($d['sisa']),
+            'Status' => labelStatusAngsuran($hdr['status']),
+            'Dibuat Oleh' => $hdr['pembuat'],
+            'Rupiah/Bulan' => number_format($hdr['bulanan'])
+        );
+        $kunciKiri = array_keys($kiri);
+        $kunciKanan = array_keys($kanan);
+        $wLabel = 30;
+        $wNilai = $width / 2 - $wLabel;
+        for ($i = 0; $i < count($kunciKiri); $i++) {
+            $pdf->SetFont('Arial', 'B', 8);
+            $pdf->Cell($wLabel, 5.5, $kunciKiri[$i], 0, 0, 'L');
+            $pdf->Cell($wNilai, 5.5, ': ' . angFitTeks($pdf, $kiri[$kunciKiri[$i]], $wNilai, 8), 0, 0, 'L');
+            $pdf->SetFont('Arial', 'B', 8);
+            $pdf->Cell($wLabel, 5.5, $kunciKanan[$i], 0, 0, 'L');
+            $pdf->Cell($wNilai, 5.5, ': ' . angFitTeks($pdf, $kanan[$kunciKanan[$i]], $wNilai, 8), 0, 1, 'L');
+        }
+        $pdf->SetFont('Arial', 'B', 8);
+        $pdf->Cell($wLabel, 5.5, 'Keterangan', 0, 0, 'L');
+        $pdf->Cell($width - $wLabel, 5.5, ': ' . angFitTeks($pdf, $hdr['keterangan'], $width - $wLabel, 8), 0, 1, 'L');
+        $pdf->Ln(3);
+
+        angTrxJudul($pdf);
+        $h = 6;
+        $no = 0;
+        foreach ($d['baris'] as $r) {
+            $no++;
+            if ($pdf->GetY() + $h > $pdf->h - $pdf->bMargin) {
+                $pdf->AddPage();
+                angTrxJudul($pdf);
+            }
+            $c = $pdf->colW;
+            $pdf->SetFont('Arial', '', 8);
+            $pdf->Cell($c[0], $h, $no, 1, 0, 'C');
+            $pdf->Cell($c[1], $h, $r['bulan'], 1, 0, 'C');
+            $pdf->Cell($c[2], $h, number_format($r['jadwal']), 1, 0, 'R');
+            $pdf->Cell($c[3], $h, number_format($r['gaji']), 1, 0, 'R');
+            $pdf->Cell($c[4], $h, number_format($r['kas']), 1, 0, 'R');
+            $pdf->Cell($c[5], $h, number_format($r['dibayar']), 1, 0, 'R');
+            $pdf->Cell($c[6], $h, number_format($r['sisa']), 1, 1, 'R');
+        }
+        if ($no == 0) {
+            $pdf->SetFont('Arial', '', 9);
+            $pdf->Cell($width, 8, 'Data tidak ditemukan', 1, 1, 'C');
+        } else {
+            if ($pdf->GetY() + $h > $pdf->h - $pdf->bMargin) {
+                $pdf->AddPage();
+            }
+            $c = $pdf->colW;
+            $pdf->SetFont('Arial', 'B', 8);
+            $pdf->Cell($c[0] + $c[1], $h, 'Total', 1, 0, 'R');
+            $pdf->Cell($c[2], $h, number_format($d['tot']['jadwal']), 1, 0, 'R');
+            $pdf->Cell($c[3], $h, number_format($d['tot']['gaji']), 1, 0, 'R');
+            $pdf->Cell($c[4], $h, number_format($d['tot']['kas']), 1, 0, 'R');
+            $pdf->Cell($c[5], $h, number_format($d['tot']['dibayar']), 1, 0, 'R');
+            $pdf->Cell($c[6], $h, number_format($d['sisa']), 1, 1, 'R');
+        }
+        $pdf->Output();
+        exit;
+
     case 'showupload':
+        $hdrFile = barisAngsuran(isset($param['notransaksi']) ? $param['notransaksi'] : '');
+        $param['karyawanid'] = $hdrFile['karyawanid'];
             
         $tab="";
         $tab.="<table cellspacing='1' border='0' id='uploadpopup' width=100%>";
@@ -549,6 +1254,8 @@ switch ($method) {
     break;
 
     case 'loadfiles':
+        $hdrFile = barisAngsuran(isset($param['notransaksi']) ? $param['notransaksi'] : '');
+        $param['karyawanid'] = $hdrFile['karyawanid'];
         $no = 0;
         $tab = "";	
         $str="select * from ".$dbname.".listfile_sdm_angsurankaryawan where notransaksi = '".$param['notransaksi']."' and status='1' and karyawanid='".$param['karyawanid']."'";
@@ -602,11 +1309,20 @@ switch ($method) {
     break;
 
     case 'deletefile':
-        $str="delete from ".$dbname.".listfile_sdm_angsurankaryawan where notransaksi = '".$param['notransaksi']."' and status='1' and karyawanid='".$param['karyawanid']."' and namafile='".$param['namafile']."'";
+        $hdrFile = barisAngsuran(isset($param['notransaksi']) ? $param['notransaksi'] : '');
+        $namafile = basename(isset($param['namafile']) ? $param['namafile'] : '');
+        #hanya file yang tercatat untuk transaksi ini yang boleh dihapus
+        $cekFile = $owlPDO->prepare("select namafile from ".$dbname.".listfile_sdm_angsurankaryawan where notransaksi=? and status='1' and karyawanid=? and namafile=?");
+        $cekFile->execute(array($hdrFile['notransaksi'], $hdrFile['karyawanid'], $namafile));
+        if(!$cekFile->fetch()){
+            exit("Warning : File tidak ditemukan.");
+        }
         try{
-            $owlPDO->exec($str);
-            $pathx = $path.$param['namafile'];
-            unlink($pathx);
+            $delRow = $owlPDO->prepare("delete from ".$dbname.".listfile_sdm_angsurankaryawan where notransaksi=? and status='1' and karyawanid=? and namafile=?");
+            $delRow->execute(array($hdrFile['notransaksi'], $hdrFile['karyawanid'], $namafile));
+            if(is_file($path.$namafile)){
+                unlink($path.$namafile);
+            }
         }
         catch(PDOException $e){
             echo " Gagal," . addslashes($e->getMessage());
@@ -614,6 +1330,8 @@ switch ($method) {
     break;
 
     case'submitfile':
+        $hdrFile = barisAngsuran(isset($param['notransaksi']) ? $param['notransaksi'] : '');
+        $param['karyawanid'] = $hdrFile['karyawanid'];
         $tgl = date("YmdHis");
         $his = date("His");
         $data = $_POST;
@@ -621,24 +1339,27 @@ switch ($method) {
         if($data['fileupload']!=''){
             if($_FILES['file']['error']==0){	
                 $filetype = strtolower('.'.substr($_FILES['file']['name'],strripos($_FILES['file']['name'],'.')+1));
-                $filename = $pt."_".$his."".$filetype;
+                $filename = str_replace('/', '-', $param['notransaksi'])."_".$tgl."_".substr(md5(uniqid('', true)), 0, 6).$filetype;
                 $file_tmpname = file_get_contents($_FILES['file']['tmp_name']);	
                 
                 if(($filetype=='.jpeg')||($filetype=='.jpg')||($filetype=='.png')||($filetype=='.pdf')||($filetype=='.xls')||($filetype=='.xlsx')||($filetype=='.doc')||($filetype=='.docx')){
                     if($_FILES['file']['size'] <= 2500000){
                         $str = "insert into ".$dbname.".listfile_sdm_angsurankaryawan (notransaksi,karyawanid,namafile,formaticon,status,createdby,createdtime) values ('".$param['notransaksi']."','".$param['karyawanid']."','".$filename."','".$filetype."','1','".$_SESSION['standard']['userid']."','".date('Y-m-d H:i')."')";
-                        try{
-                            $owlPDO->exec($str);
-                            if (!file_exists($path)) {
+                        if (!file_exists($path)) {
                             mkdir($path, 0777, true);
                         }
-                            file_put_contents($path.$filename,$file_tmpname);
+                        if (file_put_contents($path.$filename,$file_tmpname) === false) {
+                            exit("Warning : File gagal disimpan.");
+                        }
+                        try{
+                            $owlPDO->exec($str);
                         }
                         catch(PDOException $e){
+                            @unlink($path.$filename);
                             echo " Gagal," . addslashes($e->getMessage());
                         }
                     }else{
-                        exit("warning : Ukuran file upload maksimal 250kb");
+                        exit("warning : Ukuran file upload maksimal 2,5 MB");
                     }
                 }else{
                     exit("Warning : Format file upload salah");
@@ -649,31 +1370,48 @@ switch ($method) {
 
     case'viewfile':
         $tab="";
-        $res[0]['formaticon'] = strtolower('.'.substr($param['namafile'],strripos($param['namafile'],'.')+1));
+        $namafile = basename(isset($param['namafile']) ? $param['namafile'] : '');
+        #hanya file yang tercatat di angsuran dan boleh diakses user
+        $cekFile = $owlPDO->prepare("select notransaksi from ".$dbname.".listfile_sdm_angsurankaryawan where namafile=? and status='1' limit 1");
+        $cekFile->execute(array($namafile));
+        $barisFile = $cekFile->fetch(PDO::FETCH_ASSOC);
+        if(!$barisFile){
+            exit("Warning : File tidak ditemukan.");
+        }
+        barisAngsuran($barisFile['notransaksi']);
+        $res[0]['formaticon'] = strtolower('.'.substr($namafile,strripos($namafile,'.')+1));
         
         if($res[0]['formaticon']=='.xls' or $res[0]['formaticon']=='.xlsx' or $res[0]['formaticon']=='.doc' or $res[0]['formaticon']=='.docx'){
             exit("Warning: Tidak bisa ditampilkan, silahkan download.");
         }
         
         if($res[0]['formaticon']=='.pdf'){
-            $tab.="<embed src='".$param['namafile']."' style='width:100%;height:97%;' type='application/pdf'>";
+            $tab.="<embed src='".$path.$namafile."' style='width:100%;height:97%;' type='application/pdf'>";
         }else{			
-            $tab.="<img src='".$param['namafile']."'>";
+            $tab.="<img src='".$path.$namafile."'>";
         }
         
         echo $tab;
     break;	
     
     case 'delete':
-        $str    = "Delete FROM " . $dbname . ".sdm_angsuran WHERE notransaksi ='".$param['notransaksi']."'";
+        $hdrDel = barisAngsuran(isset($param['notransaksi']) ? $param['notransaksi'] : '');
+        if ($hdrDel['status'] != '0') {
+            exit("Warning : Hanya angsuran yang belum diposting yang bisa dihapus.");
+        }
+        $owlPDO->beginTransaction();
         try{
-            $owlPDO->exec($str);
+            $owlPDO->prepare("Delete FROM " . $dbname . ".sdm_angsurandt WHERE notransaksi=?")->execute(array($hdrDel['notransaksi']));
+            $owlPDO->prepare("Delete FROM " . $dbname . ".sdm_angsuran WHERE notransaksi=? and status='0'")->execute(array($hdrDel['notransaksi']));
+            $owlPDO->commit();
         }catch (PDOException $e) {
+            $owlPDO->rollBack();
             print " Gagal  !: " . $e->getMessage() . "\n";
             die();
         }
     break; 
     case 'deltopup':
+        barisAngsuran(isset($param['notransaksi']) ? $param['notransaksi'] : '');
         $str    = "Delete FROM " . $dbname . ".sdm_angsuran_topup WHERE notransaksi ='".$param['notransaksi']."' and nomotopup='".$param['nomotopup']."'";
         try{
             $owlPDO->exec($str);
@@ -683,15 +1421,33 @@ switch ($method) {
         }
     break; 
     case 'postdata':
-        $str    = "update " . $dbname . ".sdm_angsuran set status='1' WHERE notransaksi ='".$param['notransaksi']."'";
+        $hdrPost = barisAngsuran(isset($param['notransaksi']) ? $param['notransaksi'] : '');
+        if ($hdrPost['status'] != '0') {
+            exit("Warning : Angsuran ini sudah diposting.");
+        }
+        cekBulanTutup(cekAksesKaryawan($hdrPost['karyawanid']), array($hdrPost['start']));
+        #detail harus ada dan jumlahnya sama dengan total pinjaman sebelum diposting
+        $cekDt = $owlPDO->prepare("select count(*) as jml, coalesce(sum(jumlah),0) as total, coalesce(min(jumlah),0) as terkecil from ".$dbname.".sdm_angsurandt where notransaksi=?");
+        $cekDt->execute(array($hdrPost['notransaksi']));
+        $rowDt = $cekDt->fetch(PDO::FETCH_ASSOC);
+        if (intval($rowDt['jml']) == 0) {
+            exit("Warning : Angsuran belum punya detail per bulan.");
+        }
+        if ($rowDt['terkecil'] < 0) {
+            exit("Warning : Ada detail angsuran bernilai negatif.");
+        }
+        if (abs($rowDt['total'] - $hdrPost['totalpinjaman']) > 0.5) {
+            exit("Warning : Total detail (".number_format($rowDt['total'],0).") tidak sama dengan total pinjaman (".number_format($hdrPost['totalpinjaman'],0).").");
+        }
         try{
-            $owlPDO->exec($str);
+            $owlPDO->prepare("update " . $dbname . ".sdm_angsuran set status='1' WHERE notransaksi=? and status='0'")->execute(array($hdrPost['notransaksi']));
         }catch (PDOException $e) {
             print " Gagal  !: " . $e->getMessage() . "\n";
             die();
         }
     break; 
     case 'posttopup':
+        barisAngsuran(isset($param['notransaksi']) ? $param['notransaksi'] : '');
         $str="select * from ".$dbname.".sdm_angsuran_topup where nomotopup='".$param['nomotopup']."' and notransaksi='".$param['notransaksi']."'";
         $res=fetchData($str);
         $notransaksi=$res[0]['notransaksi'];
@@ -808,8 +1564,24 @@ switch ($method) {
         }
     break; 
     case'update':
-        
-        $strApp="select * from ".$dbname.".sdm_angsuran where karyawanid='".$param['karyawanid']."' and jenis='".$param['jenisangsuran']."' and (status='1' or status='0') and notransaksi!='".$param['notransaksi']."' ";
+        $hdr = barisAngsuran(isset($param['notransaksi']) ? $param['notransaksi'] : '');
+        if ($hdr['status'] == '3') {
+            exit("Warning : Angsuran sudah lunas, tidak dapat diubah.");
+        }
+        if (intval($hdr['karyawanid']) != intval(isset($param['karyawanid']) ? $param['karyawanid'] : 0)) {
+            exit("Warning : Karyawan tidak boleh diubah.");
+        }
+        if (!isset($param['bulansampai']) || !preg_match('/^[0-9]{4}-[0-9]{2}$/', $param['bulansampai']) || empty($param['tipeangsuran'])) {
+            exit("Warning : Bulan akhir dan tipe angsuran wajib diisi.");
+        }
+        #karyawan, jenis, dan bulan awal terkunci saat edit, pakai nilai yang tersimpan
+        $param['jenisangsuran'] = $hdr['jenis'];
+        $param['bulandari'] = $hdr['start'];
+        if ($hdr['status'] == '0') {
+            cekBulanTutup(cekAksesKaryawan($hdr['karyawanid']), array($hdr['start']));
+        }
+
+        $strApp="select * from ".$dbname.".sdm_angsuran where karyawanid='".$hdr['karyawanid']."' and jenis='".$hdr['jenis']."' and (status='1' or status='0') and notransaksi!='".$hdr['notransaksi']."' ";
         $resApp=fetchData($strApp);
         if(count($resApp) > 0){
             exit("Warning : Sudah ada data yang tersimpan atas karyawan dan jenis angsuran ini yang belum lunas/belum diposting , silahkan edit data yang belum diposting");
@@ -817,81 +1589,60 @@ switch ($method) {
 
 
         $totalhutang=doubleval(str_replace(',', '', $param['tothutang']));
-        $totaldetail=0;
-        $arrdetail=array();
-        for ($i=1; $i <=$param['totalcountdetail']; $i++) { 
-            if(!isset($arrdetail[$param['bulan'.$i]])){
-                $arrdetail[$param['bulan'.$i]]=0;
-            }
-            $totaldetail+=doubleval(str_replace(',', '', $param['rpbulandet'.$i]));
-            $arrdetail[$param['bulan'.$i]]+=doubleval(str_replace(',', '', $param['rpbulandet'.$i]));
-        }
+        $arrdetail=detailAngsuranDariParam($param);
+        $totaldetail=array_sum($arrdetail);
         if($totalhutang!=$totaldetail){
             exit("Warning : Total hutang dengan total detail tidak sama dengan varian : ".($totalhutang-$totaldetail)."<br> silahkan dilakukan pengecekan kembali");
         }
 
-        $strApp="select * from ".$dbname.".sdm_angsuran where status='1' and notransaksi='".$param['notransaksi']."' ";
-        $resApp=fetchData($strApp);
-        if(count($resApp) == 0){
-            $str    = "Delete FROM " . $dbname . ".sdm_angsuran WHERE notransaksi ='".$param['notransaksi']."'";
-            try{
-                $owlPDO->exec($str);
-            }catch (PDOException $e) {
-                print " Gagal  !: " . $e->getMessage() . "\n";
-                die();
+        if ($hdr['status'] == '1') {
+            #bulan yang periode gajinya sudah diproses tidak boleh berubah (sama dengan input yang dinonaktifkan di form)
+            $bulanTutup = array();
+            foreach (fetchdata("select distinct periode from ".$dbname.".sdm_5periodegaji where sudahproses='1'") as $barTutup) {
+                $bulanTutup[$barTutup['periode']] = 1;
             }
-
-            $notransaksi=$param['notransaksi'];
-
-            $insertht     = "INSERT INTO " . $dbname . ".sdm_angsuran 
-            (`notransaksi`,`karyawanid`,`jenis`,`tipe`,`start`,`end`,`total`,`totalpinjaman`,`bulanan`,`keterangan`,`status`,`updatetime`,`updateby`)
-            VALUES 
-            ('" . $notransaksi . "','" . $param['karyawanid']. "','" . $param['jenisangsuran']. "','" . $param['tipeangsuran']. "','" . $param['bulandari']. "','" . $param['bulansampai']. "','" . doubleval(str_replace(',', '', $param['tothutang'])). "','" . doubleval(str_replace(',', '', $param['tothutang'])). "','" . doubleval(str_replace(',', '', $param['rpbulan'])). "','" . $param['ket']. "','0','".date('Y-m-d H:i:s')."','".$_SESSION['standard']['userid']."')";
-            try{
-                $owlPDO->exec($insertht);
-            }catch (PDOException $e) {
-                print " Gagal  !: " . $e->getMessage() . "\n";
-                die();
+            $detailLama = array();
+            foreach (fetchdata("select bulan,jumlah from ".$dbname.".sdm_angsurandt where notransaksi=".$owlPDO->quote($hdr['notransaksi'])) as $barLama) {
+                $detailLama[$barLama['bulan']] = doubleval($barLama['jumlah']);
             }
-            
-        }else{
-
-            $str    = "update " . $dbname . ".sdm_angsuran set `end`='".$param['bulansampai']."' WHERE notransaksi ='".$param['notransaksi']."'";
-            //echo $str;
-            try{
-                $owlPDO->exec($str);
-            }catch (PDOException $e) {
-                print " Gagal  !: " . $e->getMessage() . "\n";
-                die();
-            }
-
-
-            $str    = "Delete FROM " . $dbname . ".sdm_angsurandt WHERE notransaksi ='".$param['notransaksi']."'";
-            //echo $str;
-            try{
-                $owlPDO->exec($str);
-            }catch (PDOException $e) {
-                print " Gagal  !: " . $e->getMessage() . "\n";
-                die();
+            foreach ($bulanTutup as $bulanX => $tandaX) {
+                $adaLama = isset($detailLama[$bulanX]);
+                $adaBaru = isset($arrdetail[$bulanX]);
+                if ($adaLama != $adaBaru || ($adaLama && abs($detailLama[$bulanX] - $arrdetail[$bulanX]) > 0.005)) {
+                    exit("Warning : Bulan ".$bulanX." sudah diproses gaji, nilainya tidak boleh diubah.");
+                }
             }
         }
 
-
-        foreach ($arrdetail as $key => $val) {
-            $insertdt     = "INSERT INTO " . $dbname . ".sdm_angsurandt 
-            (`notransaksi`,`bulan`,`jumlah`) VALUES ('" . $param['notransaksi'] . "','" . $key. "','" . $val. "')";
-            //echo $insertdt;
-            try{
-                $owlPDO->exec($insertdt);
-            }catch (PDOException $e) {
-                print " Gagal  !: " . $e->getMessage() . "\n";
-                die();
+        $notransaksi = $hdr['notransaksi'];
+        $owlPDO->beginTransaction();
+        try{
+            if ($hdr['status'] == '1') {
+                $owlPDO->prepare("update " . $dbname . ".sdm_angsuran set `end`=? WHERE notransaksi=?")->execute(array($param['bulansampai'], $notransaksi));
+            } else {
+                $owlPDO->prepare("Delete FROM " . $dbname . ".sdm_angsuran WHERE notransaksi=?")->execute(array($notransaksi));
+                $insertht = $owlPDO->prepare("INSERT INTO " . $dbname . ".sdm_angsuran 
+                (`notransaksi`,`karyawanid`,`jenis`,`tipe`,`start`,`end`,`total`,`totalpinjaman`,`bulanan`,`keterangan`,`status`,`updatetime`,`updateby`)
+                VALUES (?,?,?,?,?,?,?,?,?,?,'0',?,?)");
+                $insertht->execute(array($notransaksi, $hdr['karyawanid'], $hdr['jenis'], $param['tipeangsuran'], $hdr['start'], $param['bulansampai'], doubleval(str_replace(',', '', $param['tothutang'])), doubleval(str_replace(',', '', $param['tothutang'])), doubleval(str_replace(',', '', $param['rpbulan'])), $param['ket'], date('Y-m-d H:i:s'), $_SESSION['standard']['userid']));
             }
+
+            $owlPDO->prepare("Delete FROM " . $dbname . ".sdm_angsurandt WHERE notransaksi=?")->execute(array($notransaksi));
+            $insertdt = $owlPDO->prepare("INSERT INTO " . $dbname . ".sdm_angsurandt (`notransaksi`,`bulan`,`jumlah`) VALUES (?,?,?)");
+            foreach ($arrdetail as $key => $val) {
+                $insertdt->execute(array($notransaksi, $key, $val));
+            }
+            $owlPDO->commit();
+        }catch (PDOException $e) {
+            $owlPDO->rollBack();
+            print " Gagal  !: " . $e->getMessage() . "\n";
+            die();
         }
         
     break;
 
 	case 'preview':
+        barisAngsuran(isset($param['notransaksi']) ? $param['notransaksi'] : '');
         $str="select a.*,b.namakaryawan,b.kodeorganisasi from ".$dbname.".sdm_angsuran a 
         left join  ".$dbname.".datakaryawan b on a.karyawanid=b.karyawanid 
         where notransaksi='".$param['notransaksi']."'";
@@ -900,7 +1651,8 @@ switch ($method) {
         $komponengaji=$res[0]['jenis'];
         $bulandari=$res[0]['start'];
         $bulansampai=$res[0]['end'];
-        $arrjenisangsuran=makeOption($dbname,'sdm_angsuran_komponen','komponengaji,jenisangsuran');
+        $komponenPrev = komponenAngsuranPT($res[0]['kodeorganisasi'], $res[0]['jenis']);
+        $arrjenisangsuran = array($res[0]['jenis'] => $komponenPrev['jenisangsuran']);
         $tabx="<legend>Data Angsuran</legend><br><br>
         <table cellspacing=0 border=0 width=100% style='text-align:left'>";
         $tabx.="<tr>";
@@ -1064,6 +1816,10 @@ switch ($method) {
 
     break;
     case 'close_a':
+        $hdrClose = barisAngsuran(isset($param['notransaksi']) ? $param['notransaksi'] : '');
+        if ($hdrClose['status'] != '1') {
+            exit("Warning : Hanya angsuran yang aktif yang bisa ditutup.");
+        }
         
         // ambil periode gaji saat ini
         // $str0="SELECT * FROM ".$dbname.".`sdm_5periodegaji` WHERE 1=1 order by periode desc limit 1 ";
@@ -1084,6 +1840,7 @@ switch ($method) {
 
     break;
     case 'topup':
+        barisAngsuran(isset($param['notransaksi']) ? $param['notransaksi'] : '');
         $str="select a.*,b.namakaryawan,b.kodeorganisasi from ".$dbname.".sdm_angsuran a 
         left join  ".$dbname.".datakaryawan b on a.karyawanid=b.karyawanid 
         where notransaksi='".$param['notransaksi']."'";
@@ -1316,12 +2073,14 @@ switch ($method) {
 
     break;
     case 'hitunghutangsisa':
+        barisAngsuran(isset($param['notransaksi']) ? $param['notransaksi'] : '');
     $str="select sum(jumlah) as total from ".$dbname.".sdm_angsurandt where notransaksi='".$param['notransaksi']."' and bulan>='".$param['bulanmulaiperubahan']."'";
     $res=fetchdata($str);
 
     echo $res[0]['total'];
     break;
     case 'getedit':
+        barisAngsuran(isset($param['notransaksi']) ? $param['notransaksi'] : '');
         $str1="select * from ".$dbname.".sdm_angsuran where notransaksi ='".$param['notransaksi']."' ";
         $res1=fetchData($str1);
         $datasend=$res1[0]['notransaksi'].'###'.$res1[0]['karyawanid'].'###'.$res1[0]['jenis'].'###'.$res1[0]['tipe'].'###'.$res1[0]['start'].'###'.$res1[0]['end'].'###'.$res1[0]['totalpinjaman'].'###'.$res1[0]['bulanan'].'###'.$res1[0]['keterangan'];

@@ -17,17 +17,11 @@ $namaRekanan = spkNamaRekanan($rows);
 $petaPekerjaan = spkPekerjaan($rows);
 $ptkode = getindukPT($_SESSION['empl']['lokasitugas']);
 $hd = setheadreport($ptkode, $ptkode);
-$logourl = '';
-if (file_exists($hd['logo'])) {
-	$skema = (isset($_SERVER['HTTPS']) and $_SERVER['HTTPS'] != 'off') ? 'https' : 'http';
-	$logourl = $skema . "://" . @$_SERVER['HTTP_HOST'] . rtrim(dirname(@$_SERVER['SCRIPT_NAME']), '/') . "/" . $hd['logo'];
-}
 $h = function ($v) {
 	return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
 };
 $kolom = 13;
 $tab = "<table>
-<tr><td colspan=" . $kolom . " height='70' style='height:52pt'>" . ($logourl != '' ? "<img src='" . $logourl . "' height='60'>" : "") . "</td></tr>
 <tr><td colspan=" . $kolom . "><b>" . $h($hd['nama']) . "</b></td></tr>
 <tr><td colspan=" . $kolom . "><b>BAPP KONTRAKTOR</b></td></tr>
 <tr><td colspan=" . $kolom . ">" . $h($dft['flt']['info'] != '' ? $dft['flt']['info'] : 'Seluruh data') . "</td></tr>

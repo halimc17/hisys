@@ -67,15 +67,9 @@ switch($method)
 			$statusPost='Sebagian Posted';
 		}
 
-		#kop/logo/ditarik-oleh format standar, pakai org karyawan yang login
+		#kop/ditarik-oleh format standar, pakai org karyawan yang login
 		$hdpt=setheadreport($_SESSION['empl']['kodeorganisasi'],$_SESSION['empl']['kodeorganisasi']);
-		$logourl='';
-		if(file_exists($hdpt['logo'])){
-			$skema=(isset($_SERVER['HTTPS']) and $_SERVER['HTTPS']!='off')?'https':'http';
-			$logourl=$skema."://".@$_SERVER['HTTP_HOST'].rtrim(str_replace(chr(92),'/',dirname(@$_SERVER['SCRIPT_NAME'])),'/')."/".$hdpt['logo'];
-		}
 		$kop="<table>
-			<tr><td colspan=6 height='70' style='height:52pt'>".($logourl!=''?"<img src='".$logourl."' height='60'>":"")."</td></tr>
 			<tr><td colspan=6><b>".htmlspecialchars($hdpt['nama'])."</b></td></tr>
 			<tr><td colspan=6><b>PENDAPATAN LAIN</b></td></tr>
 			<tr><td colspan=6>Periode : ".$per."</td></tr>

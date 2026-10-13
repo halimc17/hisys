@@ -1,5 +1,17 @@
 // JavaScript Document
 
+//set nilai select2 tanpa memicu onchange bawaan select (beda dengan setValue2)
+//onchange inline dimatikan sebentar karena trigger jQuery ikut menjalankannya
+function setSel(id, v) {
+  var el = document.getElementById(id);
+  var handler = el.onchange;
+  el.onchange = null;
+  $("#" + id)
+    .val(v)
+    .trigger("change.select2");
+  el.onchange = handler;
+}
+
 ////////excel material
 
 function printFile(param, tujuan, title, ev) {
@@ -45,6 +57,7 @@ function getPrd() {
         } else {
           //alert(con.responseText);
           document.getElementById("tglAbsen").innerHTML = con.responseText;
+          $("#tglAbsen").trigger("change.select2");
         }
       } else {
         busy_off();
@@ -71,6 +84,7 @@ function getPrd2() {
           alert(con.responseText);
         } else {
           document.getElementById("periode2").innerHTML = con.responseText;
+          $("#periode2").trigger("change.select2");
         }
       } else {
         busy_off();
@@ -80,13 +94,21 @@ function getPrd2() {
   }
 }
 
+function add_upload() {
+  document.getElementById("displayupload").style.display = "block";
+  document.getElementById("listData").style.display = "none";
+  document.getElementById("headher").style.display = "none";
+  document.getElementById("detailEntry").style.display = "none";
+}
+
 function displayList() {
   document.getElementById("listData").style.display = "block";
   document.getElementById("headher").style.display = "none";
   document.getElementById("detailEntry").style.display = "none";
-  document.getElementById("kdOrgCr").value = "";
-  document.getElementById("tgl_cari").value = "";
-  document.getElementById("tpPotCr").value = "";
+  document.getElementById("displayupload").style.display = "none";
+  setSel("kdOrgCr", "");
+  setSel("tgl_cari", "");
+  setSel("tpPotCr", "");
   hapusfill();
   loadData(0);
 }
@@ -183,6 +205,7 @@ function add_detail() {
         } else {
           document.getElementById("detailEntry").style.display = "block";
           document.getElementById("detailIsi").innerHTML = con.responseText;
+          $("#detailIsi .select2").select2({ dropdownAutoWidth: true });
           // document.getElementById('tmbLheader').innerHTML = '';
           lockForm();
         }
@@ -204,9 +227,9 @@ function unlockForm() {
   document.getElementById("kdOrg").disabled = false;
   document.getElementById("tglAbsen").disabled = false;
   document.getElementById("tpPotongan").disabled = false;
-  document.getElementById("kdOrg").value = "";
-  document.getElementById("tglAbsen").value = "";
-  document.getElementById("tpPotongan").value = "";
+  setSel("kdOrg", "");
+  setSel("tglAbsen", "");
+  setSel("tpPotongan", "");
   document.getElementById("tombolHeader").style.display = "block";
 }
 status_inputan = 0;
@@ -228,8 +251,17 @@ function saveData() {
   tpPot = tpPot.options[tpPot.selectedIndex].value;
   karyId = document.getElementById("krywnId");
   karyId = karyId.options[karyId.selectedIndex].value;
-  rpPot = document.getElementById("rpPot").value;
+  rpPot = remove_comma_var(document.getElementById("rpPot").value);
   ketpot = document.getElementById("ketPot").value;
+
+  if (karyId == "") {
+    alert("Warning : Karyawan wajib dipilih.");
+    return;
+  }
+  if (rpPot == "" || isNaN(rpPot) || parseFloat(rpPot) <= 0) {
+    alert("Warning : Potongan wajib diisi dengan angka lebih dari 0.");
+    return;
+  }
 
   pros = document.getElementById("proses").value;
   if (pros != "updateDetail") {
@@ -239,7 +271,7 @@ function saveData() {
   }
   param += "&kdOrg=" + kdOrg;
   param += "&periode=" + prd + "&tipePot=" + tpPot + "&krywnId=" + karyId;
-  param += "&rupPot=" + rpPot + "&ketPot=" + ketpot;
+  param += "&rupPot=" + rpPot + "&ketPot=" + encodeURIComponent(ketpot);
   tujuan = "sdm_slave_potongan.php";
   post_response_text(tujuan, param, respog);
   function respog() {
@@ -263,9 +295,12 @@ function saveData() {
   }
 }
 function editDetail(karyawn, rppot, ketrng) {
-  document.getElementById("krywnId").value = karyawn;
+  setSel("krywnId", karyawn);
   document.getElementById("krywnId").disabled = true;
   document.getElementById("rpPot").value = rppot;
+  if (rppot !== "") {
+    z.numberFormat("rpPot", 2);
+  }
   document.getElementById("ketPot").value = ketrng;
   document.getElementById("proses").value = "updateDetail";
 }
@@ -282,13 +317,14 @@ function showTmbl() {
 
 function bersihFormDet() {
   document.getElementById("krywnId").disabled = false;
+  document.getElementById("rpPot").value = "";
   document.getElementById("ketPot").value = "";
-  document.getElementById("krywnId").value = "";
+  setSel("krywnId", "");
   document.getElementById("proses").value = "saveData";
 }
 
 function delDetail(kdorg, period, krywn, tppot) {
-  param += "&kdOrg=" + kdorg;
+  param = "kdOrg=" + kdorg;
   param += "&periode=" + period + "&tipePot=" + tppot + "&krywnId=" + krywn;
   param += "&proses=delDetail";
   tujuan = "sdm_slave_potongan.php";
@@ -311,15 +347,43 @@ function delDetail(kdorg, period, krywn, tppot) {
     post_response_text(tujuan, param, respog);
 }
 
-function loadData(num) {
-  kdorg = document.getElementById("kdOrgCr");
-  kdorg = kdorg.options[kdorg.selectedIndex].value;
-  tgl = document.getElementById("tgl_cari").value;
-  tppot = document.getElementById("tpPotCr");
-  tppot = tppot.options[tppot.selectedIndex].value;
+//filter pencarian yang aktif, dipakai oleh list, Excel, dan PDF supaya hasilnya sama
+function getFilterParamPot() {
+  var p = "";
+  p += "&kdOrgCr=" + encodeURIComponent(document.getElementById("kdOrgCr").value);
+  p += "&periodecr=" + encodeURIComponent(document.getElementById("tgl_cari").value);
+  p += "&tipePotCr=" + encodeURIComponent(document.getElementById("tpPotCr").value);
+  return p;
+}
 
-  param = "proses=loadNewData" + "&kdOrgCr=" + kdorg;
-  param += "&periodecr=" + tgl + "&tipePotCr=" + tppot;
+function exportExcelPot() {
+  tujuan = "sdm_slave_potongan.php?method=excellist" + getFilterParamPot();
+  alertify
+    .popup(
+      "Report Ms.Excel",
+      "<iframe frameborder=0 style='width:100%;height:100%;overflow:none' src='" +
+        tujuan +
+        "'></iframe>",
+    )
+    .set({ resizable: true, maximizable: true, overflow: false })
+    .resizeTo("80%", "70%");
+}
+
+function exportPdfPot() {
+  tujuan = "sdm_potongan_pdf.php?" + getFilterParamPot().substring(1);
+  alertify
+    .popup(
+      "Report PDF",
+      "<iframe frameborder=0 style='width:100%;height:100%;overflow:none' src='" +
+        tujuan +
+        "'></iframe>",
+    )
+    .set({ resizable: true, maximizable: true, overflow: false })
+    .resizeTo("80%", "70%");
+}
+
+function loadData(num) {
+  param = "proses=loadNewData" + getFilterParamPot();
   param += "&page=" + num;
   tujuan = "sdm_slave_potongan.php";
   post_response_text(tujuan, param, respog);
@@ -368,24 +432,9 @@ function loadDetail() {
   }
 }
 function fillField(kdorg, prder, potong) {
-  kdOrg = document.getElementById("kdOrg");
-  for (x = 0; x < kdOrg.length; x++) {
-    if (kdOrg.options[x].value == kdorg) {
-      kdOrg.options[x].selected = true;
-    }
-  }
-  prd = document.getElementById("tglAbsen");
-  for (x = 0; x < prd.length; x++) {
-    if (prd.options[x].value == prder) {
-      prd.options[x].selected = true;
-    }
-  }
-  tppot = document.getElementById("tpPotongan");
-  for (x = 0; x < tppot.length; x++) {
-    if (tppot.options[x].value == potong) {
-      tppot.options[x].selected = true;
-    }
-  }
+  setSel("kdOrg", kdorg);
+  setSel("tglAbsen", prder);
+  setSel("tpPotongan", potong);
   param =
     "kdOrg=" +
     kdorg +
@@ -412,6 +461,7 @@ function fillField(kdorg, prder, potong) {
           document.getElementById("detailEntry").style.display = "block";
           var detailDiv = document.getElementById("detailIsi");
           detailDiv.innerHTML = con.responseText;
+          $("#detailIsi .select2").select2({ dropdownAutoWidth: true });
           status_inputan = 1;
           statFrm = 1;
           showTmbl();
@@ -426,7 +476,7 @@ function fillField(kdorg, prder, potong) {
 }
 
 function delData(kdorg, prder, potong) {
-  param += "&kdOrg=" + kdorg;
+  param = "kdOrg=" + kdorg;
   param += "&periode=" + prder + "&tipePot=" + potong;
   param += "&proses=delData";
   tujuan = "sdm_slave_potongan.php";
@@ -712,9 +762,9 @@ function printFile(param, tujuan, title, ev) {
 }
 
 function hapusfill() {
-  document.getElementById("kodeorg2").value = "";
-  document.getElementById("periode2").value = "";
-  document.getElementById("potongan2").value = "";
+  setSel("kodeorg2", "");
+  setSel("periode2", "");
+  setSel("potongan2", "");
   document.getElementById("filex").value = "";
 }
 

@@ -1829,15 +1829,10 @@ switch($proses){
 			$couex.="</tbody>";
 		$couex .= "</table>";
 
-		#kop: logo PT, nama PT, judul, filter, dan waktu cetak
+		#kop: nama PT, judul, filter, dan waktu cetak
 		$unitcetak=($unitlist!='') ? $unitlist : $_SESSION['empl']['lokasitugas'];
 		$ptkode=getindukPT($unitcetak);
 		$hd=setheadreport($ptkode,$ptkode);
-		$logourl='';
-		if(file_exists($hd['logo'])){
-			$skema=(isset($_SERVER['HTTPS']) and $_SERVER['HTTPS']!='off') ? 'https' : 'http';
-			$logourl=$skema."://".@$_SERVER['HTTP_HOST'].rtrim(dirname(@$_SERVER['SCRIPT_NAME']),'/')."/".$hd['logo'];
-		}
 		$infocetak="Periode: ".($prdlist!='' ? $prdlist : 'Seluruhnya')." | Unit: ".($unitlist!='' ? $unitlist : 'Seluruhnya')." | Divisi: ".($afdlist!='' ? $afdlist : 'Seluruhnya');
 		if($tgl1list!='' && $tgl2list!=''){
 			$infocetak.=" | Tanggal: ".tanggalnormal($tgl1list)." s/d ".tanggalnormal($tgl2list);
@@ -1849,7 +1844,6 @@ switch($proses){
 			$infocetak.=" | Status: ".($statuslist=='1' ? 'Posted' : 'Belum Posting');
 		}
 		$couex="<table>
-			<tr><td colspan='10' height='70' style='height:52pt'>".($logourl!='' ? "<img src='".$logourl."' height='60'>" : "")."</td></tr>
 			<tr><td colspan='10'><b>".$hd['nama']."</b></td></tr>
 			<tr><td colspan='10'><b>DAFTAR PREMI PEMANEN (LIST DATA)</b></td></tr>
 			<tr><td colspan='10'>".$infocetak."</td></tr>

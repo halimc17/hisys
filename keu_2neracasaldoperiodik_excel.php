@@ -20,18 +20,12 @@ for ($m = 1; $m <= 12; $m++) {
 }
 
 $hd = setheadreport($flt['pt'], $flt['pt']);
-$logourl = '';
-if (file_exists($hd['logo'])) {
-	$skema = (isset($_SERVER['HTTPS']) and $_SERVER['HTTPS'] != 'off') ? 'https' : 'http';
-	$logourl = $skema . "://" . @$_SERVER['HTTP_HOST'] . rtrim(dirname(@$_SERVER['SCRIPT_NAME']), '/') . "/" . $hd['logo'];
-}
 $kolom = 3 + 12 * 3 + 1;
 $h = function ($v) {
 	return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
 };
 
 $tab = "<table>
-<tr><td colspan=" . $kolom . " height='70' style='height:52pt'>" . ($logourl != '' ? "<img src='" . $logourl . "' height='60'>" : "") . "</td></tr>
 <tr><td colspan=" . $kolom . "><b>" . $h($hd['nama']) . "</b></td></tr>
 <tr><td colspan=" . $kolom . "><b>NERACA SALDO PERIODIK</b></td></tr>
 <tr><td colspan=" . $kolom . ">" . $h($flt['info']) . "</td></tr>
