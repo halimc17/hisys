@@ -12,6 +12,21 @@ require_once('dompdf/autoload.inc.php');
 
 use Dompdf\Dompdf;
 
+#PT PPP: detail realisasi (BAPP) tidak bisa diinput bila hari ini melewati periode SPK (kolom sampai)
+if (!function_exists('bappCekPeriodeSpk')) {
+	function bappCekPeriodeSpk($notransaksi)
+	{
+		global $owlPDO, $dbname;
+		$stmt = $owlPDO->prepare("select s.sampai, o.induk from " . $dbname . ".log_spkht s left join " . $dbname . ".organisasi o on o.kodeorganisasi=s.kodeorg where s.notransaksi=?");
+		$stmt->execute(array($notransaksi));
+		$baris = $stmt->fetch(PDO::FETCH_ASSOC);
+		if ($baris && $baris['induk'] == 'PPP' && $baris['sampai'] != '' && $baris['sampai'] != '0000-00-00' && date('Y-m-d') > $baris['sampai']) {
+			return "Gagal, Periode SPK sudah berakhir (s/d " . tanggalnormal($baris['sampai']) . "), detail realisasi tidak bisa diinput. Silahkan input SPK baru";
+		}
+		return '';
+	}
+}
+
 $method            = checkPostGet('method', '');
 $pages             = checkPostGet('page', '');
 $notransaksicr     = checkPostGet('notransaksicr', '');
@@ -160,6 +175,7 @@ switch ($method) {
 			$dataShow[$key]['jumlahrp'] = $row['jumlahrp'];
 		}
 
+		$pesanPeriode = bappCekPeriodeSpk($param['notransaksi']);
 		# Grid Header
 		$grid = "<style type=text/css>
 		.freezetbl {
@@ -208,7 +224,9 @@ switch ($method) {
 					} else {
 						$grid .= "align='right'";
 					}
-					if ($head == 'jumlahrp' or $head == 'hk' or $head == 'hasilkerjajumlah') {
+					if ($head == 'hk' or $head == 'hasilkerjajumlah') {
+						$grid .= ">" . angkaPisah($cont) . "</td>";
+					} elseif ($head == 'jumlahrp') {
 						$grid .= ">" . number_format($cont) . "</td>";
 					} elseif ($head == 'satuan') {
 						$grid .= ">" . $cont . "</td>";
@@ -217,7 +235,7 @@ switch ($method) {
 					}
 				}
 				$grid .= "<td style='text-align:center'>
-					<img class='zImgBtn' src='images/skyblue/zoom.png' onclick=\"previewdt('" . $key . "',event)\">
+					<img class='zImgBtn' src='images/skyblue/zoom.png' " . ($pesanPeriode != '' ? "style='opacity:0.35;cursor:pointer' onclick=\"alertify.alert('Informasi','" . substr($pesanPeriode, 7) . "')\"" : "onclick=\"previewdt('" . $key . "',event)\"") . ">
 					</td>
 				</tr>";
 				// $grid .= "<tr><td colspan='6'><div id='detail_".$key."'></div></td></tr>";
@@ -236,6 +254,10 @@ switch ($method) {
 		break;
 
 	case 'previewdt':
+		$pesanPeriode = bappCekPeriodeSpk($notransaksi);
+		if ($pesanPeriode != '') {
+			exit($pesanPeriode);
+		}
 		$tab = "";
 
 		@$str = "select * from " . $dbname . ".log_baspk where notransaksi='" . $notransaksi . "' and kodeblok='" . $kodeblok . "' and kodekegiatan='" . $kodekeg . "'";
@@ -851,6 +873,10 @@ switch ($method) {
 		break;
 
 	case 'simpandt2':
+		$pesanPeriode = bappCekPeriodeSpk($notransaksi);
+		if ($pesanPeriode != '') {
+			exit($pesanPeriode);
+		}
 		if ($tgldt2 == '') {
 			exit("Gagal, Tanggal harus diisi");
 		}
@@ -2066,7 +2092,7 @@ switch ($method) {
 			$tab .= "<td align=left hidden id=kegpost" . $no . ">" . $val['kodekegiatan'] . "</td>";
 			$tab .= "<td align=left >" . ($optAct[$val['kodekegiatan']] == '' ? $optActv[$val['kodekegiatan']] : $optAct[$val['kodekegiatan']]) . "</td>";
 			$tab .= "<td align=right id=hkpost" . $no . ">" . number_format($val['hkrealisasi']) . "</td>";
-			$tab .= "<td align=right id=hslkerjapost" . $no . ">" . number_format($val['hasilkerjarealisasi']) . "</td>";
+			$tab .= "<td align=right id=hslkerjapost" . $no . ">" . angkaPisah($val['hasilkerjarealisasi']) . "</td>";
 			$tab .= "<td align=right  id=realpost" . $no . ">" . number_format($val['jumlahrealisasi'], 2) . "</td>";
 			$tab .= "</tr>";
 			@$ttl += $val['jumlahrealisasi'];
@@ -2313,7 +2339,7 @@ switch ($method) {
 			$tab .= "<td>" . $bar['kodekegiatan'] . "-" . @$nmkeg[$bar['kodekegiatan']] . "</td>";
 			$tab .= "<td>" . @$nmsat[$bar['kodekegiatan']] . "</td>";
 			$tab .= "<td>" . @$nmblok[$bar['kodeblok']] . "</td>";
-			$tab .= "<td align=right>" . number_format($bar['hasilkerjarealisasi']) . "</td>";
+			$tab .= "<td align=right>" . angkaPisah($bar['hasilkerjarealisasi']) . "</td>";
 			$tab .= "<td align=right>" . @number_format($bar['jumlahrealisasi'] / $bar['hasilkerjarealisasi'], 1) . "</td>";
 			$tab .= "<td align=right>" . number_format($bar['jumlahrealisasi']) . "</td>";
 			$tab .= "<td>" . $bar['keterangan'] . "</td>";
@@ -2328,7 +2354,7 @@ switch ($method) {
 						<td>" . @$nmkeg[$bar['kodekegiatan']] . "</td>
 						<td>" . @$nmsat[$bar['kodekegiatan']] . "</td>
 						<td>" . @$nmblok[$bar['kodeblok']] . "</td>
-						<td align=right>" . number_format($valx['hasilkerjarealisasi']) . "</td>
+						<td align=right>" . angkaPisah($valx['hasilkerjarealisasi']) . "</td>
 						<td align=right>" . number_format($valx['jumlahrealisasi'] / $valx['hasilkerjarealisasi']) . "</td>
 						<td align=right>" . number_format($valx['jumlahrealisasi']) . "</td>
 						<td>" . $valx['keterangan2'] . "</td>

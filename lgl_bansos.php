@@ -5,6 +5,7 @@ include_once('lib/zLib.php');
 include('lib/zFunction.php');
 echo open_body();
 include('master_mainMenu.php');
+require_once('lib/zSelect2.php');
 ?>
 
 <script language=javascript1.2 src='js/lgl_bansos.js?v=<?= time(); ?>'></script>
@@ -78,7 +79,7 @@ foreach($arrtipekas as $key => $val){
 }
 
 $optsts="<option value=''></option>";
-$arrtipekasx=array('x'=>'Perlu Persetujuan','0'=>'Dalam Proses Persetujuan','1'=>'Disetujui','2'=>'Dikoreksi','3'=>'Ditolak');
+$arrtipekasx=array('x'=>'Belum Diposting','0'=>'Sudah Diposting','1'=>'Disetujui (lama)','3'=>'Ditolak (lama)');
 foreach($arrtipekasx as $key => $val){
 	$optsts.="<option value=" . $key. ">" . $val . "</option>";
 }
@@ -113,17 +114,17 @@ echo"<table>
 			<tr>
 				<td>" . $_SESSION['lang']['pt'] . "</td> 
 				<td>:</td>
-				<td><select id=ptsrc  style=\"width:100px;\">" . $optpt . "</select></td>
+				<td><select class=select2 id=ptsrc  style=\"width:100px;\">" . $optpt . "</select></td>
 				
 				
 				<td>" . $_SESSION['lang']['unit'] . "</td> 
 				<td>:</td>
-				<td><select id=divsch  style=\"width:100px;\">" . $optunit . "</select></td>
+				<td><select class=select2 id=divsch  style=\"width:100px;\">" . $optunit . "</select></td>
 				
 				
 				<td>" . $_SESSION['lang']['status'] . "</td> 
 				<td>:</td>
-				<td><select id=status  style=\"width:100px;\">" . $optsts . "</select></td>
+				<td><select class=select2 id=status  style=\"width:100px;\">" . $optsts . "</select></td>
 
 				<td>" . $_SESSION['lang']['nama'] . "</td> 
 				<td>:</td>
@@ -141,7 +142,7 @@ echo"<table>
 				
 				<td>" . $_SESSION['lang']['kategori'] . "</td> 
 				<td>:</td>
-				<td><select id=katsrc  style=\"width:100px;\">" . $optkat . "</select></td>
+				<td><select class=select2 id=katsrc  style=\"width:100px;\">" . $optkat . "</select></td>
             </tr>
 		
 			<tr hidden><td>" . $_SESSION['lang']['status'] . " " . $_SESSION['lang']['kasbank'] . "</td> 
@@ -151,7 +152,7 @@ echo"<table>
 			
 			";
 
-echo"<tr><td></td><td></td><td colspan=2><button class=mybutton onclick=loaddata(0)>" . $_SESSION['lang']['find'] . "</button><button class=mybutton onclick=\"loaddata(0, 'excel')\">" . $_SESSION['lang']['excel'] . "</button></td></tr></table>";
+echo"<tr><td></td><td></td><td colspan=2><button class=mybutton onclick=loaddata(0)>" . $_SESSION['lang']['find'] . "</button><button class=mybutton onclick=exportExcelBNS()>" . $_SESSION['lang']['excel'] . "</button><button class=mybutton onclick=exportPdfBNS()>PDF</button></td></tr></table>";
 echo"</fieldset></td>
 		<td>
 		<fieldset style=display:none><legend>" . $_SESSION['lang']['print'] . "</legend> 
@@ -190,7 +191,7 @@ echo "<fieldset>
 				<td align=center>" . $_SESSION['lang']['biaya'] . "</td>
 				<td align=center>" . $_SESSION['lang']['kasbank'] . "</td>";
 				echo"<td align=center>" . $_SESSION['lang']['updateby'] . "</td>
-				<td align=center colspan='5'>" . $_SESSION['lang']['action'] . "</td>
+				<td align=center colspan='6'>" . $_SESSION['lang']['action'] . "</td>
 		</thead>
 		 <tbody id=contain> 
 			<script>loaddata(0)</script>
@@ -217,12 +218,12 @@ echo "
 			
 			<td>" . $_SESSION['lang']['kategori'] . " ".$mandatory."</td> 
 			<td>:</td>
-			<td><select style=\"width:175px;\" id=kategori>" . $optkat . "</select></td>
+			<td><select class=select2 style=\"width:175px;\" id=kategori>" . $optkat . "</select></td>
 		</tr>
 		<tr>
 			<td>" . $_SESSION['lang']['kodeorganisasi'] . " ".$mandatory."</td> 
 			<td>:</td>
-			<td><select style=\"width:175px;\" id=kodeorg>" . $optorg . "</select></td>
+			<td><select class=select2 style=\"width:175px;\" id=kodeorg>" . $optorg . "</select></td>
 			
 			<td>Nama Pemesan ".$mandatory."</td> 
 			<td>:</td>
@@ -236,16 +237,16 @@ echo "
 			
 			<td>Lokasi Pemesan ".$mandatory."</td> 
 			<td>:</td>
-			<td><select style=\"width:175px;\" onchange=getrekening() id=lokasipemesan>" . $optorgx . "</select></td>
+			<td><select class=select2 style=\"width:175px;\" onchange=getrekening() id=lokasipemesan>" . $optorgx . "</select></td>
 		</tr>
 		<tr>
 			<td>Type Pembayaran</td> 
 			<td>:</td>
-			<td><select style=\"width:175px;\" onchange=getrekening() id=tipebayar>" . $opttipe . "</select></td>
+			<td><select class=select2 style=\"width:175px;\" onchange=getrekening() id=tipebayar>" . $opttipe . "</select></td>
 			
 			<td>Nomor Rekening</td> 
 			<td>:</td>
-			<td><select style=\"width:175px;\" onchange=getatasnama() id=rekening>" . $optbank . "</select>
+			<td><select class=select2 style=\"width:175px;\" onchange=getatasnama() id=rekening>" . $optbank . "</select>
 			</td>
 		</tr> 
 		<tr>

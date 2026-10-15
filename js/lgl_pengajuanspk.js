@@ -356,6 +356,7 @@ function setrupiah(ket) {
 	document.getElementById('ketnilai').value = '';
 	if (document.getElementById('rupiah_1').value == '') {
 		document.getElementById('rupiah_1').value = nilai;
+		if (nilai != null && nilai !== '') {z.numberFormat('rupiah_1', 2);}
 		document.getElementById('ketrupiah_1').value = ket;
 		document.getElementById('rupiah_1').style.display = 'block';
 		document.getElementById('rupiah_1').style.display = 'inline-block';
@@ -474,6 +475,10 @@ function html(notransaksi, tipe) {
 	param = 'method=html' +'&tipe=' + tipe + '&notransaksi=' + notransaksi;
 	tujuan = 'lgl_slave_pengajuanspk.php';
 	if(tipe == 'pdf'){
+		//PDF resmi satu SPK
+		param = 'method=pdfSPK&notransaksi=' + encodeURIComponent(notransaksi);
+	}
+	if(tipe == 'pdf'){
 		alertify.popuppdf("title","<iframe frameborder=0 style='width:100%;height:90%;overflow:none' src='"+tujuan+"?"+param+"'></iframe>").set({'resizable':true, 'overflow':false}).resizeTo('80%','70%');
 	}else{
 		post_response_text(tujuan, param, respog);
@@ -570,6 +575,17 @@ function getdivisi() {
 		}
 	}
 }
+//detail kegiatan: tampil hanya setelah header tersimpan, dan tidak untuk jenis yang detailnya datang dari rekap (sama dengan aturan ajukan di server)
+var jenisTanpaDetail = ['ANGKUTTBS', 'SEWA.HM', 'HOLDING', 'JUALTBS'];
+var headerTersimpan = false;
+var detailOtomatis = false;
+function aturTampilDetail() {
+	var jenisSekarang = document.getElementById('jenis').value;
+	var tampil = headerTersimpan && !detailOtomatis && jenisTanpaDetail.indexOf(jenisSekarang) < 0;
+	document.getElementById('detail').style.display = tampil ? '' : 'none';
+	document.getElementById('tabledetail').style.display = tampil ? '' : 'none';
+}
+
 function getsubunit() {
 	pt = document.getElementById('pt').options[document.getElementById('pt').selectedIndex].value;
 	divisi = document.getElementById('divisi').value;
@@ -602,7 +618,8 @@ function getsubunit() {
 							// document.getElementById('tanggalsampai').value = trim(opt[4]);
 							// document.getElementById('tanggalsampai').disabled = true;
 							document.getElementById('imgkoderekanan').style.display = '';
-							document.getElementById('detail').style.display = 'block';
+							detailOtomatis = false;
+							aturTampilDetail();
 							jumlahhari();
 						}else{
 							//document.getElementById('rupiah_1').style.display = 'none';
@@ -629,10 +646,12 @@ function getsubunit() {
 							setValue2('koderekanan',trim(opt[6]));
 							document.getElementById('koderekanan').disabled = true;
 							document.getElementById('imgkoderekanan').style.display = 'none';
-							document.getElementById('detail').style.display = 'none';
+							detailOtomatis = true;
+							aturTampilDetail();
 						}
 					} else {
-						document.getElementById('detail').style.display = '';
+						detailOtomatis = false;
+						aturTampilDetail();
 						document.getElementById('project').disabled = false;
 						getJenisSup();
 					}
@@ -726,21 +745,13 @@ function fillfield(notransaksi) {
 					// document.getElementById('rupiah_1').value=data[21];
 					// Get Rupiah tambahkan echo baru di slave
 					document.getElementById('rupiah_1').value=hsl.totalrupiah;
+					if (hsl.totalrupiah != null && hsl.totalrupiah !== '') {z.numberFormat('rupiah_1', 2);}
 					document.getElementById('contpajak').innerHTML=hsl.pajak;
 					document.getElementById('contnopol').innerHTML=hsl.nopol;
 						
-					if(hsl.jenis=='PROJECT'){
-						// document.getElementById('tabledetail').style.display = 'none';
-						// document.getElementById('detail').style.display = 'none';
-					// }else if(){
-						// document.getElementById('jlhhm').value = 
-					}else if (hsl.jenis=='ANGKUTTBS'){
-						document.getElementById('tabledetail').style.display = 'none';
-						document.getElementById('detail').style.display = 'none';
-					}else{
-						document.getElementById('tabledetail').style.display = '';
-						document.getElementById('detail').style.display = '';
-					}
+					headerTersimpan = true;
+					detailOtomatis = (hsl.jenis == 'PROJECT');
+					aturTampilDetail();
 					loadfiles(notransaksi);								
 					setTimeout(function(){
 						getrekanan(notransaksi,hsl.koderekanan,hsl.project, hsl.jenis)
@@ -897,7 +908,9 @@ function cleardetail() {
 	document.getElementById('notransaksiold').innerHTML='';
 	document.getElementById('jlhhm').value='';
 	document.getElementById('pendukung').checked = false;
-	document.getElementById('tabledetail').style.display = '';
+	headerTersimpan = false;
+	detailOtomatis = false;
+	aturTampilDetail();
 	document.getElementById('jenissupplier').innerHTML="<option value=''></option>";
 	loaddatadetail();
 }
@@ -955,6 +968,7 @@ function savedetail() {
 					alert(con.responseText);
 				} else {
 					document.getElementById('rupiah_1').value = con.responseText;
+					if (trim(con.responseText) != '') {z.numberFormat('rupiah_1', 2);}
 					loaddatadetail();
 					cleardetaildt();
 				}
@@ -1031,6 +1045,7 @@ function deldetail(notransaksi,subunit,kegiatan) {
 					alert(con.responseText);
 				} else {
 					document.getElementById('rupiah_1').value = con.responseText;
+					if (trim(con.responseText) != '') {z.numberFormat('rupiah_1', 2);}
 					loaddatadetail();
 					delterdanpjk();
 				}
@@ -1102,18 +1117,18 @@ function save() {
 	param += '&tanggal=' + tanggal;
 	param += '&unit=' + unit;
 	param += '&divisi=' + divisi;
-	param += '&bagian=' + bagian;
-	param += '&project=' + project;
+	param += '&bagian=' + encodeURIComponent(bagian);
+	param += '&project=' + encodeURIComponent(project);
 	param += '&koderekanan=' + koderekanan;
-	param += '&perjanjianinduk=' + perjanjianinduk;
-	param += '&perjanjianperubahan=' + perjanjianperubahan;
-	param += '&retensi=' + retensi;
-	param += '&denda=' + denda;
+	param += '&perjanjianinduk=' + encodeURIComponent(perjanjianinduk);
+	param += '&perjanjianperubahan=' + encodeURIComponent(perjanjianperubahan);
+	param += '&retensi=' + encodeURIComponent(retensi);
+	param += '&denda=' + encodeURIComponent(denda);
 	param += '&tanggaldari=' + tanggaldari;
 	param += '&tanggalsampai=' + tanggalsampai;
-	param += '&jangkawaktu=' + jangkawaktu;
-	param += '&garansi=' + garansi;
-	param += '&spesifikasi=' + spesifikasi;
+	param += '&jangkawaktu=' + encodeURIComponent(jangkawaktu);
+	param += '&garansi=' + encodeURIComponent(garansi);
+	param += '&spesifikasi=' + encodeURIComponent(spesifikasi);
 	param += '&jenissupplier=' + jenissupplier;
 	param += '&pendukung=' + pendukung;
 	param += '&rupiahttl=' + rupiahttl;
@@ -1136,13 +1151,9 @@ function save() {
 					document.getElementById('unit').disabled = true;
 					document.getElementById('notransaksi').disabled = true;
 					document.getElementById('divisi').disabled = true;
-					if(jenis=='PROJECT'){
-						document.getElementById('detail').style.display = 'none';
-					}else if (jenis=='ANGKUTTBS'){
-						document.getElementById('detail').style.display = 'none';
-					}else{
-						document.getElementById('detail').style.display = '';
-					}
+						headerTersimpan = true;
+						detailOtomatis = (jenis == 'PROJECT');
+						aturTampilDetail();
 					loaddatadetail();
 					alert("Data sudah disimpan");
 				}
@@ -1288,13 +1299,13 @@ function loaddata(paged) {
 		param += '&unitsch=' + unitsch;
 	}
 	if (nohaksch != '') {
-		param += '&nohaksch=' + nohaksch;
+		param += '&nohaksch=' + encodeURIComponent(nohaksch);
 	}
 	if (projectsch != '') {
-		param += '&projectsch=' + projectsch;
+		param += '&projectsch=' + encodeURIComponent(projectsch);
 	}
 	if (koderekanansch != '') {
-		param += '&koderekanansch=' + koderekanansch;
+		param += '&koderekanansch=' + encodeURIComponent(koderekanansch);
 	}
 	if (statussch != '') {
 		param += '&statussch=' + statussch;
@@ -1329,8 +1340,8 @@ function form() {
 	showDialog5(title, content, width, height, ev);
 }
 function viewfile(ev, namafile) {
-	ext = namafile.split(".");
-	if (trim(ext[1]) == 'jpg' || trim(ext[1]) == 'jpeg' || trim(ext[1]) == 'png') {
+	var extFile = namafile.split('.').pop().toLowerCase();
+	if (extFile == 'jpg' || extFile == 'jpeg' || extFile == 'png') {
 		form();
 		param = 'method=viewfile&namafile=' + namafile;
 		tujuan = 'lgl_slave_pengajuanspk.php';
@@ -1383,7 +1394,7 @@ function showupload(ev,notrans,jenisupload){
 	}
 	showformupload(ev);
 	param='method=showupload&notransaksi='+notransaksi;
-	param+='&jenisupload=' + jenisupload;
+	param+='&jenisupload=' + (jenisupload === undefined ? '' : jenisupload);
 	tujuan='lgl_slave_pengajuanspk.php';
 	post_response_text(tujuan, param, respog);
 	
@@ -1419,9 +1430,19 @@ function submitfile(notrans,jenisupload) {
 	formdata.append("file", file);
 	formdata.append("notransaksi", notransaksi);
 	formdata.append("kriteriaefil", kriteriaefil);
-	formdata.append("jenisupload", jenisupload);
+	formdata.append("jenisupload", jenisupload === undefined ? '' : jenisupload);
 	if (getValue('upload') == "") {
-		alert("warning : Upload file has been empty.");
+		alert("Warning : Silahkan pilih file yang akan diupload.");
+		return false;
+	}
+	var formatOk = ['jpeg', 'jpg', 'png', 'pdf', 'xls', 'xlsx', 'doc', 'docx'];
+	var extFile = file.name.split('.').pop().toLowerCase();
+	if (file.name.indexOf('.') < 0 || formatOk.indexOf(extFile) < 0) {
+		alert("Warning : Format file upload harus ." + formatOk.join(', .') + ".");
+		return false;
+	}
+	if (file.size > 10 * 1024 * 1024) {
+		alert("Warning : Ukuran file melebihi batas, maksimal 10 MB.");
 		return false;
 	}
 
@@ -1440,6 +1461,7 @@ function submitfile(notrans,jenisupload) {
 			if (con.status == 200) {
 				busy_off();
 				if (!isSaveResponse(con.responseText)) {
+					document.getElementById('btnsubmit').disabled=false;
 					alert(con.responseText);
 				} else {
 					//=== Success Response
@@ -1450,6 +1472,7 @@ function submitfile(notrans,jenisupload) {
 				}
 			} else {
 				busy_off();
+				document.getElementById('btnsubmit').disabled=false;
 				error_catch(con.status);
 			}
 		}
@@ -1484,7 +1507,7 @@ function viewlistfile(notransaksi) {
 }
 function loadfiles(notransaksi,jenisupload) {
 	param = 'method=loadfiles&notransaksi=' + notransaksi;
-	param+='&jenisupload=' + jenisupload;
+	param+='&jenisupload=' + (jenisupload === undefined ? '' : jenisupload);
 	tujuan = 'lgl_slave_pengajuanspk.php';
 	post_response_text(tujuan, param, respog);
 	function respog() {
@@ -1514,7 +1537,7 @@ function loadfiles(notransaksi,jenisupload) {
 function deletefile(notransaksi, namafile,jenisupload) {
 	param = "method=deletefile";
 	param += "&notransaksi=" + notransaksi;
-	param += "&namafile=" + namafile;
+	param += "&namafile=" + encodeURIComponent(namafile);
 	tujuan = 'lgl_slave_pengajuanspk.php';
 	post_response_text(tujuan, param, respog);
 	function respog() {
@@ -1535,13 +1558,7 @@ function deletefile(notransaksi, namafile,jenisupload) {
 }
 
 function form_ajukan_spk(notransaksi, unit, numrow, rupiah) {
-	width = '300';
-	height = '';
-	content = "<fieldset><legend>Submission Form</legend><div id=containeraju align=center style=\"width:100%;max-height:100px;overflow:auto;\"></div></fieldset>";
-	ev = 'event';
-	title = "";
-	showDialog1(title, content, width, height, ev);
-	param = 'method=form_ajukan' + '&notransaksi=' + notransaksi + '&unit=' + unit + '&numrow=' + numrow + '&rupiahttl=' + rupiah;
+	param = 'method=form_ajukan' + '&notransaksi=' + encodeURIComponent(notransaksi) + '&unit=' + unit + '&numrow=' + numrow + '&rupiahttl=' + rupiah;
 	tujuan = 'lgl_slave_pengajuanspk.php';
 	post_response_text(tujuan, param, respog);
 	function respog() {
@@ -1551,13 +1568,25 @@ function form_ajukan_spk(notransaksi, unit, numrow, rupiah) {
 				if (!isSaveResponse(con.responseText)) {
 					alert(con.responseText);
 				} else {
-					document.getElementById('containeraju').innerHTML = con.responseText;
+					//popup di tengah layar
+					alertify.popup().set({'title':'Form Pengajuan SPK','resizable':false,'maximizable':false,'startMaximized':false,'message':con.responseText}).resizeTo('46%','62%').show();
+					initSelectPopupSPK('#kepada');
 				}
 			} else {
 				busy_off();
 				error_catch(con.status);
 			}
 		}
+	}
+}
+
+//select2 untuk dropdown di dalam popup; daftar pilihan harus tampil di atas popup
+function initSelectPopupSPK(selector) {
+	if ($('#styleSelect2Popup').length == 0) {
+		$('<style id="styleSelect2Popup">.select2-container--open .select2-dropdown{z-index:100000;} .select2-drop,.select2-drop-mask{z-index:100000;} .select2-search input{width:100%;}</style>').appendTo('head');
+	}
+	if ($(selector).length > 0 && typeof $.fn.select2 === 'function') {
+		$(selector).select2({dropdownAutoWidth: true, width: '100%'});
 	}
 }
 function ajukan() {
@@ -1579,7 +1608,7 @@ function ajukan() {
 					alert(con.responseText);
 				} else {
 					getPage();
-					closeDialog();
+					alertify.popup().destroy();
 				}
 			} else {
 				busy_off();
@@ -1691,7 +1720,7 @@ function tutup() {
 	param = 'method=tutup';
 	param += '&notransaksi=' + notransaksi;
 	param += '&unit=' + unit;
-	param += '&alasanclose=' + alasanclose;
+	param += '&alasanclose=' + encodeURIComponent(alasanclose);
 	tujuan = 'lgl_slave_pengajuanspk.php';
 	post_response_text(tujuan, param, respog);
 	function respog() {
@@ -1926,4 +1955,34 @@ function getrekanan(notransaksi,supp, namaproject, tipe){
 	}
 	
 	alertify.popup().destroy();
+}
+
+//tarikan daftar SPK sesuai filter yang sedang aktif
+function getFilterParamSPK() {
+	var p = '';
+	p += '&divsch=' + encodeURIComponent(document.getElementById('divsch').value);
+	p += '&jenissch=' + encodeURIComponent(document.getElementById('jenissch').value);
+	p += '&unitsch=' + encodeURIComponent(document.getElementById('unitsch').value);
+	p += '&nohaksch=' + encodeURIComponent(document.getElementById('nohaksch').value.trim());
+	p += '&projectsch=' + encodeURIComponent(document.getElementById('projectsch').value.trim());
+	p += '&koderekanansch=' + encodeURIComponent(document.getElementById('koderekanansch').value.trim());
+	p += '&statussch=' + encodeURIComponent(document.getElementById('statussch').value);
+	return p;
+}
+
+function tampilTarikanSPK(judul, tujuan) {
+	alertify.popup(judul, "<iframe frameborder=0 style='width:100%;height:100%;overflow:none' src='" + tujuan + "'></iframe>").set({'resizable': true, 'maximizable': true, 'overflow': false}).resizeTo('80%', '70%');
+}
+
+function exportExcelSPK() {
+	tampilTarikanSPK('Report Ms.Excel', 'lgl_slave_pengajuanspk.php?method=excellist' + getFilterParamSPK());
+}
+
+function exportPdfSPK() {
+	tampilTarikanSPK('Report PDF', 'lgl_slave_pengajuanspk.php?method=pdflist' + getFilterParamSPK());
+}
+
+//tarikan Excel / PDF satu SPK
+function exportSPK(notransaksi, jenis) {
+	tampilTarikanSPK(jenis == 'excel' ? 'Report Ms.Excel' : 'Report PDF', 'lgl_slave_pengajuanspk.php?method=' + (jenis == 'excel' ? 'excelSPK' : 'pdfSPK') + '&notransaksi=' + encodeURIComponent(notransaksi));
 }

@@ -700,7 +700,7 @@ switch ($proses) {
         }
 
         if ($data['tanggal'] == '') {
-            exit("Warning : ".$_SESSION['lang']['tanggalterima']." ".$_SESSION['lang']['kosong']);
+            exit("Warning : ".$_SESSION['lang']['tanggalinvoice']." ".$_SESSION['lang']['kosong']);
         }
 
         if ($data['jenissupplier'] == '') {
@@ -1385,7 +1385,7 @@ switch ($proses) {
 		$data = $_POST;
 
 		if ($data['tanggalinvoice'] == '') {
-			exit('warning : Invoice Date is obligatory');
+			exit('Warning : Tanggal Terima Dokumen masih kosong');
 		}
 
 		if ($data['keterangan2'] == '') {
@@ -2813,8 +2813,8 @@ switch ($proses) {
 					<td>" . $bar['noakun'] . "</td>
                     <td>" . $bar['kodeorg'] . "</td>
                     <td>" . $bar['unit'] . "</td>
-                    <td>" . tanggalnormal($bar['tanggalinvoice']) . "</td>
                     <td>" . tanggalnormal($bar['tanggal']) . "</td>
+                    <td>" . tanggalnormal($bar['tanggalinvoice']) . "</td>
                     <td>" . $bar['nopo'] . "</td>
                     <td>" . $optSup[$bar['kodesupplier']] . "</td>
                     
@@ -5508,7 +5508,7 @@ switch ($proses) {
 					//}
 				}
 
-				$str = "select notransaksi,sum(hargasatuan*jumlah) as hartot, sum(ongkir*jumlah) as ongkir, tanggal,left(kodebarang,3) as kelompokbarang,kodebarang, nopo from " . $dbname . ".log_transaksi_vw 
+				$str = "select notransaksi,sum(hargasatuan*jumlah) as hartot, sum(ongkir*jumlah) as ongkir, sum(jumlah) as jumlahbrg, hargasatuan, tanggal,left(kodebarang,3) as kelompokbarang,kodebarang, nopo from " . $dbname . ".log_transaksi_vw 
 				where nopo='" . $param['nodok'] . "' and post=1 and tipetransaksi='1' group by notransaksi,kodebarang order by tanggal asc";
 				//echo $str;
 				$res = fetchdata($str);
@@ -5534,6 +5534,9 @@ switch ($proses) {
 
 					$dtkelompokbarang[$bar['notransaksi']][$bar['kelompokbarang']] = $bar['kelompokbarang'];
 					$dtkodebarang[$bar['notransaksi']] = $bar['kodebarang'];
+					$dtkodebarangsemua[$bar['notransaksi']][$bar['kelompokbarang']][$bar['kodebarang']] = $bar['kodebarang'];
+					$semuakodebarang[$bar['kodebarang']] = $bar['kodebarang'];
+					$rincianharga[$bar['notransaksi']][$bar['kelompokbarang']][] = array($bar['kodebarang'], $bar['jumlahbrg'], $bar['hargasatuan'], $bar['hartot'], $bar['ongkir']);
 
 					$nilaidiskon[$bar['notransaksi']] += $diskonperbarang[$bar['kodebarang']];
 				}
@@ -5570,7 +5573,7 @@ switch ($proses) {
 
 				#= ambil namabarang
 				$str = "select * from " . $dbname . ".log_5masterbarang 
-					where kodebarang in ('" . implode("','", $dtkodebarang) . "')";
+					where kodebarang in ('" . implode("','", $semuakodebarang) . "')";
 				// echo $str;
 				$res = fetchdata($str);
 				foreach ($res as $bar) {
@@ -5627,21 +5630,48 @@ switch ($proses) {
 				}
 
 
+					#= gudang penerimaan untuk rincian sumber nilai
+					$dtgudang = array();
+					$str = "select notransaksi,kodegudang from " . $dbname . ".log_transaksiht where notransaksi in ('" . implode("','", array_keys($arrnotransaksi)) . "')";
+					$res = fetchdata($str);
+					foreach ($res as $bar) {
+						$dtgudang[$bar['notransaksi']] = $bar['kodegudang'];
+					}
+
 				foreach ($arrnotransaksi as $dtnotransaksi => $valn) {
 					foreach ($valn as $klmpkbarang => $valb):
 						@$no += 1;
+						#= rincian asal angka Rupiah Gudang dan Rupiah Total (tampil di popup saat angka diklik)
+						$rincian = '';
+						if (!empty($rincianharga[$dtnotransaksi][$klmpkbarang]) and $datasoref[$dtnotransaksi][$klmpkbarang] == 0) {
+							$rincian = "<table cellspacing=1 border=0><tr><td>No Transaksi</td><td>: " . $dtnotransaksi . "</td></tr><tr><td>Tanggal</td><td>: " . tanggalnormal($dttanggal[$dtnotransaksi]) . "</td></tr><tr><td>Gudang</td><td>: " . $dtgudang[$dtnotransaksi] . "</td></tr><tr><td>No PO</td><td>: " . $param['nodok'] . "</td></tr></table><br>";
+							$rincian .= "<table class=sortable cellspacing=1 border=0><thead><tr class=rowheader><td>Barang</td><td>Qty</td><td>Harga Satuan</td><td>Nilai</td></tr></thead><tbody>";
+							foreach ($rincianharga[$dtnotransaksi][$klmpkbarang] as $rb) {
+								$rincian .= "<tr class=rowcontent><td>" . $namabarang[$rb[0]] . "</td><td align=right>" . number_format($rb[1], 2) . "</td><td align=right>" . number_format($rb[2], 2) . "</td><td align=right>" . number_format($rb[3], 2) . "</td></tr>";
+							}
+							if ($nilaiongkir[$dtnotransaksi][$klmpkbarang] > 0) {
+								$rincian .= "<tr class=rowcontent><td colspan=3>Ongkir</td><td align=right>-" . number_format($nilaiongkir[$dtnotransaksi][$klmpkbarang], 2) . "</td></tr>";
+							}
+							if ($dthartotretur[$dtnotransaksi] > 0) {
+								$rincian .= "<tr class=rowcontent><td colspan=3>Retur</td><td align=right>-" . number_format($dthartotretur[$dtnotransaksi], 2) . "</td></tr>";
+							}
+							$rincian .= "<tr class=rowcontent><td colspan=3><b>Total</b></td><td align=right><b>" . number_format($dthartot[$dtnotransaksi][$klmpkbarang] - $dthartotretur[$dtnotransaksi], 2) . "</b></td></tr></tbody></table>";
+							$rincian = htmlspecialchars($rincian, ENT_QUOTES);
+						}
+						$rincianattr = ($rincian != '') ? " title='Klik untuk melihat rincian' onclick=\"tampilRincianNilai(this)\" data-rincian='" . $rincian . "'" : '';
+						$rincianstyle = ($rincian != '') ? 'cursor:pointer;color:#001f6b;font-weight:bold;text-decoration:underline' : 'cursor:pointer';
 						$stream .= "<tr class=rowcontent>";
 						$stream .= "<td style=cursor:pointer align=center>" . $no . "</td>";
 						$stream .= "<td style=cursor:pointer id=notransaksidt" . $no . ">" . $dtnotransaksi . "</td>";
 						$stream .= "<td style=cursor:pointer id=tanggaldt" . $no . ">" . tanggalnormal($dttanggal[$dtnotransaksi]) . "</td>";
 						$stream .= "<td style=cursor:pointer id=termindt" . $no . "></td>";
 
-						$stream .= "<td style=cursor:pointer align=right id=nilaitransaksidt" . $no . ">" . @number_format($dthartot[$dtnotransaksi][$klmpkbarang], 2) . "</td>";
+						$stream .= "<td style='" . $rincianstyle . "' " . $rincianattr . " align=right id=nilaitransaksidt" . $no . ">" . @number_format($dthartot[$dtnotransaksi][$klmpkbarang], 2) . "</td>";
 						$stream .= "<td style=cursor:pointer align=right id=nilaireturdt" . $no . ">" . @number_format($dthartotretur[$dtnotransaksi], 2) . "</td>";
 						$stream .= "<td style=cursor:pointer align=right><input type=text class=myinputtextnumber id=nilaiuangmukadt" . $no . " onkeyup=\"z.numberFormat('nilaiuangmukadt" . $no . "',2);getnilaitotaldt(" . $no . ")\" value=" . number_format($dtnilaiuangmuka[$dtnotransaksi], 2) . "   onkeypress=return angka_doang(event); style=width:70px; /></td>";
 
 						// $stream .= "<td style=cursor:pointer title='Rp gudang - Rp Retur - Rp UM - Rp Diskon = " . $nilaidiskon[$dtnotransaksi] . "' align=right id=nilaidt" . $no . ">" . @number_format($dthartot[$dtnotransaksi][$klmpkbarang] - $dthartotretur[$dtnotransaksi] + $pbbkbfndt[$dtnotransaksi], 2) . "</td>";
-						$stream .= "<td style=cursor:pointer title='Rp gudang - Rp Retur - Rp UM - Rp Diskon = " . $nilaidiskon[$dtnotransaksi] . "' align=right id=nilaidt" . $no . ">" . @number_format($dthartot[$dtnotransaksi][$klmpkbarang] - $dthartotretur[$dtnotransaksi], 2) . "</td>";
+						$stream .= "<td style='" . $rincianstyle . "' " . ($rincianattr != '' ? $rincianattr : " title='Rp gudang - Rp Retur - Rp UM - Rp Diskon = " . $nilaidiskon[$dtnotransaksi] . "'") . " align=right id=nilaidt" . $no . ">" . @number_format($dthartot[$dtnotransaksi][$klmpkbarang] - $dthartotretur[$dtnotransaksi], 2) . "</td>";
 
 						$stream .= "<td style=cursor:pointer align=right><input type=text class=myinputtextnumber id=nilailaindt" . $no . " onkeyup=\"z.numberFormat('nilailaindt" . $no . "',2);\" value=0  onkeypress=return angka_doang(event); style=width:70px; /></td>";
 
@@ -5654,7 +5684,11 @@ switch ($proses) {
 						$stream .= "<td style=cursor:pointer align=right id=kodekegiatandt" . $no . "></td>";
 						$stream .= "<td style=cursor:pointer align=right id=kodeassetdt" . $no . "></td>";
 						$stream .= "<td style=cursor:pointer id=reksupplierdt" . $no . "></td>";
-						$stream .= "<td style=cursor:pointer id=keterangandatadt" . $no . ">" . $namabarang[$dtkodebarang[$dtnotransaksi]] . "</td>";
+						$namasemua = array();
+						foreach ($dtkodebarangsemua[$dtnotransaksi][$klmpkbarang] as $kdbrg) {
+							$namasemua[] = $namabarang[$kdbrg];
+						}
+						$stream .= "<td style=cursor:pointer id=keterangandatadt" . $no . ">" . substr(implode(", ", $namasemua), 0, 250) . "</td>";
 
 						if (@$dtnotransaksiada[$dtnotransaksi] == @$dtnotransaksi or (@$dthartot[$dtnotransaksi][$klmpkbarang] - @$dthartotretur[$dtnotransaksi] == '0')) {
 							$stream .= "<td style=cursor:pointer align=right tittle='Sudah dibuat invoice'>" . $dtnoinvoice[$dtnotransaksi] . " <input hidden disabled title='check => Ya, uncheck => Tidak' type=checkbox id=checkboxdt" . $no . "></td>";
@@ -7744,12 +7778,17 @@ switch ($proses) {
 		}
 
 		if ($param['tanggalinvoice'] == '') {
-			exit("Warning:Tanggal Invoice masih kosong");
+			exit("Warning:Tanggal Terima Dokumen masih kosong");
 		}
 
 		if ($param['tanggal'] == '') {
-			exit("Warning:Tanggal Dokumen masih kosong");
+			exit("Warning:Tanggal Invoice masih kosong");
 		}
+
+			#tanggal terima dokumen tidak mungkin lebih awal dari tanggal invoice
+			if (tanggalsystemn($param['tanggalinvoice']) < tanggalsystemn($param['tanggal'])) {
+				exit("Warning:Tanggal Terima Dokumen (" . $param['tanggalinvoice'] . ") tidak boleh lebih awal dari Tanggal Invoice (" . $param['tanggal'] . ")");
+			}
 
 		if ($param['noinvoicesupplier'] == '') {
 			exit("Warning:No. Invoice Supplier masih kosong");

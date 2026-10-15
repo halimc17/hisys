@@ -3,6 +3,29 @@ require_once('master_validation.php');
 require_once('config/connection.php');
 include_once('lib/nangkoelib.php');
 include_once('lib/zLib.php');
+
+#tanggal jurnal (tanggal terima dokumen) harus berada pada periode akuntansi unit yang masih terbuka
+function cekPeriodeTagihan($unit, $tanggal)
+{
+	global $owlPDO, $dbname;
+	$periodeDok = substr($tanggal, 0, 7);
+	$stmt = $owlPDO->prepare("select periode, tanggalmulai, tutupbuku from " . $dbname . ".setup_periodeakuntansi where kodeorg=? and periode=?");
+	$stmt->execute(array($unit, $periodeDok));
+	$barisPeriode = $stmt->fetch(PDO::FETCH_ASSOC);
+	if ($barisPeriode) {
+		if ($barisPeriode['tutupbuku'] != 0) {
+			exit("Warning:Periode " . $periodeDok . " unit " . $unit . " sudah ditutup buku, Tanggal Terima Dokumen " . $tanggal . " tidak bisa diposting. Ubah Tanggal Terima Dokumen ke periode yang masih terbuka.");
+		}
+		return;
+	}
+	#periode bulan dokumen belum ada di setup: tanggal tidak boleh lebih awal dari periode terbuka paling lama
+	$stmt = $owlPDO->prepare("select periode, tanggalmulai from " . $dbname . ".setup_periodeakuntansi where kodeorg=? and tutupbuku=0 order by periode asc limit 1");
+	$stmt->execute(array($unit));
+	$tertua = $stmt->fetch(PDO::FETCH_ASSOC);
+	if ($tertua && str_replace("-", "", $tertua['tanggalmulai']) > str_replace("-", "", $tanggal)) {
+		exit("Warning:Tanggal Terima Dokumen " . $tanggal . " di luar periode akuntansi terbuka unit " . $unit . ", Periode terbuka paling awal : " . $tertua['periode']);
+	}
+}
 try {
 
 	$owlPDO->beginTransaction();
@@ -272,14 +295,7 @@ try {
 				'revisi' => '0'
 			);
 			#====cek periode
-			$tgl = str_replace("-", "", $dataH[0]['tanggalinvoice']);
-			$sPeriode = "select * from " . $dbname . ".setup_periodeakuntansi 
-			           where kodeorg='" . $dataH[0]['unit'] . "' and tutupbuku=0 order by periode desc";
-			$rPeriode = fetchdata($sPeriode);
-			$tglakutansi = str_replace("-", "", $rPeriode[0]['tanggalmulai']);
-			if ($tglakutansi > $tgl) {
-				exit("Warning:Tanggal invoice diluar periode aktif, Periode invoice : " . substr($dataH[0]['tanggalinvoice'], 0, 7) . " ; Periode Aktif : " . $rPeriode[0]['periode'] . " ");
-			}
+			cekPeriodeTagihan($dataH[0]['unit'], $dataH[0]['tanggalinvoice']);
 
 			#=== Cek if data not exist ===
 			$error1 = "";
@@ -1193,15 +1209,7 @@ try {
 
 
 				#====cek periode
-				$tgl = str_replace("-", "", $dataH[0]['tanggalinvoice']);
-				$sPeriode = "select * from " . $dbname . ".setup_periodeakuntansi 
-				           where kodeorg='" . $dataH[0]['unit'] . "' and tutupbuku=0 order by periode desc";
-				$rPeriode = fetchdata($sPeriode);
-				$tglakutansi = str_replace("-", "", $rPeriode[0]['tanggalmulai']);
-				if ($tglakutansi > $tgl) {
-					// exit('Error:Date beyond active period');
-					exit("Warning:Tanggal invoice diluar periode aktif, Periode invoice : " . substr($dataH[0]['tanggalinvoice'], 0, 7) . " ; Periode Aktif : " . $rPeriode[0]['periode'] . " ");
-				}
+				cekPeriodeTagihan($dataH[0]['unit'], $dataH[0]['tanggalinvoice']);
 
 				#=== Cek if data not exist ===
 				$error1 = "";

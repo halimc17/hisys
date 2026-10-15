@@ -245,7 +245,7 @@ echo "<table cellpading=3 width=100% cellspacing=1 border=0 class=sortable>";
 echo "<thead>";
 echo "<tr align=center>";
 foreach ($listTitle as $key => $value) {
-    echo "<th>" . $_SESSION['lang'][$value] . "</th>";
+    echo "<th>" . ($value == 'tanggaldokumen' ? 'Tanggal Terima Dokumen' : $_SESSION['lang'][$value]) . "</th>";
 }
 echo "<th colspan=7>" . $_SESSION['lang']['action'] . "</th>";
 echo "</tr></thead><tbody id=continerlist>";
@@ -288,7 +288,7 @@ echo "<tr>
 
 		<td class=bintang>" . $_SESSION['lang']['tanggalinvoice'] . "</td>
         <td>:</td>
-        <td><input type=text class=myinputtext id=tanggal placeholder='tanggal dokumen ' onchange=getdate30()  onchange=gettglfp() readonly onmousemove=setCalendar(this.id) onkeypress=return false; style=width:150px; maxlength=10 /></td>
+        <td><input type=text class=myinputtext id=tanggal placeholder='tanggal invoice' title='tanggal invoice' onchange=getdate30() readonly onmousemove=setCalendar(this.id) onkeypress=return false; style=width:150px; maxlength=10 /></td>
 		
         </tr>";
 
@@ -308,7 +308,7 @@ echo "<tr>
 		
 		<td>" . $_SESSION['lang']['jatuhtempo'] . "</td>
         <td>:</td>
-        <td><input type=text class=myinputtext id=jatuhtempo placeholder='Otomatis jika tanggal terima terisi' onmousemove=setCalendar(this.id) onkeypress=return false; style=width:150px; maxlength=10 readonly/></td>
+        <td><input type=text class=myinputtext id=jatuhtempo placeholder='Otomatis dari tanggal invoice' onmousemove=setCalendar(this.id) onkeypress=return false; style=width:150px; maxlength=10 readonly/></td>
 		
    </tr>";
 
