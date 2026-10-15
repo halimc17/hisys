@@ -2194,19 +2194,19 @@ switch ($proses) {
 		echo $optBlok;
 	break;
     case'createTable':
-        $tgl_db = substr($tgl, 0, 4) . '-' . substr($tgl, 4, 2) . '-' . substr($tgl, 6, 2);
         if (strlen($kdOrg) > 4) {
-            $where = " ((subbagian='" . $kdOrg . "' AND karyawanid NOT IN (SELECT karyawanid FROM ".$dbname.".sdm_riwayatjabatan WHERE kesubbagian='".$kdOrg."' AND mulaiberlaku > '".$tgl_db."')) OR karyawanid IN (SELECT karyawanid FROM ".$dbname.".sdm_riwayatjabatan WHERE darisubbagian='".$kdOrg."' AND mulaiberlaku > '".$tgl_db."')) and statuskaryawan != 'Keluar' and ((tanggalkeluar>" . $tgl . " or tanggalkeluar='0000-00-00') OR (tanggalkeluar!='0000-00-00' AND statuskaryawan = 'Percobaan'))";
+            $where = " subbagian='" . $kdOrg . "'   and statuskaryawan != 'Keluar' and ((tanggalkeluar>" . $tgl . " or tanggalkeluar='0000-00-00') OR (tanggalkeluar!='0000-00-00' AND statuskaryawan = 'Percobaan'))";
         } else {
-            $where = " ((lokasitugas='" . $kdOrg . "' AND karyawanid NOT IN (SELECT karyawanid FROM ".$dbname.".sdm_riwayatjabatan WHERE kekodeorg='".$kdOrg."' AND mulaiberlaku > '".$tgl_db."')) OR karyawanid IN (SELECT karyawanid FROM ".$dbname.".sdm_riwayatjabatan WHERE darikodeorg='".$kdOrg."' AND mulaiberlaku > '".$tgl_db."')) and statuskaryawan != 'Keluar' and (subbagian IS NULL or subbagian='0' or subbagian='') and ((tanggalkeluar>" . $tgl . " or tanggalkeluar='0000-00-00') OR (tanggalkeluar!='0000-00-00' AND statuskaryawan = 'Percobaan'))";
-        }
+            $where = " lokasitugas='" . $kdOrg . "'  and statuskaryawan != 'Keluar' and (subbagian IS NULL or subbagian='0' or subbagian='') and ((tanggalkeluar>" . $tgl . " or tanggalkeluar='0000-00-00') OR (tanggalkeluar!='0000-00-00' AND statuskaryawan = 'Percobaan'))";
+        }//namakaryawan,karyawanid,nik
 
         $optTipeKar = makeOption($dbname, 'sdm_5tipekaryawan', 'id,tipe');
 
-        $strdkar = "select karyawanid from ".$dbname.".datakaryawan_hist a where " . $where . " and tipekaryawan not in ('0','7','8')  and approval_status='8' and version_type='B' and periodegaji='".substr($tgl, 0,6)."' "; 
+        $periodeTarget = substr($tgl, 0, 4) . '-' . substr($tgl, 4, 2);
+        $strdkar = "select karyawanid from ".$dbname.".datakaryawan_hist a where " . $where . " and tipekaryawan not in ('0','7','8')  and approval_status='8' and version_type='B' and periodegaji='".$periodeTarget."' "; 
         $resdkar = fetchdata($strdkar);
         if(count($resdkar)>0){ 
-			$sKry="select * from ".$dbname.".datakaryawan_hist where  ".$where." and tipekaryawan not in ('0','7','8') and approval_status='8' and version_type='B' and periodegaji='".substr($tgl, 0,6)."' order by tipekaryawan,namakaryawan asc";
+			$sKry="select * from ".$dbname.".datakaryawan_hist where  ".$where." and tipekaryawan not in ('0','7','8') and approval_status='8' and version_type='B' and periodegaji='".$periodeTarget."' order by tipekaryawan,namakaryawan asc";
         }else{
 			$sKry="select * from ".$dbname.".datakaryawan where  ".$where." and tipekaryawan not in ('0','7','8') order by tipekaryawan, namakaryawan asc";
         }
@@ -2434,12 +2434,11 @@ switch ($proses) {
 
     case'createTableall':
         $where = "";
-        $tgl_db = substr($tgl, 0, 4) . '-' . substr($tgl, 4, 2) . '-' . substr($tgl, 6, 2);
         //exit('warning : '.$kdOrg);
         if (strlen($kdOrg) > 4) {
-            $where = " ((subbagian='" . $kdOrg . "' AND karyawanid NOT IN (SELECT karyawanid FROM ".$dbname.".sdm_riwayatjabatan WHERE kesubbagian='".$kdOrg."' AND mulaiberlaku > '".$tgl_db."')) OR karyawanid IN (SELECT karyawanid FROM ".$dbname.".sdm_riwayatjabatan WHERE darisubbagian='".$kdOrg."' AND mulaiberlaku > '".$tgl_db."')) and (tanggalkeluar>='" . $tgl . "' or tanggalkeluar='0000-00-00')";
+            $where = " subbagian='" . $kdOrg . "'  and (tanggalkeluar>='" . $tgl . "' or tanggalkeluar='0000-00-00')";
         } else {
-            $where = " ((lokasitugas='" . $kdOrg . "' AND karyawanid NOT IN (SELECT karyawanid FROM ".$dbname.".sdm_riwayatjabatan WHERE kekodeorg='".$kdOrg."' AND mulaiberlaku > '".$tgl_db."')) OR karyawanid IN (SELECT karyawanid FROM ".$dbname.".sdm_riwayatjabatan WHERE darikodeorg='".$kdOrg."' AND mulaiberlaku > '".$tgl_db."')) and (subbagian IS NULL or subbagian='0' or subbagian='') and (tanggalkeluar>='" . $tgl . "' or tanggalkeluar='0000-00-00')";
+            $where = " lokasitugas='" . $kdOrg . "' and (subbagian IS NULL or subbagian='0' or subbagian='') and (tanggalkeluar>='" . $tgl . "' or tanggalkeluar='0000-00-00')";
         }
 
         if ($tipekar != '') {
@@ -2455,10 +2454,12 @@ switch ($proses) {
         }
 
 
-        $strdkar = "select karyawanid from ".$dbname.".datakaryawan_hist a where " . $where . "  and approval_status='8' and version_type='B' and periodegaji='".substr($tgl, 0,6)."' "; 
+        $periodeTarget = substr($tgl, 0, 4) . '-' . substr($tgl, 4, 2);
+        $strdkar = "select karyawanid from ".$dbname.".datakaryawan_hist a where " . $where . "  and approval_status='8' and version_type='B' and periodegaji='".$periodeTarget."'"; 
+		// exit("warning: ".$strdkar);
         $resdkar = fetchdata($strdkar);
         if(count($resdkar)>0){ 
-			$sKry="select * from ".$dbname.".datakaryawan_hist where  ".$where." and approval_status='8' and version_type='B' and periodegaji='".substr($tgl, 0,6)."' order by namakaryawan";
+			$sKry="select * from ".$dbname.".datakaryawan_hist where  ".$where." and approval_status='8' and version_type='B' and (periodegaji='".$periodeTarget."') order by namakaryawan";
         }else{
 			$sKry="select * from ".$dbname.".datakaryawan where  ".$where." order by namakaryawan";
         }
@@ -2645,10 +2646,11 @@ switch ($proses) {
 			#$wh=" and karyawanid not in (select karyawanid from ".$dbname.".sdm_lemburdt where kodeorg='".$kdOrg."' and tanggal='".$tgl."')";
 			
             @$no2+=0;$no=0;
-            $strdkar = "select karyawanid from ".$dbname.".datakaryawan_hist a where " . $where . "  and approval_status='8' and version_type='B' and periodegaji='".substr($tgl, 0,6)."' "; 
+            $periodeTarget = substr($tgl, 0, 4) . '-' . substr($tgl, 4, 2);
+            $strdkar = "select karyawanid from ".$dbname.".datakaryawan_hist a where " . $where . "  and approval_status='8' and version_type='B' and periodegaji='".$periodeTarget."' "; 
             $resdkar = fetchdata($strdkar);
             if(count($resdkar)>0){ 
-				$sKry="select * from ".$dbname.".datakaryawan_hist where  ".$where." and approval_status='8' and version_type='B' and periodegaji='".substr($tgl, 0,6)."' ".$wh." order by namakaryawan";
+				$sKry="select * from ".$dbname.".datakaryawan_hist where  ".$where." and approval_status='8' and version_type='B' and periodegaji='".$periodeTarget."' ".$wh." order by namakaryawan";
             }else{
 				$sKry="select * from ".$dbname.".datakaryawan where  ".$where."  ".$wh." order by namakaryawan";
             }
