@@ -5,6 +5,7 @@ include('lib/nangkoelib.php');
 include_once('lib/zLib.php');
 echo open_body();
 include('master_mainMenu.php');
+require_once('lib/zSelect2.php');
 OPEN_BOX('','<span class=judul>'.getMenu('log_release_po').'</span>');
 
 ?>
@@ -23,17 +24,34 @@ foreach($arrFilter as $row=>$lst){
 	$optFilter.="<option value='".$row."'>".$lst."</option>";
 }
 
+#supplier yang pernah punya PO, diurutkan menurut nama
 $namasupplier = makeOption($dbname,'log_5supplier','supplierid,namasupplier');
-$optFilterSupplier="<option value=''>".$_SESSION['lang']['pilihdata']."</option>";
-$str="select * from ".$dbname.".log_poht group by kodesupplier";
-$res=fetchdata($str);
+$arrSupplier=array();
+$res=fetchdata("select distinct kodesupplier from ".$dbname.".log_poht where kodesupplier<>''");
 foreach($res as $val){
-	$optFilterSupplier.="<option value='".$val['kodesupplier']."'>".$namasupplier[$val['kodesupplier']]."</option>";
+	$arrSupplier[$val['kodesupplier']]=trim(isset($namasupplier[$val['kodesupplier']])?$namasupplier[$val['kodesupplier']]:$val['kodesupplier']);
+}
+asort($arrSupplier);
+$optFilterSupplier="<option value=''>".$_SESSION['lang']['pilihdata']."</option>";
+foreach($arrSupplier as $kode=>$nama){
+	$optFilterSupplier.="<option value='".htmlspecialchars($kode,ENT_QUOTES)."'>".htmlspecialchars($nama)."</option>";
+}
 
+#tahun PO: default tahun sekarang, "Semua Tahun" untuk seluruh tahun
+$tahunSkrg=date('Y');
+$arrTahun=array($tahunSkrg=>$tahunSkrg);
+$res=fetchdata("select distinct year(tanggal) as thn from ".$dbname.".log_poht where tanggal>'0000-00-00'");
+foreach($res as $val){
+	$arrTahun[$val['thn']]=$val['thn'];
+}
+krsort($arrTahun);
+$optFilterTahun="<option value=''>Semua Tahun</option>";
+foreach($arrTahun as $thn){
+	$optFilterTahun.="<option value='".$thn."'".($thn==$tahunSkrg?" selected":"").">".$thn."</option>";
 }
 
 echo "<table>
-     <tr valign=moiddle>
+     <tr valign=top>
 	 <td align=center style='width:100px;cursor:pointer;' onclick=displaylistdata()>
 		<img class=delliconBig src=images/skyblue/list.png title='".$_SESSION['lang']['list']."'><br>".$_SESSION['lang']['list']."
 	</td>
@@ -42,37 +60,39 @@ echo "<table>
 	<legend>".$_SESSION['lang']['find']."</legend>"; 
 	echo "<table>
 		<tr>
+			<td>".$_SESSION['lang']['tahun']." PO/SO</td>
+			<td>:</td>
+			<td style='width:220px'>
+				<select id=filterTahun class=select2 style='width:100%'>".$optFilterTahun."</select>
+			</td>
+			<td style='padding-left:15px;'>".$_SESSION['lang']['status']."</td>
+			<td>:</td>
+			<td style='width:260px'>
+				<select id=filterId class=select2 style='width:100%'>".$optFilter."</select>
+			</td>
+		</tr>
+		<tr>
 			<td>".$_SESSION['lang']['nopo']."</td>
 			<td>:</td>
-			<td>
-				<input type=text id=txtsearch_rpo style=width:150px maxlength=30 class=myinputtext>
+			<td style='width:220px'>
+				<input type=text id=txtsearch_rpo style='width:100%;box-sizing:border-box' maxlength=30 class=myinputtext>
 			</td>
-			<td style='padding-left:10px;'>".$_SESSION['lang']['tgl_po']."</td>
+			<td style='padding-left:15px;'>".$_SESSION['lang']['tgl_po']."</td>
 			<td>:</td>
-			<td>
-				<input type=text class=myinputtext id=tgl_cari_rpo onmousemove=setCalendar(this.id) onkeypress=return false;  size=10 maxlength=10 readonly/>
+			<td style='width:260px'>
+				<input type=text class=myinputtext id=tgl_cari_rpo style='width:100%;box-sizing:border-box' onmousemove=setCalendar(this.id) onkeypress=return false; maxlength=10 readonly/>
 			</td>
-
-			</tr>
-			</tr>
+		</tr>
 		<tr>
-			<td style='padding-left:10px;'>".$_SESSION['lang']['status']."</td>
+			<td>".$_SESSION['lang']['supplier']."</td>
 			<td>:</td>
-			<td>
-				<select id=filterId>".$optFilter."</select>
+			<td style='width:220px'>
+				<select id=filterSupplier class=select2 style='width:100%'>".$optFilterSupplier."</select>
 			</td>
-			<td style='padding-left:10px;'>".$_SESSION['lang']['supplier']."</td>
-			<td>:</td>
-			<td>
-				<select id=filterSupplier class=select2 >".$optFilterSupplier."</select>
-			</td>
-			<td>
-				<img id='filterSupplier' onclick=z.elSearch('filterSupplier',event) class='resicon' src='images/onebit_02.png' style='position:relative;top:3px;left:3px;'>
-			</td>
-		<tr>
-			<td colspan=2></td>
-			<td>
+			<td colspan=3 style='padding-left:15px;'>
 				<button class=mybutton onclick=loadData(0)>".$_SESSION['lang']['find']."</button>
+				<button class=mybutton onclick=exportExcelRPO()>".$_SESSION['lang']['excel']."</button>
+				<button class=mybutton onclick=exportPdfRPO()>PDF</button>
 			</td>
 		</tr>
 		</table>
@@ -131,24 +151,24 @@ CLOSE_BOX();
 <div id=list_pp_verication>
 <?php OPEN_BOX();?>
 
-<div style="overflow:auto;height:60vh">
-	<table class="sortable" cellspacing="1" cellpadding="3" border="0">
+<div style="overflow:auto;height:68vh;width:100%">
+	<table class="sortable" cellspacing="1" cellpadding="3" border="0" style="width:100%">
 		<thead>
 		<tr class=rowheader>
-			<th rowspan='2' align="center">No.</th>
-			<th rowspan='2' align="center"><?php echo $_SESSION['lang']['nopo']?></th>
-			<th rowspan='2' align="center"><?php echo $_SESSION['lang']['tgl_po'];?></th> 
-			<th rowspan='2' align="center"><?php echo $_SESSION['lang']['perusahaan'];?></th>
-			<th rowspan='2' align="center"><?php echo $_SESSION['lang']['supplier'];?></th>
-			<th rowspan='2' align="center"><?php echo $_SESSION['lang']['uraian'];?></th>
+			<th rowspan='2' align="center" style="width:30px">No.</th>
+			<th rowspan='2' align="center" style="width:190px"><?php echo $_SESSION['lang']['nopo']?></th>
+			<th rowspan='2' align="center" style="width:85px"><?php echo $_SESSION['lang']['tgl_po'];?></th> 
+			<th rowspan='2' align="center" style="width:70px"><?php echo $_SESSION['lang']['perusahaan'];?></th>
+			<th rowspan='2' align="center" style="width:170px"><?php echo $_SESSION['lang']['supplier'];?></th>
+			<th rowspan='2' align="center" style="width:200px"><?php echo $_SESSION['lang']['uraian'];?></th>
 			<th rowspan='2' align="center"><?php echo $_SESSION['lang']['chat'];?></th>
 			<th colspan='<?php echo $countApp;?>' align="center" width="50px"><?php echo $_SESSION['lang']['status'];?> Persetujuan</th>
-			<th rowspan='2' align="center"><?php echo $_SESSION['lang']['status'];?></th>
-			<th rowspan='2' align="center">PIC</th>
-			<th rowspan='2' align="center"><?php echo $_SESSION['lang']['keterangan']; ?></th>
-			<th rowspan='2' align="center"><?php echo $_SESSION['lang']['gudang']; ?></th>
+			<th rowspan='2' align="center" style="width:85px"><?php echo $_SESSION['lang']['status'];?></th>
+			<th rowspan='2' align="center" style="width:110px">PIC</th>
+			<th rowspan='2' align="center" style="width:230px"><?php echo $_SESSION['lang']['keterangan']; ?></th>
+			<th rowspan='2' align="center" style="width:170px"><?php echo $_SESSION['lang']['gudang']; ?></th>
 			<th rowspan='2' align="center"><?php echo $_SESSION['lang']['detail']; ?></th>
-			<th rowspan='2' align="center" colspan="3" align="center"><?php echo $_SESSION['lang']['action']; ?></th>
+			<th rowspan='2' align="center" style="width:150px"><?php echo $_SESSION['lang']['action']; ?></th>
 		</tr>
 		<tr class=rowheader>
 		<?php
