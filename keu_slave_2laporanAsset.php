@@ -651,6 +651,11 @@ switch($proses)
                     echo "warning : Bulan is obligatory";
                     exit(); 
                 }
+                else if($tipelaporan=='')
+                {
+                    echo "Warning : Tipe Laporan wajib dipilih";
+                    exit();
+                }
                 else 
                 {
                     if($tipelaporan == '1') {
