@@ -603,14 +603,39 @@ switch ($method) {
 		echo $optkar . "####" . $opttpkar . "####" . $optkary;
 		break;
 	case 'loadData':
+		$periodeTarget = $optThn;
+		$whereDkar = "";
+		if ($kdUnitCr != '') {
+			$whereDkar .= " and lokasitugas='" . $kdUnitCr . "'";
+		} else {
+			$whereDkar .= " and lokasitugas in (" . getOrgDetail('2') . ")";
+		}
+		if ($tpKaryCr != '') {
+			$whereDkar .= " and tipekaryawan='" . $tpKaryCr . "'";
+		}
+		if ($idjabatan != '') {
+			$whereDkar .= " and kodejabatan='" . $idjabatan . "'";
+		}
+		if ($namaKary != '') {
+			$whereDkar .= " and namakaryawan like '%" . $namaKary . "%'";
+		}
+
+		$strdkar = "select karyawanid from " . $dbname . ".datakaryawan_hist a where 1=1 " . $whereDkar . " and approval_status='8' and version_type='B' and periodegaji='" . $periodeTarget . "'";
+		$resdkar = fetchData($strdkar);
+		if ($periodeTarget != '' && count($resdkar) > 0) {
+			$joinKaryawan = " left join " . $dbname . ".datakaryawan_hist b on a.karyawanid=b.karyawanid and b.periodegaji='" . $periodeTarget . "' and b.approval_status='8' and b.version_type='B'";
+			$subKaryawan = "select karyawanid from " . $dbname . ".datakaryawan_hist where approval_status='8' and version_type='B' and periodegaji='" . $periodeTarget . "'";
+		} else {
+			$joinKaryawan = " left join " . $dbname . ".datakaryawan b on a.karyawanid=b.karyawanid";
+			$subKaryawan = "select karyawanid from " . $dbname . ".datakaryawan where 1=1";
+		}
+
 		$whrd = '';
 
 		if ($kdUnitCr != '') {
-			$whrd .= " and a.karyawanid in (select karyawanid from " . $dbname . ".datakaryawan"
-				. " where lokasitugas='" . $kdUnitCr . "') ";
+			$whrd .= " and a.karyawanid in (" . $subKaryawan . " and lokasitugas='" . $kdUnitCr . "') ";
 		} else {
-			$whrd .= " and a.karyawanid in (select karyawanid from " . $dbname . ".datakaryawan"
-				. " where lokasitugas in (" . getOrgDetail('2') . ")) ";
+			$whrd .= " and a.karyawanid in (" . $subKaryawan . " and lokasitugas in (" . getOrgDetail('2') . ")) ";
 		}
 
 		if ($optThn != '') {
@@ -632,7 +657,6 @@ switch ($method) {
 			$whrd .= " and b.kodejabatan='" . $idjabatan . "'";
 		}
 
-
 		$limit = 30;
 		if (isset($page)) {
 			if ($page < 0)
@@ -641,8 +665,8 @@ switch ($method) {
 		$offset = floatval($page) * $limit;
 		$maxdisplay = (floatval($page) * $limit);
 
-		$ql2 = "select count(*) as jmlhrow,b.namakaryawan,b.tipekaryawan from " . $dbname . ".sdm_5gajipokok a "
-			. " left join " . $dbname . ".datakaryawan b on a.karyawanid=b.karyawanid where 1=1 " . $whrd . " ";
+		$ql2 = "select count(*) as jmlhrow from " . $dbname . ".sdm_5gajipokok a "
+			. $joinKaryawan . " where 1=1 " . $whrd . " ";
 		$query2 = $owlPDO->query($ql2) or die(print " Gagal: " . PDOException::getMessage() . "___" . $ql2);
 		$query2->setFetchMode(PDO::FETCH_OBJ);
 		while ($jsl = $query2->fetch()) {
@@ -669,8 +693,8 @@ switch ($method) {
 			<tbody>";
 
 		$str = "select a.*,b.namakaryawan,b.tipekaryawan,b.kodegolongan,b.nik,b.lokasitugas,b.kodejabatan, d.namagolongan from " . $dbname . ".sdm_5gajipokok a "
-			. " left join " . $dbname . ".datakaryawan b on a.karyawanid=b.karyawanid
-					left join " . $dbname . ".sdm_5golongan d on b.kodegolongan=d.kodegolongan 
+			. $joinKaryawan
+			. " left join " . $dbname . ".sdm_5golongan d on b.kodegolongan=d.kodegolongan 
 					left join " . $dbname . ".sdm_5tipekaryawan c on b.tipekaryawan=c.id where 1=1 " . $whrd . " "
 			. " limit " . $offset . "," . $limit . " ";
 		//exit("error".$str);
