@@ -12,12 +12,23 @@
 <script language="javascript" src="js/zSearch.js"></script>
 <script language="javascript" src="js/zTools.js"></script>
 <script type="text/javascript" src="js/vhc_pekerjaan_v2.js?v=<?php echo time(); ?>"></script>
+<?php
+    $optPT = makeOption($dbname, 'organisasi', 'kodeorganisasi,induk');
+    $strTRDH = "select nilai from " . $dbname . ".setup_parameterappl where kodeparameter='TRDH' ";
+    $resTRDH = fetchdata($strTRDH);
+    $arrTRDH = !empty($resTRDH[0]['nilai']) ? array_map('trim', explode(',', str_replace("'", "", $resTRDH[0]['nilai']))) : array();
+?>
 <script>
+    var trdhList = <?php echo json_encode($arrTRDH); ?>;
+    var orgPTMap = <?php echo json_encode($optPT); ?>;
     dataKdvhc="<?php echo $_SESSION['lang']['pilihdata']?>";
     $(document).ready(function() {
         $('.select2').select2({
             dropdownAutoWidth:true
         });
+        if (typeof checkPTHelper === 'function') {
+            checkPTHelper();
+        }
     });
 </script>
 
@@ -106,24 +117,6 @@
 		$optkontanan.="<option value='".$lstStatus."'>".$vwStatus."</option>";
 	}
 
-	$optposting_cari="<option value=''>".$_SESSION['lang']['all']."</option>";
-	$optposting_cari.="<option value='1'>Posted</option>";
-	$optposting_cari.="<option value='0'>Belum Posting</option>";
-
-	$regexOrg = str_replace(',','|',str_replace("'","",getOrgDetail(2)));
-
-	$optperiode_cari="<option value=''>".$_SESSION['lang']['all']."</option>";
-	$sPer="select left(tanggal,7) as periode from ".$dbname.".vhc_runht where substr(kodeorg,1,4) regexp '".$regexOrg."' group by left(tanggal,7) order by periode desc";
-	foreach(fetchData($sPer) as $val){
-		$optperiode_cari.="<option value='".$val['periode']."'>".$val['periode']."</option>";
-	}
-
-	$optoperator_cari="<option value=''>".$_SESSION['lang']['all']."</option>";
-	$sOpr="select k.karyawanid,k.namakaryawan,k.nik from ".$dbname.".datakaryawan k where k.karyawanid in (select d.operator from ".$dbname.".vhc_rundt d join ".$dbname.".vhc_runht h on h.notransaksi=d.notransaksi where substr(h.kodeorg,1,4) regexp '".$regexOrg."' and d.operator<>'0000000000') order by k.namakaryawan";
-	foreach(fetchData($sOpr) as $val){
-		$optoperator_cari.="<option value='".$val['karyawanid']."'>".$val['namakaryawan']." - ".$val['nik']."</option>";
-	}
-
     #= Mandor
     $optMandor="<option value=''>".$_SESSION['lang']['pilihdata']."</option>";
     $sbrg="select * from ".$dbname.".vhc_5mandortraksi ";
@@ -153,17 +146,12 @@
         $nonDisabled = "disabled";
     }
 
-    #- Ambil Pt Untuk hidden kolom helper
-    $str = "select nilai from ".$dbname.".setup_parameterappl where kodeparameter='TRDH' "; 
-    $res = fetchdata($str);
-    @$arrpt = explode(',', $res[0]['nilai']);
-
+    #- Ambil PT/Unit dari TRDH untuk hidden helper 3 & 4 (jika ada di TRDH -> 2 helper, selain itu -> 4 helper)
+    $userOrg = $_SESSION['empl']['lokasitugas'];
+    $userPT = isset($optPT[$userOrg]) ? $optPT[$userOrg] : (isset($optPT[$_SESSION['empl']['kodeorganisasi']]) ? $optPT[$_SESSION['empl']['kodeorganisasi']] : '');
+    $isTRDH = in_array($userPT, $arrTRDH) || in_array($userOrg, $arrTRDH) || in_array($_SESSION['empl']['kodeorganisasi'], $arrTRDH) || ($userPT == 'PPP' && empty($arrTRDH));
     $hiddenHelper = '';
-    if (in_array($_SESSION['empl']['kodeorganisasi'],$arrpt)) {
-        $hiddenHelper = "hidden";
-    }else{
-        $hiddenHelper = '';
-    }
+    $hiddenHelperExtra = $isTRDH ? "display:none;" : "";
   
 ?>
 
@@ -188,39 +176,15 @@
                                 <legend>".$_SESSION['lang']['find']." Data</legend>
                                 <table cellspacing=\"1\" border=\"0\">
                                     <tr>
-                                        <td nowrap>".$_SESSION['lang']['notransaksi']."</td>
-                                        <td>:</td>
-                                        <td><input type=\"text\" id='txtCari' onkeyup='loaddata(0)' name='txtCari' style='width:180px' class=myinputtext /></td>
-                                        <td nowrap>Periode</td>
-                                        <td>:</td>
-                                        <td><select id=periode_cari class=select2 onchange='loaddata(0)' style=width:180px;>".$optperiode_cari."</select></td>
-                                        <td nowrap>".$_SESSION['lang']['tanggal']."</td>
-                                        <td>:</td>
-                                        <td nowrap>
-                                            <input type=text class=myinputtext id=tgl_cari onmousemove=setCalendar(this.id) onchange='loaddata(0)' style='width:76px' maxlength=10 readonly/> s.d
-                                            <input type=text class=myinputtext id=tgl_carisd onmousemove=setCalendar(this.id) onchange='loaddata(0)' style='width:76px' maxlength=10 readonly/>
+                                        <td>".$_SESSION['lang']['notransaksi']." </td>
+                                        <td><input type=\"text\" id='txtCari' onkeyup='loaddata(0)' name='txtCari' style='width:130px' class=myinputtext /></td>
+                                        <td>".$_SESSION['lang']['tanggal']."
+                                            <input type=text class=myinputtext id=tgl_cari onmousemove=setCalendar(this.id) onchange='loaddata(0)' size=8 maxlength=10 readonly/> s.d 
+                                            <input type=text class=myinputtext id=tgl_carisd onmousemove=setCalendar(this.id) onchange='loaddata(0)' size=8 maxlength=10 readonly/>
                                         </td>
-                                        <td nowrap>Status Posting</td>
-                                        <td>:</td>
-                                        <td><select id=posting_cari class=select2 onchange='loaddata(0)' style=width:180px;>".$optposting_cari."</select></td>
-                                    </tr>
-                                    <tr>
-                                        <td nowrap>".$_SESSION['lang']['kodevhc']."</td>
-                                        <td>:</td>
-                                        <td><select id=kodevhc_cari class=select2 name=kodevhc_cari onchange='loaddata(0)' style=width:180px;>".$optkodevhc."</select></td>
-                                        <td nowrap>".$_SESSION['lang']['operator']."</td>
-                                        <td>:</td>
-                                        <td><select id=operator_cari class=select2 onchange='loaddata(0)' style=width:180px;>".$optoperator_cari."</select></td>
-                                        <td nowrap>Kontanan</td>
-                                        <td>:</td>
-                                        <td><select id=kontanan_cari class=select2 onchange='loaddata(0)' style=width:180px;>".$optkontanan."</select></td>
-                                    </tr>
-                                    <tr>
-                                        <td colspan=12>
-                                            <button class=mybutton onclick=exportExcelPekerjaan()>".$_SESSION['lang']['excel']."</button>
-                                            <button class=mybutton onclick=exportPdfPekerjaan(event)>PDF</button>
-                                            <button class=mybutton onclick=batalcariDataTransaksi()>".$_SESSION['lang']['cancel']."</button>
-                                        </td>
+                                        <td>".$_SESSION['lang']['kodevhc']." 
+                                        <select id=kodevhc_cari class=select2 name=kodevhc_cari onchange='loaddata(0)' style=width:150px;>".$optkodevhc."</select></td><td>Kontanan <select id=kontanan_cari class=select2 onchange='loaddata(0)'>".$optkontanan."</select></td>
+                                        <td><button class=mybutton  onclick=batalcariDataTransaksi()>".$_SESSION['lang']['cancel']."</button></td>
                                     </tr>
                                 </table>
                             </fieldset>
@@ -251,6 +215,7 @@
                             <th align=center>".$_SESSION['lang']['helper']." 1</th>
                             <th align=center>".$_SESSION['lang']['helper']." 2</th>
                             <th align=center>".$_SESSION['lang']['helper']." 3</th>
+                            <th align=center>".$_SESSION['lang']['helper']." 4</th>
                             <th align=center>".$_SESSION['lang']['tanggal']."</th>
                             <th align=center>".$_SESSION['lang']['vhc_jenis_bbm']."</th>
                             <th align=center style='width:40px'>".$_SESSION['lang']['vhc_jumlah_bbm']."</th>
@@ -349,9 +314,9 @@
             <input hidden type=text id=kode_helper_old tabindex=11 name=kode_helper_old class=myinputtextnumber style=width:150px; onkeypress='return angka_doang(event)' value=0 />
         </td>
 
-        <td ".$hiddenHelper.">".$_SESSION['lang']['helper']." 2 &nbsp;<font style='font-size:10px;color:blue;' tabindex=11>(11)</font></td>
-        <td ".$hiddenHelper.">:</td>
-        <td ".$hiddenHelper.">
+        <td>".$_SESSION['lang']['helper']." 2 &nbsp;<font style='font-size:10px;color:blue;' tabindex=11>(11)</font></td>
+        <td>:</td>
+        <td>
             <select id=kode_helper2 tabindex=12 class=select2 name=kode_helper2 style=width:154px; onchange=getUmr();><option value=''></select></select>
             <input hidden type=text id=kode_helper_old2 tabindex=11 name=kode_helper_old2 class=myinputtextnumber style=width:150px; onkeypress='return angka_doang(event)' value=0 />
         </td>
@@ -379,9 +344,9 @@
             <input type=text hidden id=uphHelp_old name=uphHelp_old  class=myinputtextnumber style=width:150px; onkeypress='return angka_doang(event)' />
         </td>
 
-        <td ".$hiddenHelper.">".$_SESSION['lang']['upahkerja']." ".$_SESSION['lang']['helper']." 2</td>
-        <td ".$hiddenHelper.">:</td>
-        <td ".$hiddenHelper.">
+        <td>".$_SESSION['lang']['upahkerja']." ".$_SESSION['lang']['helper']." 2</td>
+        <td>:</td>
+        <td>
             <input type=text id=uphHelp2 name=uphHelp2  class=myinputtextnumber style=width:150px; onkeypress='return angka_doang(event)' />
             <input type=text hidden id=uphHelp_libur2 name=uphHelp_libur2  class=myinputtextnumber style=width:150px; onkeypress='return angka_doang(event)'  />
             <input type=text hidden id=uphHelp_old2 name=uphHelp_old2  class=myinputtextnumber style=width:150px; onkeypress='return angka_doang(event)' />
@@ -408,9 +373,9 @@
             <input hidden type=text id=prmiHelp_old tabindex=11 name=prmiHelp_old class=myinputtextnumber style=width:150px; onkeypress='return angka_doang(event)' onclick=\"this.select();\" value=0 />
         </td>
 
-        <td ".$hiddenHelper.">".$_SESSION['lang']['premi']." (Rp) ".$_SESSION['lang']['helper']." 2</td>
-        <td ".$hiddenHelper.">:</td>
-        <td ".$hiddenHelper.">
+        <td>".$_SESSION['lang']['premi']." (Rp) ".$_SESSION['lang']['helper']." 2</td>
+        <td>:</td>
+        <td>
             <input  type=text id=prmiHelp2 tabindex=14 name=prmiHelp2 class=myinputtextnumber style=width:150px; onkeypress='return angka_doang(event)' onclick=\"this.select();\" />
             <input hidden type=text id=prmiHelp_old2 tabindex=11 name=prmiHelp_old2 class=myinputtextnumber style=width:150px; onkeypress='return angka_doang(event)' onclick=\"this.select();\" value=0 />
         </td>
@@ -444,10 +409,24 @@
         <input hidden type=text class=myinputtextnumber id=oldbrt_muatan name=oldbrt_muatan maxlength=6 onkeypress=\"return angka_doang(event);\" style=width:80px; />&nbsp;<span id='satuan'>
         </td>
 
-        <td ".$hiddenHelper." >".$_SESSION['lang']['premi']." Tambahan (Rp) ".$_SESSION['lang']['operator']."</td>
-        <td ".$hiddenHelper." >:</td>
-        <td ".$hiddenHelper." >
+        <td>".$_SESSION['lang']['premi']." Tambahan (Rp) ".$_SESSION['lang']['operator']."</td>
+        <td>:</td>
+        <td>
             <input type=text id=prmiOprtTambahan tabindex=11 name=prmiOprtTambahan class=myinputtextnumber style=width:150px; onkeypress='return angka_doang(event)' onclick=\"this.select();\" value=0 /></td>
+        </td>
+
+        <td class='helper-extra' style='".$hiddenHelperExtra."'>".$_SESSION['lang']['helper']." 3 &nbsp;<font style='font-size:10px;color:blue;' tabindex=12>(12)</font></td>
+        <td class='helper-extra' style='".$hiddenHelperExtra."'>:</td>
+        <td class='helper-extra' style='".$hiddenHelperExtra."'>
+            <select id=kode_helper3 tabindex=12 class=select2 name=kode_helper3 style=width:154px; onchange=getUmr();><option value=''></select></select>
+            <input hidden type=text id=kode_helper_old3 tabindex=11 name=kode_helper_old3 class=myinputtextnumber style=width:150px; onkeypress='return angka_doang(event)' value=0 />
+        </td>
+
+        <td class='helper-extra' style='".$hiddenHelperExtra."'>".$_SESSION['lang']['helper']." 4 &nbsp;<font style='font-size:10px;color:blue;' tabindex=13>(13)</font></td>
+        <td class='helper-extra' style='".$hiddenHelperExtra."'>:</td>
+        <td class='helper-extra' style='".$hiddenHelperExtra."'>
+            <select id=kode_helper4 tabindex=12 class=select2 name=kode_helper4 style=width:154px; onchange=getUmr();><option value=''></select></select>
+            <input hidden type=text id=kode_helper_old4 tabindex=11 name=kode_helper_old4 class=myinputtextnumber style=width:150px; onkeypress='return angka_doang(event)' value=0 />
         </td>
 
         <td hidden>".$_SESSION['lang']['premi']."</td>
@@ -468,6 +447,22 @@
         <td>".$_SESSION['lang']['rupiahpenalty']."</td>
         <td valign=middle>:</td>
         <td valign=middle><input type=text id=pnltyOprt name=pnltyOprt class=myinputtextnumber style=width:150px; onkeypress='return angka_doang(event)' maxlength=8 value=0 disabled/>&nbsp;<input type='checkbox' id=checkdenda name='checkdenda' onclick='adadenda();'></td>
+
+        <td class='helper-extra' style='".$hiddenHelperExtra."'>".$_SESSION['lang']['upahkerja']." ".$_SESSION['lang']['helper']." 3</td>
+        <td class='helper-extra' style='".$hiddenHelperExtra."'>:</td>
+        <td class='helper-extra' style='".$hiddenHelperExtra."'>
+            <input type=text id=uphHelp3 name=uphHelp3  class=myinputtextnumber style=width:150px; onkeypress='return angka_doang(event)' />
+            <input type=text hidden id=uphHelp_libur3 name=uphHelp_libur3  class=myinputtextnumber style=width:150px; onkeypress='return angka_doang(event)'  />
+            <input type=text hidden id=uphHelp_old3 name=uphHelp_old3  class=myinputtextnumber style=width:150px; onkeypress='return angka_doang(event)' />
+        </td>
+
+        <td class='helper-extra' style='".$hiddenHelperExtra."'>".$_SESSION['lang']['upahkerja']." ".$_SESSION['lang']['helper']." 4</td>
+        <td class='helper-extra' style='".$hiddenHelperExtra."'>:</td>
+        <td class='helper-extra' style='".$hiddenHelperExtra."'>
+            <input type=text id=uphHelp4 name=uphHelp4  class=myinputtextnumber style=width:150px; onkeypress='return angka_doang(event)' />
+            <input type=text hidden id=uphHelp_libur4 name=uphHelp_libur4  class=myinputtextnumber style=width:150px; onkeypress='return angka_doang(event)'  />
+            <input type=text hidden id=uphHelp_old4 name=uphHelp_old4  class=myinputtextnumber style=width:150px; onkeypress='return angka_doang(event)' />
+        </td>
     </tr>
 
     <tr>
@@ -485,6 +480,20 @@
         <textarea rows='3' maxlength='200' id='ket' type='text' onkeypress='return tanpa_kutip(event)' style='width:136px;height:22px' tabindex=9></textarea>
         </td>
 
+        <td class='helper-extra' style='".$hiddenHelperExtra."'>".$_SESSION['lang']['premi']." (Rp) ".$_SESSION['lang']['helper']." 3</td>
+        <td class='helper-extra' style='".$hiddenHelperExtra."'>:</td>
+        <td class='helper-extra' style='".$hiddenHelperExtra."'>
+            <input  type=text id=prmiHelp3 tabindex=14 name=prmiHelp3 class=myinputtextnumber style=width:150px; onkeypress='return angka_doang(event)' onclick=\"this.select();\" value=0 />
+            <input hidden type=text id=prmiHelp_old3 tabindex=11 name=prmiHelp_old3 class=myinputtextnumber style=width:150px; onkeypress='return angka_doang(event)' onclick=\"this.select();\" value=0 />
+        </td>
+
+        <td class='helper-extra' style='".$hiddenHelperExtra."'>".$_SESSION['lang']['premi']." (Rp) ".$_SESSION['lang']['helper']." 4</td>
+        <td class='helper-extra' style='".$hiddenHelperExtra."'>:</td>
+        <td class='helper-extra' style='".$hiddenHelperExtra."'>
+            <input  type=text id=prmiHelp4 tabindex=14 name=prmiHelp4 class=myinputtextnumber style=width:150px; onkeypress='return angka_doang(event)' onclick=\"this.select();\" value=0 />
+            <input hidden type=text id=prmiHelp_old4 tabindex=11 name=prmiHelp_old4 class=myinputtextnumber style=width:150px; onkeypress='return angka_doang(event)' onclick=\"this.select();\" value=0 />
+        </td>
+
         <td hidden>".$_SESSION['lang']['biaya']." Rp</td>
         <td hidden>:</td>
         <td hidden><input type=text class=myinputtextnumber id=biaya name=biaya maxlength=45 onkeypress=\"return angka_doang(event);\" style=width:80px; /></td>
@@ -495,30 +504,6 @@
         <td hidden>:</td>
         <td hidden>
             <input type=text class=myinputtext id=ketOprt name=ket maxlength=45 onkeypress=\"return tanpa_kutip(event);\" style=width:150px; />
-        </td>
-    </tr>
-    <tr>    
-        <td valign=top rowspan=1 hidden>".$_SESSION['lang']['helper']." 3 &nbsp;<font style='font-size:10px;color:blue;' tabindex=12>(12)</font></td>
-        <td valign=top rowspan=1 hidden>:</td>
-        <td valign=top rowspan=1 hidden>
-            <select id=kode_helper3 tabindex=12 class=select2 name=kode_helper3 style=width:154px; onchange=getUmr();><option value=''></select></select>
-            <input hidden type=text id=kode_helper_old3 tabindex=11 name=kode_helper_old3 class=myinputtextnumber style=width:150px; onkeypress='return angka_doang(event)' value=0 />
-        </td>
-
-        <td valign=top rowspan=1 hidden>".$_SESSION['lang']['premi']." ".$_SESSION['lang']['helper']." 3</td>
-        <td valign=top rowspan=1 hidden>:</td>
-        <td valign=top rowspan=1 hidden>
-            <input disabled type=text id=prmiHelp3 tabindex=14 name=prmiHelp3 class=myinputtextnumber style=width:150px; onkeypress='return angka_doang(event)' onclick=\"this.select();\"/>
-            <input hidden type=text id=prmiHelp_old3 tabindex=11 name=prmiHelp_old3 class=myinputtextnumber style=width:150px; onkeypress='return angka_doang(event)' onclick=\"this.select();\" value=0 />
-        </td>
-    </tr>
-    <tr>    
-        <td valign=top hidden>".$_SESSION['lang']['upah']." ".$_SESSION['lang']['helper']." 3</td>
-        <td valign=top hidden>:</td>
-        <td valign=top hidden>
-            <input type=text id=uphHelp3 name=uphHelp3  class=myinputtextnumber style=width:150px; onkeypress='return angka_doang(event)' disabled/>
-            <input type=text hidden id=uphHelp_libur3 name=uphHelp_libur3  class=myinputtextnumber style=width:150px; onkeypress='return angka_doang(event)'  />
-            <input type=text hidden id=uphHelp_old3 name=uphHelp_old3  class=myinputtextnumber style=width:150px; onkeypress='return angka_doang(event)' />
         </td>
     </tr>
     <tr>
@@ -556,17 +541,20 @@
             <th align=center>".$_SESSION['lang']['operator']."/<br>".$_SESSION['lang']['supir']."</th>
             <th align=center>".$_SESSION['lang']['upahkerja']."</th>
             <th align=center>".$_SESSION['lang']['upahpremi']."</th>
-            <th align=center ".$hiddenHelper.">".$_SESSION['lang']['upahpremi']." Tambahan</th>
+            <th align=center>".$_SESSION['lang']['upahpremi']." Tambahan</th>
             <th align=center>".$_SESSION['lang']['rupiahpenalty']."</th>
             <th align=center >".$_SESSION['lang']['helper']." 1</th>
             <th align=center >".$_SESSION['lang']['upah']." ".$_SESSION['lang']['helper']." 1</th>
             <th align=center >".$_SESSION['lang']['premi']." ".$_SESSION['lang']['helper']." 1</th>
-            <th align=center ".$hiddenHelper.">".$_SESSION['lang']['helper']." 2</th>
-            <th align=center ".$hiddenHelper.">".$_SESSION['lang']['upah']." ".$_SESSION['lang']['helper']." 2</th>
-            <th align=center ".$hiddenHelper.">".$_SESSION['lang']['premi']." ".$_SESSION['lang']['helper']." 2</th>
-            <th align=center style='display:none'>".$_SESSION['lang']['helper']." 3</th>
-            <th align=center style='display:none'>".$_SESSION['lang']['upah']." ".$_SESSION['lang']['helper']." 3</th>
-            <th align=center style='display:none'>".$_SESSION['lang']['premi']." ".$_SESSION['lang']['helper']." 3</th>
+            <th align=center >".$_SESSION['lang']['helper']." 2</th>
+            <th align=center >".$_SESSION['lang']['upah']." ".$_SESSION['lang']['helper']." 2</th>
+            <th align=center >".$_SESSION['lang']['premi']." ".$_SESSION['lang']['helper']." 2</th>
+            <th align=center class='helper-extra' style='".$hiddenHelperExtra."'>".$_SESSION['lang']['helper']." 3</th>
+            <th align=center class='helper-extra' style='".$hiddenHelperExtra."'>".$_SESSION['lang']['upah']." ".$_SESSION['lang']['helper']." 3</th>
+            <th align=center class='helper-extra' style='".$hiddenHelperExtra."'>".$_SESSION['lang']['premi']." ".$_SESSION['lang']['helper']." 3</th>
+            <th align=center class='helper-extra' style='".$hiddenHelperExtra."'>".$_SESSION['lang']['helper']." 4</th>
+            <th align=center class='helper-extra' style='".$hiddenHelperExtra."'>".$_SESSION['lang']['upah']." ".$_SESSION['lang']['helper']." 4</th>
+            <th align=center class='helper-extra' style='".$hiddenHelperExtra."'>".$_SESSION['lang']['premi']." ".$_SESSION['lang']['helper']." 4</th>
             <th align=center style='display:none'>".$_SESSION['lang']['biaya']." (Rp.)</th>
             <th align=center style='display:none'>".$_SESSION['lang']['vhc_posisi']."</th>
             <th align=center style='display:none'>".$_SESSION['lang']['upahkerja']."</th>

@@ -1,4 +1,28 @@
+function checkPTHelper() {
+  var kdorg = getValue("kodeorg");
+  var pt = (typeof orgPTMap !== "undefined" && orgPTMap[kdorg]) ? orgPTMap[kdorg] : kdorg;
+  var isHidden = false;
+  if (typeof trdhList !== "undefined" && Array.isArray(trdhList) && trdhList.length > 0) {
+    if (trdhList.indexOf(pt) !== -1 || trdhList.indexOf(kdorg) !== -1) {
+      isHidden = true;
+    }
+  } else {
+    if (pt === "PPP") {
+      isHidden = true;
+    }
+  }
+  var extraElems = document.querySelectorAll(".helper-extra");
+  extraElems.forEach(function(el) {
+    if (isHidden) {
+      el.style.display = "none";
+    } else {
+      el.style.display = "";
+    }
+  });
+}
+
 function getsubunit() {
+  checkPTHelper();
   kodeorg = document.getElementById("kodeorg").value;
 
   param = "proses=getsubunit&kodeorg=" + kodeorg;
@@ -32,6 +56,7 @@ function displayList() {
 }
 
 function formbaru() {
+  checkPTHelper();
   document.getElementById("listData").style.display = "none";
   document.getElementById("formnew").style.display = "block";
   document.getElementById("detail").style.display = "none";
@@ -108,33 +133,7 @@ function batalcariDataTransaksi() {
   document.getElementById("txtCari").value = "";
   setValue2("kodevhc_cari", null);
   setValue2("kontanan_cari", "%");
-  setValue2("posting_cari", "");
-  setValue2("periode_cari", "");
-  setValue2("operator_cari", "");
   loaddata(0);
-}
-
-function getFilterParamPekerjaan() {
-  var p = "";
-  p += "&tgl_cari=" + document.getElementById("tgl_cari").value;
-  p += "&tgl_carisd=" + document.getElementById("tgl_carisd").value;
-  p += "&txtCari=" + encodeURIComponent(document.getElementById("txtCari").value);
-  p += "&kodevhc_cari=" + encodeURIComponent(document.getElementById("kodevhc_cari").value);
-  p += "&kontanan_cari=" + encodeURIComponent(document.getElementById("kontanan_cari").value);
-  p += "&posting_cari=" + document.getElementById("posting_cari").value;
-  p += "&periode_cari=" + document.getElementById("periode_cari").value;
-  p += "&operator_cari=" + document.getElementById("operator_cari").value;
-  return p;
-}
-function exportExcelPekerjaan() {
-  param = "proses=excel" + getFilterParamPekerjaan();
-  tujuan = "vhc_slave_pekerjaan_v2.php?" + param;
-  alertify.popup("Report Ms.Excel", "<iframe frameborder=0 style='width:100%;height:100%;overflow:none' src='" + tujuan + "'></iframe>").set({'resizable':true,'overflow':false}).resizeTo('80%','70%');
-}
-function exportPdfPekerjaan(ev) {
-  param = getFilterParamPekerjaan();
-  tujuan = "vhc_pekerjaan_v2_pdf.php?" + param;
-  alertify.popup("Report PDF", "<iframe frameborder=0 style='width:100%;height:100%;overflow:none' src='" + tujuan + "'></iframe>").set({'resizable':true,'overflow':false}).resizeTo('80%','70%');
 }
 
 function bersih_form_pekerjaan() {
@@ -147,12 +146,31 @@ function bersih_form_pekerjaan() {
   document.getElementById("kode_karyawan").disabled = false;
   document.getElementById("kode_helper").disabled = false;
   document.getElementById("kode_helper2").disabled = false;
+  if (document.getElementById("kode_helper3")) {
+    document.getElementById("kode_helper3").disabled = false;
+  }
+  if (document.getElementById("kode_helper4")) {
+    document.getElementById("kode_helper4").disabled = false;
+  }
 
   document.getElementById("uphHelp").disabled = false;
   document.getElementById("prmiHelp").disabled = false;
 
   document.getElementById("uphHelp2").disabled = false;
   document.getElementById("prmiHelp2").disabled = false;
+
+  if (document.getElementById("uphHelp3")) {
+    document.getElementById("uphHelp3").disabled = false;
+  }
+  if (document.getElementById("prmiHelp3")) {
+    document.getElementById("prmiHelp3").disabled = false;
+  }
+  if (document.getElementById("uphHelp4")) {
+    document.getElementById("uphHelp4").disabled = false;
+  }
+  if (document.getElementById("prmiHelp4")) {
+    document.getElementById("prmiHelp4").disabled = false;
+  }
   // document.getElementById('lokasi_kerja3').disabled = false;
 
   // document.getElementById('uphOprt').disabled = false;
@@ -171,23 +189,51 @@ function bersih_form_pekerjaan() {
   document.getElementById("prmiHelp").value = 0;
   document.getElementById("prmiHelp2").value = 0;
   document.getElementById("prmiHelp3").value = 0;
+  if (document.getElementById("prmiHelp4")) {
+    document.getElementById("prmiHelp4").value = 0;
+  }
   document.getElementById("prmiHelp_old").value = 0;
+  if (document.getElementById("prmiHelp_old2")) {
+    document.getElementById("prmiHelp_old2").value = 0;
+  }
+  if (document.getElementById("prmiHelp_old3")) {
+    document.getElementById("prmiHelp_old3").value = 0;
+  }
+  if (document.getElementById("prmiHelp_old4")) {
+    document.getElementById("prmiHelp_old4").value = 0;
+  }
   document.getElementById("uphOprt").value = 0;
   document.getElementById("uphHelp").value = 0;
   document.getElementById("uphHelp2").value = 0;
   document.getElementById("uphHelp3").value = 0;
+  if (document.getElementById("uphHelp4")) {
+    document.getElementById("uphHelp4").value = 0;
+  }
   document.getElementById("uphHelp_old").value = 0;
   document.getElementById("uphHelp_old2").value = 0;
   document.getElementById("uphHelp_old3").value = 0;
+  if (document.getElementById("uphHelp_old4")) {
+    document.getElementById("uphHelp_old4").value = 0;
+  }
   document.getElementById("uphOprt_libur").value = 0;
   document.getElementById("uphHelp_libur").value = 0;
   document.getElementById("uphHelp_libur2").value = 0;
   document.getElementById("uphHelp_libur3").value = 0;
+  if (document.getElementById("uphHelp_libur4")) {
+    document.getElementById("uphHelp_libur4").value = 0;
+  }
   document.getElementById("prmiOprtTambahan").value = 0;
   document.getElementById("kode_karyawan_old").value = "";
   document.getElementById("kode_helper_old").value = "";
   document.getElementById("kode_helper_old2").value = "";
   document.getElementById("kode_helper_old3").value = "";
+  if (document.getElementById("kode_helper_old4")) {
+    document.getElementById("kode_helper_old4").value = "";
+  }
+  setValue2("kode_helper", "");
+  setValue2("kode_helper2", "");
+  setValue2("kode_helper3", "");
+  setValue2("kode_helper4", "");
   document.getElementById("jlhhm").value = 0;
   document.getElementById("pnltyOprt").value = 0;
   document.getElementById("oldbrt_muatan").value = "";
@@ -290,6 +336,7 @@ function getPremi() {
   kode_helper = getValue("kode_helper");
   kode_helper2 = getValue("kode_helper2");
   kode_helper3 = getValue("kode_helper3");
+  kode_helper4 = getValue("kode_helper4");
   jenisvhc = getValue("jenisvhc");
   jns_kerja = getValue("jns_kerja");
   brtmuatan = getValue("brt_muatan");
@@ -321,6 +368,7 @@ function getPremi() {
   param += "&kode_helper=" + kode_helper;
   param += "&kode_helper2=" + kode_helper2;
   param += "&kode_helper3=" + kode_helper3;
+  param += "&kode_helper4=" + kode_helper4;
   param += "&kde_vhc=" + kodevhc;
   param += "&proses_pekerjaan=" + proskerja;
   param += "&oldbrt_muatan=" + oldbrtmuatan;
@@ -356,6 +404,14 @@ function getPremi() {
 
           document.getElementById("prmiHelp2").value = hsl.premihelp2;
           document.getElementById("prmiHelp_old2").value = hsl.premihelp2;
+
+          document.getElementById("prmiHelp3").value = hsl.premihelp3 || 0;
+          document.getElementById("prmiHelp_old3").value = hsl.premihelp3 || 0;
+
+          if (document.getElementById("prmiHelp4")) {
+            document.getElementById("prmiHelp4").value = hsl.premihelp4 || 0;
+            document.getElementById("prmiHelp_old4").value = hsl.premihelp4 || 0;
+          }
 
           document.getElementById("jnsstn").value = hsl.jnsprmi;
           document.getElementById("basisborong").value = hsl.basis;
@@ -410,6 +466,7 @@ function getUmr() {
   kode_helper = getValue("kode_helper");
   kode_helper2 = getValue("kode_helper2");
   kode_helper3 = getValue("kode_helper3");
+  kode_helper4 = getValue("kode_helper4");
   tanggal = getValue("tglpekerjaan");
   no_trans = getValue("no_trans");
   jns_kerja = getValue("jns_kerja");
@@ -419,6 +476,7 @@ function getUmr() {
   uphHelp = getValue("uphHelp");
   uphHelp2 = getValue("uphHelp2");
   uphHelp3 = getValue("uphHelp3");
+  uphHelp4 = getValue("uphHelp4");
   tahun = tanggal.substr(6, 4);
 
   param =
@@ -430,7 +488,9 @@ function getUmr() {
     "&kode_helper2=" +
     kode_helper2 +
     "&kode_helper3=" +
-    kode_helper3;
+    kode_helper3 +
+    "&kode_helper4=" +
+    kode_helper4;
   param +=
     "&tahun=" +
     tahun +
@@ -447,6 +507,7 @@ function getUmr() {
   param += "&uphHelp=" + uphHelp;
   param += "&uphHelp2=" + uphHelp2;
   param += "&uphHelp3=" + uphHelp3;
+  param += "&uphHelp4=" + uphHelp4;
   tujuan = "vhc_slave_pekerjaan_v2.php";
 
   post_response_text(tujuan, param, respog);
@@ -463,35 +524,46 @@ function getUmr() {
           document.getElementById("uphHelp").value = trim(data[1]);
           document.getElementById("uphHelp2").value = trim(data[2]);
           document.getElementById("uphHelp3").value = trim(data[3]);
+          if (document.getElementById("uphHelp4")) {
+            document.getElementById("uphHelp4").value = trim(data[4]);
+          }
 
           document.getElementById("lebihdarisatupekerjaan").value = trim(
-            data[10],
+            data[12],
           );
 
           // Jika pakek setup premi 1 maka upah pakek flow PALMA
-          if (trim(data[11]) == 1) {
-            if (trim(data[4]) == 1 && trim(data[9]) == "libur") {
+          if (trim(data[13]) == 1) {
+            if (trim(data[5]) == 1 && trim(data[11]) == "libur") {
               //kalo non staff
               document.getElementById("uphOprt").value = 0;
               document.getElementById("uphOprt_libur").value = trim(data[0]);
             }
 
-            if (trim(data[5]) == 1 && trim(data[9]) == "libur") {
+            if (trim(data[6]) == 1 && trim(data[11]) == "libur") {
               //kalo non staff
               document.getElementById("uphHelp").value = 0;
               document.getElementById("uphHelp_libur").value = trim(data[1]);
             }
 
-            if (trim(data[6]) == 1 && trim(data[9]) == "libur") {
+            if (trim(data[7]) == 1 && trim(data[11]) == "libur") {
               //kalo non staff
               document.getElementById("uphHelp2").value = 0;
               document.getElementById("uphHelp_libur2").value = trim(data[2]);
             }
 
-            if (trim(data[7]) == 1 && trim(data[9]) == "libur") {
+            if (trim(data[8]) == 1 && trim(data[11]) == "libur") {
               //kalo non staff
               document.getElementById("uphHelp3").value = 0;
               document.getElementById("uphHelp_libur3").value = trim(data[3]);
+            }
+
+            if (trim(data[9]) == 1 && trim(data[11]) == "libur") {
+              //kalo non staff
+              if (document.getElementById("uphHelp4")) {
+                document.getElementById("uphHelp4").value = 0;
+                document.getElementById("uphHelp_libur4").value = trim(data[4]);
+              }
             }
           }
 
@@ -803,12 +875,16 @@ function fillField(noTrans, Thn) {
           setValue2("kodeorg", ar[1]);
           setValue2("kodetraksi", ar[2]);
 
+          checkPTHelper();
           document.getElementById("tglpekerjaan").value = ar[4];
           document.getElementById("mandor").innerHTML = ar[10];
           document.getElementById("kode_karyawan").innerHTML = ar[5];
           document.getElementById("kode_helper").innerHTML = ar[11];
           document.getElementById("kode_helper2").innerHTML = ar[11];
           document.getElementById("kode_helper3").innerHTML = ar[11];
+          if (document.getElementById("kode_helper4")) {
+            document.getElementById("kode_helper4").innerHTML = ar[11];
+          }
           setValue2("jenisbbm", ar[6]);
           document.getElementById("jmlh_bbm").value = ar[7];
           if (ar[8] == 1) {
@@ -916,6 +992,7 @@ function save_header() {
         } else {
           isidt = con.responseText.split("####");
 
+          checkPTHelper();
           setValue("kmhm_awal", isidt[0]);
           setValue("no_trans", isidt[1]);
           document.getElementById("jns_kerja").innerHTML = isidt[2];
@@ -923,6 +1000,9 @@ function save_header() {
           document.getElementById("kode_helper").innerHTML = isidt[4];
           document.getElementById("kode_helper2").innerHTML = isidt[4];
           document.getElementById("kode_helper3").innerHTML = isidt[4];
+          if (document.getElementById("kode_helper4")) {
+            document.getElementById("kode_helper4").innerHTML = isidt[4];
+          }
           document.getElementById("detail").style.display = "block";
           lock_header_form();
           loaddetail();
@@ -948,9 +1028,6 @@ function loaddata(num) {
   txtCari = document.getElementById("txtCari").value;
   kodevhc_cari = document.getElementById("kodevhc_cari").value;
   kontan_cari = document.getElementById("kontanan_cari").value;
-  posting_cari = document.getElementById("posting_cari").value;
-  periode_cari = document.getElementById("periode_cari").value;
-  operator_cari = document.getElementById("operator_cari").value;
   param = "proses=loaddata&page=" + num;
   param +=
     "&tgl_cari=" +
@@ -962,13 +1039,7 @@ function loaddata(num) {
     "&tgl_carisd=" +
     tgl_carisd +
     "&kontanan_cari=" +
-    kontan_cari +
-    "&posting_cari=" +
-    posting_cari +
-    "&periode_cari=" +
-    periode_cari +
-    "&operator_cari=" +
-    operator_cari;
+    kontan_cari;
   tujuan = "vhc_slave_pekerjaan_v2.php";
   post_response_text(tujuan, param, respog);
   function respog() {
@@ -1265,13 +1336,16 @@ function fillFieldKrj(
   helper,
   helper2,
   helper3,
+  helper4,
   premihelp,
   premihelp2,
   premihelp3,
+  premihelp4,
   upah,
   upahhelp,
   upahhelp2,
   upahhelp3,
+  upahhelp4,
   denda,
   basisborong,
   checklembur,
@@ -1307,11 +1381,17 @@ function fillFieldKrj(
   document.getElementById("uphHelp").value = upahhelp;
   document.getElementById("uphHelp2").value = upahhelp2;
   document.getElementById("uphHelp3").value = upahhelp3;
+  if (document.getElementById("uphHelp4")) {
+    document.getElementById("uphHelp4").value = upahhelp4;
+  }
   document.getElementById("uphOprt_old").value = upah;
   document.getElementById("uphHelp_old").value = upahhelp;
   document.getElementById("prmiHelp_old").value = premihelp;
   document.getElementById("prmiHelp_old2").value = premihelp2;
   document.getElementById("prmiHelp_old3").value = premihelp3;
+  if (document.getElementById("prmiHelp_old4")) {
+    document.getElementById("prmiHelp_old4").value = premihelp4;
+  }
   document.getElementById("pnltyOprt").value = denda;
   document.getElementById("kmhm_awal").value = kmawl;
   document.getElementById("kmhm_akhir").value = kmakhr;
@@ -1322,6 +1402,9 @@ function fillFieldKrj(
   document.getElementById("kode_helper_old").value = helper;
   document.getElementById("kode_helper_old2").value = helper2;
   document.getElementById("kode_helper_old3").value = helper3;
+  if (document.getElementById("kode_helper_old4")) {
+    document.getElementById("kode_helper_old4").value = helper4;
+  }
   document.getElementById("basisborong").value = basisborong;
   document.getElementById("basisboronghelp").value = basisborong;
   document.getElementById("prmiOprtTambahan").value = premitambahan;
@@ -1335,11 +1418,17 @@ function fillFieldKrj(
   setValue2("kode_helper", helper);
   setValue2("kode_helper2", helper2);
   setValue2("kode_helper3", helper3);
+  if (document.getElementById("kode_helper4")) {
+    setValue2("kode_helper4", helper4);
+  }
 
   setValue2("prmiOprt", premiopt);
   setValue2("prmiHelp", premihelp);
   setValue2("prmiHelp2", premihelp2);
   setValue2("prmiHelp3", premihelp3);
+  if (document.getElementById("prmiHelp4")) {
+    setValue2("prmiHelp4", premihelp4);
+  }
 
   jumlah = parseFloat(kmakhr) - parseFloat(kmawl);
   document.getElementById("jlhhm").value = jumlah.toFixed(2);
@@ -1352,7 +1441,12 @@ function fillFieldKrj(
   document.getElementById("kode_karyawan").disabled = true;
   document.getElementById("kode_helper").disabled = true;
   document.getElementById("kode_helper2").disabled = true;
-  document.getElementById("kode_helper3").disabled = true;
+  if (document.getElementById("kode_helper3")) {
+    document.getElementById("kode_helper3").disabled = true;
+  }
+  if (document.getElementById("kode_helper4")) {
+    document.getElementById("kode_helper4").disabled = true;
+  }
 
   if (helper === "") {
     document.getElementById("uphHelp").disabled = true;
@@ -1362,6 +1456,16 @@ function fillFieldKrj(
   if (helper2 === "") {
     document.getElementById("uphHelp2").disabled = true;
     document.getElementById("prmiHelp2").disabled = true;
+  }
+
+  if (helper3 === "" && document.getElementById("uphHelp3")) {
+    document.getElementById("uphHelp3").disabled = true;
+    document.getElementById("prmiHelp3").disabled = true;
+  }
+
+  if (helper4 === "" && document.getElementById("uphHelp4")) {
+    document.getElementById("uphHelp4").disabled = true;
+    document.getElementById("prmiHelp4").disabled = true;
   }
 
   if (lokKrj.length > 4) {
@@ -1427,6 +1531,7 @@ function save_pekerjaan() {
   kode_helper = getValue("kode_helper");
   kode_helper2 = getValue("kode_helper2");
   kode_helper3 = getValue("kode_helper3");
+  kode_helper4 = getValue("kode_helper4");
   pnltyOprt = getValue("pnltyOprt");
   pro = getValue("proses_pekerjaan");
   bya = getValue("biaya");
@@ -1454,6 +1559,8 @@ function save_pekerjaan() {
     kode_helper2 +
     "&kode_helper3=" +
     kode_helper3 +
+    "&kode_helper4=" +
+    kode_helper4 +
     "&pnltyOprt=" +
     pnltyOprt;
   param +=
@@ -1487,22 +1594,19 @@ function save_pekerjaan() {
     "&oldSegment=" +
     getValue("oldSegment");
 
-  if (
-    kode_helper == kode_helper2 ||
-    kode_helper == kode_helper3 ||
-    kode_helper2 == kode_helper3
-  ) {
-    if (kode_helper != "" && kode_helper2 != "") {
-      alert("Helper tidak boleh sama dari helper-helper yang dipilih.");
-      return false;
-    }
-    if (kode_helper != "" && kode_helper3 != "") {
-      alert("Helper tidak boleh sama dari helper-helper yang dipilih.");
-      return false;
-    }
-    if (kode_helper2 != "" && kode_helper3 != "") {
-      alert("Helper tidak boleh sama dari helper-helper yang dipilih.");
-      return false;
+  var arrKary = [
+    { name: "Operator", val: kdKry },
+    { name: "Helper 1", val: kode_helper },
+    { name: "Helper 2", val: kode_helper2 },
+    { name: "Helper 3", val: kode_helper3 },
+    { name: "Helper 4", val: kode_helper4 }
+  ];
+  for (var i = 0; i < arrKary.length; i++) {
+    for (var j = i + 1; j < arrKary.length; j++) {
+      if (arrKary[i].val !== "" && arrKary[i].val === arrKary[j].val) {
+        alert(arrKary[i].name + " dan " + arrKary[j].name + " tidak boleh orang yang sama.");
+        return false;
+      }
     }
   }
 
@@ -1596,6 +1700,7 @@ function delDataKrj(
   kode_helper,
   kode_helper2,
   kode_helper3,
+  kode_helper4,
   kodevhc,
   kmhmAwal,
 ) {
@@ -1618,6 +1723,8 @@ function delDataKrj(
     kode_helper2 +
     "&kode_helper3=" +
     kode_helper3 +
+    "&kode_helper4=" +
+    kode_helper4 +
     "&kde_vhc=" +
     kodevhc +
     "&kmhm_awal=" +
@@ -1631,7 +1738,7 @@ function delDataKrj(
         if (!isSaveResponse(con.responseText)) {
           alert(con.responseText);
         } else {
-          delData(noTrans, kdkry, kode_helper, kode_helper2, kode_helper3);
+          delData(noTrans, kdkry, kode_helper, kode_helper2, kode_helper3, kode_helper4);
         }
       } else {
         busy_off();
@@ -1646,7 +1753,7 @@ function delDataKrj(
   }
 }
 
-function delData(noTrans, Kdkry, kode_helper, kode_helper2, kode_helper3) {
+function delData(noTrans, Kdkry, kode_helper, kode_helper2, kode_helper3, kode_helper4) {
   no_trans = document.getElementById("no_trans").value = noTrans;
   kdKry = document.getElementById("kode_karyawan").value = Kdkry;
   pros = document.getElementById("prosesOpt");
@@ -1662,6 +1769,8 @@ function delData(noTrans, Kdkry, kode_helper, kode_helper2, kode_helper3) {
     kode_helper2 +
     "&kode_helper3=" +
     kode_helper3 +
+    "&kode_helper4=" +
+    kode_helper4 +
     "&proses=delete_opt";
   tujuan = "vhc_slave_pekerjaan_v2.php";
 
@@ -1691,19 +1800,23 @@ function save_operator() {
   kode_helper = getValue("kode_helper");
   kode_helper2 = getValue("kode_helper2");
   kode_helper3 = getValue("kode_helper3");
+  kode_helper4 = getValue("kode_helper4");
   pnltyOprt = getValue("pnltyOprt");
   uphoprt = getValue("uphOprt");
   uphhelp = getValue("uphHelp");
   uphhelp2 = getValue("uphHelp2");
   uphhelp3 = getValue("uphHelp3");
+  uphhelp4 = getValue("uphHelp4");
   prmiOprt = getValue("prmiOprt");
   prmiOprtold = getValue("prmiOprt_old");
   prmiHelp = getValue("prmiHelp");
   prmiHelp2 = getValue("prmiHelp2");
   prmiHelp3 = getValue("prmiHelp3");
+  prmiHelp4 = getValue("prmiHelp4");
   prmiHelpold = getValue("prmiHelp_old");
   prmiHelpold2 = getValue("prmiHelp_old2");
   prmiHelpold3 = getValue("prmiHelp_old3");
+  prmiHelpold4 = getValue("prmiHelp_old4");
   tglTrans = getValue("tglpekerjaan");
   ketOprt = getValue("ketOprt");
   jns_kerja = getValue("jns_kerja");
@@ -1739,7 +1852,9 @@ function save_operator() {
     "&prmiHelp_old2=" +
     prmiHelpold2 +
     "&prmiHelp_old3=" +
-    prmiHelpold3;
+    prmiHelpold3 +
+    "&prmiHelp_old4=" +
+    prmiHelpold4;
   param +=
     "&proses=insert_operator" +
     "&pnltyOprt=" +
@@ -1752,6 +1867,8 @@ function save_operator() {
     prmiHelp2 +
     "&prmiHelp3=" +
     prmiHelp3 +
+    "&prmiHelp4=" +
+    prmiHelp4 +
     "&uphOprt=" +
     uphoprt +
     "&uphHelp=" +
@@ -1760,6 +1877,8 @@ function save_operator() {
     uphhelp2 +
     "&uphHelp3=" +
     uphhelp3 +
+    "&uphHelp4=" +
+    uphhelp4 +
     "&tglpekerjaan=" +
     tglTrans +
     "&ketOprt=" +
@@ -1774,6 +1893,8 @@ function save_operator() {
     kode_helper2 +
     "&kode_helper3=" +
     kode_helper3 +
+    "&kode_helper4=" +
+    kode_helper4 +
     "&oldbrt_muatan=" +
     olbrtrmuatan +
     "&lokasikerja=" +
