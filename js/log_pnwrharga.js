@@ -1,3 +1,80 @@
+//kotak List Job dibuat setinggi kotak Cari (select2 diinisialisasi oleh zSelect2.js)
+$(document).ready(function () {
+  samakanTinggiFilterPnwr();
+  $(window).on("load", samakanTinggiFilterPnwr);
+});
+
+function samakanTinggiFilterPnwr() {
+  var a = document.getElementById("fsCariPnwr"),
+    b = document.getElementById("fsListJobPnwr");
+  if (a && b) {
+    b.style.boxSizing = "border-box";
+    b.style.height = a.offsetHeight + "px";
+    //isi List Job (angka notifikasi) di tengah kotak
+    var n = document.getElementById("notifikasiKerja"),
+      lg = b.querySelector("legend");
+    if (n) {
+      n.style.display = "flex";
+      n.style.alignItems = "center";
+      n.style.justifyContent = "center";
+      n.style.height =
+        Math.max(20, b.clientHeight - (lg ? lg.offsetHeight : 0) - 24) + "px";
+    }
+  }
+}
+
+//isi pilihan (select2) lalu perbarui tampilannya
+function setSelPnwr(id, v) {
+  var el = document.getElementById(id);
+  el.value = v;
+  if (window.jQuery) {
+    jQuery(el).trigger("change.select2");
+  }
+}
+
+//tarikan Excel dan PDF mengikuti filter yang sedang dipilih
+function getFilterParamPnwr() {
+  var p = "";
+  p +=
+    "&crnotransaksi=" +
+    encodeURIComponent(trim(document.getElementById("txtsearch").value));
+  p +=
+    "&crnopp=" + encodeURIComponent(trim(document.getElementById("txtnopp").value));
+  p +=
+    "&crtanggal=" +
+    encodeURIComponent(trim(document.getElementById("tgl_cari").value));
+  p +=
+    "&filterTahun=" +
+    encodeURIComponent(document.getElementById("filterTahun").value);
+  p +=
+    "&filterStatus=" +
+    encodeURIComponent(document.getElementById("filterStatus").value);
+  return p;
+}
+function tampilTarikanPnwr(judul, tujuan) {
+  alertify
+    .popup(
+      judul,
+      "<iframe frameborder=0 style='width:100%;height:100%;overflow:none' src='" +
+        tujuan +
+        "'></iframe>"
+    )
+    .set({ resizable: true, maximizable: true, overflow: false })
+    .resizeTo("80%", "70%");
+}
+function exportExcelPnwr() {
+  tampilTarikanPnwr(
+    "Report Ms.Excel",
+    "log_slave_pnwrharga.php?method=excellist" + getFilterParamPnwr()
+  );
+}
+function exportPdfPnwr() {
+  tampilTarikanPnwr(
+    "Report PDF",
+    "log_slave_pnwrharga.php?method=pdflist" + getFilterParamPnwr()
+  );
+}
+
 function loadRFQChat(nomor, ev) {
   title = "Chat:" + nomor;
   content =
@@ -38,7 +115,7 @@ function getkurs(no) {
           } else {
             if (con.responseText == "") {
               alert("Kurs Belum di-input");
-              document.getElementById("mtUang_" + no).value = "IDR";
+              setSelPnwr("mtUang_" + no, "IDR");
               document.getElementById("Kurs_" + no).value = "1";
             } else {
               document.getElementById("Kurs_" + no).value = con.responseText;
@@ -51,7 +128,7 @@ function getkurs(no) {
       }
     }
   } else {
-    document.getElementById("mtUang_" + no).value = "IDR";
+    setSelPnwr("mtUang_" + no, "IDR");
     document.getElementById("Kurs_" + no).value = "1";
   }
 }
@@ -70,6 +147,8 @@ function displaylist() {
   document.getElementById("txtsearch").value = "";
   document.getElementById("tgl_cari").value = "";
   document.getElementById("txtnopp").value = "";
+  setSelPnwr("filterTahun", String(new Date().getFullYear()));
+  setSelPnwr("filterStatus", "");
   document.getElementById("formEditData2").style.display = "none";
   loaddata(0);
 }
@@ -83,11 +162,15 @@ function loaddata(pg) {
     "method=loaddata&page=" +
     pg +
     "&crnotransaksi=" +
-    crnotransaksi +
+    encodeURIComponent(crnotransaksi) +
     "&crtanggal=" +
-    crtanggal +
+    encodeURIComponent(crtanggal) +
     "&crnopp=" +
-    crnopp;
+    encodeURIComponent(crnopp) +
+    "&filterTahun=" +
+    encodeURIComponent(document.getElementById("filterTahun").value) +
+    "&filterStatus=" +
+    encodeURIComponent(document.getElementById("filterStatus").value);
   tujuan = "log_slave_pnwrharga.php";
   post_response_text(tujuan, param, respog);
   function respog() {
@@ -655,6 +738,28 @@ function addDataSma() {
   }
 }
 
+//area edit RFQ dibuat penuh ke bawah: tingginya sampai dasar layar
+function penuhkanAreaEdit() {
+  var res = document.getElementById("printContainer2");
+  if (!res || res.offsetParent === null) {
+    return;
+  }
+  var tinggi = window.innerHeight - res.getBoundingClientRect().top - 24;
+  res.style.height = Math.max(300, tinggi) + "px";
+  res.style.overflow = "auto";
+}
+window.addEventListener("resize", penuhkanAreaEdit);
+
+//dropdown pada form edit RFQ dibuat select2 dengan lebar sama
+function selectkanAreaEdit() {
+  if (window.jQuery && jQuery.fn.select2) {
+    jQuery("#printContainer2 select.selRfq").select2({
+      dropdownAutoWidth: true,
+      width: "330px",
+    });
+  }
+}
+
 function zPreview2(fileTarget, notrans, idCont) {
   if (notrans == "") {
     notrans = document.getElementById("notransaksi").value;
@@ -677,6 +782,8 @@ function zPreview2(fileTarget, notrans, idCont) {
           document.getElementById("formEditData2").style.display = "block";
           var res = document.getElementById(idCont);
           res.innerHTML = con.responseText;
+          penuhkanAreaEdit();
+          selectkanAreaEdit();
 
           tipepo = document.getElementById("tipepo").value;
           if (tipepo == "SO") {

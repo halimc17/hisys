@@ -56,7 +56,14 @@ $pdf->Ln();
         
 $arrHead = setheadreport($kodept);
 $path=$arrHead['logo'];
-$pdf->Image($path,15,3,20);	
+if(!file_exists($path)){
+	#logo unit tidak ada: pakai logo PT dari PR, bila tetap tidak ada kop dicetak tanpa logo
+	$ptLogo=isset($kdPt[$dOrder['nopp']])?$kdPt[$dOrder['nopp']]:'';
+	$path='images/logo/'.$ptLogo.'.jpg';
+}
+if(file_exists($path)){
+	$pdf->Image($path,15,3,20);
+}
 
 $pdf->SetFont('Arial','B',12);
 $pdf->SetY(10);

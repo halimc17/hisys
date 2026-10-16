@@ -7,6 +7,7 @@ include_once('lib/HtmlExcel.php');
 require_once('dompdf/autoload.inc.php');
 require_once 'dompdf/PHPExcel.php';
 require_once 'dompdf/PHPExcel/IOFactory.php';
+require_once('lib/fpdf.php');
 
 use Dompdf\Dompdf;
 
@@ -83,15 +84,215 @@ $garansiprodukjasa = checkPostGet('garansiprodukjasa', '');
 $posisistokbarang = checkPostGet('posisistokbarang', '');
 $asuransi = checkPostGet('asuransi', '');
 
+#=== Pembersihan input: nomor/ID hanya karakter aman, teks bebas di-escape ===
+if (!function_exists('pnwrEsc')) {
+	function pnwrEsc($v)
+	{
+		global $owlPDO;
+		return substr($owlPDO->quote((string)$v), 1, -1);
+	}
+}
+if (!function_exists('pnwrIdOk')) {
+	function pnwrIdOk($v)
+	{
+		return preg_match('/^[A-Za-z0-9\/._ -]*$/', (string)$v) ? true : false;
+	}
+}
+foreach (array('no_permintaan', 'notransaksi', 'xnomor', 'supplierid', 'id_supplier', 'id_alamat_supplier', 'nopp2', 'nopp', 'kodebarang') as $kParam) {
+	foreach (array($_POST, $_GET) as $srcParam) {
+		if (isset($srcParam[$kParam]) and !is_array($srcParam[$kParam]) and !pnwrIdOk($srcParam[$kParam])) {
+			exit("warning: Parameter " . $kParam . " tidak valid");
+		}
+	}
+}
+foreach (array('xnourut', 'nourut') as $kParam) {
+	foreach (array($_POST, $_GET) as $srcParam) {
+		if (isset($srcParam[$kParam]) and !is_array($srcParam[$kParam]) and !preg_match('/^[0-9]*$/', (string)$srcParam[$kParam])) {
+			exit("warning: Parameter " . $kParam . " tidak valid");
+		}
+	}
+}
+foreach (array('kdbrg', 'lstnopp', 'lstkontrak') as $kParam) {
+	if (isset($_POST[$kParam]) and is_array($_POST[$kParam])) {
+		foreach ($_POST[$kParam] as $vParam) {
+			if (!is_array($vParam) and !pnwrIdOk($vParam)) {
+				exit("warning: Parameter " . $kParam . " tidak valid");
+			}
+		}
+	}
+}
+$ketUraian = pnwrEsc($ketUraian);
+$keterangan = pnwrEsc($keterangan);
+$lokasipengiriman = pnwrEsc($lokasipengiriman);
+$namafile = pnwrEsc($namafile);
+$kriteriaefil = pnwrEsc($kriteriaefil);
+$schnopp = pnwrEsc($schnopp);
+$schjenis = pnwrEsc($schjenis);
+$schunit = pnwrEsc($schunit);
+$schpt = pnwrEsc($schpt);
+$schklbrg = pnwrEsc($schklbrg);
+$schkdbrg = pnwrEsc($schkdbrg);
+$crnotransaksi = pnwrEsc($crnotransaksi);
+$crnopp = pnwrEsc($crnopp);
+
+#=== Filter list RFQ serta tarikan Excel/PDF (dipakai bersama oleh list, Excel, dan PDF) ===
+#kondisi list: RFQ milik purchaser yang login, lalu filter yang dipilih
+if (!function_exists('pnwrKondisi')) {
+	function pnwrKondisi()
+	{
+		global $dbname;
+		$k = " a.purchaser='" . pnwrEsc($_SESSION['standard']['userid']) . "'";
+		$v = trim((string)checkPostGet('crnotransaksi', ''));
+		if ($v != '') {
+			$k .= " and a.nomor like '%" . pnwrEsc($v) . "%'";
+		}
+		$p = trim((string)checkPostGet('crnopp', ''));
+		if ($p != '') {
+			$k .= " and a.nomor in (select nomor from " . $dbname . ".log_permintaanhargadt where nopp like '%" . pnwrEsc($p) . "%')";
+		}
+		$st = (string)checkPostGet('filterStatus', '');
+		if ($st == '1') {
+			$k .= " and a.tolakrph<>1 and a.flag=0";
+		} elseif ($st == '2') {
+			$k .= " and a.tolakrph<>1 and a.flag=1";
+		} elseif ($st == '3') {
+			$k .= " and a.tolakrph=1";
+		}
+		$tgl = trim((string)checkPostGet('crtanggal', ''));
+		$th = trim((string)checkPostGet('filterTahun', ''));
+		if (preg_match('/^(\d{2})-(\d{2})-(\d{4})$/', $tgl, $m)) {
+			$k .= " and a.tanggal='" . $m[3] . '-' . $m[2] . '-' . $m[1] . "'";
+		} elseif (preg_match('/^\d{4}$/', $th)) {
+			$k .= " and a.tanggal>='" . $th . "-01-01' and a.tanggal<'" . ($th + 1) . "-01-01'";
+		}
+		return $k;
+	}
+}
+if (!function_exists('pnwrJumlah')) {
+	function pnwrJumlah()
+	{
+		global $dbname;
+		$r = fetchdata("select count(*) as c from (select a.nomor from " . $dbname . ".log_perintaanhargaht a where " . pnwrKondisi() . " group by a.nomor) x");
+		return (int)$r[0]['c'];
+	}
+}
+if (!function_exists('pnwrDataList')) {
+	function pnwrDataList($offset, $limit)
+	{
+		global $dbname;
+		return fetchdata("select a.* from " . $dbname . ".log_perintaanhargaht a where " . pnwrKondisi() . " group by a.nomor order by a.tanggal desc, a.nomor desc limit " . (int)$offset . "," . (int)$limit);
+	}
+}
+#status RFQ untuk tarikan Excel/PDF
+if (!function_exists('pnwrStatusRfq')) {
+	function pnwrStatusRfq($bar)
+	{
+		if ($bar['tolakrph'] == 1) {
+			return 'Ditolak';
+		}
+		if ($bar['flag'] == 1) {
+			return 'Sudah diajukan';
+		}
+		return 'Belum diajukan';
+	}
+}
+#data lengkap per baris list (PR, supplier, chat, nomor RPH) dengan sedikit query per halaman
+if (!function_exists('pnwrLengkapi')) {
+	function pnwrLengkapi($rows)
+	{
+		global $dbname;
+		$hasil = array('pp' => array(), 'sup' => array(), 'chat' => array(), 'norph' => array());
+		if (count($rows) == 0) {
+			return $hasil;
+		}
+		$nomor = array();
+		foreach ($rows as $r) {
+			$nomor[$r['nomor']] = $r['nomor'];
+		}
+		$in = "'" . implode("','", array_map('pnwrEsc', $nomor)) . "'";
+		foreach (fetchdata("select distinct nomor,nopp,norph from " . $dbname . ".log_permintaanhargadt where nomor in (" . $in . ") order by nopp") as $d) {
+			if (!isset($hasil['pp'][$d['nomor']]) or !in_array($d['nopp'], $hasil['pp'][$d['nomor']])) {
+				$hasil['pp'][$d['nomor']][] = $d['nopp'];
+			}
+			if ($d['norph'] != '' and !isset($hasil['norph'][$d['nomor']])) {
+				$hasil['norph'][$d['nomor']] = $d['norph'];
+			}
+		}
+		foreach (fetchdata("select a.nomor,a.supplierid,b.namasupplier,a.nourut from " . $dbname . ".log_perintaanhargaht a left join " . $dbname . ".log_5supplier b on a.supplierid=b.supplierid where a.nomor in (" . $in . ") order by a.nomor,a.nourut") as $s) {
+			$hasil['sup'][$s['nomor']][] = $s;
+		}
+		foreach (fetchdata("select nomor,count(*) as c from " . $dbname . ".log_rfq_chat where nomor in (" . $in . ") group by nomor") as $c) {
+			$hasil['chat'][$c['nomor']] = (int)$c['c'];
+		}
+		return $hasil;
+	}
+}
+#keterangan filter yang aktif untuk kop tarikan
+if (!function_exists('pnwrInfoFilter')) {
+	function pnwrInfoFilter()
+	{
+		global $pnwrTerpotong;
+		$info = array();
+		$th = trim((string)checkPostGet('filterTahun', ''));
+		$info[] = 'Tahun: ' . (preg_match('/^\d{4}$/', $th) ? $th : 'Semua');
+		$arrSt = array('1' => 'Belum diajukan', '2' => 'Sudah diajukan', '3' => 'Ditolak');
+		$st = (string)checkPostGet('filterStatus', '');
+		if (isset($arrSt[$st])) {
+			$info[] = 'Status: ' . $arrSt[$st];
+		}
+		$v = trim((string)checkPostGet('crnotransaksi', ''));
+		if ($v != '') {
+			$info[] = 'No. Transaksi: ' . $v;
+		}
+		$p = trim((string)checkPostGet('crnopp', ''));
+		if ($p != '') {
+			$info[] = 'No. PP: ' . $p;
+		}
+		$tg = trim((string)checkPostGet('crtanggal', ''));
+		if (preg_match('/^\d{2}-\d{2}-\d{4}$/', $tg)) {
+			$info[] = 'Tanggal: ' . $tg;
+		}
+		if (!empty($pnwrTerpotong)) {
+			$info[] = 'Dibatasi 3000 data terbaru, persempit filter bila perlu';
+		}
+		return implode(' | ', $info);
+	}
+}
+#teks yang kepanjangan dipotong dan diberi "..." supaya tidak tumpang tindih ke kolom sebelah
+#keterangan RFQ tersimpan dengan tag <br>; untuk tarikan diubah menjadi baris baru
+if (!function_exists('pnwrKet')) {
+	function pnwrKet($t)
+	{
+		return trim(strip_tags(preg_replace('/<br\s*\/?>/i', "\n", (string)$t)));
+	}
+}
+if (!function_exists('pnwrFit')) {
+	function pnwrFit($pdf, $txt, $w, $f = 7)
+	{
+		$txt = utf8_decode($txt);
+		$pdf->SetFont('Arial', '', $f);
+		if ($pdf->GetStringWidth($txt) <= $w - 2) {
+			return $txt;
+		}
+		while (strlen($txt) > 1 && $pdf->GetStringWidth($txt . '...') > $w - 2) {
+			$txt = substr($txt, 0, -1);
+		}
+		return rtrim($txt) . '...';
+	}
+}
+
+
 $emodul = "RPH";
 $optpt = makeOption($dbname, 'organisasi', 'kodeorganisasi,induk');
 
 if ($xmethod != '') {
-	$str = "select a.*,right(a.nomor,4) as kodept, b.alamat, b.telepon, b.fax 
-		from " . $dbname . ".log_perintaanhargaht a 
-		left join " . $dbname . ".log_5supalamat b on a.id_alamat_supplier = b.id_alamat 
-		where a.nomor='" . $xnomor . "' and a.nourut='" . $xnourut . "'";
-	$res = fetchdata($str);
+	#dokumen Permintaan Penawaran Harga untuk supplier (PDF atau Excel)
+	$stmt = $owlPDO->prepare("select a.*,right(a.nomor,4) as kodept, b.alamat, b.telepon, b.fax from " . $dbname . ".log_perintaanhargaht a left join " . $dbname . ".log_5supalamat b on a.id_alamat_supplier = b.id_alamat where a.nomor=? and a.nourut=?");
+	$stmt->execute(array($xnomor, $xnourut));
+	$res = $stmt->fetchAll(PDO::FETCH_ASSOC);
+	if (count($res) == 0) {
+		exit('Data permintaan penawaran tidak ditemukan');
+	}
 	$kodeunit = $res[0]['kodept'];
 	$supplierid = $res[0]['supplierid'];
 	$alamat = $res[0]['alamat'];
@@ -99,201 +300,274 @@ if ($xmethod != '') {
 	$fax = $res[0]['fax'];
 	$matauang = $res[0]['matauang'];
 	$kurs = $res[0]['kurs'];
-
-	$optpt = makeOption($dbname, 'organisasi', 'kodeorganisasi,induk', "kodeorganisasi='" . $kodeunit . "'");
-	$kodept = $optpt[$kodeunit];
-
-	$arrHead = setheadreport('', $kodept);
-	$path = $arrHead['logo'];
-
-	$str = "select namaorganisasi,alamat,wilayahkota,telepon from " . $dbname . ".organisasi where kodeorganisasi='" . $kodept . "'";
-	$res = fetchdata($str);
-	$namapt = $res[0]['namaorganisasi'];
-	$alamatpt = $res[0]['alamat'] . ", " . $res[0]['wilayahkota'];
-	$telp = $res[0]['telepon'];
-
-	$str = "select npwp,alamatnpwp from " . $dbname . ".setup_org_npwp where kodeorg='" . $kodept . "'";
-	$res = fetchdata($str);
-	$npwp = $res[0]['npwp'];
-	$alamatnpwp = $res[0]['alamatnpwp'];
-
-	$str = "select * from " . $dbname . ".log_5supplier where supplierid='" . $supplierid . "'";
-	$res = fetchdata($str);
-	$namasupplier = $res[0]['namasupplier'];
-
-	$tab .= "<table cellpadding=3 cellspacing=0 border=0 style='width:100%;font-size:11px;margin-top:-30px;'>
-		<tr>
-			<td colspan=2 rowspan=5 style='border-bottom:1px solid #000000;text-align:center;vertical-align:middle'>
-				<img src=" . $arrHead['logo'] . " width=80px></img>
-			</td>
-			<td colspan=7>" . $arrHead['nama'] . "</td>
-		</tr>
-		<tr>
-			<td colspan=7>" . $arrHead['alamat'] . "</td>
-		</tr>
-		<tr>
-			<td colspan=7>Telp : " . $arrHead['telepon'] . "</td>
-		</tr>
-		<tr>
-			<td colspan=7>NPWP : " . $npwp . "</td>
-		</tr>
-		<tr>
-			<td colspan=7 style='border-bottom:1px solid #000000'>" . $_SESSION['lang']['alamat'] . " NPWP : " . $alamatnpwp . "</td>
-		</tr>
-		
-		<tr>
-			<td colspan=9>&nbsp;</td>
-		</tr>
-		
-		<tr>
-			<td colspan=9 style='font-weight:bold;text-align:center;size:large'>" . strtoupper($_SESSION['lang']['permintaan_harga']) . "</td>
-		</tr>
-		
-		<tr>
-			<td colspan=9>&nbsp;</td>
-		</tr>
-		
-		<tr>
-			<td colspan=2 style='width:100px;'>No Transaksi</td>
-			<td style='width:5px'>:</td>
-			<td colspan=6>" . $xnomor . "</td>
-		</tr>
-		<tr>
-			<td colspan=2>" . $_SESSION['lang']['nm_perusahaan'] . "</td>
-			<td>:</td>
-			<td colspan=6>" . $namasupplier . "</td>
-		</tr>
-		<tr>
-			<td colspan=2>" . $_SESSION['lang']['alamat'] . "</td>
-			<td>:</td>
-			<td colspan=6>" . $alamat . "</td>
-		</tr>
-		<tr>
-			<td colspan=2>" . $_SESSION['lang']['telp'] . "</td>
-			<td>:</td>
-			<td colspan=6>" . $telepon . "</td>
-		</tr>
-		<tr>
-			<td colspan=2>" . $_SESSION['lang']['fax'] . "</td>
-			<td>:</td>
-			<td colspan=6>" . $fax . "</td>
-		</tr>
-		<tr>
-			<td colspan=2>" . $_SESSION['lang']['matauang'] . "</td>
-			<td>:</td>
-			<td colspan=6>" . $matauang . "</td>
-		</tr>
-		<tr>
-			<td colspan=2>" . $_SESSION['lang']['kurs'] . "</td>
-			<td>:</td>
-			<td colspan=6 style='text-align:left'>" . $kurs . "</td>
-		</tr>
-		
-		<tr>
-			<td colspan=9>&nbsp;</td>
-		</tr>
-		
-		<tr>
-			<td colspan=9>" . strtoupper($_SESSION['lang']['hal']) . "</td>
-		</tr>
-		
-		<tr>
-			<td colspan=9>" . $_SESSION['lang']['isi_permintaan'] . "</td>
-		</tr>
-		
-		<tr>
-			<td colspan=9>&nbsp;</td>
-		</tr>
-		
-		<tr style='background-color:grey'>
-			<td style='text-align:center;border-left:1px solid #000000;border-top:1px solid #000000;border-right:1px solid #000000;border-bottom:1px solid #000000;width:5px'>No</td>
-			<td  colspan=4 style='text-align:center;border-top:1px solid #000000;border-right:1px solid #000000;border-bottom:1px solid #000000'>" . $_SESSION['lang']['namabarang'] . "</td>
-			<td style='text-align:center;border-top:1px solid #000000;border-right:1px solid #000000;border-bottom:1px solid #000000'>" . $_SESSION['lang']['satuan'] . "</td>
-			<td style='text-align:center;border-top:1px solid #000000;border-right:1px solid #000000;border-bottom:1px solid #000000'>" . $_SESSION['lang']['jumlah'] . "</td>
-			<td style='text-align:center;border-top:1px solid #000000;border-right:1px solid #000000;border-bottom:1px solid #000000'>" . $_SESSION['lang']['hargasatuan'] . "</td>
-			<td style='text-align:center;border-top:1px solid #000000;border-right:1px solid #000000;border-bottom:1px solid #000000'>" . $_SESSION['lang']['keterangan'] . "</td>
-		</tr>";
-
-	$str = "select * from " . $dbname . ".log_permintaanhargadt where nomor='" . $xnomor . "' and nourut='" . $xnourut . "'";
-	$res = fetchdata($str);
-	$no = 0;
-	$subTotal = 0;
-	foreach ($res as $key => $val) {
-		$no++;
-		$subTotal += $subTotal;
-		$kodebarang = $val['kodebarang'];
-		$jumlah = $val['jumlah'];
-		$namabarang = '';
-
-		$strx = "select * from " . $dbname . ".log_5masterbarang where kodebarang='" . $kodebarang . "'";
-		$resx = fetchdata($strx);
-		$namabarang = $resx[0]['namabarang'];
-		$satuan = $resx[0]['satuan'];
-
-		$tab .= "<tr>
-				<td style='border-left:1px solid #000000;border-right:1px solid #000000;border-bottom:1px solid #000000;text-align:center'>" . $no . "</td>
-				<td colspan=4 style='border-right:1px solid #000000;border-bottom:1px solid #000000'>" . $namabarang . "<br>" . $val['spec'] . "</td>
-				<td style='border-right:1px solid #000000;border-bottom:1px solid #000000;text-align:center'>" . $satuan . "</td>
-				<td style='border-right:1px solid #000000;border-bottom:1px solid #000000;text-align:center'>" . number_format($val['jumlah'], 2, '.', ',') . "</td>
-				<td style='border-right:1px solid #000000;border-bottom:1px solid #000000'></td>
-				<td style='border-right:1px solid #000000;border-bottom:1px solid #000000'></td>
-			</tr>";
-	}
-
-	$tab .= "<tr>
-			<td colspan=9>Note: " . $_SESSION['lang']['note_permintaan'] . "</td>
-		</tr>
-		<tr>
-			<td colspan=9>&nbsp;</td>
-		</tr>";
-
-	$str = "select * from " . $dbname . ".log_perintaanhargaht where nomor='" . $xnomor . "' and nourut='" . $xnourut . "'";
-	$res = fetchdata($str);
 	$xid_franco = $res[0]['id_franco'];
 	$xtgldari = $res[0]['tgldari'];
-	$xoptFranco =  makeOption($dbname, 'setup_franco', 'id_franco,franco_name');
+	$tglRfq = $res[0]['tanggal'];
+	$purchaserRfq = $res[0]['purchaser'];
 
-	$tab .= "<tr>
-			<td colspan=2>" . $_SESSION['lang']['franco'] . "</td>
-			<td>:</td>
-			<td colspan=6>" . $xoptFranco[$xid_franco] . "</td>
-		</tr>
-		<tr>
-			<td colspan=2>" . $_SESSION['lang']['waktu'] . " " . $_SESSION['lang']['pengiriman'] . "</td>
-			<td>:</td>
-			<td colspan=6 style='text-align:left'>" . tanggalnormal($xtgldari) . "</td>
-		</tr>
-		
-		<tr>
-			<td colspan=9>&nbsp;</td>
-		</tr>
-		
-		<tr>";
-	if ($_SESSION['language'] == 'EN') {
-		$tab .= "<td colspan=9>Please explain the price conditions and tax if included. Thankyou for your coorporation.</td>";
-	} else {
-		$tab .= "<td colspan=9>Harga harap di jelaskan secara lengkap termasuk PPn atau tidak. Terima kasih atas perhatian dan kerjasamanya.</td>";
+	$optpt = makeOption($dbname, 'organisasi', 'kodeorganisasi,induk', "kodeorganisasi='" . addslashes($kodeunit) . "'");
+	$kodept = $optpt[$kodeunit];
+	$arrHead = setheadreport($kodeunit, $kodept);
+	$namaUnit = getNamaOrg($kodeunit);
+
+	$stmt = $owlPDO->prepare("select npwp,alamatnpwp from " . $dbname . ".setup_org_npwp where kodeorg=?");
+	$stmt->execute(array($kodept));
+	$rn = $stmt->fetch(PDO::FETCH_ASSOC);
+	$npwp = $rn ? $rn['npwp'] : '';
+	$alamatnpwp = $rn ? $rn['alamatnpwp'] : '';
+
+	$stmt = $owlPDO->prepare("select namasupplier from " . $dbname . ".log_5supplier where supplierid=?");
+	$stmt->execute(array($supplierid));
+	$namasupplier = (string)$stmt->fetchColumn();
+
+	$stmt = $owlPDO->prepare("select a.kodebarang,a.jumlah,a.spec,b.namabarang,b.satuan from " . $dbname . ".log_permintaanhargadt a left join " . $dbname . ".log_5masterbarang b on a.kodebarang=b.kodebarang where a.nomor=? and a.nourut=? order by a.kodebarang");
+	$stmt->execute(array($xnomor, $xnourut));
+	$barangRfq = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+	$xoptFranco = makeOption($dbname, 'setup_franco', 'id_franco,franco_name');
+	$namaPurchaser = getNamaKaryawan($purchaserRfq);
+	$jabPurchaser = '';
+	$rj = fetchdata("select b.namajabatan from " . $dbname . ".datakaryawan a left join " . $dbname . ".sdm_5jabatan b on a.kodejabatan=b.kodejabatan where a.karyawanid='" . addslashes($purchaserRfq) . "'");
+	if (count($rj) > 0) {
+		$jabPurchaser = $rj[0]['namajabatan'];
 	}
-	$tab .= "</tr>";
 
-	$tab .= "</table>";
+	$esc = function ($t) {
+		return htmlspecialchars(iconv('UTF-8', 'UTF-8//IGNORE', (string)$t), ENT_QUOTES, 'UTF-8');
+	};
+	$tglNormal = function ($t) {
+		$t = trim((string)$t);
+		return ($t == '' or substr($t, 0, 4) == '0000') ? '-' : tanggalnormal(substr($t, 0, 10));
+	};
+
+	#logo: PDF memakai data URI agar tidak terhalang batas folder dompdf; Excel memakai alamat berkas
+	$pathLogo = 'images/logo/' . $kodept . '.jpg';
+	$logoSrc = '';
+	if ($kodept != '' and file_exists($pathLogo)) {
+		$logoSrc = ($xmethod == 'excel') ? $pathLogo : 'data:image/jpeg;base64,' . base64_encode(file_get_contents($pathLogo));
+	}
+	$kontakPt = array();
+	if (trim((string)$arrHead['alamat']) != '') {
+		$kontakPt[] = trim($arrHead['alamat']);
+	}
+	if (trim((string)$arrHead['telepon']) != '') {
+		$kontakPt[] = 'Telp. ' . trim($arrHead['telepon']);
+	}
+
+	$tab = "<html><head><meta http-equiv='Content-Type' content='text/html; charset=utf-8'/>
+<style type='text/css'>
+	@page { margin: 36px 42px 40px 42px; }
+	body { font-family: Helvetica, Arial, sans-serif; font-size: 11px; color: #000; }
+	table { border-collapse: collapse; }
+	table.grid th { background-color: #e1e1e1; border: 0.5px solid #444; padding: 4px 5px; text-align: center; }
+	table.grid td { border: 0.5px solid #444; padding: 4px 5px; vertical-align: top; }
+	table.info td { padding: 2px 4px 2px 0; vertical-align: top; }
+	table.info td.lbl { width: 110px; }
+	table.info td.col { width: 10px; }
+</style></head><body>";
+
+	#kop surat
+	$tab .= "<table width='100%' style='border-bottom:2px solid #000'><tr>";
+	if ($logoSrc != '') {
+		$tab .= "<td style='width:80px;vertical-align:middle'><img src='" . $logoSrc . "' style='height:56px'></td>";
+	}
+	$tab .= "<td style='vertical-align:middle'>
+		<div style='font-size:16px;font-weight:bold'>" . $esc($arrHead['nama']) . "</div>
+		<div style='font-size:11px'>" . $esc($namaUnit) . "</div>" .
+		(count($kontakPt) > 0 ? "<div style='font-size:9px;color:#444'>" . $esc(implode('  |  ', $kontakPt)) . "</div>" : "") .
+		($npwp != '' ? "<div style='font-size:9px;color:#444'>NPWP : " . $esc($npwp) . ($alamatnpwp != '' ? " &nbsp;|&nbsp; " . $esc($alamatnpwp) : "") . "</div>" : "") . "
+	</td></tr></table>
+	<div style='border-top:0.5px solid #000;margin-top:1px'></div>";
+
+	#judul dan identitas dokumen
+	$tab .= "<div style='text-align:center;margin-top:14px'>
+		<div style='font-size:15px;font-weight:bold;text-decoration:underline'>" . $esc(strtoupper($_SESSION['lang']['permintaan_harga'])) . "</div>
+		<div style='font-size:11px;margin-top:3px'>No. " . $esc($xnomor) . "</div>
+	</div>";
+
+	$tab .= "<table class='info' style='margin-top:14px'>
+		<tr><td class='lbl'>Tanggal</td><td class='col'>:</td><td>" . $tglNormal($tglRfq) . "</td></tr>
+		<tr><td class='lbl'>Kepada Yth.</td><td class='col'>:</td><td><b>" . $esc($namasupplier) . "</b></td></tr>
+		<tr><td class='lbl'>" . $esc($_SESSION['lang']['alamat']) . "</td><td class='col'>:</td><td>" . $esc($alamat) . "</td></tr>
+		<tr><td class='lbl'>" . $esc($_SESSION['lang']['telp']) . " / " . $esc($_SESSION['lang']['fax']) . "</td><td class='col'>:</td><td>" . $esc($telepon) . ($fax != '' ? " / " . $esc($fax) : "") . "</td></tr>
+		<tr><td class='lbl'>" . $esc($_SESSION['lang']['matauang']) . " / " . $esc($_SESSION['lang']['kurs']) . "</td><td class='col'>:</td><td>" . $esc($matauang) . " / " . $esc($kurs) . "</td></tr>
+	</table>";
+
+	$tab .= "<div style='margin-top:12px;font-weight:bold'>" . $esc(strtoupper($_SESSION['lang']['hal'])) . "</div>
+	<div style='margin-top:3px'>" . $esc($_SESSION['lang']['isi_permintaan']) . "</div>";
+
+	#daftar barang
+	$tab .= "<table class='grid' width='100%' style='margin-top:10px'>
+		<tr><th style='width:18px'>No</th><th>" . $esc($_SESSION['lang']['namabarang']) . "</th><th style='width:45px'>" . $esc($_SESSION['lang']['satuan']) . "</th><th style='width:60px'>" . $esc($_SESSION['lang']['jumlah']) . "</th><th style='width:85px'>" . $esc($_SESSION['lang']['hargasatuan']) . "</th><th style='width:100px'>" . $esc($_SESSION['lang']['keterangan']) . "</th></tr>";
+	$no = 0;
+	foreach ($barangRfq as $val) {
+		$no++;
+		$tab .= "<tr><td style='text-align:center'>" . $no . "</td><td>" . $esc($val['namabarang']) . ($val['spec'] != '' ? "<br><span style='font-size:9px;color:#444'>" . $esc($val['spec']) . "</span>" : "") . "</td><td style='text-align:center'>" . $esc($val['satuan']) . "</td><td style='text-align:right'>" . number_format($val['jumlah'], 2, '.', ',') . "</td><td>&nbsp;</td><td>&nbsp;</td></tr>";
+	}
+	if ($no == 0) {
+		$tab .= "<tr><td colspan='6' style='text-align:center'>Tidak ada data barang</td></tr>";
+	}
+	$tab .= "</table>
+	<div style='margin-top:4px;font-size:10px'><i>Note: " . $esc($_SESSION['lang']['note_permintaan']) . "</i></div>";
+
+	#syarat pengiriman
+	$tab .= "<table class='info' style='margin-top:12px'>
+		<tr><td class='lbl'>" . $esc($_SESSION['lang']['franco']) . "</td><td class='col'>:</td><td>" . $esc(isset($xoptFranco[$xid_franco]) ? $xoptFranco[$xid_franco] : '-') . "</td></tr>
+		<tr><td class='lbl'>" . $esc($_SESSION['lang']['waktu']) . " " . $esc($_SESSION['lang']['pengiriman']) . "</td><td class='col'>:</td><td>" . $tglNormal($xtgldari) . "</td></tr>
+	</table>";
+
+	#penutup
+	if ($_SESSION['language'] == 'EN') {
+		$penutup = "Please explain the price conditions and tax if included. Thankyou for your coorporation.";
+	} else {
+		$penutup = "Harga harap dijelaskan secara lengkap termasuk PPn atau tidak. Terima kasih atas perhatian dan kerjasamanya.";
+	}
+	$tab .= "<div style='margin-top:14px'>" . $esc($penutup) . "</div>";
+
+	#tanda tangan purchaser
+	$tab .= "<table width='100%' style='margin-top:18px'><tr><td style='width:60%'></td><td style='text-align:center'>
+		Hormat kami,<br>
+		<div style='height:52px'></div>
+		<b><u>" . $esc($namaPurchaser) . "</u></b><br>" . $esc($jabPurchaser) . "
+	</td></tr></table>";
+	$tab .= "</body></html>";
 
 	if ($xmethod == 'excel') {
-		$namasupplier = str_replace(" ", "_", $namasupplier);
-		$namasupplier = str_replace(",", "", $namasupplier);
-		// exit("Error:".$namasupplier);
-		$nop = "Perbandingan_Harga_" . $namasupplier . ".xls";
-		$xls = new HtmlExcel();
-		$xls->setCss($css);
-		$xls->addSheet($namasupplier, $tab);
-		$xls->headers($nop);
-		echo $xls->buildFile();
+		#Excel dibuat sebagai berkas xlsx (tanpa logo) agar kolom dan garis tabel rapi
+		$raw = function ($t) {
+			return iconv('UTF-8', 'UTF-8//IGNORE', (string)$t);
+		};
+		$xl = new PHPExcel();
+		$sh = $xl->getActiveSheet();
+		$sh->setTitle(substr(preg_replace('/[\\\\\/\?\*\[\]:]/', '', $raw($namasupplier)), 0, 28) ?: 'RFQ');
+		foreach (array('A' => 5, 'B' => 38, 'C' => 10, 'D' => 12, 'E' => 18, 'F' => 26) as $kol => $lebar) {
+			$sh->getColumnDimension($kol)->setWidth($lebar);
+		}
+		$sh->getDefaultStyle()->getFont()->setName('Arial')->setSize(10);
+		$tengah = PHPExcel_Style_Alignment::HORIZONTAL_CENTER;
+		$kiri = PHPExcel_Style_Alignment::HORIZONTAL_LEFT;
+		$kanan = PHPExcel_Style_Alignment::HORIZONTAL_RIGHT;
+		$r = 1;
+		#teks pada rentang kolom (digabung), rata kiri/tengah, opsional tebal
+		$baris = function ($a, $b, $teks, $opt = array()) use (&$r, $sh, $kiri) {
+			$sh->mergeCells($a . $r . ':' . $b . $r);
+			$sh->setCellValueExplicit($a . $r, $teks, PHPExcel_Cell_DataType::TYPE_STRING);
+			$st = $sh->getStyle($a . $r . ':' . $b . $r);
+			$st->getAlignment()->setHorizontal(isset($opt['h']) ? $opt['h'] : $kiri)->setVertical(PHPExcel_Style_Alignment::VERTICAL_TOP)->setWrapText(true);
+			$st->getFont()->setBold(!empty($opt['b']))->setItalic(!empty($opt['i']))->setUnderline(!empty($opt['u']) ? PHPExcel_Style_Font::UNDERLINE_SINGLE : PHPExcel_Style_Font::UNDERLINE_NONE);
+			if (isset($opt['s'])) {
+				$st->getFont()->setSize($opt['s']);
+			}
+			if (isset($opt['tinggi'])) {
+				$sh->getRowDimension($r)->setRowHeight($opt['tinggi']);
+			}
+			$r++;
+		};
+		#pasangan label : isi (label di kolom B, isi di C sampai F)
+		$pasang = function ($label, $isi) use (&$r, $sh, $kiri) {
+			$sh->setCellValueExplicit('B' . $r, $label, PHPExcel_Cell_DataType::TYPE_STRING);
+			$sh->getStyle('B' . $r)->getFont()->setBold(true);
+			$sh->mergeCells('C' . $r . ':F' . $r);
+			$sh->setCellValueExplicit('C' . $r, ': ' . $isi, PHPExcel_Cell_DataType::TYPE_STRING);
+			$sh->getStyle('B' . $r . ':F' . $r)->getAlignment()->setHorizontal($kiri)->setVertical(PHPExcel_Style_Alignment::VERTICAL_TOP)->setWrapText(true);
+			$r++;
+		};
+
+		#kop surat
+		$baris('A', 'F', $raw($arrHead['nama']), array('b' => 1, 's' => 14));
+		$baris('A', 'F', $raw($namaUnit), array('b' => 1));
+		if (count($kontakPt) > 0) {
+			$baris('A', 'F', $raw(implode('  |  ', $kontakPt)), array('s' => 9));
+		}
+		if ($npwp != '') {
+			$baris('A', 'F', 'NPWP : ' . $raw($npwp) . ($alamatnpwp != '' ? '  |  ' . $raw($alamatnpwp) : ''), array('s' => 9));
+		}
+		$sh->getStyle('A' . ($r - 1) . ':F' . ($r - 1))->getBorders()->getBottom()->setBorderStyle(PHPExcel_Style_Border::BORDER_MEDIUM);
+		$r++;
+
+		#judul dan identitas dokumen
+		$baris('A', 'F', $raw(strtoupper($_SESSION['lang']['permintaan_harga'])), array('b' => 1, 'u' => 1, 's' => 13, 'h' => $tengah));
+		$baris('A', 'F', 'No. ' . $raw($xnomor), array('b' => 1, 'h' => $tengah));
+		$r++;
+		$pasang('Tanggal', $tglNormal($tglRfq));
+		$pasang('Kepada Yth.', $raw($namasupplier));
+		$pasang($raw($_SESSION['lang']['alamat']), $raw($alamat));
+		$pasang($raw($_SESSION['lang']['telp']) . ' / ' . $raw($_SESSION['lang']['fax']), $raw($telepon) . ($fax != '' ? ' / ' . $raw($fax) : ''));
+		$pasang($raw($_SESSION['lang']['matauang']) . ' / ' . $raw($_SESSION['lang']['kurs']), $raw($matauang) . ' / ' . $raw($kurs));
+		$r++;
+		$baris('A', 'F', $raw(strtoupper($_SESSION['lang']['hal'])), array('b' => 1));
+		$baris('A', 'F', $raw($_SESSION['lang']['isi_permintaan']), array('tinggi' => 28));
+		$r++;
+
+		#daftar barang
+		$awalTabel = $r;
+		foreach (array('A' => 'No', 'B' => $_SESSION['lang']['namabarang'], 'C' => $_SESSION['lang']['satuan'], 'D' => $_SESSION['lang']['jumlah'], 'E' => $_SESSION['lang']['hargasatuan'], 'F' => $_SESSION['lang']['keterangan']) as $kol => $judulKol) {
+			$sh->setCellValueExplicit($kol . $r, $raw($judulKol), PHPExcel_Cell_DataType::TYPE_STRING);
+		}
+		$sh->getStyle('A' . $r . ':F' . $r)->getFont()->setBold(true);
+		$sh->getStyle('A' . $r . ':F' . $r)->getAlignment()->setHorizontal($tengah)->setVertical(PHPExcel_Style_Alignment::VERTICAL_CENTER);
+		$sh->getStyle('A' . $r . ':F' . $r)->getFill()->setFillType(PHPExcel_Style_Fill::FILL_SOLID)->getStartColor()->setRGB('E1E1E1');
+		$sh->getRowDimension($r)->setRowHeight(20);
+		$r++;
+		$no = 0;
+		foreach ($barangRfq as $val) {
+			$no++;
+			$sh->setCellValueExplicit('A' . $r, $no, PHPExcel_Cell_DataType::TYPE_NUMERIC);
+			$sh->setCellValueExplicit('B' . $r, $raw($val['namabarang']) . ($val['spec'] != '' ? "\n" . $raw($val['spec']) : ''), PHPExcel_Cell_DataType::TYPE_STRING);
+			$sh->setCellValueExplicit('C' . $r, $raw($val['satuan']), PHPExcel_Cell_DataType::TYPE_STRING);
+			$sh->setCellValueExplicit('D' . $r, (float)$val['jumlah'], PHPExcel_Cell_DataType::TYPE_NUMERIC);
+			$sh->getStyle('D' . $r)->getNumberFormat()->setFormatCode('#,##0.00');
+			$sh->getStyle('A' . $r . ':F' . $r)->getAlignment()->setVertical(PHPExcel_Style_Alignment::VERTICAL_TOP)->setWrapText(true);
+			$sh->getStyle('A' . $r)->getAlignment()->setHorizontal($tengah);
+			$sh->getStyle('C' . $r)->getAlignment()->setHorizontal($tengah);
+			$sh->getStyle('D' . $r)->getAlignment()->setHorizontal($kanan);
+			$sh->getRowDimension($r)->setRowHeight($val['spec'] != '' ? 28 : 18);
+			$r++;
+		}
+		if ($no == 0) {
+			$sh->mergeCells('A' . $r . ':F' . $r);
+			$sh->setCellValue('A' . $r, 'Tidak ada data barang');
+			$sh->getStyle('A' . $r)->getAlignment()->setHorizontal($tengah);
+			$r++;
+		}
+		$sh->getStyle('A' . $awalTabel . ':F' . ($r - 1))->getBorders()->getAllBorders()->setBorderStyle(PHPExcel_Style_Border::BORDER_THIN);
+		$baris('A', 'F', 'Note: ' . $raw($_SESSION['lang']['note_permintaan']), array('i' => 1, 's' => 9));
+		$r++;
+
+		#syarat pengiriman dan penutup
+		$pasang($raw($_SESSION['lang']['franco']), $raw(isset($xoptFranco[$xid_franco]) ? $xoptFranco[$xid_franco] : '-'));
+		$pasang($raw($_SESSION['lang']['waktu']) . ' ' . $raw($_SESSION['lang']['pengiriman']), $tglNormal($xtgldari));
+		$r++;
+		$baris('A', 'F', $raw($penutup), array('tinggi' => 28));
+		$r++;
+
+		#tanda tangan purchaser
+		$sh->mergeCells('D' . $r . ':F' . $r);
+		$sh->setCellValue('D' . $r, 'Hormat kami,');
+		$sh->getStyle('D' . $r)->getAlignment()->setHorizontal($tengah);
+		$r += 4;
+		$sh->mergeCells('D' . $r . ':F' . $r);
+		$sh->setCellValueExplicit('D' . $r, $raw($namaPurchaser), PHPExcel_Cell_DataType::TYPE_STRING);
+		$sh->getStyle('D' . $r)->getFont()->setBold(true)->setUnderline(PHPExcel_Style_Font::UNDERLINE_SINGLE);
+		$sh->getStyle('D' . $r)->getAlignment()->setHorizontal($tengah);
+		$r++;
+		$sh->mergeCells('D' . $r . ':F' . $r);
+		$sh->setCellValueExplicit('D' . $r, $raw($jabPurchaser), PHPExcel_Cell_DataType::TYPE_STRING);
+		$sh->getStyle('D' . $r)->getAlignment()->setHorizontal($tengah);
+
+		$sh->getPageSetup()->setOrientation(PHPExcel_Worksheet_PageSetup::ORIENTATION_PORTRAIT)->setPaperSize(PHPExcel_Worksheet_PageSetup::PAPERSIZE_A4)->setFitToWidth(1)->setFitToHeight(0);
+		$sh->setShowGridlines(false);
+		$namaBerkas = "Permintaan_Penawaran_Harga_" . preg_replace('/[^A-Za-z0-9_-]/', '_', $namasupplier) . ".xlsx";
+		header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+		header('Content-Disposition: attachment; filename="' . $namaBerkas . '"');
+		header('Cache-Control: max-age=0');
+		PHPExcel_IOFactory::createWriter($xl, 'Excel2007')->save('php://output');
 	} else {
 		$dompdf = new Dompdf();
 		$dompdf->loadHtml($tab);
 		$dompdf->setPaper('A4', 'portrait');
 		$dompdf->render();
-		$dompdf->stream("Perbandingan_Harga_" . $namasupplier, array("Attachment" => false));
+		$dompdf->stream("Perbandingan_Harga_" . preg_replace('/[^A-Za-z0-9_-]/', '_', $namasupplier), array("Attachment" => false));
 	}
 } else {
 	switch ($method) {
@@ -321,103 +595,43 @@ if ($xmethod != '') {
 		case 'loaddata':
 			$tab = "";
 			$limit = 20;
-			$page = 0;
-			if (isset($pages)) {
-				$page = $pages;
-				if ($page < 0)
-					$page = 0;
-			}
+			$page = max(0, (int)$pages);
 			$offset = $page * $limit;
-
-			$where = "";
-			$wheredt = "";
-			if (@$crnotransaksi != '') {
-				$where .= " and a.nomor like '%" . $crnotransaksi . "%'";
-				$wheredt .= " and nomor like '%" . $crnotransaksi . "%'";
-			}
-
-			if (@$crnopp != '') {
-				$where .= " and b.nopp like '%" . $crnopp . "%'";
-			}
-
-			if (@$crtanggal != '') {
-				$txt_tgl = tanggalsystemn($crtanggal);
-				$where .= " and a.tanggal LIKE '" . $txt_tgl . "'";
-			}
-
-			$sNopp = "select distinct nomor,nopp from " . $dbname . ".log_permintaanhargadt b where 1=1 " . $wheredt . "";
-			$rNopp = fetchData($sNopp);
-			foreach ($rNopp as $key => $val) {
-				$arrNopp[$val['nomor']][] = $val['nopp'];
-			}
-
-			$jlhbrs = 0;
-			$str = "select a.* from " . $dbname . ".log_perintaanhargaht a left join " . $dbname . ".log_permintaanhargadt b on a.nomor=b.nomor  where a.purchaser='" . $_SESSION['standard']['userid'] . "' " . $where . " group by a.nomor order by a.tanggal desc";
-			$res = fetchdata($str);
-			$jlhbrs = count($res);
-
-			$no = 0;
-			$str = "SELECT a.* FROM " . $dbname . ".log_perintaanhargaht a left join " . $dbname . ".log_permintaanhargadt b on a.nomor=b.nomor  where a.purchaser='" . $_SESSION['standard']['userid'] . "' " . $where . " group by a.nomor ORDER BY a.tanggal DESC LIMIT " . $offset . "," . $limit . "";
-			$res = $owlPDO->query($str) or die(print " Gagal: " . PDOException::getMessage());
-			$res->setFetchMode(PDO::FETCH_ASSOC);
-			while ($bar = $res->fetch()) {
+			$jlhbrs = pnwrJumlah();
+			$rowsHal = pnwrDataList($offset, $limit);
+			$lengkap = pnwrLengkapi($rowsHal);
+			$no = $offset;
+			foreach ($rowsHal as $bar) {
 				$no += 1;
-				// $strx="select * from ".$dbname.".log_permintaanhargadt where nomor='".$bar['nomor']."' and ";
-				// $dtkr="select * from ".$dbname.".datakaryawan where karyawanid='".$res2['purchaser']."'";
-				// $qdtkr=$owlPDO->query($dtkr) or die(print " Gagal: ".PDOException::getMessage());
-				// $qdtkr->setFetchMode(PDO::FETCH_OBJ);
-				// $rdtkr=$qdtkr->fetch();
-
-				// $splr="select * from ".$dbname.".log_5supplier where supplierid='".$res2['supplierid']."'"; //echo $splr;
-				// $qsuplr=$owlPDO->query($splr) or die(print " Gagal: ".PDOException::getMessage());
-				// $qsuplr->setFetchMode(PDO::FETCH_OBJ);
-				// $rsplr=$qsuplr->fetch();
-
-				// if($res2['ppn']!=0){
-				// $ppn=($res2['ppn']/($res2['subtotal']-$res2['nilaidiskon']))*100;
-				// }
 
 				##pengecekan ditolak PO
 				$nopo = '';
-				$norph = '';
 				$komentar = '';
-				$str2 = "select norph from " . $dbname . ".log_permintaanhargadt where nomor='" . $bar['nomor'] . "'  and norph!=''";
-				$res2 = $owlPDO->query($str2) or die(print " Gagal: " . PDOException::getMessage());
-				$res2->setFetchMode(PDO::FETCH_ASSOC);
-				$bar2 = $res2->fetch();
-				$norphsave = $bar2['norph'];
-				$norph = $bar2['norph'];
+				$norph = isset($lengkap['norph'][$bar['nomor']]) ? $lengkap['norph'][$bar['nomor']] : '';
+				$norphsave = $norph;
 
 				if ($bar['tolakrph'] == 0 && $bar['nodphlama'] != '') {
 					if ($norph == '') {
-						$str2 = "select norph from " . $dbname . ".log_permintaanhargadt where nomor='" . $bar['nomor'] . "'";
-						$res2 = $owlPDO->query($str2) or die(print " Gagal: " . PDOException::getMessage());
-						$res2->setFetchMode(PDO::FETCH_ASSOC);
-						$bar2 = $res2->fetch();
 						$norph = $bar['nodphlama'];
 					}
 				}
 
 				if ($norph != '') {
-					$str2 = "select nopo from " . $dbname . ".log_poht_del where nodph='" . $norph . "'";
+					$str2 = "select nopo from " . $dbname . ".log_poht_del where nodph='" . pnwrEsc($norph) . "'";
 					$res2 = fetchdata($str2);
 					$jlhbrs1 = count($res2);
-					$bar2 = $res2[0];
-					$nopo = $bar2['nopo'];
+					$nopo = $jlhbrs1 > 0 ? $res2[0]['nopo'] : '';
 
 					if ($jlhbrs1 == 0) {
-						$str2 = "select nopo from " . $dbname . ".log_poht where nodph='" . $norph . "'";
+						$str2 = "select nopo from " . $dbname . ".log_poht where nodph='" . pnwrEsc($norph) . "'";
 						$res2 = fetchdata($str2);
-						$bar2 = $res2[0];
-						$nopo = $bar2['nopo'];
+						$nopo = count($res2) > 0 ? $res2[0]['nopo'] : '';
 					}
 					$maxDtSetuju = 2;
-					$str2 = "select * from " . $dbname . ".approval where notransaksi='" . $nopo . "' and status='2'";
-					$res2 = $owlPDO->query($str2) or die(print " Gagal: " . PDOException::getMessage());
-					$res2->setFetchMode(PDO::FETCH_ASSOC);
-					while ($bar2 = $res2->fetch()) {
+					$str2 = "select * from " . $dbname . ".approval where notransaksi='" . pnwrEsc($nopo) . "' and status='2'";
+					foreach (fetchdata($str2) as $bar2) {
 						if ($maxDtSetuju != 0) {
-							$optkar = makeOption($dbname, 'datakaryawan', 'karyawanid,namakaryawan', "karyawanid='" . $bar2['karyawanid'] . "'");
+							$optkar = makeOption($dbname, 'datakaryawan', 'karyawanid,namakaryawan', "karyawanid='" . pnwrEsc($bar2['karyawanid']) . "'");
 							$komentar .= $optkar[$bar2['karyawanid']] . " : " . $bar2['komentar'] . " \n";
 						}
 						if ($maxDtSetuju <= 0) {
@@ -428,7 +642,6 @@ if ($xmethod != '') {
 				}
 
 				if ($bar['nodphlama'] != '') {
-					$optNoDph = makeOption($dbname, 'log_permintaanhargadt', 'norph,nomor', "norph='" . $bar['nodphlama'] . "'");
 					$komentar .= "\n No.referensi DPH lama : " . $bar['nodphlama'];
 				}
 
@@ -436,68 +649,46 @@ if ($xmethod != '') {
 				if ($bar['tolakrph'] == 1) {
 					$bgcolor = 'style=background:orange';
 				}
-
 				if ($bar['nodphlama'] != '' && $norphsave == '') {
 					$bgcolor = 'style=background:Springgreen';
 				}
 
 				#periksa chat
-				$strChat = "select *  from " . $dbname . ".log_rfq_chat where nomor='" . $bar['nomor'] . "'";
-				$resChat = $owlPDO->query($strChat) or die(print " Gagal: " . PDOException::getMessage());
-				if (owlBaris($resChat) > 0) {
-					$ingChat = "<img src='images/chat1.png' onclick=\"loadRFQChat('" . $bar['nomor'] . "',event);\" class=resicon>";
-				} else {
-					$ingChat = "<img src='images/chat0.png'  onclick=\"loadRFQChat('" . $bar['nomor'] . "',event);\" class=resicon>";
-				}
-
+				$imgChat = (isset($lengkap['chat'][$bar['nomor']]) && $lengkap['chat'][$bar['nomor']] > 0) ? 'chat1.png' : 'chat0.png';
+				$ingChat = "<img src='images/" . $imgChat . "' onclick=\"loadRFQChat('" . $bar['nomor'] . "',event);\" class=resicon>";
 
 				$tab .= "<tr class=rowcontent " . $bgcolor . ">
 				<td style='text-align:right;vertical-align:top'>" . $no . "</td>
-				<td style='vertical-align:top;color:blue;cursor:pointer;min-width:150px' onclick=\"previewlink('" . $bar['nomor'] . "', '', 'Detail Riwayat Perbandingan Harga' ,event)\">" . $bar['nomor'] . "</td>
-				<td style='text-align:center;vertical-align:top;cursor:pointer;min-width:70px' title='" . $komentar . "'>" . tanggalnormal($bar['tanggal']) . "</td>
+				<td style='vertical-align:top;color:blue;cursor:pointer;min-width:150px;white-space:nowrap' onclick=\"previewlink('" . $bar['nomor'] . "', '', 'Detail Riwayat Perbandingan Harga' ,event)\">" . $bar['nomor'] . "</td>
+				<td style='text-align:center;vertical-align:top;cursor:pointer;min-width:70px' title='" . htmlspecialchars($komentar, ENT_QUOTES) . "'>" . tanggalnormal($bar['tanggal']) . "</td>
 				";
-				$tab .= "<td style='text-align:left;vertical-align:top;min-width:150px'><ol type=1>";
-				$lstNopp = $arrNopp[$bar['nomor']];
-				if (@count($lstNopp) != 0) {
-					foreach ($lstNopp as $key) {
+				$tab .= "<td style='text-align:left;vertical-align:top;min-width:150px'><ol type=1 style='margin:0;padding-left:22px'>";
+				if (isset($lengkap['pp'][$bar['nomor']])) {
+					foreach ($lengkap['pp'][$bar['nomor']] as $key) {
 						$tab .= "<li>" . $key . "</li>";
 					}
 				}
-
 				$tab .= "</ol></td>";
 				$tab .= "<td style='text-align:center;vertical-align:top'>" . $ingChat . "</td>";
 				$tab .= "<td style='text-align:left;vertical-align:top'>";
 				$tab .= "<table width=100%>";
-
-				$str2 = "select a.supplierid,b.namasupplier,a.nourut from " . $dbname . ".log_perintaanhargaht a left join " . $dbname . ".log_5supplier b on a.supplierid=b.supplierid where a.nomor='" . $bar['nomor'] . "'";
-				$res2 = $owlPDO->query($str2) or die(print " Gagal: " . PDOException::getMessage());
-				$res2->setFetchMode(PDO::FETCH_ASSOC);
 				$nosup = 0;
-				while ($bar2 = $res2->fetch()) {
-					$nosup++;
-					$tab .= "<tr>
-					<td width=20px>" . $nosup . ".</td>
-					<td>" . $bar2['namasupplier'] . "</td>
-					<td width=20px align=center>
-						<img src=images/pdf.jpg class=resicon  title='Print Pdf' onclick=\"xPdf(event,'log_slave_pnwrharga.php','" . $bar['nomor'] . "','" . $bar2['nourut'] . "');\">
-					</td>
-					<td width=20px align=center>
-						<img src=images/excel.jpg class=resicon  title='Print Excel' onclick=\"xExcel(event,'log_slave_pnwrharga.php','" . $bar['nomor'] . "','" . $bar2['nourut'] . "');\">
-					</td>
-				</tr>";
+				if (isset($lengkap['sup'][$bar['nomor']])) {
+					foreach ($lengkap['sup'][$bar['nomor']] as $bar2) {
+						$nosup++;
+						$tab .= "<tr>
+						<td width=20px>" . $nosup . ".</td>
+						<td>" . $bar2['namasupplier'] . "</td>
+						<td width=20px align=center>
+							<img src=images/pdf.jpg class=resicon  title='Print Pdf' onclick=\"xPdf(event,'log_slave_pnwrharga.php','" . $bar['nomor'] . "','" . $bar2['nourut'] . "');\">
+						</td>
+						<td width=20px align=center>
+							<img src=images/excel.jpg class=resicon  title='Print Excel' onclick=\"xExcel(event,'log_slave_pnwrharga.php','" . $bar['nomor'] . "','" . $bar2['nourut'] . "');\">
+						</td>
+					</tr>";
+					}
 				}
-
 				$tab .= "</table></td>";
-
-
-				#update baru jika sudah ada dipo (
-				#gap terbaru dipo dapat langsung mangambil data dari dph)
-
-				// $str="select count(*) as dtpo from ".$dbname.".log_poht where nodph='".$res2['nomor']."' ";
-				// $res=$owlPDO->query($str) or die(print " Gagal: ".PDOException::getMessage());
-				// $res->setFetchMode(PDO::FETCH_ASSOC);
-				// $bar=$res->fetch();
-				// $dtpo=$bar['dtpo'];
 
 				$status = "";
 				if ($bar['flag'] == 0 && $bar['purchaser'] == $_SESSION['standard']['userid']) {
@@ -509,11 +700,6 @@ if ($xmethod != '') {
 					}
 					$status .= "<img src=images/skyblue/posting.png class=resicon  title='Ajukan RPH' onclick=\"alasan_batal('" . $bar['nomor'] . "','" . $bar['nourut'] . "');\" style='margin-left:4px' >";
 				}
-				// if($res2['flag']==1){
-				// $status.="<img src=images/box/drop-yes.gif title='Pemenang Tender' class=resicon);\">";
-				// } else{
-				// $status.="<img src=images/box/drop-no.gif class=resicon);\">";
-				// }
 				$vkomentar = "";
 				if ($bar['komentar'] == '') {
 					$vkomentar .= $komentar;
@@ -525,16 +711,18 @@ if ($xmethod != '') {
 					}
 				}
 
-				$tab .= "<td style='vertical-align:top;text-align:left;max-width:350px;'>" . $vkomentar . "</td>
+				$tab .= "<td style='vertical-align:top;text-align:left;max-width:350px;'>" . nl2br($vkomentar) . "</td>
 			<td style='vertical-align:top;text-align:center;min-width:100px'>
 				" . $status . "
-				<!--<img src=images/pdf.jpg class=resicon  title='Print' onclick=\"masterPDF('log_perintaanhargaht','" . $bar['nomor'] . "," . $bar['nourut'] . "','','log_slave_print_permintaan_penawaran',event);\">-->
-				<img src=images/pdf.jpg class=resicon  title='Print' onclick=\"masterPDF('log_perintaanhargaht','" . $bar['nomor'] . "," . $bar['nourut'] . "','','log_slave_print_permintaan_penawaran_v2',event);\">  
-				<img src=images/uploader/dwnld.png class=resicon title=Upload onClick=\"loadUploadPo('" . $bar['nomor'] . "', event)\" />  						
-				<img onclick=datakeExcel(event,'" . $bar['nomor'] . "') src=images/excel.jpg class=resicon title='MS.Excel'> 						
+				<img src=images/pdf.jpg class=resicon  title='Print' onclick=\"masterPDF('log_perintaanhargaht','" . $bar['nomor'] . "," . $bar['nourut'] . "','','log_slave_print_permintaan_penawaran_v2',event);\">
+				<img src=images/uploader/dwnld.png class=resicon title=Upload onClick=\"loadUploadPo('" . $bar['nomor'] . "', event)\" />
+				<img onclick=datakeExcel(event,'" . $bar['nomor'] . "') src=images/excel.jpg class=resicon title='MS.Excel'>
 			</td>";
 
 				$tab .= "</tr>";
+			}
+			if ($jlhbrs == 0) {
+				$tab .= "<tr class=rowcontent><td colspan=8 align=center>" . $_SESSION['lang']['errdatanotexist'] . "</td></tr>";
 			}
 
 			$totrows = ceil($jlhbrs / $limit);
@@ -548,32 +736,27 @@ if ($xmethod != '') {
 				$isiRow .= "<option value='" . $er . "' " . $sel . ">" . $er . "</option>";
 			}
 
-			$frompage = (($page * $limit) + 1);
+			$frompage = ($jlhbrs == 0) ? 0 : (($page * $limit) + 1);
 			if ((($page + 1) * $limit) > $jlhbrs) {
 				$topage = $jlhbrs;
 			} else {
 				$topage = (($page + 1) * $limit);
 			}
-			$tab .= "</tr>
-		<tr>
-			<td colspan=7 align=center>
+			$tab .= "<tr>
+			<td colspan=8 align=center>
 				" . $frompage . " to " . $topage . " Of " .  $jlhbrs . "
 			</td>
 		</tr>
 		<tr>
-			<td colspan=7 align=center>";
+			<td colspan=8 align=center>";
 
-			if ($page == '0') {
-				$tab .= "";
-			} else {
+			if ($page != 0) {
 				$tab .= "<button class=mybutton onclick=loaddata(" . ($page - 1) . ");>" . $_SESSION['lang']['pref'] . "</button>";
 			}
 
 			$tab .= "<select id=\"pages\" name=\"pages\" style=\"width:50px\" onchange=\"getPage()\">" . $isiRow . "</select>";
 
-			if (($page + 1) == $totrows) {
-				$tab .= "";
-			} else {
+			if (($page + 1) != $totrows) {
 				$tab .= "<button class=mybutton onclick=loaddata(" . ($page + 1) . ");>" . $_SESSION['lang']['lanjut'] . "</button>";
 			}
 			$tab .= "</td></tr>";
@@ -581,35 +764,189 @@ if ($xmethod != '') {
 			echo $tab;
 			break;
 
-		case 'delrfq':
-			$kodebarang = checkPostGet('kodebarang', '');
-			$notransaksi = checkPostGet('notransaksi', '');
+		case 'excellist':
+			$rows = pnwrDataList(0, 3001);
+			$pnwrTerpotong = count($rows) > 3000;
+			$rows = array_slice($rows, 0, 3000);
+			$lengkap = pnwrLengkapi($rows);
+			$hdpt = setheadreport($_SESSION['empl']['kodeorganisasi'], $_SESSION['empl']['kodeorganisasi']);
+			$kolom = 7;
+			$stream = "<table>
+				<tr><td colspan=" . $kolom . "><b>" . htmlspecialchars($hdpt['nama']) . "</b></td></tr>
+				<tr><td colspan=" . $kolom . "><b>PERMINTAAN PENAWARAN HARGA</b></td></tr>
+				<tr><td colspan=" . $kolom . ">" . htmlspecialchars(pnwrInfoFilter()) . "</td></tr>
+				<tr><td colspan=" . $kolom . ">Ditarik oleh " . htmlspecialchars($_SESSION['empl']['name']) . " (" . htmlspecialchars($_SESSION['standard']['username']) . ") pada " . date('d-m-Y H:i:s') . "</td></tr>
+				<tr><td colspan=" . $kolom . ">&nbsp;</td></tr>
+				</table>";
+			$stream .= "<table class=sortable cellspacing=1 cellpadding=3 border=1>
+				<thead><tr>
+					<th align=center bgcolor=#CCCCCC>No</th>
+					<th align=center bgcolor=#CCCCCC>No. Transaksi</th>
+					<th align=center bgcolor=#CCCCCC>Tanggal</th>
+					<th align=center bgcolor=#CCCCCC>No. PP</th>
+					<th align=center bgcolor=#CCCCCC>Supplier</th>
+					<th align=center bgcolor=#CCCCCC>Status</th>
+					<th align=center bgcolor=#CCCCCC>Keterangan</th>
+				</tr></thead><tbody>";
+			$no = 0;
+			foreach ($rows as $bar) {
+				$no++;
+				$namaSup = array();
+				if (isset($lengkap['sup'][$bar['nomor']])) {
+					foreach ($lengkap['sup'][$bar['nomor']] as $s) {
+						$namaSup[] = $s['namasupplier'];
+					}
+				}
+				$stream .= "<tr>
+					<td align=center>" . $no . "</td>
+					<td>" . htmlspecialchars($bar['nomor']) . "</td>
+					<td align=center>" . tanggalnormal($bar['tanggal']) . "</td>
+					<td>" . nl2br(htmlspecialchars(implode("\n", isset($lengkap['pp'][$bar['nomor']]) ? $lengkap['pp'][$bar['nomor']] : array()))) . "</td>
+					<td>" . nl2br(htmlspecialchars(implode("\n", $namaSup))) . "</td>
+					<td align=center>" . htmlspecialchars(pnwrStatusRfq($bar)) . "</td>
+					<td>" . nl2br(htmlspecialchars(pnwrKet($bar['komentar']))) . "</td>
+				</tr>";
+			}
+			if ($no == 0) {
+				$stream .= "<tr><td colspan=" . $kolom . " align=center>Data tidak ditemukan</td></tr>";
+			}
+			$stream .= "</tbody></table>";
+			$xls = new HtmlExcel();
+			$xls->addSheet("RFQ", $stream);
+			$xls->headers("PermintaanPenawaranHarga_" . date('YmdHis') . ".xls");
+			echo $xls->buildFile();
+			exit;
 
-			$str = "select * from " . $dbname . ".log_permintaanhargadt where nomor='" . $notransaksi . "' group by kodebarang";
-			$res = fetchdata($str);
-			$nopr = $res[0]['nopp'];
-			if (count($res) <= 1) {
+		case 'pdflist':
+			$rows = pnwrDataList(0, 3001);
+			$pnwrTerpotong = count($rows) > 3000;
+			$rows = array_slice($rows, 0, 3000);
+			$lengkap = pnwrLengkapi($rows);
+			$hdpt = setheadreport($_SESSION['empl']['kodeorganisasi'], $_SESSION['empl']['kodeorganisasi']);
+			$infoFilter = pnwrInfoFilter();
+			if (!class_exists('PDFListPNWR')) {
+				class PDFListPNWR extends FPDF
+				{
+					public $colW = array();
+
+					function Header()
+					{
+						global $hdpt, $infoFilter;
+						$width = $this->w - $this->lMargin - $this->rMargin;
+						if (file_exists($hdpt['logo'])) {
+							$this->Image($hdpt['logo'], $this->lMargin, $this->tMargin, 18);
+						}
+						$this->SetFont('Arial', 'B', 11);
+						$this->SetXY($this->lMargin + 22, $this->tMargin + 2);
+						$this->Cell(160, 6, utf8_decode($hdpt['nama']), 0, 1, 'L');
+						$this->SetY($this->tMargin + 15);
+						$this->SetFont('Arial', 'B', 13);
+						$this->Cell($width, 7, 'PERMINTAAN PENAWARAN HARGA', 0, 1, 'C');
+						$this->SetFont('Arial', '', 8);
+						$this->Cell($width, 5, utf8_decode($infoFilter), 0, 1, 'C');
+						$this->Cell($width, 5, utf8_decode('Ditarik oleh ' . $_SESSION['empl']['name'] . ' (' . $_SESSION['standard']['username'] . ') pada ' . date('d-m-Y H:i:s')), 0, 1, 'C');
+						$this->Ln(1);
+						$this->SetFillColor(220, 220, 220);
+						$this->SetFont('Arial', 'B', 8);
+						$judul = array('No', 'No. Transaksi', 'Tanggal', 'No. PP', 'Supplier', 'Status', 'Keterangan');
+						foreach ($judul as $i => $j) {
+							$this->Cell($this->colW[$i], 6, $j, 1, 0, 'C', true);
+						}
+						$this->Ln();
+					}
+
+					function Footer()
+					{
+						$this->SetY(-12);
+						$this->SetFont('Arial', 'I', 7);
+						$this->Cell(0, 8, 'Halaman ' . $this->PageNo() . ' / {nb}', 0, 0, 'R');
+					}
+				}
+			}
+			$pdf = new PDFListPNWR('L', 'mm', 'A4');
+			$pdf->AliasNbPages();
+			$pdf->SetAutoPageBreak(false, 16);
+			$width = $pdf->w - $pdf->lMargin - $pdf->rMargin;
+			$colFixed = array(8, 46, 18, 50, 62, 26); #semua kolom kecuali Keterangan
+			$pdf->colW = array_merge($colFixed, array($width - array_sum($colFixed)));
+			$pdf->AddPage();
+			$h = 6;
+			$no = 0;
+			foreach ($rows as $bar) {
+				$no++;
+				if ($pdf->GetY() + $h > $pdf->h - $pdf->bMargin) {
+					$pdf->AddPage();
+				}
+				$c = $pdf->colW;
+				$namaSup = array();
+				if (isset($lengkap['sup'][$bar['nomor']])) {
+					foreach ($lengkap['sup'][$bar['nomor']] as $s) {
+						$namaSup[] = $s['namasupplier'];
+					}
+				}
+				$pdf->SetFont('Arial', '', 7);
+				$pdf->Cell($c[0], $h, $no, 1, 0, 'C');
+				$pdf->Cell($c[1], $h, pnwrFit($pdf, $bar['nomor'], $c[1]), 1, 0, 'L');
+				$pdf->Cell($c[2], $h, tanggalnormal($bar['tanggal']), 1, 0, 'C');
+				$pdf->Cell($c[3], $h, pnwrFit($pdf, implode('; ', isset($lengkap['pp'][$bar['nomor']]) ? $lengkap['pp'][$bar['nomor']] : array()), $c[3]), 1, 0, 'L');
+				$pdf->Cell($c[4], $h, pnwrFit($pdf, implode('; ', $namaSup), $c[4]), 1, 0, 'L');
+				$pdf->Cell($c[5], $h, pnwrFit($pdf, pnwrStatusRfq($bar), $c[5]), 1, 0, 'L');
+				$pdf->Cell($c[6], $h, pnwrFit($pdf, str_replace(array("\r", "\n"), ' ', pnwrKet($bar['komentar'])), $c[6]), 1, 1, 'L');
+			}
+			if ($no == 0) {
+				$pdf->Cell(array_sum($pdf->colW), $h, 'Data tidak ditemukan', 1, 1, 'C');
+			}
+			$pdf->Output();
+			exit;
+
+		case 'delrfq':
+			$hdrDel = fetchdata("select flag,tolakrph from " . $dbname . ".log_perintaanhargaht where nomor='" . $notransaksi . "'");
+			if (count($hdrDel) == 0) {
+				exit("Gagal : Data RFQ tidak ditemukan");
+			}
+			foreach ($hdrDel as $h) {
+				if ($h['flag'] == '1') {
+					exit("Gagal : RFQ sudah diajukan, barang tidak dapat dihapus");
+				}
+			}
+			$cekDel = fetchdata("select count(distinct kodebarang) as c from " . $dbname . ".log_permintaanhargadt where nomor='" . $notransaksi . "'");
+			if ((int)$cekDel[0]['c'] <= 1) {
 				exit("Gagal : Jumlah item barang hanya 1 silahkan dihapus dari list data");
 			}
-
-			$str = "delete from " . $dbname . ".log_permintaanhargadt where nomor='" . $notransaksi . "' and kodebarang='" . $kodebarang . "'";
-			$owlPDO->exec($str);
-
-			$str = "select sum(harga*jumlah) as jumlah, nourut from " . $dbname . ".log_permintaanhargadt where nomor='" . $notransaksi . "' group by nourut";
-			$res = fetchdata($str);
-			foreach ($res as $val) {
-				$strx = "select nilaidiskon,pbbkb from " . $dbname . ".log_perintaanhargaht where nomor='" . $notransaksi . "' and nourut='" . $val['nourut'] . "'";
-				$resx = fetchdata($strx);
-				$edtnilaidiskon = $resx[0]['nilaidiskon'];
-				$edtpbbkb = $resx[0]['pbbkb'];
-				$edttotal = $val['jumlah'] - $edtnilaidiskon + $edtpbbkb;
-
-				$strx = "update " . $dbname . ".log_perintaanhargaht set subtotal='" . $val['jumlah'] . "', nilaipermintaan='" . $edttotal . "' where nomor='" . $notransaksi . "' and nourut='" . $val['nourut'] . "'";
-				$owlPDO->exec($strx);
+			$noppDel = fetchdata("select distinct nopp from " . $dbname . ".log_permintaanhargadt where nomor='" . $notransaksi . "' and kodebarang='" . $kodebarang . "'");
+			if (count($noppDel) == 0) {
+				exit("Gagal : Barang tidak ditemukan pada RFQ ini");
 			}
 
-			$str = "update " . $dbname . ".log_listverifikasi set status='0' where nopp='" . $nopr . "' and kodebarang='" . $kodebarang . "'";
-			$owlPDO->exec($str);
+			try {
+				$owlPDO->beginTransaction();
+				$str = "delete from " . $dbname . ".log_permintaanhargadt where nomor='" . $notransaksi . "' and kodebarang='" . $kodebarang . "'";
+				$owlPDO->exec($str);
+
+				$str = "select sum(harga*jumlah) as jumlah, nourut from " . $dbname . ".log_permintaanhargadt where nomor='" . $notransaksi . "' group by nourut";
+				$res = fetchdata($str);
+				foreach ($res as $val) {
+					$strx = "select nilaidiskon,pbbkb from " . $dbname . ".log_perintaanhargaht where nomor='" . $notransaksi . "' and nourut='" . $val['nourut'] . "'";
+					$resx = fetchdata($strx);
+					$edtnilaidiskon = $resx[0]['nilaidiskon'];
+					$edtpbbkb = $resx[0]['pbbkb'];
+					$edttotal = $val['jumlah'] - $edtnilaidiskon + $edtpbbkb;
+
+					$strx = "update " . $dbname . ".log_perintaanhargaht set subtotal='" . $val['jumlah'] . "', nilaipermintaan='" . $edttotal . "' where nomor='" . $notransaksi . "' and nourut='" . $val['nourut'] . "'";
+					$owlPDO->exec($strx);
+				}
+
+				foreach ($noppDel as $nd) {
+					$str = "update " . $dbname . ".log_listverifikasi set status='0' where nopp='" . pnwrEsc($nd['nopp']) . "' and kodebarang='" . $kodebarang . "'";
+					$owlPDO->exec($str);
+				}
+				$owlPDO->commit();
+			} catch (PDOException $e) {
+				if ($owlPDO->inTransaction()) {
+					$owlPDO->rollBack();
+				}
+				exit("Gagal : " . $e->getMessage());
+			}
 			break;
 
 		case 'getNotifikasi':
@@ -824,54 +1161,60 @@ if ($xmethod != '') {
 			break;
 
 		case 'createrfq':
+			if (empty($_POST['lstnopp']) or empty($_POST['kdbrg']) or empty($_POST['lstkontrak'])) {
+				exit("Gagal : Data barang atau kontrak payung belum lengkap");
+			}
 			#ambil kodept jika holding, unit berdasarkan pp jika selain holding
 			$noppx = $_POST['lstnopp'][0];
 			$nokontrak = $_POST['lstkontrak'][0];
 			$nopplist =  explode('/', $noppx);
-			$unit = $nopplist[4];
+			$unit = isset($nopplist[4]) ? $nopplist[4] : '';
 			if ($_SESSION['empl']['tipelokasitugas'] == 'HOLDING') {
-				$iOrg = "select pt from " . $dbname . ".log_prapoht where nopp='" . $noppx . "'";
-				$nOrg = $owlPDO->query($iOrg) or die(print " Gagal: " . PDOException::getMessage());
-				$nOrg->setFetchMode(PDO::FETCH_ASSOC);
-				$dOrg = $nOrg->fetch();
-				$unodph = $dOrg['pt'];
+				$dOrg = fetchdata("select pt from " . $dbname . ".log_prapoht where nopp='" . $noppx . "'");
+				$unodph = count($dOrg) > 0 ? $dOrg[0]['pt'] : $unit;
 			} else {
 				$unodph = $unit;
 			}
 
-			$bln = date('m');
-			$thn = date('Y');
-			$no = "/" . date('Y') . "/DPH/" . $unodph;
-			$ql = "select nomor from " . $dbname . ".`log_perintaanhargaht` where nomor like '%" . $no . "%' order by `nomor` desc limit 0,1";
-
-			$qr = $owlPDO->query($ql) or die(print " Gagal: " . PDOException::getMessage());
-			$qr->setFetchMode(PDO::FETCH_ASSOC);
-			$rp = $qr->fetch();
-			$dt = explode("/", $rp['nomor']);
-			$awal = $dt[0];
-			$awal = intval($awal);
-			$cekbln = $dt[1];
-			$cekthn = $dt[2];
-			if ($thn != $cekthn) {
-				$awal = 1;
-			} else {
-				$awal += 1;
-			}
-			$counter = addZero($awal, 3);
-			$no_permintaan = $counter . "/" . $bln . "/" . $thn . "/DPH/" . $unodph;
-
 			##Get detail Kontral Payung
 			$str = "select supplierid,harga from " . $dbname . ".log_kontrakpayung where nokontrak='" . $nokontrak . "'";
 			$res = fetchdata($str);
+			if (count($res) == 0) {
+				exit("Gagal : Kontrak payung " . $nokontrak . " tidak ditemukan");
+			}
 			$supplier_id = $res[0]['supplierid'];
 
-			$str = "select id_alamat from " . $dbname . ".log_5supalamat where supplierid='" . $supplier_id . "' limit 1";
+			$str = "select id_alamat from " . $dbname . ".log_5supalamat where supplierid='" . pnwrEsc($supplier_id) . "' limit 1";
 			$res = fetchdata($str);
-			$id_alamat_supplier = $res[0]['id_alamat'];
+			$id_alamat_supplier = count($res) > 0 ? $res[0]['id_alamat'] : '';
 
-			$tgl = date('Ymd');
-			$str = "insert into " . $dbname . ".log_perintaanhargaht (nomor, tanggal, purchaser, supplierid,id_alamat_supplier,nourut,keterangan,lokasikirim) values ('" . $no_permintaan . "','" . $tgl . "','" . $_SESSION['standard']['userid'] . "','" . $supplier_id . "','" . $id_alamat_supplier . "','1','','')";
+			$bln = date('m');
+			$thn = date('Y');
+			$no = "/" . date('Y') . "/DPH/" . $unodph;
+			#nomor dibuat di bawah kunci agar dua purchaser tidak mendapat nomor yang sama
+			$namaKunci = pnwrEsc("rfq_" . $thn . "_" . $unodph);
+			$kunci = fetchdata("select get_lock('" . $namaKunci . "',10) as k");
+			if (count($kunci) == 0 or $kunci[0]['k'] != 1) {
+				exit("Gagal : Sistem sedang membuat nomor RFQ lain, silahkan coba lagi");
+			}
+
 			try {
+				$owlPDO->beginTransaction();
+
+				$ql = "select nomor from " . $dbname . ".`log_perintaanhargaht` where nomor like '%" . pnwrEsc($no) . "%' order by cast(substring_index(nomor,'/',1) as unsigned) desc limit 0,1";
+				$rp = fetchdata($ql);
+				$awal = 1;
+				if (count($rp) > 0) {
+					$dt = explode("/", $rp[0]['nomor']);
+					if (isset($dt[2]) and $dt[2] == $thn) {
+						$awal = intval($dt[0]) + 1;
+					}
+				}
+				$counter = addZero($awal, 3);
+				$no_permintaan = $counter . "/" . $bln . "/" . $thn . "/DPH/" . $unodph;
+
+				$tgl = date('Ymd');
+				$str = "insert into " . $dbname . ".log_perintaanhargaht (nomor, tanggal, purchaser, supplierid,id_alamat_supplier,nourut,keterangan,lokasikirim) values ('" . pnwrEsc($no_permintaan) . "','" . $tgl . "','" . $_SESSION['standard']['userid'] . "','" . pnwrEsc($supplier_id) . "','" . pnwrEsc($id_alamat_supplier) . "','1','','')";
 				$owlPDO->exec($str);
 
 				foreach ($_POST['kdbrg'] as $row => $Act) {
@@ -880,34 +1223,28 @@ if ($xmethod != '') {
 
 					$str = "select harga from " . $dbname . ".log_kontrakpayungdt where nokontrak='" . $nokontrak . "' and kodebarang='" . $kdbrg . "'";
 					$res = fetchdata($str);
-					$harga = $res[0]['harga'];
+					$harga = count($res) > 0 ? $res[0]['harga'] : 0;
 
 					$str = "select hargasatuan,jumlah from " . $dbname . ".log_prapodt where nopp='" . $nopp . "' and kodebarang='" . $kdbrg . "'";
 					$res = fetchdata($str);
-					$hargaterakhir = $res[0]['hargasatuan'];
-					$jmlh = $res[0]['jumlah'];
+					$hargaterakhir = count($res) > 0 ? $res[0]['hargasatuan'] : 0;
+					$jmlh = count($res) > 0 ? $res[0]['jumlah'] : 0;
 
-					$str = "insert into " . $dbname . ".log_permintaanhargadt (nomor,nourut,kodebarang,hargaterakhir,harga,jumlah,nopp) values('" . $no_permintaan . "','1','" . $kdbrg . "','" . $hargaterakhir . "','" . $harga . "','" . $jmlh . "','" . $nopp . "')";
+					$str = "insert into " . $dbname . ".log_permintaanhargadt (nomor,nourut,kodebarang,hargaterakhir,harga,jumlah,nopp) values('" . pnwrEsc($no_permintaan) . "','1','" . $kdbrg . "','" . $hargaterakhir . "','" . $harga . "','" . $jmlh . "','" . $nopp . "')";
+					$owlPDO->exec($str);
 
-					try {
-						$owlPDO->exec($str);
-
-						$str = "update " . $dbname . ".log_listverifikasi set status='1' where nopp='" . $nopp . "' and kodebarang='" . $kdbrg . "' and karyawanid='" . $_SESSION['standard']['userid'] . "'";
-						try {
-							$owlPDO->exec($str);
-						} catch (PDOException $e) {
-							print " Gagal  !: " . $e->getMessage() . "\n";
-							die();
-						}
-					} catch (PDOException $e) {
-						print " Gagal  !: " . $e->getMessage() . "\n";
-						die();
-					}
+					$str = "update " . $dbname . ".log_listverifikasi set status='1' where nopp='" . $nopp . "' and kodebarang='" . $kdbrg . "' and karyawanid='" . $_SESSION['standard']['userid'] . "'";
+					$owlPDO->exec($str);
 				}
+				$owlPDO->commit();
 			} catch (PDOException $e) {
-				print " Gagal  !: " . $e->getMessage() . "\n";
-				die();
+				if ($owlPDO->inTransaction()) {
+					$owlPDO->rollBack();
+				}
+				fetchdata("select release_lock('" . $namaKunci . "') as k");
+				exit("Gagal : " . $e->getMessage());
 			}
+			fetchdata("select release_lock('" . $namaKunci . "') as k");
 
 			echo $no_permintaan;
 			break;
@@ -1815,7 +2152,7 @@ if ($xmethod != '') {
 				if ($formPil != '1') {
 					$tab .= "<td colspan=7>" . $dtMtuang[$brs] . "</td>";
 				} else {
-					$tab .= "<td colspan=4><select id=\"mtUang_" . $brs . "\" onchange=getkurs(" . $brs . ") name=\"mtUang_" . $brs . "\" >" . $optMt . "</select></td>
+					$tab .= "<td colspan=4><select id=\"mtUang_" . $brs . "\" class=\"selRfq\" onchange=getkurs(" . $brs . ") name=\"mtUang_" . $brs . "\" >" . $optMt . "</select></td>
 					<td style='text-align:right'>Availability</td>
 					<td>
 						<input type=number id=availability_" . $brs . " value='" . ($dtnilai2s[$brs] == '' ? '0' : $dtnilai2s[$brs]) . "'  class='myinputtextnumber' onkeypress=\"return isNumber(event);\" onkeyup=\"scorevalidate('availability_" . $brs . "')\" style='width:40px;text-align:center' min='0' max='5' />
@@ -1870,7 +2207,7 @@ if ($xmethod != '') {
 					}
 
 					$tab .= "<td colspan=4>
-						<select id='term_pay_" . $brs . "'>" . $optTermPay . "</select>
+						<select id='term_pay_" . $brs . "' class='selRfq'>" . $optTermPay . "</select>
 						<select style='display:none' id=stockId_" . $brs . " style='width:150px'>" . $optStock . "</select>
 					</td>";
 				}
@@ -1902,7 +2239,7 @@ if ($xmethod != '') {
 					}
 
 					$tab .= "<td colspan=4>
-						<select id=tmpt_krm_" . $brs . ">" . $optKrm . "</select></td>";
+						<select id=tmpt_krm_" . $brs . " class=selRfq>" . $optKrm . "</select></td>";
 				}
 			}
 
@@ -1918,7 +2255,7 @@ if ($xmethod != '') {
 					$tab .= "<td align=justify colspan=7>" . (isset($dtdpgrm[$brs]) ? $dtdpgrm[$brs] : '') . "</td>";
 				} else {
 					$tab .= "<td align=justify colspan=4>
-						<input type=text id='durasipengiriman_" . $brs . "' size=40 class=myinputtext value='" . $dtdpgrm[$brs] . "'>
+						<input type=text id='durasipengiriman_" . $brs . "' class=myinputtext style='width:330px;box-sizing:border-box' value='" . $dtdpgrm[$brs] . "'>
 					</td>
 					<td style='text-align:right'>Service</td>
 					<td>
@@ -1937,7 +2274,7 @@ if ($xmethod != '') {
 					$tab .= "<td align=justify colspan=7>" . (isset($dtdpkrj[$ard]) ? $dtdpkrj[$brs] : '') . "</td>";
 				} else {
 					$tab .= "<td align=justify colspan=4>
-						<input type=text id='durasipekerjaan_" . $brs . "' size=40 class=myinputtext value='" . $dtdpkrj[$brs] . "'>
+						<input type=text id='durasipekerjaan_" . $brs . "' class=myinputtext style='width:330px;box-sizing:border-box' value='" . $dtdpkrj[$brs] . "'>
 					</td>
 					<td style='text-align:right'>Others</td>
 					<td>
@@ -1971,7 +2308,7 @@ if ($xmethod != '') {
 					}
 
 					$tab .= "<td colspan=6>
-						<select id=waktu_penyerahan_" . $brs . ">" . $optWaktuPenyerahan . "</select></td>";
+						<select id=waktu_penyerahan_" . $brs . " class=selRfq>" . $optWaktuPenyerahan . "</select></td>";
 				}
 			}
 
@@ -1987,7 +2324,7 @@ if ($xmethod != '') {
 					$tab .= "<td align=justify colspan=8>" . (isset($dtgrnprd[$brs]) ? $dtgrnprd[$brs] : '') . "</td>";
 				} else {
 					$tab .= "<td align=justify colspan=6>
-						<input type=text id='garansiprodukjasa_" . $brs . "' size=51 class=myinputtext value='" . $dtgrnprd[$brs] . "'>
+						<input type=text id='garansiprodukjasa_" . $brs . "' class=myinputtext style='width:330px;box-sizing:border-box' value='" . $dtgrnprd[$brs] . "'>
 					</td>";
 				}
 			}
@@ -2002,7 +2339,7 @@ if ($xmethod != '') {
 					$tab .= "<td align=justify colspan=8>" . (isset($dtposstk[$brs]) ? $dtposstk[$brs] : '') . "</td>";
 				} else {
 					$tab .= "<td align=justify colspan=6>
-						<input type=text id='posisistokbarang_" . $brs . "' size=51 class=myinputtext value='" . $dtposstk[$brs] . "'>
+						<input type=text id='posisistokbarang_" . $brs . "' class=myinputtext style='width:330px;box-sizing:border-box' value='" . $dtposstk[$brs] . "'>
 					</td>";
 				}
 			}
@@ -2017,7 +2354,7 @@ if ($xmethod != '') {
 					$tab .= "<td align=justify colspan=8>" . (isset($dtasrn[$brs]) ? $dtasrn[$brs] : '') . "</td>";
 				} else {
 					$tab .= "<td align=justify colspan=6>
-						<input type=text id='asuransi_" . $brs . "' size=51 class=myinputtext value='" . $dtasrn[$brs] . "'>
+						<input type=text id='asuransi_" . $brs . "' class=myinputtext style='width:330px;box-sizing:border-box' value='" . $dtasrn[$brs] . "'>
 					</td>";
 				}
 			}
@@ -2032,7 +2369,7 @@ if ($xmethod != '') {
 				if ($formPil != '1') {
 					$tab .= "<td align=justify colspan=8>" . (isset($dtCttn[$brs]) ? $dtCttn[$brs] : '') . "</td>";
 				} else {
-					$tab .= "<td align=justify colspan=6><textarea placeholder='Maximal character 255' maxlength=255 id='ketUraian_" . $brs . "' name='ketUraian_" . $brs . "' onkeypress='return tanpa_kutip(event);' cols=42 rows=3>" . (isset($dtCttn[$brs]) ? $dtCttn[$brs] : '') . "</textarea></td>";
+					$tab .= "<td align=justify colspan=6><textarea placeholder='Maximal character 255' maxlength=255 id='ketUraian_" . $brs . "' name='ketUraian_" . $brs . "' onkeypress='return tanpa_kutip(event);' rows=3 style='width:330px;box-sizing:border-box'>" . (isset($dtCttn[$brs]) ? $dtCttn[$brs] : '') . "</textarea></td>";
 				}
 			}
 
@@ -2158,7 +2495,7 @@ if ($xmethod != '') {
 
 			foreach ($dtNomor as $brs) {
 				if ($formPil != '0') {
-					$tab .= "<td align=center colspan=6>
+					$tab .= "<td align=center valign=middle colspan=6>
 						<button class=mybutton style='width:200px;height:50px;cursor:pointer' id=save_" . $brs . " onclick=simpanSemua2(" . $brs . "," . $totBrg . ")>" . $_SESSION['lang']['save'] . "</button>
 					</td>";
 				}
@@ -2621,51 +2958,64 @@ if ($xmethod != '') {
 			break;
 
 		case 'deleted':
-			## DELETE HEADER RPH ##
-			$str = "delete from " . $dbname . ".log_perintaanhargaht where nomor='" . $no_permintaan . "'";
+			## HAPUS RFQ: hanya milik sendiri, belum diajukan, belum masuk RPH/persetujuan ##
+			$hdrDel = fetchdata("select flag,purchaser,tolakrph from " . $dbname . ".log_perintaanhargaht where nomor='" . $no_permintaan . "'");
+			if (count($hdrDel) == 0) {
+				exit("Gagal : Data RFQ tidak ditemukan atau sudah dihapus");
+			}
+			foreach ($hdrDel as $h) {
+				if ($h['purchaser'] != $_SESSION['standard']['userid']) {
+					exit("Gagal : RFQ hanya dapat dihapus oleh purchaser yang membuatnya");
+				}
+				if ($h['flag'] == '1') {
+					exit("Gagal : RFQ sudah diajukan dan tidak dapat dihapus");
+				}
+				if ($h['tolakrph'] == '1') {
+					exit("Gagal : RFQ ditolak verifikator dan tidak dapat dihapus");
+				}
+			}
+			$sudahRph = fetchdata("select norph from " . $dbname . ".log_permintaanhargadt where nomor='" . $no_permintaan . "' and norph<>'' limit 1");
+			if (count($sudahRph) > 0) {
+				exit("Gagal : RFQ sudah masuk RPH " . $sudahRph[0]['norph'] . " dan tidak dapat dihapus");
+			}
+			$sudahApp = fetchdata("select 1 from " . $dbname . ".approval where notransaksi='" . $no_permintaan . "' limit 1");
+			if (count($sudahApp) > 0) {
+				exit("Gagal : RFQ sudah memiliki proses persetujuan dan tidak dapat dihapus");
+			}
+
+			$arrHapusFile = array();
 			try {
-				$owlPDO->exec($str);
+				$owlPDO->beginTransaction();
 
-				## DELETE DETAIL RPH AND UPDATE VERIFIKASI PP ##
+				## UPDATE VERIFIKASI PP ##
 				$str = "select kodebarang,nopp from " . $dbname . ".log_permintaanhargadt where nomor='" . $no_permintaan . "'";
-				$res = $owlPDO->query($str) or die(print " Gagal: " . PDOException::getMessage());
-				$res->setFetchMode(PDO::FETCH_ASSOC);
-				while ($bar = $res->fetch()) {
-					$str = "update " . $dbname . ".log_listverifikasi set status='0' where nopp='" . $bar['nopp'] . "' and kodebarang='" . $bar['kodebarang'] . "' and karyawanid='" . $_SESSION['standard']['userid'] . "'";
-					try {
-						$owlPDO->exec($str);
-					} catch (PDOException $e) {
-						print " Gagal  !: " . $e->getMessage() . "\n";
-						die();
-					}
-				}
-
-				$str = "delete from " . $dbname . ".log_permintaanhargadt where nomor='" . $no_permintaan . "'";
-				try {
+				foreach (fetchdata($str) as $bar) {
+					$str = "update " . $dbname . ".log_listverifikasi set status='0' where nopp='" . pnwrEsc($bar['nopp']) . "' and kodebarang='" . pnwrEsc($bar['kodebarang']) . "' and karyawanid='" . $_SESSION['standard']['userid'] . "'";
 					$owlPDO->exec($str);
-
-					$str = "select namafile from " . $dbname . ".log_permintaanhargafile where nomor='" . $no_permintaan . "'";
-					$res = $owlPDO->query($str) or die(print " Gagal: " . PDOException::getMessage());
-					$res->setFetchMode(PDO::FETCH_ASSOC);
-					while ($bar = $res->fetch()) {
-						$path = "fileupload/rph/" . $bar['namafile'];
-						unlink($path);
-					}
-
-					$str = "delete from " . $dbname . ".log_permintaanhargafile where nomor='" . $no_permintaan . "'";
-					try {
-						$owlPDO->exec($str);
-					} catch (PDOException $e) {
-						print " Gagal  !: " . $e->getMessage() . "\n";
-						die();
-					}
-				} catch (PDOException $e) {
-					print " Gagal  !: " . $e->getMessage() . "\n";
-					die();
 				}
+
+				## NAMA FILE YANG AKAN DIHAPUS ##
+				$str = "select namafile from " . $dbname . ".log_permintaanhargafile where nomor='" . $no_permintaan . "'";
+				foreach (fetchdata($str) as $bar) {
+					$arrHapusFile[] = "fileupload/rph/" . basename($bar['namafile']);
+				}
+
+				## HAPUS DETAIL, FILE, DAN HEADER RFQ ##
+				$owlPDO->exec("delete from " . $dbname . ".log_permintaanhargadt where nomor='" . $no_permintaan . "'");
+				$owlPDO->exec("delete from " . $dbname . ".log_permintaanhargafile where nomor='" . $no_permintaan . "'");
+				$owlPDO->exec("delete from " . $dbname . ".log_perintaanhargaht where nomor='" . $no_permintaan . "'");
+				$owlPDO->commit();
 			} catch (PDOException $e) {
-				print " Gagal  !: " . $e->getMessage() . "\n";
-				die();
+				if ($owlPDO->inTransaction()) {
+					$owlPDO->rollBack();
+				}
+				exit("Gagal : " . $e->getMessage());
+			}
+			#berkas fisik dihapus setelah data berhasil terhapus
+			foreach ($arrHapusFile as $path) {
+				if (is_file($path)) {
+					@unlink($path);
+				}
 			}
 			break;
 
@@ -2751,10 +3101,19 @@ if ($xmethod != '') {
 				$tgl0 = date("Y-m-d");
 				$str0 = "select * from " . $dbname . ".log_perintaanhargaht where nomor='" . $no_permintaan . "'";
 				$res0 = fetchdata($str0);
+				if (count($res0) == 0) {
+					$owlPDO->rollBack();
+					exit("Warning : Data RFQ tidak ditemukan");
+				}
 				foreach ($res0 as $val0) {
+					if ($val0['flag'] == '1') {
+						$owlPDO->rollBack();
+						exit("Warning : RFQ sudah diajukan sebelumnya");
+					}
 					if ($val0['tglbatasrfq'] != '0000-00-00') {
 						// apakah sudah lewat
 						if ($tgl0 > $val0['tglbatasrfq']) {
+							$owlPDO->rollBack();
 							exit("Warning : Tanggal Perbandingan Sudah Melewati Batas...");
 						}
 					}
@@ -2762,7 +3121,7 @@ if ($xmethod != '') {
 
 				if ($createpr == '1') {
 					$purchaser = $_SESSION['standard']['userid'];
-					$tglskrg = date("Y-m-d H:i:S");
+					$tglskrg = date("Y-m-d H:i:s");
 					$no = 0;
 					$str = "select nopp,kodebarang,jumlah from " . $dbname . ".log_permintaanhargadt where nomor='" . $no_permintaan . "' group by kodebarang";
 					$res = fetchdata($str);
@@ -3691,7 +4050,18 @@ if ($xmethod != '') {
 
 			$countsup = count($arridsup);
 
-			$tab = "";
+			#kop: nama PT, judul, nomor RFQ, dan penarik data
+			$kolomKop = 6 + (3 * $countsup);
+			$unitKop = substr($notransaksi, -4);
+			$ptKop = isset($optpt[$unitKop]) ? $optpt[$unitKop] : $unitKop;
+			$hdKop = setheadreport($unitKop, $ptKop);
+			$tab = "<table>
+				<tr><td colspan=" . $kolomKop . "><b>" . htmlspecialchars($hdKop['nama']) . "</b></td></tr>
+				<tr><td colspan=" . $kolomKop . "><b>PERBANDINGAN HARGA PENAWARAN</b></td></tr>
+				<tr><td colspan=" . $kolomKop . ">No. RFQ : " . htmlspecialchars($notransaksi) . "</td></tr>
+				<tr><td colspan=" . $kolomKop . ">Ditarik oleh " . htmlspecialchars($_SESSION['empl']['name']) . " (" . htmlspecialchars($_SESSION['standard']['username']) . ") pada " . date('d-m-Y H:i:s') . "</td></tr>
+				<tr><td colspan=" . $kolomKop . ">&nbsp;</td></tr>
+			</table>";
 			$tab .= "<table border=1>
 			<tr style='text-align:center;font-weight:bold'>
 				<td rowspan=2>Evaluation Parameter</td>
