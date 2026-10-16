@@ -95,12 +95,18 @@ for ($x = 0; $x < 20; $x++) {
 }
 
 $optdivsch = "<option value=''>" . $_SESSION['lang']['all'] . "</option>";
+// Pegawai divisi hanya melihat divisinya; selain itu (termasuk HO) semua divisi dan mandor di unit yang boleh diaksesnya
+$adaDivisi = false;
 if ($_SESSION['empl']['subbagian'] != "") {
+    $cekDivisi = fetchdata("select kodeorganisasi from " . $dbname . ".organisasi where tipe='AFDELING' and kodeorganisasi='" . addslashes($_SESSION['empl']['subbagian']) . "'");
+    $adaDivisi = count($cekDivisi) > 0;
+}
+if ($adaDivisi) {
     $whdivsch = " and kodeorganisasi='" . $_SESSION['empl']['subbagian'] . "'";
     $whmdrsch = " and subbagian='" . $_SESSION['empl']['subbagian'] . "'";
 } else {
-    $whdivsch = " and induk like '" . $_SESSION['empl']['lokasitugas'] . "%'";
-    $whmdrsch = " and lokasitugas like '" . $_SESSION['empl']['lokasitugas'] . "%'";
+    $whdivsch = " and induk in (" . getOrgDetail(2) . ")";
+    $whmdrsch = " and lokasitugas in (" . getOrgDetail(2) . ")";
 }
 foreach (fetchdata("select kodeorganisasi, namaorganisasi from " . $dbname . ".organisasi where tipe='AFDELING' " . $whdivsch . " order by kodeorganisasi asc") as $dv) {
     $optdivsch .= "<option value=" . $dv['kodeorganisasi'] . ">" . $dv['kodeorganisasi'] . " - " . $dv['namaorganisasi'] . "</option>";
