@@ -461,10 +461,17 @@ if (!function_exists('rpoSudahDiterima')) {
 }
 #catatan di form Cancel/Close/Become Out Standing bila PO sudah ada penerimaan, pembayaran, atau invoice yang belum diposting (hanya informasi, tidak memblokir)
 if (!function_exists('rpoCatatanAksi')) {
-	function rpoCatatanAksi($nopo)
+	function rpoCatatanAksi($nopo, $aksi = '')
 	{
 		global $dbname, $owlPDO;
 		$baris = array();
+		if ($aksi == 'cancel') {
+			$stmt = $owlPDO->prepare("select statuspo from " . $dbname . ".log_poht where nopo=?");
+			$stmt->execute(array($nopo));
+			if ($stmt->fetchColumn() == '1') {
+				$baris[] = 'PO sedang proses persetujuan; persetujuan yang masih menunggu akan dihapus dan PO hilang dari daftar persetujuan approver.';
+			}
+		}
 		$stmt = $owlPDO->prepare("select count(*) as n, coalesce(sum(post=1),0) as p from " . $dbname . ".log_transaksiht where nopo=? and tipetransaksi='1'");
 		$stmt->execute(array($nopo));
 		$a = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -1392,7 +1399,7 @@ switch ($method) {
 		break;
 		
 	case'cancelpoform':
-		$tab=rpoCatatanAksi($nopo);
+		$tab=rpoCatatanAksi($nopo,'cancel');
 		$tab.="<fieldset><table cellpadding=1 cellspacing=1>";
 		$tab.="<table cellpadding=3>
 			<tr>
