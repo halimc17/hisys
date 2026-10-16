@@ -91,6 +91,7 @@ $nList->setFetchMode(PDO::FETCH_ASSOC);
 while($dList=$nList->fetch()){   
     $cpo[$dList['tanggal']]+=$dList['oer'];
     $pk[$dList['tanggal']]+=$dList['oerpk'];
+    $tbsdiolah[$dList['tanggal']]+=$dList['tbsdiolah'];
 }
 
 
