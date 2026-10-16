@@ -3,6 +3,7 @@ require_once('master_validation.php');
 include('lib/nangkoelib.php');
 echo open_body();
 include('master_mainMenu.php');
+require_once('lib/zSelect2.php');
 OPEN_BOX('','<span class=judul>'.getMenu('log_po').'</span>');
 ?>
 
@@ -20,6 +21,30 @@ foreach($arrFilter as $row=>$lst){
 }
 $_SESSION['sorefrensi']=array();
 $_SESSION['somaterial']=array();
+#tahun PO dan supplier (sesuai PO yang boleh dilihat pengguna): default tahun sekarang, "Semua Tahun" untuk seluruh tahun
+$scopePo = ($_SESSION['empl']['kodejabatan'] == '5') ? "" : " and purchaser='".$_SESSION['standard']['userid']."'";
+$tahunSkrg=date('Y');
+$arrTahun=array($tahunSkrg=>$tahunSkrg);
+$res=fetchdata("select distinct year(tanggal) as thn from ".$dbname.".log_poht where tanggal>'0000-00-00'".$scopePo);
+foreach($res as $val){
+	$arrTahun[$val['thn']]=$val['thn'];
+}
+krsort($arrTahun);
+$optFilterTahun="<option value=''>Semua Tahun</option>";
+foreach($arrTahun as $thn){
+	$optFilterTahun.="<option value='".$thn."'".($thn==$tahunSkrg?" selected":"").">".$thn."</option>";
+}
+$namasupplier = makeOption($dbname,'log_5supplier','supplierid,namasupplier');
+$arrSupplier=array();
+$res=fetchdata("select distinct kodesupplier from ".$dbname.".log_poht where kodesupplier<>''".$scopePo);
+foreach($res as $val){
+	$arrSupplier[$val['kodesupplier']]=trim(isset($namasupplier[$val['kodesupplier']])?$namasupplier[$val['kodesupplier']]:$val['kodesupplier']);
+}
+asort($arrSupplier);
+$optFilterSupplier="<option value=''>".$_SESSION['lang']['pilihdata']."</option>";
+foreach($arrSupplier as $kode=>$nama){
+	$optFilterSupplier.="<option value='".htmlspecialchars($kode,ENT_QUOTES)."'>".htmlspecialchars($nama)."</option>";
+}
 echo"<div id=dataAtas>
 <div id='action_list'>
 <table>
@@ -30,13 +55,48 @@ echo"<div id=dataAtas>
 		<td>
 			<fieldset>
 			<legend>".$_SESSION['lang']['find']."</legend>
-			".$_SESSION['lang']['nopo']." : <input type=text id=txtsearch size=20 maxlength=30 class=myinputtext>
-			".$_SESSION['lang']['nopp']." : <input type=text id=txtsearch_nopp size=20 maxlength=30 class=myinputtext>
-			".$_SESSION['lang']['tanggal']." PO/SO : <input type=text class=myinputtext id=tgl_cari  onmousemove=setCalendar(this.id) onkeypress=return false;  size=10 maxlength=10 readonly/>
-			".$_SESSION['lang']['tanggal']." Rilis : <input type=text class=myinputtext id=tglrilis_cari  onmousemove=setCalendar(this.id) onkeypress=return false;  size=10 maxlength=10 readonly/>
-			".$_SESSION['lang']['namasupplier']." : <input type=text id=txtnamsupsch size=20 maxlength=30 class=myinputtext>
-			".$_SESSION['lang']['status']." : <select id=filterId>".$optFilter."</select>
-			<button class=mybutton onclick=load_new_data(0)>".$_SESSION['lang']['find']."</button>
+				<table>
+					<tr>
+						<td>".$_SESSION['lang']['tahun']." PO/SO</td>
+						<td>:</td>
+						<td style='width:220px'>
+							<select id=filterTahun class=select2 style='width:100%'>".$optFilterTahun."</select>
+						</td>
+						<td style='padding-left:15px;'>".$_SESSION['lang']['status']."</td>
+						<td>:</td>
+						<td style='width:260px'>
+							<select id=filterId class=select2 style='width:100%'>".$optFilter."</select>
+						</td>
+					</tr>
+					<tr>
+						<td>".$_SESSION['lang']['nopo']."</td>
+						<td>:</td>
+						<td><input type=text id=txtsearch maxlength=30 class=myinputtext style='width:100%;box-sizing:border-box'></td>
+						<td style='padding-left:15px;'>".$_SESSION['lang']['tanggal']." PO/SO</td>
+						<td>:</td>
+						<td><input type=text class=myinputtext id=tgl_cari onmousemove=setCalendar(this.id) onkeypress=return false; maxlength=10 readonly style='width:100%;box-sizing:border-box'/></td>
+					</tr>
+					<tr>
+						<td>".$_SESSION['lang']['nopp']."</td>
+						<td>:</td>
+						<td><input type=text id=txtsearch_nopp maxlength=30 class=myinputtext style='width:100%;box-sizing:border-box'></td>
+						<td style='padding-left:15px;'>".$_SESSION['lang']['tanggal']." Rilis</td>
+						<td>:</td>
+						<td><input type=text class=myinputtext id=tglrilis_cari onmousemove=setCalendar(this.id) onkeypress=return false; maxlength=10 readonly style='width:100%;box-sizing:border-box'/></td>
+					</tr>
+					<tr>
+						<td>".$_SESSION['lang']['namasupplier']."</td>
+						<td>:</td>
+						<td>
+							<select id=filterSupplier class=select2 style='width:100%'>".$optFilterSupplier."</select>
+						</td>
+						<td colspan=3 style='padding-left:15px;'>
+							<button class=mybutton onclick=load_new_data(0)>".$_SESSION['lang']['find']."</button>
+							<button class=mybutton onclick=exportExcelPO()>".$_SESSION['lang']['excel']."</button>
+							<button class=mybutton onclick=exportPdfPO()>PDF</button>
+						</td>
+					</tr>
+				</table>
 			</fieldset>
 		</td>
 		<td style='display:none'>
@@ -58,12 +118,12 @@ echo "<div id=\"list_po\">";
 OPEN_BOX(); //2 O
 $countApp = getCountApproval($jenisApp,'');
 echo"<div class='table-scroll' style=height:68vh>
-		<table cellspacing='1' cellpadding=5 border='0' class='sortable'>
+		<table cellspacing='1' cellpadding=5 border='0' class='sortable' style='width:100%'>
 			<thead>
 				<tr class=rowheader>
 					<th rowspan=2 align=center>No</th>
-					<th rowspan=2 align=center>".$_SESSION['lang']['nopo']."</th>
-					<th rowspan=2 align=center>".$_SESSION['lang']['nopp']."</th>
+					<th rowspan=2 align=center style='min-width:190px'>".$_SESSION['lang']['nopo']."</th>
+					<th rowspan=2 align=center style='min-width:230px'>".$_SESSION['lang']['nopp']."</th>
 					<th rowspan=2 align=center></th>
 					<th rowspan=2 align=center>".$_SESSION['lang']['namasupplier']."</th>
 					<th rowspan=2 align=center>".$_SESSION['lang']['tgl_po']."</th>
@@ -73,7 +133,7 @@ echo"<div class='table-scroll' style=height:68vh>
 					<th rowspan=2 align=center>".$_SESSION['lang']['status']."</th>
 					<th rowspan=2 align=center>PIC</th>
 					<th rowspan=2 align=center>TERMIN</th>
-					<th rowspan=2 align=center>".$_SESSION['lang']['keterangan']."</th>
+					<th rowspan=2 align=center style='width:230px'>".$_SESSION['lang']['keterangan']."</th>
 					<th rowspan=2 align=center>action</th>
 					<th rowspan=2 align=center>".$_SESSION['lang']['tanggalRelease']."</th>
 					<th rowspan=2 align=center>".$_SESSION['lang']['print']."</th>
@@ -323,14 +383,14 @@ echo"<fieldset>
 						<td>".$_SESSION['lang']['npwp']."</td>
 						<td>:</td>
 						<td>
-							<select id='npwporg' style='width:174px;'  name='npwporg'>".$optpil."</select>
+							<select class=select2po id='npwporg' style='width:174px;'  name='npwporg'>".$optpil."</select>
 						</td>
 					</tr>
 					<tr>
 						<td>".$_SESSION['lang']['matauang']."</td>
 						<td>:</td>
 						<td>
-							<select id='mtUang' style='width:174px;'  name='mtUang' disabled>".$optpil."</select>
+							<select class=select2po id='mtUang' style='width:174px;'  name='mtUang' disabled>".$optpil."</select>
 						</td>
 					</tr>
 					<tr>
@@ -351,7 +411,7 @@ echo"<fieldset>
 							<td>".$_SESSION['lang']['namasupplier']."</td>
 							<td>:</td>
 							<td>
-								<select id='supplier_id' name='supplier_id' style='width:300px;'  onchange='get_supplier()'>
+								<select class=select2po id='supplier_id' name='supplier_id' style='width:300px;'  onchange='get_supplier()'>
 									<option value=''></option>
 									".$optSupplier."
 								</select>
@@ -361,7 +421,7 @@ echo"<fieldset>
 							<td>Sub Kelompok ".$_SESSION['lang']['supplier']."</td>
 							<td>:</td>
 							<td>
-								<select id='subsupplier_id' style='width:300px;' name='subsupplier_id'>
+								<select class=select2po id='subsupplier_id' style='width:300px;' name='subsupplier_id'>
 									<option value=''></option>
 									".$optSupkelompok."
 								</select>
@@ -371,21 +431,21 @@ echo"<fieldset>
 							<td>".$_SESSION['lang']['alamat']." ".$_SESSION['lang']['supplier']."</td>
 							<td>:</td>
 							<td>
-								<select id=alamat_sup style='width:300px;'><option value=''></option></select>
+								<select class=select2po id=alamat_sup style='width:300px;'><option value=''></option></select>
 							</td>
 						</tr>
 						<tr>
 							<td>".$_SESSION['lang']['npwp']." ".$_SESSION['lang']['supplier']."</td>
 							<td>:</td>
 							<td>
-								<select id=npwp_sup style='width:300px;'><option value=''></option></select>
+								<select class=select2po id=npwp_sup style='width:300px;'><option value=''></option></select>
 							</td>
 						</tr>
 						<tr>
 							<td>".$_SESSION['lang']['norekeningbank']."</td>
 							<td>:</td>
 							<td colspan=4>
-								<select id=bank_acc style='width:300px;'><option value=''></option></select>
+								<select class=select2po id=bank_acc style='width:300px;'><option value=''></option></select>
 							</td>
 						</tr>
 					</table>
@@ -437,7 +497,7 @@ echo"<fieldset>
 									<td class='bintang'>".$_SESSION['lang']['waktupenyerahan']."</td>
 									<td>:</td>
 									<td>
-										<select id=delivtime style=\"width:200px;\">".$optjenis."</select>
+										<select class=select2po id=delivtime style=\"width:200px;\">".$optjenis."</select>
 									</td>
 								</tr>
 								
@@ -445,21 +505,21 @@ echo"<fieldset>
 									<td>".$_SESSION['lang']['almt_kirim']." ".$_SESSION['lang']['barang']."</td>
 									<td>:</td>
 									<td>
-										<select style='width:200px' id='tmpt_krm' name='tmpt_krm' disabled>".$optKrm."</select>
+										<select class=select2po style='width:200px' id='tmpt_krm' name='tmpt_krm' disabled>".$optKrm."</select>
 									</td>
 								</tr>
 								<tr>
 									<td class='bintang'>".$_SESSION['lang']['almt_kirim']." ".$_SESSION['lang']['invoice']."</td>
 									<td>:</td>
 									<td>
-										<select style='width:200px' id='invc_krm' name='tmpt_krm'>".$optKrm."</select>
+										<select class=select2po style='width:200px' id='invc_krm' name='tmpt_krm'>".$optKrm."</select>
 									</td>
 								</tr>
 								<tr>
 									<td>".$_SESSION['lang']['syaratPem']."</td>
 									<td>:</td>
 									<td>
-										<select style='width:200px' id='term_pay' name='term_pay' disabled>".$optSyp."</select>
+										<select class=select2po style='width:200px' id='term_pay' name='term_pay' disabled>".$optSyp."</select>
 									</td>
 									
 								</tr>

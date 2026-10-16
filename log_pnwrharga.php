@@ -34,23 +34,58 @@ OPEN_BOX('','<span class=judul>'.getMenu('log_pnwrharga').'</span>');
 </script>
 
 <?php
+#tahun RFQ milik purchaser: default tahun sekarang, "Semua Tahun" untuk seluruh tahun
+$tahunSkrg=date('Y');
+$arrTahun=array($tahunSkrg=>$tahunSkrg);
+foreach(fetchdata("select distinct year(tanggal) as thn from ".$dbname.".log_perintaanhargaht where purchaser='".$_SESSION['standard']['userid']."' and tanggal>'0000-00-00'") as $val){
+	$arrTahun[$val['thn']]=$val['thn'];
+}
+krsort($arrTahun);
+$optFilterTahun="<option value=''>Semua Tahun</option>";
+foreach($arrTahun as $thn){
+	$optFilterTahun.="<option value='".$thn."'".($thn==$tahunSkrg?" selected":"").">".$thn."</option>";
+}
 echo"<div id='action_list'>
 	<table>
-		<tr valign=moiddle>
-			<td align=center style='width:100px;cursor:pointer;' onclick=displaylist()>
+		<tr valign=top>
+			<td align=center valign=middle style='width:100px;cursor:pointer;' onclick=displaylist()>
 				<img class=delliconBig src=images/skyblue/list.png title='".$_SESSION['lang']['list']."'><br>".$_SESSION['lang']['list']."
 			</td>
 			<td>
-				<fieldset><legend>".$_SESSION['lang']['find']."</legend>
-                ".$_SESSION['lang']['notransaksi']." : <input type=text id=txtsearch size=25 maxlength=30 class=myinputtext>
-				".$_SESSION['lang']['nopp']." : <input type=text id=txtnopp size=25 maxlength=30 class=myinputtext>
-				".$_SESSION['lang']['tanggal']." : <input type=text class=myinputtext id=tgl_cari onmousemove=setCalendar(this.id) onkeypress=return false;  size=10 maxlength=10 />
-				<button class=mybutton onclick=loaddata(0)>".$_SESSION['lang']['find']."</button>
+				<fieldset id=fsCariPnwr><legend>".$_SESSION['lang']['find']."</legend>
+				<table>
+					<tr>
+						<td>Tahun</td>
+						<td>:</td>
+						<td style='width:200px'><select id=filterTahun class=select2 style='width:100%'>".$optFilterTahun."</select></td>
+						<td style='padding-left:15px;'>".$_SESSION['lang']['nopp']."</td>
+						<td>:</td>
+						<td style='width:220px'><input type=text id=txtnopp maxlength=30 class=myinputtext style='width:100%;box-sizing:border-box'></td>
+					</tr>
+					<tr>
+						<td>".$_SESSION['lang']['notransaksi']."</td>
+						<td>:</td>
+						<td><input type=text id=txtsearch maxlength=30 class=myinputtext style='width:100%;box-sizing:border-box'></td>
+						<td style='padding-left:15px;'>".$_SESSION['lang']['tanggal']."</td>
+						<td>:</td>
+						<td><input type=text class=myinputtext id=tgl_cari onmousemove=setCalendar(this.id) onkeypress=return false; maxlength=10 readonly style='width:100%;box-sizing:border-box'/></td>
+					</tr>
+					<tr>
+						<td>Status</td>
+						<td>:</td>
+						<td><select id=filterStatus class=select2 style='width:100%'><option value=''>".$_SESSION['lang']['pilihdata']."</option><option value='1'>Belum diajukan</option><option value='2'>Sudah diajukan</option><option value='3'>Ditolak</option></select></td>
+						<td colspan=3 style='padding-left:15px;'>
+							<button class=mybutton onclick=loaddata(0)>".$_SESSION['lang']['find']."</button>
+							<button class=mybutton onclick=exportExcelPnwr()>".$_SESSION['lang']['excel']."</button>
+							<button class=mybutton onclick=exportPdfPnwr()>PDF</button>
+						</td>
+					</tr>
+				</table>
 				</fieldset>
 			</td>
 			<td>
-				<fieldset>
-				<legend>List Job</legend><div id=notifikasiKerja></div>
+				<fieldset id=fsListJobPnwr>
+				<legend align=center>List Job</legend><div id=notifikasiKerja></div>
 				</fieldset>
 			</td>
 		</tr>
@@ -104,7 +139,7 @@ while($rKelompok=$qKelompok->fetch())
 	$arr="";
     echo"<div id=formPP style=display:none>";
     OPEN_BOX();
-    echo"</fieldset><input type=hidden id=noUrut value='1' /><input type=hidden id=notransaksi value='' />";
+    echo"<input type=hidden id=noUrut value='1' /><input type=hidden id=notransaksi value='' />";
     //tampilkan form mengambil get PP
     echo"<div id=listBrgPP  style=display:none>";
 	
@@ -115,15 +150,15 @@ while($rKelompok=$qKelompok->fetch())
 				<td>:</td>
 				<td><input type=text id=schnopp style=width:150px size=25 maxlength=30 class=myinputtext></td>		
 				
-				<td>".$_SESSION['lang']['jenis']."</td><td>:</td><td><select style=width:100px  id='schjenis' name='jenis'>".$optjenis."</select></td>
-				<td>".$_SESSION['lang']['unit']."</td><td>:</td><td><select style=width:100px  id='schunit' name='jenis'>".$optunit."</select></td>
+				<td>".$_SESSION['lang']['jenis']."</td><td>:</td><td><select class=select2 style=width:100px  id='schjenis' name='jenis'>".$optjenis."</select></td>
+				<td>".$_SESSION['lang']['unit']."</td><td>:</td><td><select class=select2 style=width:100px  id='schunit' name='jenis'>".$optunit."</select></td>
 			
 				<td><input type=text hidden id=schpt style=width:150px size=25 maxlength=30 class=myinputtext></td>		
 			</tr>
 			<tr>
-				<td>".$_SESSION['lang']['kelompokbarang']."</td><td>:</td><td> <select id=schklbrg style=width:155px onchange=getBarangCari()>".$optKelompokBrg."</select></td>
+				<td>".$_SESSION['lang']['kelompokbarang']."</td><td>:</td><td> <select id=schklbrg class=select2 style=width:155px onchange=getBarangCari()>".$optKelompokBrg."</select></td>
 				
-				<td>".$_SESSION['lang']['namabarang']."</td><td>:</td><td><select id=schkdbrg style=width:100px>".$optBrgCari."</select>&nbsp;<img hidden src=\"images/search.png\" class=\"resicon\" title='".$_SESSION['lang']['find']." ".$_SESSION['lang']['namabarang']."' onclick=\"searchBrgCari('".$_SESSION['lang']['find']." ".$_SESSION['lang']['namabarang']."','<fieldset style=min-width:93%>".$_SESSION['lang']['find']."&nbsp;<input type=text class=myinputtext id=nmBrg><button class=mybutton onclick=findBrg2()>".$_SESSION['lang']['find']."</button></fieldset><div id=containerBarang style=overflow=auto;max-height=300;max-width=400></div>',event);\"></td>
+				<td>".$_SESSION['lang']['namabarang']."</td><td>:</td><td><select id=schkdbrg class=select2 style=width:100px>".$optBrgCari."</select>&nbsp;<img hidden src=\"images/search.png\" class=\"resicon\" title='".$_SESSION['lang']['find']." ".$_SESSION['lang']['namabarang']."' onclick=\"searchBrgCari('".$_SESSION['lang']['find']." ".$_SESSION['lang']['namabarang']."','<fieldset style=min-width:93%>".$_SESSION['lang']['find']."&nbsp;<input type=text class=myinputtext id=nmBrg><button class=mybutton onclick=findBrg2()>".$_SESSION['lang']['find']."</button></fieldset><div id=containerBarang style=overflow=auto;max-height=300;max-width=400></div>',event);\"></td>
 				<td align=center><button class=mybutton onclick=schgetDtPP()>".$_SESSION['lang']['find']."</button></td>
 			</tr>
 			
@@ -195,7 +230,7 @@ while($rKelompok=$qKelompok->fetch())
                 <tr>
                 <td>".$_SESSION['lang']['matauang']."</td>
                 <td>:</td>
-                <td><select id=\"mtUang\" name=\"mtUang\" style=\"width:150px;\" >".$optMt."</select></td>
+                <td><select id=\"mtUang\" class=\"select2\" name=\"mtUang\" style=\"width:150px;\" >".$optMt."</select></td>
                 </tr>
                 <tr>
                 <td>".$_SESSION['lang']['kurs']."</td>
@@ -205,19 +240,19 @@ while($rKelompok=$qKelompok->fetch())
                 <tr>
                 <td>".$_SESSION['lang']['syaratPem']."</td>
                 <td>:</td>
-                <td><select id='term_pay' name='term_pay' style=\"width:200px\">".$optTermPay."</select></td>
+                <td><select id='term_pay' class='select2' name='term_pay' style=\"width:200px\">".$optTermPay."</select></td>
                 <td>&nbsp;</td>
                 </tr>
                 <tr>
                 <td>".$_SESSION['lang']['almt_kirim']."</td>
                         <td>:</td>
-                        <td><select id='tmpt_krm' name='tmpt_krm' style=\"width:200px;\">".$optKrm."</select></td>
+                        <td><select id='tmpt_krm' class='select2' name='tmpt_krm' style=\"width:200px;\">".$optKrm."</select></td>
                         <td>&nbsp;</td>
                 </tr>
                 <tr>
                 <td>".substr($_SESSION['lang']['stockdetail'],0,5)."</td>
                 <td>:</td>
-                <td><select id='stockId' name='stockId' style=\"width:200px\">".$optStock."</select></td>
+                <td><select id='stockId' class='select2' name='stockId' style=\"width:200px\">".$optStock."</select></td>
                 <td>&nbsp;</td>
                 </tr>
                 <tr>
@@ -240,7 +275,7 @@ while($rKelompok=$qKelompok->fetch())
 				and status='1' order by namasupplier asc";
 				*/
 		$sql="select supplierid,namasupplier from ".$dbname.".log_5supplier where 
-				supplierid in (select supplierid from ".$dbname.".log_5supkelompok where status=1 and tipe in (kelompok='SUPPLIER' or kelompok='KONTRAKTOR'))
+				supplierid in (select supplierid from ".$dbname.".log_5supkelompok where status=1 and tipe in ('SUPPLIER','KONTRAKTOR'))
 				and status='1' order by namasupplier asc";		
 				
 		$query=$owlPDO->query($sql) or die(print " Gagal: ".PDOException::getMessage());

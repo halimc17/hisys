@@ -140,6 +140,7 @@ OPEN_BOX(); //<div style=overflow:scroll>
 //<table cellpading=1 cellspacing=1 border=0 class=sortable style=width:100%
 echo "
 	
+            <div style='margin-bottom:6px;font-size:12px'><span style='display:inline-block;width:14px;height:12px;background-color:#ffb347;border:1px solid #999;vertical-align:middle'></span> Berbeda dengan data mobile: ada pemanen di mobile yang belum ada di ERP</div>
             <table cellpadding=5 cellspacing=1 border=0 class=sortable style=min-width:900px>
             <thead>
                 <tr class=rowheader>

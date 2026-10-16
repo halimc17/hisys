@@ -1,3 +1,40 @@
+//select2 untuk dropdown halaman ini (zSelect2.js tidak dimuat)
+$(document).ready(function(){
+	$('.select2').select2({dropdownAutoWidth:true,width:'100%'});
+	//dropdown form PO: lebar mengikuti style masing-masing; isi pilihan yang diganti lewat innerHTML otomatis disinkronkan select2
+	$('.select2po').select2({dropdownAutoWidth:true});
+	//daftar pilihan select2 harus tampil di atas popup/dialog
+	$('<style>.select2-container--open .select2-dropdown{z-index:100000;}</style>').appendTo('head');
+});
+
+//isi pilihan (select2) lalu perbarui tampilannya
+function setSelPO(id, v) {
+	var el = document.getElementById(id);
+	el.value = v;
+	if (window.jQuery) {
+		jQuery(el).trigger('change.select2');
+	}
+}
+
+//tarikan Excel dan PDF mengikuti filter yang sedang dipilih
+function getFilterParamPO() {
+	var ids = {crnopo:'txtsearch', crtanggal:'tgl_cari', tglrilis_cari:'tglrilis_cari', txtsearch_nopp:'txtsearch_nopp', filterId:'filterId', filterSupplier:'filterSupplier', filterTahun:'filterTahun'};
+	var p = '';
+	for (var k in ids) {
+		p += '&' + k + '=' + encodeURIComponent(trim(document.getElementById(ids[k]).value));
+	}
+	return p;
+}
+function tampilTarikanPO(judul, tujuan) {
+	alertify.popup(judul, "<iframe frameborder=0 style='width:100%;height:100%;overflow:none' src='" + tujuan + "'></iframe>").set({'resizable':true,'maximizable':true,'overflow':false}).resizeTo('80%','70%');
+}
+function exportExcelPO() {
+	tampilTarikanPO('Report Ms.Excel', 'log_slave_po.php?method=excellist' + getFilterParamPO());
+}
+function exportPdfPO() {
+	tampilTarikanPO('Report PDF', 'log_slave_po.php?method=pdflist' + getFilterParamPO());
+}
+
 function loadPOChat(nopo, ev) {
   title = "Chat:" + nopo;
   content =
@@ -233,6 +270,8 @@ function getpoheader(nopo, matauang, supplier_id) {
           document.getElementById("ketUraian").value = split[11];
           document.getElementById("invc_krm").innerHTML = split[12];
           document.getElementById("subsupplier_id").innerHTML = split[13];
+          //pilihan penyetuju baru dibuat, jadikan select2
+          jQuery("#tdlistapproval select").select2({ dropdownAutoWidth: true });
           loadtermin(nopo);
         }
       } else {
@@ -598,6 +637,9 @@ function clear_all_data() {
   document.getElementById("bank_acc").innerHTML = "";
 
   document.getElementById("delivtime").selectedIndex = 0;
+  if (window.jQuery) {
+    jQuery("#delivtime").trigger("change.select2");
+  }
   document.getElementById("tmpt_krm").innerHTML = "";
   document.getElementById("term_pay").innerHTML = "";
   document.getElementById("ketUraian").innerHTML = "";
@@ -606,7 +648,9 @@ function clear_all_data() {
   document.getElementById("txtsearch").value = "";
   document.getElementById("tgl_cari").value = "";
   document.getElementById("tglrilis_cari").value = "";
-  document.getElementById("txtnamsupsch").value = "";
+  setSelPO("filterSupplier", "");
+  setSelPO("filterId", "");
+  setSelPO("filterTahun", String(new Date().getFullYear()));
   document.getElementById("txtsearch_nopp").value = "";
 
   // document.getElementById('supplier_id').value='';
@@ -656,12 +700,13 @@ function ajukan(nopo) {
 }
 
 function load_new_data(pg) {
-  crnopo = document.getElementById("txtsearch").value;
+  crnopo = encodeURIComponent(document.getElementById("txtsearch").value);
   crtanggal = document.getElementById("tgl_cari").value;
   tglrilis_cari = document.getElementById("tglrilis_cari").value;
-  txtnamsupsch = document.getElementById("txtnamsupsch").value;
   filterId = document.getElementById("filterId").value;
-  txtsearch_nopp = document.getElementById("txtsearch_nopp").value;
+  filterSupplier = document.getElementById("filterSupplier").value;
+  filterTahun = document.getElementById("filterTahun").value;
+  txtsearch_nopp = encodeURIComponent(document.getElementById("txtsearch_nopp").value);
 
   param =
     "method=loaddata&crnopo=" +
@@ -670,8 +715,10 @@ function load_new_data(pg) {
     crtanggal +
     "&page=" +
     pg +
-    "&txtnamsupsch=" +
-    txtnamsupsch +
+    "&filterSupplier=" +
+    encodeURIComponent(filterSupplier) +
+    "&filterTahun=" +
+    filterTahun +
     "&tglrilis_cari=" +
     tglrilis_cari +
     "&filterId=" +
@@ -739,7 +786,7 @@ function getPage(pg) {
   pg = document.getElementById("pages");
   pg = pg.options[pg.selectedIndex].value;
   paged = parseFloat(pg) - 1;
-  loadData(paged);
+  load_new_data(paged);
   // cariBast(pg-1);
 }
 

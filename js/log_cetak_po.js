@@ -1,3 +1,47 @@
+//select2 untuk dropdown halaman ini (zSelect2.js tidak dimuat)
+$(document).ready(function(){
+	$('.select2').select2({dropdownAutoWidth:true,width:'100%'});
+	//daftar pilihan select2 harus tampil di atas popup/dialog
+	$('<style>.select2-container--open .select2-dropdown{z-index:100000;}</style>').appendTo('head');
+});
+
+//isi pilihan (select2) lalu perbarui tampilannya
+function setSelCPO(id,v){
+	var el=document.getElementById(id);
+	el.value=v;
+	if(window.jQuery){
+		jQuery(el).trigger('change.select2');
+	}
+}
+
+//kembali ke tampilan awal (tahun sekarang, tanpa filter lain)
+function displaylist(){
+	document.getElementById('txtsearch').value='';
+	document.getElementById('tgl_cari').value='';
+	setSelCPO('statusreal','');
+	setSelCPO('kodesupplier','');
+	setSelCPO('filterTahun',String(new Date().getFullYear()));
+	cariPo();
+}
+
+//parameter filter yang dipakai list, paging, dan tarikan Excel/PDF
+function getFilterParamCPO(){
+	var p='txtSearch='+encodeURIComponent(trim(document.getElementById('txtsearch').value));
+	p+='&tglCari='+encodeURIComponent(trim(document.getElementById('tgl_cari').value));
+	p+='&statusreal='+encodeURIComponent(document.getElementById('statusreal').value);
+	p+='&kodesupplier='+encodeURIComponent(document.getElementById('kodesupplier').value);
+	p+='&filterTahun='+encodeURIComponent(document.getElementById('filterTahun').value);
+	return p;
+}
+function tampilTarikanCPO(judul,tujuan){
+	alertify.popup(judul,"<iframe frameborder=0 style='width:100%;height:100%;overflow:none' src='"+tujuan+"'></iframe>").set({'resizable':true,'maximizable':true,'overflow':false}).resizeTo('80%','70%');
+}
+function exportExcelCPO(){
+	tampilTarikanCPO('Report Ms.Excel','log_slave_cetak_po.php?method=excellist&'+getFilterParamCPO());
+}
+function exportPdfCPO(){
+	tampilTarikanCPO('Report PDF','log_slave_cetak_po.php?method=pdflist&'+getFilterParamCPO());
+}
 // JavaScript Document
 //function refresh_data()
 //{
@@ -64,14 +108,7 @@ function loadData()
 
 function cariPo()
 {
-	txtSearch=trim(document.getElementById('txtsearch').value);
-	tglCari=trim(document.getElementById('tgl_cari').value);
-	statusreal=trim(document.getElementById('statusreal').value);
-	nmsupplier=trim(document.getElementById('nmsupplier').value);
-	//met=document.getElementById('method');
-	//met=met.value='list_new_data';
-        param='method=list_new_data'+'&txtSearch='+txtSearch+'&tglCari='+tglCari+'&statusreal='+statusreal+'&nmsupplier='+nmsupplier;
-        
+	param='method=list_new_data&'+getFilterParamCPO();
 	tujuan='log_slave_cetak_po.php';
 	function respog()
 		{
@@ -117,7 +154,7 @@ function load_data_exc(data){
 			html += '<td align=center>'+ data.tbody[i].namaorganisasi+'</td>';
 			html += '<td align=center>'+ data.tbody[i].vendor+'</td>';
 			html += '<td align=center>'+ data.tbody[i].tipepo+'</td>';
-			html += '<td align=center>'+ data.tbody[i].st+'</td>';
+			html += '<td align=center style="'+ data.tbody[i].stwarna +'">'+ data.tbody[i].st+'</td>';
 			
 			print = "<button class=mybutton onclick=masterPDF('log_poht','"+data.tbody[i].nopo+"','','log_slave_print_detail_po',event)>"+data.tbody[i].print+"</button>";
 			html += '<td align=center>'+ print +'</td>';	
@@ -134,7 +171,8 @@ function load_data_exc(data){
 		contain.innerHTML = html;
 		foot.innerHTML = htmlfoot;
 	}else{
-		contain.innerHTML = "<tr class=rowheader><td colspan=9 align=left>Data Kosong</td></tr>";
+		contain.innerHTML = "<tr class=rowheader><td colspan=10 align=left>Data Kosong</td></tr>";
+		foot.innerHTML = "";
 	}
 }
 /*function cariBast(num)
@@ -163,13 +201,7 @@ function load_data_exc(data){
 }*/
 function cariPage(num)
 {
-		txtSearch=trim(document.getElementById('txtsearch').value);
-		tglCari=trim(document.getElementById('tgl_cari').value);
-		statusreal=trim(document.getElementById('statusreal').value);
-		nmsupplier=trim(document.getElementById('nmsupplier').value);
-		met=document.getElementById('method');
-		met=met.value='list_new_data';
-		param='txtSearch='+txtSearch+'&tglCari='+tglCari+'&statusreal='+statusreal+'&nmsupplier='+nmsupplier+'&method='+met;
+		param='method=list_new_data&'+getFilterParamCPO();
 		param+='&page='+num;
 		tujuan = 'log_slave_cetak_po.php';
 		post_response_text(tujuan, param, respog);			

@@ -2204,8 +2204,8 @@ switch ($method)
 						$tab.="<!--<td align=justify>".$arrStatus[$val2][$arrnopp[$val]][$val][$val3]['merk']."</td>-->
 							<td align=justify>".$arrStatus[$val2][$arrnopp[$val]][$val][$val3]['spec']."</td>
 							<td align=center>".$arrStatus[$val2][$arrnopp[$val]][$val][$val3]['jumlah']."</td>
-							<td align=right>".number_format($arrStatus[$val2][$arrnopp[$val]][$val][$val3]['harga'])."</td>
-							<td align=right>".number_format($subtotal)."</td>
+							<td align=right>".number_format($arrStatus[$val2][$arrnopp[$val]][$val][$val3]['harga'],2)."</td>
+							<td align=right>".number_format($subtotal,2)."</td>
 							<td align=center style='cursor:pointer;color:blue' onclick=\"previewlinkpp2('".$notransaksi."','".$arrnopp[$val]."','".$val."','".$val3."','Detail Riwayat Perbandingan Harga',event);\">Detail</td>
 						";
 					}
@@ -2215,6 +2215,177 @@ switch ($method)
 		$tab.="</tr>
 		</table>";
 		
+		##RINGKASAN PENAWARAN, RINCIAN HARGA, DAN PEMBANDING
+		#semua penawaran pada nomor RFQ yang dipakai RPH ini (termasuk supplier yang tidak terpilih)
+		$nomorRfq = array($notransaksi);
+		if (count($ada_d) > 0) {
+			$stmtNo = $owlPDO->prepare("select distinct nomor from " . $dbname . ".log_permintaanhargadt where norph=?");
+			$stmtNo->execute(array($notransaksi));
+			$nomorRfq = $stmtNo->fetchAll(PDO::FETCH_COLUMN);
+		}
+		$sel = "select a.nomor,a.nourut,a.kodebarang,a.nopp,a.harga,a.jumlah,a.score,b.supplierid,b.tanggal,b.diskonpersen,b.sisbayar2,b.id_franco,b.tolakrph,b.matauang,b.kurs,b.tgldari,b.tglsmp,b.subtotal,b.nilaidiskon,b.pbbkb,b.ppn,b.nilaipermintaan,b.catatanmenang,b.durasipengiriman,b.garansiproduk from " . $dbname . ".log_permintaanhargadt a left join " . $dbname . ".log_perintaanhargaht b on a.nomor=b.nomor and a.nourut=b.nourut where a.nomor in (" . implode(',', array_fill(0, count($nomorRfq), '?')) . ") order by b.nomor,b.nourut,a.kodebarang";
+				$stmtAll = $owlPDO->prepare($sel);
+		$stmtAll->execute($nomorRfq);
+		$semua = $stmtAll->fetchAll(PDO::FETCH_ASSOC);
+		$tglOk = function ($t) {
+			$t = trim((string)$t);
+			return ($t == '' or substr($t, 0, 4) == '0000') ? '-' : tanggalnormal(substr($t, 0, 10));
+		};
+		$hargaNet = function ($harga, $disc) {
+			return $harga - ($harga * $disc / 100);
+		};
+		$penawaran = array();
+		$perBarang = array();
+		$idSup = array();
+		foreach ($semua as $r) {
+			$kp = $r['nomor'] . '|' . $r['nourut'];
+			if (!isset($penawaran[$kp])) {
+				$penawaran[$kp] = $r;
+				$penawaran[$kp]['menang'] = false;
+			}
+			if ($r['score'] == '1' and $r['supplierid'] == $supplierid) {
+				$penawaran[$kp]['menang'] = true;
+			}
+			$idSup[$r['supplierid']] = $r['supplierid'];
+			if ($r['harga'] > 0) {
+				$perBarang[$r['nopp'] . '|' . $r['kodebarang']][] = $r;
+			}
+		}
+		if (count($penawaran) > 0) {
+			$namaSup = makeOption($dbname, 'log_5supplier', 'supplierid,namasupplier', "supplierid in ('" . implode("','", array_map('addslashes', $idSup)) . "')");
+			$namaFranco = makeOption($dbname, 'setup_franco', 'id_franco,franco_name');
+			$sB = "background-color:#c6efce";
+
+			$tab .= "<div style='font-weight:bold;margin:12px 0 3px 0'>Ringkasan Penawaran</div>";
+			$tab .= "<table cellspacing=1 border=0 class=sortable style='width:100%'>
+				<thead class=rowheader><tr>
+					<td align=center>Supplier</td><td align=center>No. Penawaran</td><td align=center>Tanggal</td>
+					<td align=center>Syarat Bayar</td><td align=center>Lokasi Kirim</td><td align=center>Berlaku</td>
+					<td align=center>Subtotal</td><td align=center>Diskon</td><td align=center>PBBKB</td><td align=center>PPN (%)</td>
+					<td align=center>Total Penawaran</td><td align=center>Status</td>
+				</tr></thead><tbody>";
+			foreach ($penawaran as $p) {
+				$stmtS = $owlPDO->prepare("select jenis,keterangan from " . $dbname . ".log_5syaratbayar where kode=?");
+				$stmtS->execute(array($p['sisbayar2']));
+				$sy = $stmtS->fetch(PDO::FETCH_ASSOC);
+				$berlaku = ($tglOk($p['tgldari']) == '-' and $tglOk($p['tglsmp']) == '-') ? '-' : $tglOk($p['tgldari']) . ' s/d ' . $tglOk($p['tglsmp']);
+				$status = $p['menang'] ? 'Pemenang' : ($p['tolakrph'] == '1' ? 'Ditolak' : 'Pembanding');
+				$tab .= "<tr class=rowcontent style='vertical-align:top" . ($p['menang'] ? ";" . $sB : "") . "'>
+					<td>" . htmlspecialchars(isset($namaSup[$p['supplierid']]) ? $namaSup[$p['supplierid']] : $p['supplierid']) . "</td>
+					<td>" . htmlspecialchars($p['nomor']) . "</td>
+					<td align=center>" . $tglOk($p['tanggal']) . "</td>
+					<td>" . htmlspecialchars($sy ? $sy['keterangan'] . ' (' . $sy['jenis'] . ')' : $p['sisbayar2']) . "</td>
+					<td>" . htmlspecialchars(isset($namaFranco[$p['id_franco']]) ? $namaFranco[$p['id_franco']] : '') . "</td>
+					<td align=center>" . $berlaku . "</td>
+					<td align=right>" . number_format($p['subtotal'], 2) . "</td>
+					<td align=right>" . ($p['diskonpersen'] > 0 ? number_format($p['diskonpersen'], 2) . '%' : '-') . "</td>
+					<td align=right>" . number_format($p['pbbkb'], 2) . "</td>
+					<td align=right>" . number_format($p['ppn'], 2) . "</td>
+					<td align=right><b>" . number_format($p['nilaipermintaan'], 2) . "</b> " . htmlspecialchars($p['matauang']) . ($p['matauang'] != 'IDR' ? " (kurs " . number_format($p['kurs'], 2) . ")" : "") . "</td>
+					<td align=center><b>" . $status . "</b></td>
+				</tr>";
+				if ($p['menang'] and trim((string)$p['catatanmenang']) != '') {
+					$tab .= "<tr class=rowcontent><td colspan=12>Catatan: " . htmlspecialchars(trim($p['catatanmenang'])) . "</td></tr>";
+				}
+			}
+			$tab .= "</tbody></table>";
+
+			##rincian harga pemenang
+			$tab .= "<div style='font-weight:bold;margin:12px 0 3px 0'>Rincian Harga Pemenang</div>";
+			$tab .= "<table cellspacing=1 border=0 class=sortable style='width:100%'>
+				<thead class=rowheader><tr>
+					<td align=center>No.</td><td align=center>Kode</td><td align=center>Nama Barang</td><td align=center>Satuan</td>
+					<td align=center>Jumlah</td><td align=center>Harga</td><td align=center>Diskon (%)</td>
+					<td align=center>Harga Setelah Diskon</td><td align=center>Subtotal</td><td align=center>Harga Terakhir</td><td align=center>Selisih</td>
+				</tr></thead><tbody>";
+			$noR = 0;
+			$totalR = 0;
+			foreach ($perBarang as $kunci => $daftar) {
+				foreach ($daftar as $o) {
+					if ($o['score'] == '1' and $o['supplierid'] == $supplierid) {
+						$noR++;
+						$net = $hargaNet($o['harga'], $o['diskonpersen']);
+						$sub = $net * $o['jumlah'];
+						$totalR += $sub;
+						$terakhir = isset($arrHarga[$o['kodebarang']]) ? $arrHarga[$o['kodebarang']] : 0;
+						$selisih = ($terakhir > 0) ? (($net - $terakhir) / $terakhir * 100) : null;
+						$optNm = makeOption($dbname, 'log_5masterbarang', 'kodebarang,namabarang', "kodebarang='" . addslashes($o['kodebarang']) . "'");
+						$stmtSt = $owlPDO->prepare("select satuan from " . $dbname . ".log_5masterbarang where kodebarang=?");
+						$stmtSt->execute(array($o['kodebarang']));
+						$satuanBrg = $stmtSt->fetchColumn();
+						$tab .= "<tr class=rowcontent>
+							<td align=center>" . $noR . "</td>
+							<td>" . htmlspecialchars($o['kodebarang']) . "</td>
+							<td>" . htmlspecialchars(isset($optNm[$o['kodebarang']]) ? $optNm[$o['kodebarang']] : '') . "</td>
+							<td align=center>" . htmlspecialchars((string)$satuanBrg) . "</td>
+							<td align=right>" . number_format($o['jumlah'], 2) . "</td>
+							<td align=right>" . number_format($o['harga'], 2) . "</td>
+							<td align=right>" . ($o['diskonpersen'] > 0 ? number_format($o['diskonpersen'], 2) : '-') . "</td>
+							<td align=right>" . number_format($net, 2) . "</td>
+							<td align=right>" . number_format($sub, 2) . "</td>
+							<td align=right>" . ($terakhir > 0 ? number_format($terakhir, 2) : '-') . "</td>
+							<td align=right>" . ($selisih === null ? '-' : (($selisih > 0 ? '+' : '') . number_format($selisih, 1) . '%')) . "</td>
+						</tr>";
+					}
+				}
+			}
+			if ($noR == 0) {
+				$tab .= "<tr class=rowcontent><td colspan=11 align=center>Tidak ada data</td></tr>";
+			} else {
+				$tab .= "<tr class=rowcontent><td colspan=8 align=right><b>Total</b></td><td align=right><b>" . number_format($totalR, 2) . "</b></td><td colspan=2></td></tr>";
+			}
+			$tab .= "</tbody></table>";
+
+			##pembanding penawaran lain per barang (hanya bila ada lebih dari satu penawaran)
+			$adaBanding = false;
+			foreach ($perBarang as $daftar) {
+				if (count($daftar) > 1) {
+					$adaBanding = true;
+				}
+			}
+			if ($adaBanding) {
+				$tab .= "<div style='font-weight:bold;margin:12px 0 3px 0'>Pembanding Penawaran per Barang</div>";
+				$tab .= "<table cellspacing=1 border=0 class=sortable style='width:100%'>
+					<thead class=rowheader><tr>
+						<td align=center>Barang</td><td align=center>Supplier</td><td align=center>No. Penawaran</td>
+						<td align=center>Jumlah</td><td align=center>Harga</td><td align=center>Diskon (%)</td>
+						<td align=center>Harga Setelah Diskon</td><td align=center>Subtotal</td><td align=center>Selisih vs Pemenang</td><td align=center>Status</td>
+					</tr></thead><tbody>";
+				foreach ($perBarang as $kunci => $daftar) {
+					if (count($daftar) < 2) {
+						continue;
+					}
+					$hargaMenang = null;
+					foreach ($daftar as $o) {
+						if ($o['score'] == '1' and $o['supplierid'] == $supplierid) {
+							$hargaMenang = $hargaNet($o['harga'], $o['diskonpersen']);
+						}
+					}
+					$stmtN = $owlPDO->prepare("select namabarang from " . $dbname . ".log_5masterbarang where kodebarang=?");
+					$stmtN->execute(array($daftar[0]['kodebarang']));
+					$namaBrg = $stmtN->fetchColumn();
+					foreach ($daftar as $o) {
+						$net = $hargaNet($o['harga'], $o['diskonpersen']);
+						$menang = ($o['score'] == '1' and $o['supplierid'] == $supplierid);
+						$beda = ($hargaMenang > 0 and !$menang) ? (($net - $hargaMenang) / $hargaMenang * 100) : null;
+						$tab .= "<tr class=rowcontent style='" . ($menang ? $sB : "") . "'>
+							<td>" . htmlspecialchars($o['kodebarang'] . ' - ' . (string)$namaBrg) . "</td>
+							<td>" . htmlspecialchars(isset($namaSup[$o['supplierid']]) ? $namaSup[$o['supplierid']] : $o['supplierid']) . "</td>
+							<td>" . htmlspecialchars($o['nomor']) . "</td>
+							<td align=right>" . number_format($o['jumlah'], 2) . "</td>
+							<td align=right>" . number_format($o['harga'], 2) . "</td>
+							<td align=right>" . ($o['diskonpersen'] > 0 ? number_format($o['diskonpersen'], 2) : '-') . "</td>
+							<td align=right>" . number_format($net, 2) . "</td>
+							<td align=right>" . number_format($net * $o['jumlah'], 2) . "</td>
+							<td align=right>" . ($beda === null ? '-' : (($beda > 0 ? '+' : '') . number_format($beda, 1) . '%')) . "</td>
+							<td align=center><b>" . ($menang ? 'Pemenang' : ($o['tolakrph'] == '1' ? 'Ditolak' : 'Pembanding')) . "</b></td>
+						</tr>";
+					}
+				}
+				$tab .= "</tbody></table>";
+			}
+		}
+
 		echo $tab;
 	break;
 	

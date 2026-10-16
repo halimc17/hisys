@@ -1,3 +1,58 @@
+//select2 untuk dropdown halaman ini (zSelect2.js tidak dimuat)
+$(document).ready(function(){
+	$('.select2').select2({dropdownAutoWidth:true,width:'100%'});
+	samakanTinggiFilterVrph();
+	$(window).on('load',samakanTinggiFilterVrph);
+	//daftar pilihan select2 harus tampil di atas popup/dialog
+	$('<style>.select2-container--open .select2-dropdown{z-index:100000;}</style>').appendTo('head');
+});
+
+//kotak List Job dibuat setinggi kotak Cari
+function samakanTinggiFilterVrph(){
+	var a=document.getElementById('fsCariVrph'),b=document.getElementById('fsListJobVrph');
+	if(a&&b){
+		b.style.boxSizing='border-box';
+		b.style.height=a.offsetHeight+'px';
+		//isi List Job (angka notifikasi) di tengah kotak
+		var n=document.getElementById('notifikasiKerja'),lg=b.querySelector('legend');
+		if(n){
+			n.style.display='flex';
+			n.style.alignItems='center';
+			n.style.justifyContent='center';
+			n.style.height=Math.max(20,b.clientHeight-(lg?lg.offsetHeight:0)-24)+'px';
+		}
+	}
+}
+
+//isi pilihan (select2) lalu perbarui tampilannya
+function setSelVrph(id,v){
+	var el=document.getElementById(id);
+	el.value=v;
+	if(window.jQuery){
+		jQuery(el).trigger('change.select2');
+	}
+}
+
+//tarikan Excel dan PDF mengikuti filter yang sedang dipilih
+function getFilterParamVrph(){
+	var p='';
+	p+='&crnotransaksi='+encodeURIComponent(trim(document.getElementById('txtsearch').value));
+	p+='&crtanggal='+encodeURIComponent(trim(document.getElementById('tgl_cari').value));
+	p+='&filterTahun='+encodeURIComponent(document.getElementById('filterTahun').value);
+	p+='&filterStatus='+encodeURIComponent(document.getElementById('filterStatus').value);
+	p+='&filterPurchaser='+encodeURIComponent(document.getElementById('filterPurchaser').value);
+	return p;
+}
+function tampilTarikanVrph(judul,tujuan){
+	alertify.popup(judul,"<iframe frameborder=0 style='width:100%;height:100%;overflow:none' src='"+tujuan+"'></iframe>").set({'resizable':true,'maximizable':true,'overflow':false}).resizeTo('80%','70%');
+}
+function exportExcelVrph(){
+	tampilTarikanVrph('Report Ms.Excel','log_slave_verifikasirph.php?method=excellist'+getFilterParamVrph());
+}
+function exportPdfVrph(){
+	tampilTarikanVrph('Report PDF','log_slave_verifikasirph.php?method=pdflist'+getFilterParamVrph());
+}
+
 function loadRFQChat(nomor, ev) {
 	title = "Chat:" + nomor;
 	content = "<iframe frameborder=0 style='width:510px;height:290px;' src='log_slaveChatRFQ.php?nomor=" + nomor + "'></iframe>";
@@ -18,6 +73,9 @@ function displaylist()
 {
 	document.getElementById('txtsearch').value='';
     document.getElementById('tgl_cari').value='';
+	setSelVrph('filterStatus','');
+	setSelVrph('filterPurchaser','');
+	setSelVrph('filterTahun',String(new Date().getFullYear()));
 	document.getElementById('formPP').style.display='none';
     document.getElementById('formPP2').style.display='none';
     document.getElementById('list_permintaan').style.display='block';
@@ -31,7 +89,8 @@ function loaddata(pg)
 	crnotransaksi = document.getElementById('txtsearch').value;
 	crtanggal = document.getElementById('tgl_cari').value;
 	
-	param='method=loaddata&page='+pg+'&crnotransaksi='+crnotransaksi+'&crtanggal='+crtanggal;
+	param='method=loaddata&page='+pg+'&crnotransaksi='+encodeURIComponent(crnotransaksi)+'&crtanggal='+encodeURIComponent(crtanggal);
+	param+='&filterTahun='+encodeURIComponent(document.getElementById('filterTahun').value)+'&filterStatus='+encodeURIComponent(document.getElementById('filterStatus').value)+'&filterPurchaser='+encodeURIComponent(document.getElementById('filterPurchaser').value);
     tujuan = 'log_slave_verifikasirph.php';
     post_response_text(tujuan, param, respog);
     function respog()
@@ -144,7 +203,7 @@ function schgetDtPP()
 	schklbrg=document.getElementById('schklbrg').value;
 	schkdbrg=document.getElementById('schkdbrg').value;
 	
-	param='method=getBarangPP'+'&schnopp='+schnopp+'&schjenis='+schjenis+'&schunit='+schunit;
+	param='method=getBarangPP'+'&schnopp='+encodeURIComponent(schnopp)+'&schjenis='+encodeURIComponent(schjenis)+'&schunit='+encodeURIComponent(schunit);
     param+='&schklbrg='+schklbrg+'&schpt='+schpt+'&schkdbrg='+schkdbrg;	
     
     tujuan='log_slave_verifikasirph.php';

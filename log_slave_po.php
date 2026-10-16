@@ -3,6 +3,8 @@ error_reporting(E_ERROR & ~E_NOTICE);
 require_once('master_validation.php');
 include_once('lib/nangkoelib.php');
 include_once('lib/zLib.php');
+include_once('lib/HtmlExcel.php');
+require_once('lib/fpdf.php');
 
 $method = checkPostGet('method', '');
 $nopo = checkPostGet('nopo', '');
@@ -33,7 +35,414 @@ $arrcheck = array("0" => "", "1" => "√");
 $tipeApp = "PO";
 $jenisApp = "PO";
 
+#=== Filter list PO serta tarikan Excel/PDF (dipakai bersama oleh list, Excel, dan PDF) ===
+#teks bebas di-escape sekali; tanggal dd-mm-yyyy; status 1-5; tahun 4 digit; supplier alfanumerik
+if (!function_exists('poEsc')) {
+	function poEsc($v)
+	{
+		global $owlPDO;
+		return substr($owlPDO->quote((string)$v), 1, -1);
+	}
+}
+if (!function_exists('poTglSql')) {
+	function poTglSql($v)
+	{
+		return preg_match('/^(\d{2})-(\d{2})-(\d{4})$/', trim((string)$v), $m) ? $m[3] . '-' . $m[2] . '-' . $m[1] : '';
+	}
+}
+if (!function_exists('poWhereList')) {
+	function poWhereList()
+	{
+		global $dbname;
+		$where = "";
+		$v = trim((string)checkPostGet('crnopo', ''));
+		if ($v != '') {
+			$where .= " and a.nopo LIKE '%" . poEsc($v) . "%'";
+		}
+		$v = trim((string)checkPostGet('txtsearch_nopp', ''));
+		if ($v != '') {
+			$where .= " and b.nopp LIKE '%" . poEsc($v) . "%'";
+		}
+		$v = poTglSql(checkPostGet('crtanggal', ''));
+		if ($v != '') {
+			$where .= " and a.tanggal='" . $v . "'";
+		}
+		$v = poTglSql(checkPostGet('tglrilis_cari', ''));
+		if ($v != '') {
+			$where .= " and a.tglrelease LIKE '%" . $v . "%'";
+		}
+		$v = trim((string)checkPostGet('txtnamsupsch', ''));
+		if ($v != '') {
+			$where .= " and a.kodesupplier in (select supplierid from " . $dbname . ".log_5supplier where namasupplier like '%" . poEsc($v) . "%')";
+		}
+		$v = trim((string)checkPostGet('filterSupplier', ''));
+		if ($v != '' and preg_match('/^[A-Za-z0-9_\-\.]+$/', $v)) {
+			$where .= " and a.kodesupplier='" . $v . "'";
+		}
+		$st = (string)checkPostGet('filterId', '');
+		if ($st == '1') {
+			##RELEASE
+			$where .= " and a.statuspo in ('2','3') and a.stat_release='1' and a.closed='0'";
+		} elseif ($st == '2') {
+			##UNRELEASE
+			$where .= " and a.statuspo in ('0','1')";
+		} elseif ($st == '3') {
+			##BECOME OUT STANDING
+			$where .= " and a.statuspo in ('2','3') and a.closed='1' and a.keteranganclose like '%,tanggal tutup : %'";
+		} elseif ($st == '4') {
+			##CLOSE
+			$where .= " and a.statuspo in ('2','3') and a.closed='1' and (a.keterangan like '%,tanggal tutup : %' or a.keteranganclose like '%Tutup By System%')";
+		} elseif ($st == '5') {
+			##CANCEL
+			$where .= " and a.statuspo in ('4') and a.closed='1' and (a.keteranganclose like '%,tanggal cancel : %')";
+		}
+		$th = trim((string)checkPostGet('filterTahun', ''));
+		if (preg_match('/^\d{4}$/', $th)) {
+			$where .= " and a.tanggal>='" . $th . "-01-01' and a.tanggal<='" . $th . "-12-31'";
+		}
+		return $where;
+	}
+}
+#PO milik purchaser yang login (jabatan 5 melihat semua)
+if (!function_exists('poScopeList')) {
+	function poScopeList()
+	{
+		if ($_SESSION['empl']['kodejabatan'] == '5') {
+			return "";
+		}
+		return " and a.purchaser='" . poEsc($_SESSION['standard']['userid']) . "'";
+	}
+}
+#status, PIC, dan keterangan satu PO (dipakai tampilan list dan tarikan Excel/PDF)
+if (!function_exists('poStatusInfo')) {
+	function poStatusInfo($bar)
+	{
+		global $dbname;
+		$pic = "";
+		$optPic = makeOption($dbname, 'datakaryawan', 'karyawanid,namakaryawan', "karyawanid='" . $bar['useridreleasae'] . "'");
+		$picrelease = $optPic[$bar['useridreleasae']];
+		$optPic = makeOption($dbname, 'datakaryawan', 'karyawanid,namakaryawan', "karyawanid='" . $bar['userclosed'] . "'");
+		$picclose = $optPic[$bar['userclosed']];
+
+		##STATUS PO
+		$keterangan = "";
+		$postatus = "";
+		if ($bar['statuspo'] == '0') {
+			$postatus = "Unrelease";
+			$keterangan .= "- Belum diajukan";
+		} else if ($bar['statuspo'] == '1') {
+			$postatus = "Unrelease";
+			$keterangan .= "- Proses persetujuan";
+		} else if ($bar['statuspo'] == '2') {
+			if ($bar['closed'] == '0') {
+				$postatus = "Release";
+				$keterangan .= "";
+			} else {
+				if (strpos($bar['keteranganclose'], ",tanggal tutup : ")) {
+					$postatus = "Become Out Standing";
+					$keterangan .= $bar['keteranganclose'];
+					$pic = $picclose;
+				}
+				if (strpos($bar['keterangan'], ",tanggal tutup : ")) {
+					$postatus = "Close";
+					$keterangan .= $bar['keterangan'];
+					$pic = $picclose;
+				}
+				if (strpos($bar['keteranganclose'], "Tutup By System")) {
+					$postatus = "Close";
+					$keterangan .= "- Semua Barang Sudah Diterimakan";
+					$pic = "bysystem";
+				}
+			}
+		} else if ($bar['statuspo'] == '3') {
+			if ($bar['closed'] == '0') {
+				$postatus = "Release";
+				$keterangan .= "- Sudah ada penerimaan";
+				$pic = $picrelease;
+			} else {
+				if (strpos($bar['keteranganclose'], ",tanggal tutup : ")) {
+					$postatus = "Become Out Standing";
+					$keterangan .= "- Sudah ada penerimaan<br>";
+					$keterangan .= "- " . $bar['keteranganclose'];
+					$pic = $picclose;
+				}
+				if (strpos($bar['keterangan'], ",tanggal tutup : ")) {
+					$postatus = "Close";
+					$keterangan .= "- Sudah ada penerimaan<br>";
+					$keterangan .= "- " . $bar['keterangan'];
+					$pic = $picclose;
+				}
+				if (strpos($bar['keteranganclose'], "Tutup By System")) {
+					$postatus = "Close";
+					$keterangan .= "- Semua Barang Sudah Diterimakan";
+					$pic = "bysystem";
+				}
+			}
+		} else if ($bar['statuspo'] == '4') {
+			$postatus = "Cancel";
+			$keterangan .= $bar['keteranganclose'];
+			$pic = $picclose;
+		}
+		return array('postatus' => $postatus, 'keterangan' => $keterangan, 'pic' => $pic);
+	}
+}
+#teks keterangan (berisi tag br) menjadi teks biasa
+if (!function_exists('poTeksDatar')) {
+	function poTeksDatar($html, $pemisah)
+	{
+		$t = preg_replace('/<br\s*\/?>/i', "\n", (string)$html);
+		$t = trim(strip_tags($t));
+		$t = preg_replace('/\n+/', $pemisah, $t);
+		return trim($t);
+	}
+}
+#warna latar status persetujuan satu tingkat (0 menunggu, 1 disetujui, 2 dikoreksi, 3 ditolak)
+if (!function_exists('poWarnaApproval')) {
+	function poWarnaApproval($status)
+	{
+		$w = array('0' => '#ffeb9c', '1' => '#c6efce', '2' => '#fce4d6', '3' => '#ffc7ce');
+		return isset($w[(string)$status]) ? $w[(string)$status] : '';
+	}
+}
+#warna status PO: latar dan teks (hijau Release, kuning Unrelease, oranye Become Out Standing, abu Close, merah Cancel)
+if (!function_exists('poWarnaStatus')) {
+	function poWarnaStatus($status)
+	{
+		$w = array(
+			'Release' => array('#c6efce', '#006100'),
+			'Unrelease' => array('#ffeb9c', '#9c5700'),
+			'Become Out Standing' => array('#fce4d6', '#a04000'),
+			'Close' => array('#d9d9d9', '#404040'),
+			'Cancel' => array('#ffc7ce', '#9c0006')
+		);
+		return isset($w[$status]) ? $w[$status] : array('', '');
+	}
+}
+#PO sesuai filter untuk tarikan Excel/PDF (dibatasi supaya tidak berat)
+if (!function_exists('poDataList')) {
+	function poDataList($maks = 3000)
+	{
+		global $dbname, $poTerpotong;
+		$rows = fetchdata("select a.* from " . $dbname . ".log_poht a left join " . $dbname . ".log_podt b on a.nopo=b.nopo where 1=1 " . poScopeList() . poWhereList() . " group by a.nopo order by a.tanggal desc limit " . ((int)$maks + 1));
+		$poTerpotong = count($rows) > $maks;
+		return array_slice($rows, 0, $maks);
+	}
+}
+#keterangan filter yang aktif untuk kop tarikan
+if (!function_exists('poInfoFilter')) {
+	function poInfoFilter()
+	{
+		global $dbname, $poTerpotong;
+		$arrStatus = array('1' => 'Release', '2' => 'Unrelease', '3' => 'Become Out Standing', '4' => 'Close', '5' => 'Cancel');
+		$info = array();
+		$th = trim((string)checkPostGet('filterTahun', ''));
+		$info[] = 'Tahun: ' . (preg_match('/^\d{4}$/', $th) ? $th : 'Semua');
+		$st = (string)checkPostGet('filterId', '');
+		$info[] = 'Status: ' . (isset($arrStatus[$st]) ? $arrStatus[$st] : 'Semua');
+		$sp = trim((string)checkPostGet('filterSupplier', ''));
+		if ($sp != '' and preg_match('/^[A-Za-z0-9_\-\.]+$/', $sp)) {
+			$nmsup = makeOption($dbname, 'log_5supplier', 'supplierid,namasupplier');
+			$info[] = 'Supplier: ' . (isset($nmsup[$sp]) ? trim($nmsup[$sp]) : $sp);
+		}
+		$v = trim((string)checkPostGet('crnopo', ''));
+		if ($v != '') {
+			$info[] = 'No. PO: ' . $v;
+		}
+		$v = trim((string)checkPostGet('txtsearch_nopp', ''));
+		if ($v != '') {
+			$info[] = 'No. PP: ' . $v;
+		}
+		if (poTglSql(checkPostGet('crtanggal', '')) != '') {
+			$info[] = 'Tanggal PO: ' . trim(checkPostGet('crtanggal', ''));
+		}
+		if (poTglSql(checkPostGet('tglrilis_cari', '')) != '') {
+			$info[] = 'Tanggal Rilis: ' . trim(checkPostGet('tglrilis_cari', ''));
+		}
+		if (!empty($poTerpotong)) {
+			$info[] = 'Dibatasi 3000 data terbaru, persempit filter bila perlu';
+		}
+		return implode(' | ', $info);
+	}
+}
+#nomor PP sebuah PO (teks biasa) dan syarat pembayaran
+if (!function_exists('poNomorPp')) {
+	function poNomorPp($nopo)
+	{
+		global $dbname, $owlPDO;
+		$stmt = $owlPDO->prepare("select distinct nopp from " . $dbname . ".log_podt where nopo=?");
+		$stmt->execute(array($nopo));
+		return implode(', ', $stmt->fetchAll(PDO::FETCH_COLUMN));
+	}
+}
+if (!function_exists('poSyaratBayar')) {
+	function poSyaratBayar($kode)
+	{
+		global $dbname, $owlPDO;
+		$stmt = $owlPDO->prepare("select jenis, keterangan from " . $dbname . ".log_5syaratbayar where kode=?");
+		$stmt->execute(array($kode));
+		$r = $stmt->fetch(PDO::FETCH_ASSOC);
+		return $r ? $r['keterangan'] . ' (' . $r['jenis'] . ')' : '';
+	}
+}
+#teks yang kepanjangan dipotong dan diberi "..." supaya tidak tumpang tindih ke kolom sebelah
+if (!function_exists('poFit')) {
+	function poFit($pdf, $txt, $w, $f = 7)
+	{
+		$txt = utf8_decode($txt);
+		$pdf->SetFont('Arial', '', $f);
+		if ($pdf->GetStringWidth($txt) <= $w - 2) {
+			return $txt;
+		}
+		while (strlen($txt) > 1 && $pdf->GetStringWidth($txt . '...') > $w - 2) {
+			$txt = substr($txt, 0, -1);
+		}
+		return rtrim($txt) . '...';
+	}
+}
 switch ($method) {
+
+	case 'excellist':
+		$rows = poDataList();
+		$hdpt = setheadreport($_SESSION['empl']['kodeorganisasi'], $_SESSION['empl']['kodeorganisasi']);
+		$nmsup = makeOption($dbname, 'log_5supplier', 'supplierid,namasupplier');
+		$kolom = 11;
+		$stream = "<table>
+			<tr><td colspan=" . $kolom . "><b>" . htmlspecialchars($hdpt['nama']) . "</b></td></tr>
+			<tr><td colspan=" . $kolom . "><b>PO / SO</b></td></tr>
+			<tr><td colspan=" . $kolom . ">" . htmlspecialchars(poInfoFilter()) . "</td></tr>
+			<tr><td colspan=" . $kolom . ">Ditarik oleh " . htmlspecialchars($_SESSION['empl']['name']) . " (" . htmlspecialchars($_SESSION['standard']['username']) . ") pada " . date('d-m-Y H:i:s') . "</td></tr>
+			<tr><td colspan=" . $kolom . ">&nbsp;</td></tr>
+			</table>";
+		$stream .= "<table class=sortable cellspacing=1 cellpadding=3 border=1>
+			<thead><tr>
+				<th align=center bgcolor=#CCCCCC>No</th>
+				<th align=center bgcolor=#CCCCCC>No. PO</th>
+				<th align=center bgcolor=#CCCCCC>No. PP</th>
+				<th align=center bgcolor=#CCCCCC>Supplier</th>
+				<th align=center bgcolor=#CCCCCC>Tanggal PO</th>
+				<th align=center bgcolor=#CCCCCC>Syarat Pembayaran</th>
+				<th align=center bgcolor=#CCCCCC>Status</th>
+				<th align=center bgcolor=#CCCCCC>PIC</th>
+				<th align=center bgcolor=#CCCCCC>Keterangan</th>
+				<th align=center bgcolor=#CCCCCC>Tanggal Rilis</th>
+				<th align=center bgcolor=#CCCCCC>Tanggal Cetak</th>
+			</tr></thead><tbody>";
+		$no = 0;
+		foreach ($rows as $val) {
+			$no++;
+			$stPo = poStatusInfo($val);
+			$wrn = poWarnaStatus($stPo['postatus']);
+			$tglrel = tanggalnormal($val['tglrelease']);
+			$tglcetak = tanggalnormal($val['waktucetak']);
+			$stream .= "<tr>
+				<td align=center>" . $no . "</td>
+				<td>" . htmlspecialchars($val['nopo']) . "</td>
+				<td>" . htmlspecialchars(poNomorPp($val['nopo'])) . "</td>
+				<td>" . htmlspecialchars(isset($nmsup[$val['kodesupplier']]) ? $nmsup[$val['kodesupplier']] : $val['kodesupplier']) . "</td>
+				<td align=center>" . tanggalnormal($val['tanggal']) . "</td>
+				<td>" . htmlspecialchars(poSyaratBayar($val['syaratbayar'])) . "</td>
+				<td align=center" . ($wrn[0] != '' ? " bgcolor=" . $wrn[0] . " style='color:" . $wrn[1] . ";font-weight:bold'" : "") . ">" . htmlspecialchars($stPo['postatus']) . "</td>
+				<td align=center>" . htmlspecialchars($stPo['pic']) . "</td>
+				<td>" . nl2br(htmlspecialchars(poTeksDatar($stPo['keterangan'], "\n"))) . "</td>
+				<td align=center>" . ($tglrel == '--' || $tglrel == '00-00-0000' ? '' : $tglrel) . "</td>
+				<td align=center>" . ($tglcetak == '--' || $tglcetak == '00-00-0000' ? '' : $tglcetak) . "</td>
+			</tr>";
+		}
+		if ($no == 0) {
+			$stream .= "<tr><td colspan=" . $kolom . " align=center>Data tidak ditemukan</td></tr>";
+		}
+		$stream .= "</tbody></table>";
+		$xls = new HtmlExcel();
+		$xls->addSheet("PO", $stream);
+		$xls->headers("PO_" . date('YmdHis') . ".xls");
+		echo $xls->buildFile();
+		exit;
+
+	case 'pdflist':
+		$rows = poDataList();
+		$hdpt = setheadreport($_SESSION['empl']['kodeorganisasi'], $_SESSION['empl']['kodeorganisasi']);
+		$nmsup = makeOption($dbname, 'log_5supplier', 'supplierid,namasupplier');
+		$infoFilter = poInfoFilter();
+		if (!class_exists('PDFListPO')) {
+			class PDFListPO extends FPDF
+			{
+				public $colW = array();
+
+				function Header()
+				{
+					global $hdpt, $infoFilter;
+					$width = $this->w - $this->lMargin - $this->rMargin;
+					if (file_exists($hdpt['logo'])) {
+						$this->Image($hdpt['logo'], $this->lMargin, $this->tMargin, 18);
+					}
+					$this->SetFont('Arial', 'B', 11);
+					$this->SetXY($this->lMargin + 22, $this->tMargin + 2);
+					$this->Cell(160, 6, utf8_decode($hdpt['nama']), 0, 1, 'L');
+					$this->SetY($this->tMargin + 15);
+					$this->SetFont('Arial', 'B', 13);
+					$this->Cell($width, 7, 'PO / SO', 0, 1, 'C');
+					$this->SetFont('Arial', '', 8);
+					$this->Cell($width, 5, utf8_decode($infoFilter), 0, 1, 'C');
+					$this->Cell($width, 5, utf8_decode('Ditarik oleh ' . $_SESSION['empl']['name'] . ' (' . $_SESSION['standard']['username'] . ') pada ' . date('d-m-Y H:i:s')), 0, 1, 'C');
+					$this->Ln(1);
+					$this->SetFillColor(220, 220, 220);
+					$this->SetFont('Arial', 'B', 8);
+					$judul = array('No', 'No. PO', 'No. PP', 'Supplier', 'Tanggal', 'Status', 'PIC', 'Tgl Rilis', 'Keterangan');
+					foreach ($judul as $i => $j) {
+						$this->Cell($this->colW[$i], 6, $j, 1, 0, 'C', true);
+					}
+					$this->Ln();
+				}
+
+				function Footer()
+				{
+					$this->SetY(-12);
+					$this->SetFont('Arial', 'I', 7);
+					$this->Cell(0, 8, 'Halaman ' . $this->PageNo() . ' / {nb}', 0, 0, 'R');
+				}
+			}
+		}
+		$pdf = new PDFListPO('L', 'mm', 'A4');
+		$pdf->AliasNbPages();
+		$pdf->SetAutoPageBreak(false, 16);
+		$width = $pdf->w - $pdf->lMargin - $pdf->rMargin;
+		$colFixed = array(8, 46, 40, 46, 18, 24, 26, 18); #semua kolom kecuali Keterangan
+		$pdf->colW = array_merge($colFixed, array($width - array_sum($colFixed)));
+		$pdf->AddPage();
+		$h = 6;
+		$no = 0;
+		foreach ($rows as $val) {
+			$no++;
+			if ($pdf->GetY() + $h > $pdf->h - $pdf->bMargin) {
+				$pdf->AddPage();
+			}
+			$stPo = poStatusInfo($val);
+			$c = $pdf->colW;
+			$tglrel = tanggalnormal($val['tglrelease']);
+			$pdf->SetFont('Arial', '', 7);
+			$pdf->Cell($c[0], $h, $no, 1, 0, 'C');
+			$pdf->Cell($c[1], $h, poFit($pdf, $val['nopo'], $c[1]), 1, 0, 'L');
+			$pdf->Cell($c[2], $h, poFit($pdf, poNomorPp($val['nopo']), $c[2]), 1, 0, 'L');
+			$pdf->Cell($c[3], $h, poFit($pdf, isset($nmsup[$val['kodesupplier']]) ? $nmsup[$val['kodesupplier']] : $val['kodesupplier'], $c[3]), 1, 0, 'L');
+			$pdf->Cell($c[4], $h, tanggalnormal($val['tanggal']), 1, 0, 'C');
+			$wrn = poWarnaStatus($stPo['postatus']);
+			if ($wrn[0] != '') {
+				sscanf($wrn[0], '#%02x%02x%02x', $br, $bg, $bb);
+				sscanf($wrn[1], '#%02x%02x%02x', $fr, $fg, $fb);
+				$pdf->SetFillColor($br, $bg, $bb);
+				$pdf->SetTextColor($fr, $fg, $fb);
+			}
+			$pdf->Cell($c[5], $h, poFit($pdf, $stPo['postatus'], $c[5]), 1, 0, 'L', $wrn[0] != '');
+			$pdf->SetTextColor(0, 0, 0);
+			$pdf->Cell($c[6], $h, poFit($pdf, $stPo['pic'], $c[6]), 1, 0, 'L');
+			$pdf->Cell($c[7], $h, ($tglrel == '--' || $tglrel == '00-00-0000') ? '' : $tglrel, 1, 0, 'C');
+			$pdf->Cell($c[8], $h, poFit($pdf, poTeksDatar($stPo['keterangan'], '; '), $c[8]), 1, 1, 'L');
+		}
+		if ($no == 0) {
+			$pdf->Cell(array_sum($pdf->colW), $h, 'Data tidak ditemukan', 1, 1, 'C');
+		}
+		$pdf->Output();
+		exit;
 
 	case 'updatecetak':
 		## Cek PO
@@ -153,62 +562,10 @@ switch ($method) {
 		}
 		$offset = $page * $limit;
 
-		$where = "";
+		$where = poWhereList() . poScopeList();
 
-		if ($crnopo != "") {
-			$where .= " and a.nopo LIKE  '%" . $crnopo . "%'";
-		}
-		if ($txtsearch_nopp != "") {
-			$where .= " and b.nopp LIKE  '%" . $txtsearch_nopp . "%'";
-		}
-
-		if ($crtanggal != "") {
-			$where .= " and a.tanggal LIKE '%" . tanggalsystemn($crtanggal) . "%'";
-		}
-		if ($tglrilis_cari != "") {
-			$where .= " and a.tglrelease LIKE '%" . tanggalsystemn($tglrilis_cari) . "%'";
-		}
-
-		if ($txtnamsupsch != "") {
-			$where .= " and a.kodesupplier in (select supplierid from " . $dbname . ".log_5supplier where namasupplier like '%" . $txtnamsupsch . "%')";
-		}
-
-		if (!empty($_POST['filterId'])) {
-			if ($_POST['filterId'] == '1') {
-				##RELEASE
-				$where .= " and a.statuspo in ('2','3') and stat_release='1' and closed='0'";
-			}
-			if ($_POST['filterId'] == '2') {
-				##UNRELEASE
-				$where .= " and a.statuspo in ('0','1')";
-			}
-			if ($_POST['filterId'] == '3') {
-				##BECOME OUT STANDING
-				$where .= " and a.statuspo in ('2','3') and closed='1' and keteranganclose like '%,tanggal tutup : %'";
-			}
-			if ($_POST['filterId'] == '4') {
-				##CLOSE
-				$where .= " and a.statuspo in ('2','3') and closed='1' and (keterangan like '%,tanggal tutup : %' or keteranganclose like '%Tutup By System%')";
-			}
-			if ($_POST['filterId'] == '5') {
-				##CENCEL
-				$where .= " and a.statuspo in ('4') and closed='1' and (keteranganclose like '%,tanggal cancel : %')";
-			}
-		}
-
-		if ($_SESSION['empl']['kodejabatan'] == '5') {
-			// $strCount = "select count(*) as jmlhrow from ".$dbname.".log_poht where 1=1 ".$where." order by tanggal desc ";
-			$strCount = "select count(distinct(a.nopo)) as jmlhrow from " . $dbname . ".log_poht a left join " . $dbname . ".log_podt b on a.nopo=b.nopo where 1=1 " . $where . " group by a.nopo order by tanggal desc ";
-			//$str = "select * from ".$dbname.".log_poht where 1=1 ".$where." order by stat_release asc, substr(nopo,-3) asc, tanggal desc limit ".$offset.",".$limit."";
-			// $str = "select * from ".$dbname.".log_poht where 1=1 ".$where." order by tanggal desc limit ".$offset.",".$limit."";
-			$str = "select * from " . $dbname . ".log_poht a left join " . $dbname . ".log_podt b on a.nopo=b.nopo where 1=1 " . $where . " group by a.nopo order by tanggal desc limit " . $offset . "," . $limit . "";
-		} else {
-			// $strCount = "select count(*) as jmlhrow from ".$dbname.".log_poht where purchaser='".$_SESSION['standard']['userid']."' ".$where." order by tanggal desc ";
-			$strCount = "select count(distinct(a.nopo)) as jmlhrow from " . $dbname . ".log_poht a left join " . $dbname . ".log_podt b on a.nopo=b.nopo where purchaser='" . $_SESSION['standard']['userid'] . "' " . $where . " order by tanggal desc ";
-			//$str = "select * from ".$dbname.".log_poht where purchaser='".$_SESSION['standard']['userid']."' ".$where." order by stat_release asc,substr(nopo,-3,3) asc, tanggal desc limit ".$offset.",".$limit."";
-			// $str = "select * from ".$dbname.".log_poht where purchaser='".$_SESSION['standard']['userid']."' ".$where." order by tanggal desc limit ".$offset.",".$limit."";
-			$str = "select * from " . $dbname . ".log_poht a left join " . $dbname . ".log_podt b on a.nopo=b.nopo where purchaser='" . $_SESSION['standard']['userid'] . "' " . $where . " group by a.nopo order by tanggal desc limit " . $offset . "," . $limit . "";
-		}
+		$strCount = "select count(distinct a.nopo) as jmlhrow from " . $dbname . ".log_poht a left join " . $dbname . ".log_podt b on a.nopo=b.nopo where 1=1 " . $where;
+		$str = "select * from " . $dbname . ".log_poht a left join " . $dbname . ".log_podt b on a.nopo=b.nopo where 1=1 " . $where . " group by a.nopo order by tanggal desc limit " . $offset . "," . $limit . "";
 
 		$resCount = $owlPDO->query($strCount) or die(print " Gagal: " . PDOException::getMessage());
 		$resCount->setFetchMode(PDO::FETCH_ASSOC);
@@ -249,71 +606,10 @@ switch ($method) {
 				$bgcolor = "bgcolor='orange' onclick=getKoreksi('" . $res->nopo . "')";
 			}
 
-			$pic = "";
-			$optPic = makeOption($dbname, 'datakaryawan', 'karyawanid,namakaryawan', "karyawanid='" . $bar['useridreleasae'] . "'");
-			$picrelease = $optPic[$bar['useridreleasae']];
-			$optPic = makeOption($dbname, 'datakaryawan', 'karyawanid,namakaryawan', "karyawanid='" . $bar['userclosed'] . "'");
-			$picclose = $optPic[$bar['userclosed']];
-
-			##STATUS PO
-			$keterangan = "";
-			$postatus = "";
-			if ($bar['statuspo'] == '0') {
-				$postatus = "Unrelease";
-				$keterangan .= "- Belum diajukan";
-			} else if ($bar['statuspo'] == '1') {
-				$postatus = "Unrelease";
-				$keterangan .= "- Proses persetujuan";
-			} else if ($bar['statuspo'] == '2') {
-				if ($bar['closed'] == '0') {
-					$postatus = "Release";
-					$keterangan .= "";
-				} else {
-					if (strpos($bar['keteranganclose'], ",tanggal tutup : ")) {
-						$postatus = "Become Out Standing";
-						$keterangan .= $bar['keteranganclose'];
-						$pic = $picclose;
-					}
-					if (strpos($bar['keterangan'], ",tanggal tutup : ")) {
-						$postatus = "Close";
-						$keterangan .= $bar['keterangan'];
-						$pic = $picclose;
-					}
-					if (strpos($bar['keteranganclose'], "Tutup By System")) {
-						$postatus = "Close";
-						$keterangan .= "- Semua Barang Sudah Diterimakan";
-						$pic = "bysystem";
-					}
-				}
-			} else if ($bar['statuspo'] == '3') {
-				if ($bar['closed'] == '0') {
-					$postatus = "Release";
-					$keterangan .= "- Sudah ada penerimaan";
-					$pic = $picrelease;
-				} else {
-					if (strpos($bar['keteranganclose'], ",tanggal tutup : ")) {
-						$postatus = "Become Out Standing";
-						$keterangan .= "- Sudah ada penerimaan<br>";
-						$keterangan .= "- " . $bar['keteranganclose'];
-						$pic = $picclose;
-					}
-					if (strpos($bar['keterangan'], ",tanggal tutup : ")) {
-						$postatus = "Close";
-						$keterangan .= "- Sudah ada penerimaan<br>";
-						$keterangan .= "- " . $bar['keterangan'];
-						$pic = $picclose;
-					}
-					if (strpos($bar['keteranganclose'], "Tutup By System")) {
-						$postatus = "Close";
-						$keterangan .= "- Semua Barang Sudah Diterimakan";
-						$pic = "bysystem";
-					}
-				}
-			} else if ($bar['statuspo'] == '4') {
-				$postatus = "Cancel";
-				$keterangan .= $bar['keteranganclose'];
-				$pic = $picclose;
-			}
+			$stInfo = poStatusInfo($bar);
+			$pic = $stInfo['pic'];
+			$postatus = $stInfo['postatus'];
+			$keterangan = $stInfo['keterangan'];
 
 			#periksa chat
 			$strChat = "select *  from " . $dbname . ".log_po_chat where nopo='" . $bar['nopo'] . "'";
@@ -331,14 +627,14 @@ switch ($method) {
 			$optNmSup = makeOption($dbname, 'log_5supplier', 'supplierid,namasupplier', "supplierid='" . $bar['kodesupplier'] . "'");
 			$tab .= "<tr class=rowcontent>
 				<td " . $bgcolor . "  align=center>" . $no . "</td>
-				<td " . $bgcolor . " >" . $bar['nopo'] . "</td>";
-			$tab .= "<td " . $bgcolor . ">
-				<ul>";
+				<td " . $bgcolor . " style='white-space:nowrap;min-width:190px'>" . $bar['nopo'] . "</td>";
+			$tab .= "<td " . $bgcolor . " style='min-width:230px'>
+				<ul style='margin:0;padding:0;list-style:none'>";
 			$str_nopp = "select distinct nopp from " . $dbname . ".log_podt where nopo='" . $bar['nopo'] . "' ";
 			$res_nopp = $owlPDO->query($str_nopp) or die(print " Gagal: " . PDOException::getMessage());
 			$res_nopp->setFetchMode(PDO::FETCH_ASSOC);
 			while ($bar_nopp = $res_nopp->fetch()) {
-				$tab .= "<li style='display: flex;align-items: center;text-align:center;' onclick=\"previewDetail2('" . $bar_nopp['nopp'] . "','',event)\" title='Detail PR/SR'>" . $bar_nopp['nopp'] . "  <img src=images/pdf.jpg class=zImgBtn  title='Print' onclick=\"masterPDF('log_prapoht','" . $bar_nopp['nopp'] . "','','log_slave_print_log_pp',event);\"></li>";
+				$tab .= "<li style='display:flex;align-items:center;justify-content:space-between;gap:6px;white-space:nowrap;padding:1px 0'><span style='cursor:pointer' onclick=\"previewDetail2('" . $bar_nopp['nopp'] . "','',event)\" title='Detail PR/SR'>" . $bar_nopp['nopp'] . "</span><img src=images/pdf.jpg class=zImgBtn title='Print' onclick=\"masterPDF('log_prapoht','" . $bar_nopp['nopp'] . "','','log_slave_print_log_pp',event);\"></li>";
 			}
 
 			$tab .= "</ul>";
@@ -380,7 +676,8 @@ switch ($method) {
 						}
 					}
 				}
-				$tab .= "<td align=center style='vertical-align:top'>
+				$bgApp = ($arrDetail['nama'] != '') ? poWarnaApproval($arrDetail['status']) : '';
+				$tab .= "<td align=center style='vertical-align:top" . ($bgApp != '' ? ";background-color:" . $bgApp : "") . "'>
 					<b>" . $arrDetail['nama'] . "</b>";
 				if ($arrDetail['nama'] != '') {
 					$tab .= "<br>Status : " . (($arrDetail['status'] == '9' || $arrDetail['status'] == '') ? "" : $arrDetail['namastatus']);
@@ -408,10 +705,19 @@ switch ($method) {
 			// echo "<pre>";
 			// print_r($termin);
 
-			$tab .= "<td " . $bgcolor . " style='text-align:center'>" . $postatus . "</td>
+			$wrn = poWarnaStatus($postatus);
+			$ketHtml = "";
+			foreach (preg_split('/<br\s*\/?>/i', (string)$keterangan) as $ln) {
+				$ln = trim(preg_replace('/^-\s*/', '', trim($ln)));
+				if ($ln == '' or $ln == 'Sudah ada penerimaan') {
+					continue;
+				}
+				$ketHtml .= "<div style='margin-bottom:4px;line-height:1.35'>" . $ln . "</div>";
+			}
+			$tab .= "<td " . $bgcolor . " style='text-align:center" . ($wrn[0] != '' ? ";background-color:" . $wrn[0] . ";color:" . $wrn[1] . ";font-weight:bold" : "") . "'>" . $postatus . "</td>
 				<td " . $bgcolor . " style='max-width:200px'>" . $pic . "</td>
 				<td " . $bgcolor . " width=200px>" . $termin[$bar['nopo']]['termin'] . "</td>
-				<td " . $bgcolor . " style='max-width:200px'>" . $keterangan . "</td>
+				<td " . $bgcolor . " style='min-width:200px;vertical-align:top;text-align:center'>" . $ketHtml . "</td>
 				<td align=center>";
 			//<td ".$bgcolor." >".$stat_po."</td>
 
@@ -476,12 +782,12 @@ switch ($method) {
 		}
 		$tab .= "</tr>";
 		$tabx .= "<tr>
-			<td colspan='" . ($countApp + 16) . "' align=center>
+			<td colspan='" . (getCountApproval($jenisApp, '') + 15) . "' align=center>
 				" . $frompage . " to " . $topage . " Of " .  $jlhbrs . "
 			</td>
 		</tr>
 		<tr>
-			<td colspan='" . ($countApp + 16) . "' align=center>";
+			<td colspan='" . (getCountApproval($jenisApp, '') + 15) . "' align=center>";
 
 		if ($page == '0') {
 			$tabx .= "";
@@ -631,10 +937,10 @@ switch ($method) {
 		}
 
 		$optBlank = "<option value=''></option>";
-		$showtermin = "style='display:none'";
+		$showtermin = "display:none;";
 		// if(substr($expnopo[3],0,2) == 'SO'){
 		if (strpos($nopo, "SO") !== false) {
-			$showtermin = "style='display:'";
+			$showtermin = "";
 		}
 
 		// cek nilai
@@ -690,12 +996,12 @@ switch ($method) {
 
 		## NO Referensi
 		// $showApprove.="<table id='tblreferensi' style='display:none'>
-		$showApprove .= "<table id='tblreferensi' " . $showtermin . ">
+		$showApprove .= "<table id='tblreferensi' style='" . $showtermin . "width:100%;margin-bottom:12px'>
 			<tr>
-				<td style='width:110px;vertical-align:top'>" . $_SESSION['lang']['noreferensi'] . "</td>
-				<td style='vertical-align:top'>:</td>
+				<td style='width:140px;vertical-align:top;padding-top:4px'>" . $_SESSION['lang']['noreferensi'] . "</td>
+				<td style='width:10px;vertical-align:top;padding-top:4px'>:</td>
 				<td>
-					<table cellspacing=1 class=sortable>
+					<table cellspacing=1 class=sortable style='width:100%'>
 						<thead>
 						<tr class=rowheader style='text-align:center'>
 						<td>" . $_SESSION['lang']['nopo'] . "</td>
@@ -712,7 +1018,7 @@ switch ($method) {
 						</tbody>
 						<tbody>
 						<tr>
-							<td colspan=5 style='text-align:center;font-weight:bold'>
+							<td colspan=8 style='text-align:center;font-weight:bold'>
 								<label style='cursor:pointer;color:#F9CC9D' onclick='carinoref(event)'>Cari No. PO</label>
 							</td>
 						</tr>
@@ -722,16 +1028,16 @@ switch ($method) {
 			</tr>
 		</table>";
 
-		$showApprove .= "<table id='tbltermin'>
+		$showApprove .= "<table id='tbltermin' style='width:100%;margin-bottom:12px'>
 			<tr>
-				<td style='width:110px;vertical-align:top'>Termin Pembayaran</td>
-				<td style='vertical-align:top;'>:</td>
+				<td style='width:140px;vertical-align:top;padding-top:4px'>Termin Pembayaran</td>
+				<td style='width:10px;vertical-align:top;padding-top:4px'>:</td>
 				<td>
-					<table cellspacing=1 class=sortable>
+					<table cellspacing=1 class=sortable style='width:100%'>
 						<thead>
 						<tr class=rowheader style='text-align:center'>
-							<td>" . $_SESSION['lang']['termin'] . "</td>
-							<td>" . $_SESSION['lang']['nilai'] . " (%)</td>
+							<td style='width:60px'>" . $_SESSION['lang']['termin'] . "</td>
+							<td style='width:90px'>" . $_SESSION['lang']['nilai'] . " (%)</td>
 							<td>" . $_SESSION['lang']['nilai'] . "</td>
 							<td>" . $_SESSION['lang']['action'] . "</td>
 						</tr>
@@ -742,10 +1048,10 @@ switch ($method) {
 						<tr>
 							<td></td>
 							<td>
-								<input type='number' min='1' max='100' class=myinputtextnumber onkeypress='return angka_doang(event)' placeholder='0' style=\"width:50px;\" value='' id=persentermin onblur=\"getnilaitermin()\" onkeyup=\"z.numberFormat('persentermin',2);getnilaitermin()\">
+								<input type='number' min='1' max='100' class=myinputtextnumber onkeypress='return angka_doang(event)' placeholder='0' style=\"width:100%;box-sizing:border-box;\" value='' id=persentermin onblur=\"getnilaitermin()\" onkeyup=\"z.numberFormat('persentermin',2);getnilaitermin()\">
 							</td>
 							<td>
-								<input type=text class=myinputtextnumber onkeypress='return angka_doang(event)' placeholder='0' style=\"width:100px;\" value='' id=nilaitermin onblur=\"getpersentermin()\"  onkeyup=\"z.numberFormat('nilaitermin',2);getpersentermin()\">
+								<input type=text class=myinputtextnumber onkeypress='return angka_doang(event)' placeholder='0' style=\"width:100%;box-sizing:border-box;\" value='' id=nilaitermin onblur=\"getpersentermin()\"  onkeyup=\"z.numberFormat('nilaitermin',2);getpersentermin()\">
 							</td>
 							<td style='text-align:center'>
 								<img onclick=\"tambahtermin()\" class='zImgBtn' src='images/addplus.png' title='Add'>
@@ -756,7 +1062,7 @@ switch ($method) {
 				</td>
 			</tr>
 		</table>";
-		$showApprove .= "<table id='tblpersetujuan'>";
+		$showApprove .= "<table id='tblpersetujuan' style='width:100%'>";
 		$arrDetail = array();
 		for ($i = 1; $i <= $countListApproval; $i++) {
 
@@ -786,10 +1092,10 @@ switch ($method) {
 				}
 			}
 			$showApprove .= "<tr>";
-			$showApprove .= "<td style='width:110px'>Persetujuan " . $i . "</td>";
-			$showApprove .= "<td>:</td>";
+			$showApprove .= "<td style='width:140px'>Persetujuan " . $i . "</td>";
+			$showApprove .= "<td style='width:10px'>:</td>";
 			$showApprove .= "<td>
-				<select style='width:200px' id='persetujuan_" . $i . "'>" . $optPersetujuan . "</select>
+				<select class=select2po style='width:300px' id='persetujuan_" . $i . "'>" . $optPersetujuan . "</select>
 			</td>";
 			$showApprove .= "</tr>";
 		}
@@ -924,6 +1230,40 @@ switch ($method) {
 			exit("warning: Persetujuan belum disetup. Silahkan hubungi administrator.");
 		}
 
+		#semua pilihan penyetuju dicek dulu sebelum approval lama dihapus
+		for ($i = 1; $i <= $countpersetujuan; $i++) {
+			if ($_POST['persetujuan' . $i] == '') {
+				exit("warning: Persetujuan " . $i . " belum dipilih.");
+			}
+		}
+
+		//cek matauang dan kurs
+		if ($mtUang != 'IDR') {
+			$sGetKurs = "select distinct kurs,kode from " . $dbname . ".setup_matauangrate where kode='" . $mtUang . "' and daritanggal='" . $tglpo . "' order by daritanggal desc";
+			$qGetKurs = $owlPDO->query($sGetKurs) or die(print " Gagal: " . PDOException::getMessage());
+			$qGetKurs->setFetchMode(PDO::FETCH_ASSOC);
+			$rGetKurs = $qGetKurs->fetch();
+			if ($Kurs < $rGetKurs['kurs']) {
+				exit("Error: Please provide curs corrensponding to currency, curs for " . $rGetKurs['kode'] . " :" . $rGetKurs['kurs']);
+			}
+		} else {
+			$Kurs = 1;
+		}
+
+		#PO yang sudah release tidak boleh diubah
+		$scek = "select stat_release from " . $dbname . ".log_poht where nopo='" . $nopo . "'";
+		$qcek = $owlPDO->query($scek) or die(print " Gagal: " . PDOException::getMessage());
+		$qcek->setFetchMode(PDO::FETCH_ASSOC);
+		$rcek = $qcek->fetch();
+		if ($rcek['stat_release'] == 1) {
+			exit("warning : PO : " . $nopo . " has been released");
+		}
+
+		#semua perubahan data PO dalam satu transaksi: bila gagal, approval lama tidak ikut hilang
+		$ketUraian = substr($owlPDO->quote($ketUraian), 1, -1);
+		$notecost = substr($owlPDO->quote($notecost), 1, -1);
+		$owlPDO->beginTransaction();
+		try {
 		$str = "delete from " . $dbname . ".approval where notransaksi='" . $nopo . "' and jenispersetujuan='PO'";
 		$owlPDO->exec($str);
 
@@ -986,23 +1326,13 @@ switch ($method) {
 						$owlPDO->exec($str);
 					} catch (PDOException $e) {
 						print " Gagal  !: " . $e->getMessage() . "\n";
+						if ($owlPDO->inTransaction()) {
+							$owlPDO->rollBack();
+						}
 						die();
 					}
 				}
 			}
-		}
-
-		//cek matauang dan kurs
-		if ($mtUang != 'IDR') {
-			$sGetKurs = "select distinct kurs,kode from " . $dbname . ".setup_matauangrate where kode='" . $mtUang . "' and daritanggal='" . $tglpo . "' order by daritanggal desc";
-			$qGetKurs = $owlPDO->query($sGetKurs) or die(print " Gagal: " . PDOException::getMessage());
-			$qGetKurs->setFetchMode(PDO::FETCH_ASSOC);
-			$rGetKurs = $qGetKurs->fetch();
-			if ($Kurs < $rGetKurs['kurs']) {
-				exit("Error: Please provide curs corrensponding to currency, curs for " . $rGetKurs['kode'] . " :" . $rGetKurs['kurs']);
-			}
-		} else {
-			$Kurs = 1;
 		}
 
 		foreach ($_POST['kdbrg'] as $row => $isi) {
@@ -1024,18 +1354,9 @@ switch ($method) {
 			$rongank == '' ? $rongank = 0 : $rongank = $rongank;
 			$hrgSat = $hrg_diskon + $rongank;
 
-			$scek = "select stat_release from " . $dbname . ".log_poht where nopo='" . $nopo . "'";
-			$qcek = $owlPDO->query($scek) or die(print " Gagal: " . PDOException::getMessage());
-			$qcek->setFetchMode(PDO::FETCH_ASSOC);
-			$rcek = $qcek->fetch();
-			if ($rcek['stat_release'] == 1) {
-				exit("warning : PO : " . $nopo . " has been released");
-			}
-
-			if (intval($lokasi_kirim)) {
-				$field = "`idFranco`";
-			} else {
-				$field = "`lokasipengiriman`";
+			$setLokasi = '';
+			if ($lok_kirim != '') {
+				$setLokasi = (intval($lok_kirim) ? "`idFranco`" : "`lokasipengiriman`") . "='" . $lok_kirim . "',";
 			}
 
 			$strx = "update " . $dbname . ".log_poht set 
@@ -1051,8 +1372,7 @@ switch ($method) {
 				persenpph='" . $hslPPh . "',
 				nilaipo='" . $grand_total . "',
 				uraian='" . $ketUraian . "',
-				tanggalkirim='" . $tanggl_kirim . "',
-				" . $field . "='" . $lokasi_kirim . "',
+				" . $setLokasi . "
 				addcost='" . $addcost . "',
 				idFrancoinvc='" . $lok_invc . "',
 				notecost='" . $notecost . "',
@@ -1079,7 +1399,7 @@ switch ($method) {
 					$hrg_diskon = $hrg_sblmdiskon - $diskon;
 					$mat_uang = $_POST['rmat_uang'][$row];
 					$satuan = $_POST['rsatuan_unit'][$row];
-					$spekBrg = $_POST['spekBrg'][$row];
+					$spekBrg = substr($owlPDO->quote($_POST['spekBrg'][$row]), 1, -1);
 					$spk = $_POST['rspk'][$row];
 					$rongank = str_replace(',', '', $_POST['rongank'][$row]);
 					$hrgSat = $hrg_diskon + @($rongank / $jmlh_pesan);
@@ -1104,15 +1424,24 @@ switch ($method) {
 							$owlPDO->exec($sUpdate);
 						} catch (PDOException $e) {
 							print " Gagal  !: " . $e->getMessage() . "\n";
+							if ($owlPDO->inTransaction()) {
+								$owlPDO->rollBack();
+							}
 							die();
 						}
 					} catch (PDOException $e) {
 						print " Gagal  !: " . $e->getMessage() . "\n";
+						if ($owlPDO->inTransaction()) {
+							$owlPDO->rollBack();
+						}
 						die();
 					}
 				}
 			} catch (PDOException $e) {
 				print " Gagal  !: " . $e->getMessage() . "\n";
+				if ($owlPDO->inTransaction()) {
+					$owlPDO->rollBack();
+				}
 				die();
 			}
 		}
@@ -1173,6 +1502,18 @@ switch ($method) {
 				$str = "insert into " . $dbname . ".log_somaterial (nopo,namabarang,jumlah,harga) values ('" . $nopo . "','" . $val['namabarang'] . "','" . $val['jumlah'] . "','" . $val['hargasatuan'] . "')";
 				$owlPDO->exec($str);
 			}
+		}
+
+			$owlPDO->commit();
+		} catch (PDOException $e) {
+			if ($owlPDO->inTransaction()) {
+				$owlPDO->rollBack();
+			}
+			print " Gagal  !: " . $e->getMessage() . "\n";
+			if ($owlPDO->inTransaction()) {
+				$owlPDO->rollBack();
+			}
+			die();
 		}
 
 		$_SESSION['potermin'] = array();

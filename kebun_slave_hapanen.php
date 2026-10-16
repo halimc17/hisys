@@ -222,10 +222,22 @@ switch ($method) {
             $tab .= "<td align=center colspan=10>" . $_SESSION['lang']['errdatanotexist'] . "</td>";
             $tab .= "</tr>";
         } else {
-            while ($bar = $res->fetch()) {
+            $barisHalaman = $res->fetchAll();
+            // baris yang pemanennya berbeda dengan data mobile diberi warna oranye
+            $grupHalaman = array();
+            foreach ($barisHalaman as $bh) {
+                $grupHalaman[] = array('tanggal' => $bh['tanggal'], 'nikmandor' => $bh['nikmandor']);
+            }
+            $bedaMobile = bandingkanGrupMobile('ha', $grupHalaman);
+            foreach ($barisHalaman as $bar) {
                 $isi = '';
                 $no += 1;
-                $tab .= "<tr class=rowcontent  id=tr_$no>";
+                $kgBeda = $bar['tanggal'] . '|' . (int)$bar['nikmandor'];
+                if (isset($bedaMobile[$kgBeda])) {
+                    $tab .= "<tr class=rowcontent  id=tr_$no style='background-color:#ffb347' title='Ada " . $bedaMobile[$kgBeda] . " pemanen di data mobile yang belum ada di ERP'>";
+                } else {
+                    $tab .= "<tr class=rowcontent  id=tr_$no>";
+                }
                 $tab .= "<td align=center>" . $no . "</td>";
                 $tab .= "<td align=center>" . tanggalnormal($bar['tanggal']) . "</td>";
                 $divmandor = getKary($bar['nikmandor'], "subbagian");
@@ -449,13 +461,12 @@ switch ($method) {
         }
         break;
 
+    case 'cekmobile':
+        // keterangan perbedaan dengan data mobile untuk konfirmasi sebelum posting (tidak memblokir)
+        echo pesanPemanenKurang(cekPemanenMobile('ha', $tgl2, $nik), $tgl2, $nik);
+        break;
+
     case 'posting':
-        // Posting hanya boleh kalau semua pemanen di mobile sudah didownload
-        $cekMobile = cekPemanenMobile('ha', $tgl2, $nik);
-        $pesanMobile = pesanPemanenKurang($cekMobile, $tgl2, $nik);
-        if ($pesanMobile != '') {
-            exit($pesanMobile);
-        }
         $str = "UPDATE $dbname.kebun_rekaphancakpanen SET posting='1', postingby='" . $_SESSION['standard']['userid'] . "' 
                 WHERE tanggal='" . $tgl2 . "' AND nikmandor='" . $nik . "'";
         try {

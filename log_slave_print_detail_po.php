@@ -22,6 +22,29 @@ require_once('dompdf/autoload.inc.php');
 
 use Dompdf\Dompdf;
 
+// Potong teks Catatan jadi potongan pendek (per paragraf, lalu per ~350 karakter di batas kata)
+// agar tiap potongan jadi satu baris tabel kecil yang bisa dipecah antar halaman oleh dompdf.
+if (!function_exists('ppoPotongCatatan')) {
+	function ppoPotongCatatan($teks, $maks = 350)
+	{
+		$hasil = array();
+		$teks = trim(str_replace("\r", '', (string) $teks));
+		if ($teks === '') {
+			return $hasil;
+		}
+		foreach (explode("\n", $teks) as $paragraf) {
+			if (trim($paragraf) === '') {
+				$hasil[] = '&nbsp;';
+				continue;
+			}
+			foreach (explode("\n", wordwrap($paragraf, $maks, "\n", true)) as $potong) {
+				$hasil[] = $potong;
+			}
+		}
+		return $hasil;
+	}
+}
+
 $table = $_GET['table'];
 $column = $_GET['column'];
 $where = $_GET['cond'];
@@ -318,6 +341,7 @@ $tab .= "<html>
 
 
 if ($kodept == 'PPP') {
+	$tab .= "<style type='text/css'>@page { margin-bottom: 190px; } footer { bottom: -10px; }</style>";
 	$tab .= "
 	<table width=100%>
 		<tr style='text-align:center;font-weight:bold;font-size:20px'>
@@ -448,14 +472,14 @@ if ($kodept == 'PPP') {
 
 
 	$tab .= "
-	<table width='100%' border=0 cellpadding=0 cellspacing=0>
+	<table width='100%' border=0 cellpadding=0 cellspacing=0 style='table-layout:fixed'>
 		<thead>
 			<tr>
-				<th style='text-align:center;border:1px solid black'>No.</th>
-				<th style='text-align:center;border:1px solid black'>Jumlah</th>
-				<th style='text-align:center;border:1px solid black'>Nama Barang</th>
-				<th style='text-align:center;border:1px solid black'>Harga Satuan <br> (Rp)</th>
-				<th style='text-align:center;border:1px solid black'>Jumlah Harga <br> (Rp)</th>
+				<th style='width:5%;text-align:center;border:1px solid black'>No.</th>
+				<th style='width:14%;text-align:center;border:1px solid black'>Jumlah</th>
+				<th style='width:41%;text-align:center;border:1px solid black'>Nama Barang</th>
+				<th style='width:20%;text-align:center;border:1px solid black'>Harga Satuan <br> (Rp)</th>
+				<th style='width:20%;text-align:center;border:1px solid black'>Jumlah Harga <br> (Rp)</th>
 			</tr>
 		</thead>
 		<tbody>";
@@ -464,11 +488,9 @@ if ($kodept == 'PPP') {
 	foreach ($res_po as $val) {
 		if ($total_jumlahPO == $no) {
 
-			if ($val['catatan'] != '') {
-				$sfekkk = "<br> " . $val['catatan'] . " ";
-			} else {
-				$sfekkk = "";
-			}
+			// catatan per item dipecah jadi baris kecil (lihat bawah) agar tidak merusak halaman bila panjang
+			$sfekkk = "";
+			$barisCatatanItem = ppoPotongCatatan($val['catatan']);
 
 			$tab .= "
 					<tr>
@@ -479,24 +501,41 @@ if ($kodept == 'PPP') {
 						<td style='text-align:right;border-left:1px solid black;border-right:1px solid black;vertical-align: top'>" . number_format($val['hargasatuan'] * $val['jumlahpesan'], 2) . " <span style='color:white'>_</span></td>
 					</tr>";
 
-			// catatan
+			foreach ($barisCatatanItem as $teksItem) {
+				$tab .= "
+						<tr>
+							<td style='border-left:1px solid black;border-right:1px solid black;'></td>
+							<td style='border-left:1px solid black;border-right:1px solid black;'></td>
+							<td style='text-align:left;border-left:1px solid black;border-right:1px solid black;vertical-align: top'>" . $teksItem . "</td>
+							<td style='border-left:1px solid black;border-right:1px solid black;'></td>
+							<td style='border-left:1px solid black;border-right:1px solid black;'></td>
+						</tr>";
+			}
+
+			// catatan: dipotong jadi beberapa baris kecil supaya bisa pindah halaman
+			// (dompdf tidak bisa membelah satu baris tabel yang tinggi, teksnya jadi terpotong)
+			$sisiCat = "border-left:1px solid black;border-right:1px solid black;vertical-align: top;";
+			$barisCatatan = ppoPotongCatatan($keterangan);
+			$bawahCat = empty($barisCatatan) ? "border-bottom:1px solid black;" : "";
 			$tab .= "
 						<tr>
-							<td style='text-align:center;height:50px;border-left:1px solid black;border-right:1px solid black;vertical-align: top;border-bottom:1px solid black'></td>
-							<td style='text-align:right;border-left:1px solid black;border-right:1px solid black;vertical-align: top;border-bottom:1px solid black'></td>
-							<td style='text-align:left;border-left:1px solid black;border-right:1px solid black;vertical-align: top;border-bottom:1px solid black'>
-								<span>
-									Catatan : 
-								</span> <br>
-								<span style='color:red;word-wrap: break-word;word-break: break-all;white-space: normal'>
-									" . nl2br($keterangan) . "
-								</span>
-							</td>
-							<td style='text-align:right;border-left:1px solid black;border-right:1px solid black;vertical-align: top;border-bottom:1px solid black'></td>
-							<td style='text-align:right;border-left:1px solid black;border-right:1px solid black;vertical-align: top;border-bottom:1px solid black'></td>
-						</tr>
-
-					";
+							<td style='text-align:center;height:50px;" . $sisiCat . $bawahCat . "'></td>
+							<td style='text-align:right;" . $sisiCat . $bawahCat . "'></td>
+							<td style='text-align:left;" . $sisiCat . $bawahCat . "'><span>Catatan : </span></td>
+							<td style='text-align:right;" . $sisiCat . $bawahCat . "'></td>
+							<td style='text-align:right;" . $sisiCat . $bawahCat . "'></td>
+						</tr>";
+			foreach ($barisCatatan as $ic => $teksCat) {
+				$bawahCat = ($ic == count($barisCatatan) - 1) ? "border-bottom:1px solid black;" : "";
+				$tab .= "
+						<tr>
+							<td style='" . $sisiCat . $bawahCat . "'></td>
+							<td style='" . $sisiCat . $bawahCat . "'></td>
+							<td style='text-align:left;" . $sisiCat . $bawahCat . "'><span style='color:red'>" . $teksCat . "</span></td>
+							<td style='" . $sisiCat . $bawahCat . "'></td>
+							<td style='" . $sisiCat . $bawahCat . "'></td>
+						</tr>";
+			}
 		} else {
 			$tab .= "
 					<tr>
@@ -886,6 +925,12 @@ $tab .= "</div>";
 // exit("Error:$tab");
 
 // $tab->getCanvas()->text(30, 20, 'text', $font, 12);
+// Teks dari database berbentuk latin1 (misal simbol seperti ® atau tanda kutip pintar). Bila ada byte yang bukan UTF-8 valid,
+// dompdf gagal membaca HTML dan PDF keluar kosong, jadi ubah dulu ke UTF-8.
+if (!mb_check_encoding($tab, 'UTF-8')) {
+	$tab = mb_convert_encoding($tab, 'UTF-8', 'Windows-1252');
+}
+
 $dompdf = new Dompdf();
 $dompdf->loadHtml($tab);
 $dompdf->setPaper('A4', 'portrait');

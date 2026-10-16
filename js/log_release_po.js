@@ -1,3 +1,10 @@
+//select2 untuk dropdown halaman ini (zSelect2.js tidak dimuat)
+$(document).ready(function(){
+	$('.select2').select2({dropdownAutoWidth:true,width:'100%'});
+	//daftar pilihan select2 harus tampil di atas popup/dialog
+	$('<style>.select2-container--open .select2-dropdown{z-index:100000;}</style>').appendTo('head');
+});
+
 function loadPOChat(nopo, ev) {
 	title = "Chat:" + nopo;
 	content = "<iframe frameborder=0 style='width:510px;height:290px;' src='log_slaveChatPO.php?nopo=" + nopo + "'></iframe>";
@@ -10,8 +17,9 @@ function loadPOChat(nopo, ev) {
 function displaylistdata(){
 	document.getElementById('txtsearch_rpo').value='';
 	document.getElementById('tgl_cari_rpo').value='';
-	document.getElementById('filterId').selectedIndex=0;
-	document.getElementById('filterSupplier').selectedIndex='';
+	setSelRPO('filterId','');
+	setSelRPO('filterSupplier','');
+	setSelRPO('filterTahun',String(new Date().getFullYear()));
 	loadData(0);
 }
 
@@ -31,7 +39,7 @@ function loadData(num){
     filterSupplier=filterSupplier.options[filterSupplier.selectedIndex].value;
 	
 	param='method=list_new_data_release_po'+'&txtSearchrpo='+txtSearchrpo+'&tglCarirpo='+tglCarirpo;
-	param+='&page='+num+'&filterId='+filterId+'&filterSupplier='+filterSupplier;
+	param+='&page='+num+'&filterId='+filterId+'&filterSupplier='+filterSupplier+'&filterTahun='+document.getElementById('filterTahun').value;
 	tujuan='log_slave_release_po.php';
 	function respog(){
 		if(con.readyState==4){
@@ -50,6 +58,60 @@ function loadData(num){
 		}	
 	 }
 	 post_response_text(tujuan, param, respog);
+}
+
+//isi pilihan (select2) lalu perbarui tampilannya
+function setSelRPO(id,v){
+	var el=document.getElementById(id);
+	el.value=v;
+	if(window.jQuery){
+		jQuery(el).trigger('change.select2');
+	}
+}
+
+//tarikan Excel dan PDF mengikuti filter yang sedang dipilih
+function getFilterParamRPO(){
+	var p='';
+	p+='&txtSearchrpo='+encodeURIComponent(trim(document.getElementById('txtsearch_rpo').value));
+	p+='&tglCarirpo='+encodeURIComponent(trim(document.getElementById('tgl_cari_rpo').value));
+	p+='&filterId='+encodeURIComponent(document.getElementById('filterId').value);
+	p+='&filterSupplier='+encodeURIComponent(document.getElementById('filterSupplier').value);
+	p+='&filterTahun='+encodeURIComponent(document.getElementById('filterTahun').value);
+	return p;
+}
+function tampilTarikanRPO(judul,tujuan){
+	alertify.popup(judul,"<iframe frameborder=0 style='width:100%;height:100%;overflow:none' src='"+tujuan+"'></iframe>").set({'resizable':true,'maximizable':true,'overflow':false}).resizeTo('80%','70%');
+}
+function exportExcelRPO(){
+	tampilTarikanRPO('Report Ms.Excel','log_slave_release_po.php?method=excellist'+getFilterParamRPO());
+}
+function exportPdfRPO(){
+	tampilTarikanRPO('Report PDF','log_slave_release_po.php?method=pdflist'+getFilterParamRPO());
+}
+
+//popup detail penerimaan sebuah PO
+function lihatPenerimaanRPO(nopo,ev){
+	tampilDetailRPO('Telusur PO : '+nopo,'detail_penerimaan',nopo);
+}
+function tampilDetailRPO(judul,method,nopo){
+	param='method='+method+'&nopo='+encodeURIComponent(nopo);
+	tujuan='log_slave_release_po.php';
+	function respog(){
+		if(con.readyState==4){
+			if(con.status==200){
+				busy_off();
+				if(!isSaveResponse(con.responseText)){
+					alert(con.responseText);
+				}else{
+					alertify.popup(judul,con.responseText).set({'resizable':true,'maximizable':true}).resizeTo('70%','60%');
+				}
+			}else{
+				busy_off();
+				error_catch(con.status);
+			}
+		}
+	}
+	post_response_text(tujuan,param,respog);
 }
 
 function release_po(id){
@@ -441,8 +503,9 @@ function closebos(nopo,totalrow){
 				if (!isSaveResponse(con.responseText)) {
 					alert(con.responseText);
 				}else{
-					document.getElementById('filterId').selectedIndex=3;
-					document.getElementById('filterSupplier').selectedIndex='';
+					setSelRPO('filterId','3');
+					setSelRPO('filterSupplier','');
+					setSelRPO('filterTahun','');
 					// document.getElementById('closeForm').innerHTML=con.responseText;	
                     // closeDialog5();
 					alertify.popup().destroy();

@@ -160,10 +160,28 @@ function deleteData(tgl, nik, page) {
 }
 
 function posting(tgl, nik, page) {
-	param = 'method=posting' + '&tgl2=' + tgl + '&nik=' + nik;
 	tujuan = 'kebun_slave_hapanen.php';
-	if (confirm('Apakah Anda yakin ingin posting Data ???')) {
-		post_response_text(tujuan, param, respog);
+	//cek dulu perbedaan dengan data mobile; hanya keterangan, posting tetap bisa dilanjutkan
+	param = 'method=cekmobile' + '&tgl2=' + tgl + '&nik=' + nik;
+	post_response_text(tujuan, param, respCek);
+	function respCek() {
+		if (con.readyState == 4) {
+			if (con.status == 200) {
+				busy_off();
+				var keterangan = con.responseText.replace(/<br\s*\/?>/gi, '\n');
+				var teks = 'Apakah Anda yakin ingin posting Data ???';
+				if (keterangan.replace(/\s+/g, '') != '') {
+					teks = keterangan + '\n\n' + teks;
+				}
+				if (confirm(teks)) {
+					param = 'method=posting' + '&tgl2=' + tgl + '&nik=' + nik;
+					post_response_text(tujuan, param, respog);
+				}
+			} else {
+				busy_off();
+				error_catch(con.status);
+			}
+		}
 	}
 	function respog() {
 		if (con.readyState == 4) {

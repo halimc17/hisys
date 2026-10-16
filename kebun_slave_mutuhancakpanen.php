@@ -171,11 +171,23 @@ switch ($method) {
             $tab .= "<td align=center colspan=10>" . $_SESSION['lang']['errdatanotexist'] . "</td>";
             $tab .= "</tr>";
         } else {
-            while ($bar = $res->fetch()) {
+            $barisHalaman = $res->fetchAll();
+            // baris yang pemanennya berbeda dengan data mobile diberi warna oranye
+            $grupHalaman = array();
+            foreach ($barisHalaman as $bh) {
+                $grupHalaman[] = array('tanggal' => $bh['tanggal'], 'nikmandor' => $bh['nikmandor']);
+            }
+            $bedaMobile = bandingkanGrupMobile('mutu', $grupHalaman);
+            foreach ($barisHalaman as $bar) {
                 $isi = '';
                 $no += 1;
                 $divmandor = getKary($bar['nikmandor'], 'subbagian');
-                $tab .= "<tr class=rowcontent  id=tr_$no>";
+                $kgBeda = $bar['tanggal'] . '|' . (int)$bar['nikmandor'];
+                if (isset($bedaMobile[$kgBeda])) {
+                    $tab .= "<tr class=rowcontent  id=tr_$no style='background-color:#ffb347' title='Ada " . $bedaMobile[$kgBeda] . " pemanen di data mobile yang belum ada di ERP'>";
+                } else {
+                    $tab .= "<tr class=rowcontent  id=tr_$no>";
+                }
                 $tab .= "<td align=center style='width:5%'>" . $no . "</td>";
                 $tab .= "<td align=center>" . tanggalnormal($bar['tanggal']) . "</td>";
                 $tab .= "<td align=left>" . ($divmandor != '' ? $divmandor . " - " . getNamaOrg($divmandor) : "-") . "</td>";
@@ -467,13 +479,12 @@ switch ($method) {
         }
         break;
 
+    case 'cekmobile':
+        // keterangan perbedaan dengan data mobile untuk konfirmasi sebelum posting (tidak memblokir)
+        echo pesanPemanenKurang(cekPemanenMobile('mutu', $tgl2, $nik), $tgl2, $nik);
+        break;
+
     case 'posting':
-        // Posting hanya boleh kalau semua pemanen di mobile sudah didownload
-        $cekMobile = cekPemanenMobile('mutu', $tgl2, $nik);
-        $pesanMobile = pesanPemanenKurang($cekMobile, $tgl2, $nik);
-        if ($pesanMobile != '') {
-            exit($pesanMobile);
-        }
         $str = "UPDATE $dbname.kebun_rekapmutuhancakpanen SET posting='1', postingby='" . $_SESSION['standard']['userid'] . "'
                 WHERE tanggal='" . $tgl2 . "' AND nikmandor='" . $nik . "' AND posting<>'1'";
         try {

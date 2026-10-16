@@ -55,7 +55,7 @@ if ($theme == 'skyblue' || $theme == '') {
 }
 
 // Ini Common Variable
-$version = 'v=5.4';
+$version = 'v=5.5';
 $i = $no = 0;
 $where = $whr = $tab = $stream = "";
 if (isset($_GET['device']) and $_GET['device'] == 'mobile') {

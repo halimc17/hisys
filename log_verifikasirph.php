@@ -5,6 +5,7 @@ include('lib/nangkoelib.php');
 include_once('lib/zLib.php');
 echo open_body();
 include('master_mainMenu.php');
+require_once('lib/zSelect2.php');
 
 OPEN_BOX('','<span class=judul>'.getMenu('log_verifikasirph').'</span>');
 ?>
@@ -17,22 +18,73 @@ OPEN_BOX('','<span class=judul>'.getMenu('log_verifikasirph').'</span>');
 <script language=javascript src='js/vhc_detailkmhm.js?v=<?php echo time(); ?>'></script>
 
 <?php
+#tahun verifikasi dan purchaser (sesuai akses unit): default tahun sekarang, "Semua Tahun" untuk seluruh tahun
+$scopeVrph = " right(nomor,4) in (".getOrgDetail(2).") and statusverifikasi in ('1','3','4')";
+$tahunSkrg=date('Y');
+$arrTahun=array($tahunSkrg=>$tahunSkrg);
+foreach(fetchdata("select distinct year(waktuverifikasi) as thn from ".$dbname.".log_perintaanhargaht where".$scopeVrph." and waktuverifikasi>'0000-00-00'") as $val){
+	$arrTahun[$val['thn']]=$val['thn'];
+}
+krsort($arrTahun);
+$optFilterTahun="<option value=''>Semua Tahun</option>";
+foreach($arrTahun as $thn){
+	$optFilterTahun.="<option value='".$thn."'".($thn==$tahunSkrg?" selected":"").">".$thn."</option>";
+}
+$optFilterStatus="<option value=''>".$_SESSION['lang']['pilihdata']."</option>";
+foreach(array("1"=>"Disetujui","2"=>"Proses Persetujuan","3"=>"Ditolak","4"=>"Belum diverifikasi") as $kd=>$nm){
+	$optFilterStatus.="<option value='".$kd."'>".$nm."</option>";
+}
+$arrPurchaser=array();
+$namaKaryawan=makeOption($dbname,'datakaryawan','karyawanid,namakaryawan');
+foreach(fetchdata("select distinct purchaser from ".$dbname.".log_perintaanhargaht where".$scopeVrph." and purchaser<>''") as $val){
+	$arrPurchaser[$val['purchaser']]=trim(isset($namaKaryawan[$val['purchaser']])?$namaKaryawan[$val['purchaser']]:$val['purchaser']);
+}
+asort($arrPurchaser);
+$optFilterPurchaser="<option value=''>".$_SESSION['lang']['pilihdata']."</option>";
+foreach($arrPurchaser as $kd=>$nm){
+	$optFilterPurchaser.="<option value='".htmlspecialchars($kd,ENT_QUOTES)."'>".htmlspecialchars($nm)."</option>";
+}
 echo"<div id='action_list'>
 	<table>
-		<tr valign=moiddle>
+		<tr valign=top>
 			<td align=center style='width:100px;cursor:pointer;' onclick=displaylist()>
 				<img class=delliconBig src=images/skyblue/list.png title='".$_SESSION['lang']['list']."'><br>".$_SESSION['lang']['list']."
 			</td>
 			<td>
-				<fieldset><legend>".$_SESSION['lang']['find']."</legend>
-				".$_SESSION['lang']['notransaksi']." : <input type=text id=txtsearch size=25 maxlength=30 class=myinputtext>
-				".$_SESSION['lang']['tanggal']." : <input type=text class=myinputtext id=tgl_cari onmousemove=setCalendar(this.id) onkeypress=return false;  size=10 maxlength=10 readonly/>
-				<button class=mybutton onclick=loaddata(0)>".$_SESSION['lang']['find']."</button>
-				</fieldset>
+					<fieldset id=fsCariVrph><legend>".$_SESSION['lang']['find']."</legend>
+					<table>
+						<tr>
+							<td>Tahun</td>
+							<td>:</td>
+							<td style='width:200px'><select id=filterTahun class=select2 style='width:100%'>".$optFilterTahun."</select></td>
+							<td style='padding-left:15px;'>Status Persetujuan</td>
+							<td>:</td>
+							<td style='width:220px'><select id=filterStatus class=select2 style='width:100%'>".$optFilterStatus."</select></td>
+						</tr>
+						<tr>
+							<td>".$_SESSION['lang']['notransaksi']."</td>
+							<td>:</td>
+							<td><input type=text id=txtsearch maxlength=30 class=myinputtext style='width:100%;box-sizing:border-box'></td>
+							<td style='padding-left:15px;'>".$_SESSION['lang']['tanggal']."</td>
+							<td>:</td>
+							<td><input type=text class=myinputtext id=tgl_cari onmousemove=setCalendar(this.id) onkeypress=return false; maxlength=10 readonly style='width:100%;box-sizing:border-box'/></td>
+						</tr>
+						<tr>
+							<td>Purchaser</td>
+							<td>:</td>
+							<td><select id=filterPurchaser class=select2 style='width:100%'>".$optFilterPurchaser."</select></td>
+							<td colspan=3 style='padding-left:15px;'>
+								<button class=mybutton onclick=loaddata(0)>".$_SESSION['lang']['find']."</button>
+								<button class=mybutton onclick=exportExcelVrph()>".$_SESSION['lang']['excel']."</button>
+								<button class=mybutton onclick=exportPdfVrph()>PDF</button>
+							</td>
+						</tr>
+					</table>
+</fieldset>
 			</td>
 			<td>
-				<fieldset>
-				<legend>List Job</legend><div id=notifikasiKerja></div>
+				<fieldset id=fsListJobVrph>
+				<legend align=center>List Job</legend><div id=notifikasiKerja></div>
 				</fieldset>
 			</td>
 		</tr>
@@ -49,8 +101,8 @@ echo"<div id='list_permintaan' name='list_permintaan'>
 			<thead>
 			<tr class=rowheader style='text-align:center;font-weight:bold'>
 				<th>No.</th>
-				<th>".$_SESSION['lang']['notransaksi']." DPH</th>
-				<th>".$_SESSION['lang']['notransaksi']." RPH</th>
+				<th style='min-width:190px'>".$_SESSION['lang']['notransaksi']." DPH</th>
+				<th style='min-width:140px'>".$_SESSION['lang']['notransaksi']." RPH</th>
 				<th>".$_SESSION['lang']['tanggal']."</th>
 				<th>".$_SESSION['lang']['list']." ".$_SESSION['lang']['nopp']."</th>
 				<th>".$_SESSION['lang']['chat']."</th>
@@ -97,40 +149,27 @@ echo"<div id=formPP style=display:none>
 			<tr>
 				<td>".$_SESSION['lang']['nopp']."</td>
 				<td>:</td>
-				<td>
-					<input type=text id=schnopp style=width:150px size=25 maxlength=30 class=myinputtext>
-				</td>
-
-				<td>".$_SESSION['lang']['jenis']."</td>
+				<td style='width:220px'><input type=text id=schnopp maxlength=30 class=myinputtext style='width:100%;box-sizing:border-box'></td>
+				<td style='padding-left:15px'>".$_SESSION['lang']['jenis']."</td>
 				<td>:</td>
-				<td>
-					<select style=width:100px  id='schjenis' name='jenis'>".$optjenis."</select>
-				</td>
-				
-				<td>".$_SESSION['lang']['unit']."</td>
-				<td>:</td>
-				<td>
-					<select style=width:100px  id='schunit' name='jenis'>".$optunit."</select>
-				</td>
-			
-				<td><input type=text hidden id=schpt style=width:150px size=25 maxlength=30 class=myinputtext></td>		
+				<td style='width:220px'><select id='schjenis' class=select2 style='width:100%'>".$optjenis."</select></td>
 			</tr>
 			<tr>
-				<td>".$_SESSION['lang']['kelompokbarang']."</td>
+				<td>".$_SESSION['lang']['unit']."</td>
 				<td>:</td>
-				<td> 
-					<select id=schklbrg style=width:155px onchange=getBarangCari()>".$optKelompokBrg."</select>
-				</td>
-				
+				<td><select id='schunit' class=select2 style='width:100%'>".$optunit."</select></td>
+				<td style='padding-left:15px'>".$_SESSION['lang']['kelompokbarang']."</td>
+				<td>:</td>
+				<td><select id=schklbrg class=select2 style='width:100%' onchange=getBarangCari()>".$optKelompokBrg."</select></td>
+			</tr>
+			<tr>
 				<td>".$_SESSION['lang']['namabarang']."</td>
 				<td>:</td>
-				<td>
-					<select id=schkdbrg style=width:100px>".$optBrgCari."</select>&nbsp;<img hidden src=\"images/search.png\" class=\"resicon\" title='".$_SESSION['lang']['find']." ".$_SESSION['lang']['namabarang']."' onclick=\"searchBrgCari('".$_SESSION['lang']['find']." ".$_SESSION['lang']['namabarang']."','<fieldset style=min-width:93%>".$_SESSION['lang']['find']."&nbsp;<input type=text class=myinputtext id=nmBrg><button class=mybutton onclick=findBrg2()>".$_SESSION['lang']['find']."</button></fieldset><div id=containerBarang style=overflow=auto;max-height=300;max-width=400></div>',event);\">
+				<td><select id=schkdbrg class=select2 style='width:100%'>".$optBrgCari."</select></td>
+				<td colspan=3 style='padding-left:15px'>
+					<button class=mybutton onclick=schgetDtPP()>".$_SESSION['lang']['find']."</button>
+					<input type=hidden id=schpt value=''>
 				</td>
-				
-				<td></td>
-				<td></td>
-				<td align=center><button class=mybutton onclick=schgetDtPP()>".$_SESSION['lang']['find']."</button></td>
 			</tr>
 		</table>
 		</fieldset>
