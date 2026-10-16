@@ -6,6 +6,47 @@ include_once('lib/nangkoelib.php');
 include_once('lib/zLib.php');
 include_once('lib/rTable.php');
 
+#cari invoice biasa (tipe p) yang sudah memuat GR (per kelompok barang) pada PO yang sama, termasuk invoice milik unit lain
+if (!function_exists('cariInvoiceGR')) {
+	function cariInvoiceGR($nopo, $notransaksi, $kelompok, $kecuali = '', $tipe = 'p', $termin = null)
+	{
+		global $owlPDO, $dbname;
+		$sql = "select d.noinvoice, h.unit from " . $dbname . ".keu_tagihandt d join " . $dbname . ".keu_tagihanht h on h.noinvoice=d.noinvoice where d.nopo=? and d.notransaksi=? and h.tipeinvoice=? and d.noinvoice<>?";
+		$par = array($nopo, $notransaksi, $tipe, $kecuali);
+		#GR per kelompok barang (p); per termin (pon); per PO (pocbd)
+		if ($tipe == 'p') {
+			$sql .= " and (d.kelompokbarang=? or d.kelompokbarang='' or d.kelompokbarang is null)";
+			$par[] = $kelompok;
+		}
+		if ($tipe == 'pon') {
+			$sql .= " and d.termin=?";
+			$par[] = (int)$termin;
+		}
+		$stmt = $owlPDO->prepare($sql . " limit 1");
+		$stmt->execute($par);
+		return $stmt->fetch(PDO::FETCH_ASSOC);
+	}
+}
+
+#tolak simpan bila detail yang belum punya invoice memuat GR yang sudah ditagih di invoice lain
+if (!function_exists('tolakGRSudahDitagih')) {
+	function tolakGRSudahDitagih($nopo, $noinvoice, $tipeinvoice)
+	{
+		global $owlPDO, $dbname;
+		if (!in_array($tipeinvoice, array('p', 'pon', 'pocbd'))) {
+			return;
+		}
+		$stmt = $owlPDO->prepare("select notransaksi, kelompokbarang, termin from " . $dbname . ".keu_tagihandt where noinvoice='' and nopo=? and notransaksi!=''");
+		$stmt->execute(array($nopo));
+		foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $baris) {
+			$sudah = cariInvoiceGR($nopo, $baris['notransaksi'], $baris['kelompokbarang'], $noinvoice, $tipeinvoice, $baris['termin']);
+			if ($sudah) {
+				throw new PDOException("Transaksi " . $baris['notransaksi'] . " sudah ditagih pada invoice " . $sudah['noinvoice'] . " (unit " . $sudah['unit'] . ").");
+			}
+		}
+	}
+}
+
 $param = $_POST;
 $proses = checkPostGet('proses', '');
 $nopo = checkPostGet('nopo', '');
@@ -5611,6 +5652,15 @@ switch ($proses) {
 
 
 
+				#= GR yang sudah masuk invoice biasa (tipe p), termasuk milik unit lain
+				$dtsudahtagih = array();
+				$str = "select d.notransaksi,d.kelompokbarang,d.noinvoice,h.unit from " . $dbname . ".keu_tagihandt d join " . $dbname . ".keu_tagihanht h on h.noinvoice=d.noinvoice where d.nopo='" . $param['nodok'] . "' and h.tipeinvoice='p' and d.notransaksi!=''";
+				$res = fetchdata($str);
+				foreach ($res as $bar) {
+					$dtsudahtagih[$bar['notransaksi']][$bar['kelompokbarang']] = $bar['noinvoice'] . ' (' . $bar['unit'] . ')';
+				}
+
+
 				#= data retur
 				#= bentuk data retur
 				$str = "select sum(hargasatuan*jumlah) as hartot,tanggal,nopo,notransaksireferensi from " . $dbname . ".log_transaksi_vw
@@ -5690,8 +5740,9 @@ switch ($proses) {
 						}
 						$stream .= "<td style=cursor:pointer id=keterangandatadt" . $no . ">" . substr(implode(", ", $namasemua), 0, 250) . "</td>";
 
-						if (@$dtnotransaksiada[$dtnotransaksi] == @$dtnotransaksi or (@$dthartot[$dtnotransaksi][$klmpkbarang] - @$dthartotretur[$dtnotransaksi] == '0')) {
-							$stream .= "<td style=cursor:pointer align=right tittle='Sudah dibuat invoice'>" . $dtnoinvoice[$dtnotransaksi] . " <input hidden disabled title='check => Ya, uncheck => Tidak' type=checkbox id=checkboxdt" . $no . "></td>";
+						$sudahtagih = $dtsudahtagih[$dtnotransaksi][$klmpkbarang] ?? ($dtsudahtagih[$dtnotransaksi][''] ?? '');
+						if ($sudahtagih != '' or @$dtnotransaksiada[$dtnotransaksi] == @$dtnotransaksi or (@$dthartot[$dtnotransaksi][$klmpkbarang] - @$dthartotretur[$dtnotransaksi] == '0')) {
+							$stream .= "<td style=cursor:pointer align=right tittle='Sudah dibuat invoice'>" . ($sudahtagih != '' ? $sudahtagih : $dtnoinvoice[$dtnotransaksi]) . " <input hidden disabled title='check => Ya, uncheck => Tidak' type=checkbox id=checkboxdt" . $no . "></td>";
 						} else {
 							$stream .= "<td style=cursor:pointer align=right><input title='check => Ya, uncheck => Tidak' type=checkbox id=checkboxdt" . $no . "></td>";
 						}
@@ -5769,6 +5820,15 @@ switch ($proses) {
 				}
 
 
+					#= GR yang sudah masuk invoice pon (per termin), termasuk milik unit lain
+					$dtsudahtagih = array();
+					$str = "select d.notransaksi,d.termin,d.noinvoice,h.unit from " . $dbname . ".keu_tagihandt d join " . $dbname . ".keu_tagihanht h on h.noinvoice=d.noinvoice where d.nopo='" . $param['nodok'] . "' and h.tipeinvoice='pon' and d.notransaksi!=''";
+					$res = fetchdata($str);
+					foreach ($res as $bar) {
+						$dtsudahtagih[$bar['notransaksi']][(int)$bar['termin']] = $bar['noinvoice'] . ' (' . $bar['unit'] . ')';
+					}
+
+
 				$str = "select sum(hargasatuan*jumlah) as hartot,tanggal,nopo,notransaksireferensi from " . $dbname . ".log_retursuppliernoninventorydt_vw
 				where notransaksireferensi  in ('" . implode("','", $arrnotransaksi) . "') and posting=1  group by notransaksireferensi";
 				$res = fetchdata($str);
@@ -5819,8 +5879,9 @@ switch ($proses) {
 								$stream .= "<td style=cursor:pointer id=reksupplierdt" . $no . "></td>";
 								$stream .= "<td style=cursor:pointer id=keterangandatadt" . $no . ">" . $namabarang[$dtkodebarang[$dtnotransaksi]] . ", Termin ke " . $termin . "</td>";
 
-								if (@$dtnotransaksiadatermin[$dtnotransaksi][$termin] == @$termin or (@$dthartottermin[$dtnotransaksi][$klmpkbarang][$termin] - @$dthartotreturtermin[$dtnotransaksi][$termin] == '0')) {
-									$stream .= "<td style=cursor:pointer align=right tittle='Sudah dibuat invoice'>" . $dtnoinvoice[$dtnotransaksi] . " <input hidden disabled title='check => Ya, uncheck => Tidak' type=checkbox id=checkboxdt" . $no . "></td>";
+								$sudahtagih = $dtsudahtagih[$dtnotransaksi][(int)$termin] ?? '';
+								if ($sudahtagih != '' or @$dtnotransaksiadatermin[$dtnotransaksi][$termin] == @$termin or (@$dthartottermin[$dtnotransaksi][$klmpkbarang][$termin] - @$dthartotreturtermin[$dtnotransaksi][$termin] == '0')) {
+									$stream .= "<td style=cursor:pointer align=right tittle='Sudah dibuat invoice'>" . ($sudahtagih != '' ? $sudahtagih : $dtnoinvoice[$dtnotransaksi]) . " <input hidden disabled title='check => Ya, uncheck => Tidak' type=checkbox id=checkboxdt" . $no . "></td>";
 								} else {
 									$stream .= "<td style=cursor:pointer align=right><input title='check => Ya, uncheck => Tidak' type=checkbox id=checkboxdt" . $no . "></td>";
 								}
@@ -5857,8 +5918,9 @@ switch ($proses) {
 							$stream .= "<td style=cursor:pointer align=right id=kodeassetdt" . $no . "></td>";
 							$stream .= "<td style=cursor:pointer id=reksupplierdt" . $no . "></td>";
 							$stream .= "<td style=cursor:pointer id=keterangandatadt" . $no . ">" . $namabarang[$dtkodebarang[$dtnotransaksi]] . "</td>";
-							if (@$dtnotransaksiada[$dtnotransaksi] == @$dtnotransaksi or (@$dthartot[$dtnotransaksi][$klmpkbarang] - @$dthartotretur[$dtnotransaksi] == '0')) {
-								$stream .= "<td style=cursor:pointer align=right tittle='Sudah dibuat invoice'>" . $dtnoinvoice[$dtnotransaksi] . " <input hidden disabled title='check => Ya, uncheck => Tidak' type=checkbox id=checkboxdt" . $no . "></td>";
+							$sudahtagih = isset($dtsudahtagih[$dtnotransaksi]) ? reset($dtsudahtagih[$dtnotransaksi]) : '';
+							if ($sudahtagih != '' or @$dtnotransaksiada[$dtnotransaksi] == @$dtnotransaksi or (@$dthartot[$dtnotransaksi][$klmpkbarang] - @$dthartotretur[$dtnotransaksi] == '0')) {
+								$stream .= "<td style=cursor:pointer align=right tittle='Sudah dibuat invoice'>" . ($sudahtagih != '' ? $sudahtagih : $dtnoinvoice[$dtnotransaksi]) . " <input hidden disabled title='check => Ya, uncheck => Tidak' type=checkbox id=checkboxdt" . $no . "></td>";
 							} else {
 								$stream .= "<td style=cursor:pointer align=right><input title='check => Ya, uncheck => Tidak' type=checkbox id=checkboxdt" . $no . "></td>";
 							}
@@ -5928,6 +5990,14 @@ switch ($proses) {
 					}
 				}
 
+				#= PO yang sudah masuk invoice pocbd, termasuk milik unit lain
+				$dtsudahtagih = array();
+				$str = "select d.notransaksi,d.noinvoice,h.unit from " . $dbname . ".keu_tagihandt d join " . $dbname . ".keu_tagihanht h on h.noinvoice=d.noinvoice where d.nopo='" . $param['nodok'] . "' and h.tipeinvoice='pocbd' and d.notransaksi!=''";
+				$res = fetchdata($str);
+				foreach ($res as $bar) {
+					$dtsudahtagih[$bar['notransaksi']] = $bar['noinvoice'] . ' (' . $bar['unit'] . ')';
+				}
+
 				#= data retur
 				#= bentuk data retur
 				$str = "select sum(hargasatuan*jumlah) as hartot,tanggal,nopo,notransaksireferensi from " . $dbname . ".log_transaksi_vw
@@ -5972,8 +6042,9 @@ switch ($proses) {
 					$stream .= "<td style=cursor:pointer id=reksupplierdt" . $no . "></td>";
 					$stream .= "<td style=cursor:pointer id=keterangandatadt" . $no . ">" . $namabarang[$dtkodebarang[$dtnotransaksi]] . "</td>";
 
-					if (@$dtnotransaksiada[$dtnotransaksi] == @$dtnotransaksi or (@$dthartot[$dtnotransaksi] - @$dthartotretur[$dtnotransaksi] == '0')) {
-						$stream .= "<td style=cursor:pointer align=right tittle='Sudah dibuat invoice'>" . $dtnoinvoice[$dtnotransaksi] . " <input hidden disabled title='check => Ya, uncheck => Tidak' type=checkbox id=checkboxdt" . $no . "></td>";
+					$sudahtagih = $dtsudahtagih[$dtnotransaksi] ?? '';
+					if ($sudahtagih != '' or @$dtnotransaksiada[$dtnotransaksi] == @$dtnotransaksi or (@$dthartot[$dtnotransaksi] - @$dthartotretur[$dtnotransaksi] == '0')) {
+						$stream .= "<td style=cursor:pointer align=right tittle='Sudah dibuat invoice'>" . ($sudahtagih != '' ? $sudahtagih : $dtnoinvoice[$dtnotransaksi]) . " <input hidden disabled title='check => Ya, uncheck => Tidak' type=checkbox id=checkboxdt" . $no . "></td>";
 					} else {
 						$stream .= "<td style=cursor:pointer align=right><input title='check => Ya, uncheck => Tidak' type=checkbox id=checkboxdt" . $no . "></td>";
 					}
@@ -6772,6 +6843,13 @@ switch ($proses) {
 						$keterangandatadt = $param['keterangandatadt'][$i];
 						if ($param['noakundt'][$i] == '' || $param['noaruskasdt'][$i] == '') {
 							throw new PDOException("No. Akun atau No. Aruskas masih kosong, Silahkan hubungi Administrator untuk melakukan setup aruskas dan nomor akun");
+						}
+
+						if (in_array($param['tipeinvoice'], array('p', 'pon', 'pocbd'))) {
+							$sudah = cariInvoiceGR($param['nodokdt'], $param['notransaksidt'][$i], $param['kelompokbarangdt'][$i], '', $param['tipeinvoice'], $param['termindt'][$i]);
+							if ($sudah) {
+								throw new PDOException("Transaksi " . $param['notransaksidt'][$i] . " sudah ditagih pada invoice " . $sudah['noinvoice'] . " (unit " . $sudah['unit'] . "). Tarik ulang nomor dokumen untuk melihat data terbaru.");
+							}
 						}
 
 						// echo "<pre>";
@@ -7830,6 +7908,8 @@ switch ($proses) {
 				$owlPDO->exec($str);
 				#= update detail jika ada detailnya
 				#= paramnya pakai where noinvocice ='' and nopo=param po
+				#= GR pada detail yang akan diklaim tidak boleh sudah ada di invoice lain
+				tolakGRSudahDitagih($param['nopo'], $param['noinvoice'], $param['tipeinvoice']);
 				$str = "update " . $dbname . ".keu_tagihandt set noinvoice='" . $param['noinvoice'] . "' where noinvoice='' and nopo='" . $param['nopo'] . "'";
 				$owlPDO->exec($str);
 			} else {
@@ -7849,6 +7929,8 @@ switch ($proses) {
 					$owlPDO->exec($str);
 				}
 
+				#= GR pada detail yang akan diklaim tidak boleh sudah ada di invoice lain
+				tolakGRSudahDitagih($param['nopo'], $param['noinvoice'], $param['tipeinvoice']);
 				$str = "update " . $dbname . ".keu_tagihandt set noinvoice='" . $param['noinvoice'] . "' where noinvoice='' and nopo='" . $param['nopo'] . "'";
 				$owlPDO->exec($str);
 			}

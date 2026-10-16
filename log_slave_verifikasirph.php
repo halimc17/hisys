@@ -4,7 +4,9 @@ error_reporting(0);
 require_once('master_validation.php');
 require_once('lib/nangkoelib.php');
 require_once('config/connection.php');
-include_once('lib/zLib.php');	
+include_once('lib/zLib.php');
+include_once('lib/HtmlExcel.php');
+require_once('lib/fpdf.php');
 	
 $method=checkPostGet('method','');
 $pages=checkPostGet('page','');
@@ -60,277 +62,497 @@ $alasan=checkPostGet('alasan','');
 	
 $jenisApp = 'RFQ';	
  
+#=== Pembersihan input: nomor/ID hanya karakter aman, teks bebas di-escape ===
+if (!function_exists('vrphEsc')) {
+	function vrphEsc($v)
+	{
+		global $owlPDO;
+		return substr($owlPDO->quote((string)$v), 1, -1);
+	}
+}
+if (!function_exists('vrphIdOk')) {
+	function vrphIdOk($v)
+	{
+		return preg_match('/^[A-Za-z0-9\/._ -]*$/', (string)$v) ? true : false;
+	}
+}
+foreach (array('no_permintaan', 'notransaksi', 'nopp2', 'supplierid', 'supplier_id', 'id_alamat_supplier', 'norfq', 'nomor') as $kParam) {
+	foreach (array($_POST, $_GET) as $srcParam) {
+		if (isset($srcParam[$kParam]) and !is_array($srcParam[$kParam]) and !vrphIdOk($srcParam[$kParam])) {
+			exit("warning: Parameter " . $kParam . " tidak valid");
+		}
+	}
+}
+foreach (array('kdbrg', 'lstnopp', 'nopp') as $kParam) {
+	if (isset($_POST[$kParam]) and is_array($_POST[$kParam])) {
+		foreach ($_POST[$kParam] as $vParam) {
+			if (!is_array($vParam) and !vrphIdOk($vParam)) {
+				exit("warning: Parameter " . $kParam . " tidak valid");
+			}
+		}
+	}
+}
+$alasan = vrphEsc($alasan);
+$ketUraian = vrphEsc($ketUraian);
+$schnopp = vrphEsc($schnopp);
+$schjenis = vrphEsc($schjenis);
+$schunit = vrphEsc($schunit);
+$schpt = vrphEsc($schpt);
+$schklbrg = vrphEsc($schklbrg);
+$schkdbrg = vrphEsc($schkdbrg);
+$crnotransaksi = vrphEsc($crnotransaksi);
+
+#=== Filter list RPH serta tarikan Excel/PDF (dipakai bersama oleh list, Excel, dan PDF) ===
+#kondisi list: RPH sesuai akses unit, sudah diverifikasi, pemenang (score=1), lalu filter yang dipilih
+if (!function_exists('vrphKondisi')) {
+	function vrphKondisi()
+	{
+		global $dbname;
+		$ht = $dbname . ".log_perintaanhargaht";
+		$k = " a.score='1' and a.nomor in (select nomor from " . $ht . " where right(nomor,4) in (" . getOrgDetail(2) . ") and statusverifikasi in ('1','3','4'))";
+		$v = trim((string)checkPostGet('crnotransaksi', ''));
+		if ($v != '') {
+			$e = vrphEsc($v);
+			$k .= " and (a.norph like '%" . $e . "%' or a.nomor like '%" . $e . "%')";
+		}
+		$tgl = trim((string)checkPostGet('crtanggal', ''));
+		if (preg_match('/^(\d{2})-(\d{2})-(\d{4})$/', $tgl, $m)) {
+			$ymd = $m[3] . '-' . $m[2] . '-' . $m[1];
+			$k .= " and (a.tanggalverifikasi='" . $ymd . "' or date(b.waktuverifikasi)='" . $ymd . "')";
+		}
+		$th = trim((string)checkPostGet('filterTahun', ''));
+		if (preg_match('/^\d{4}$/', $th)) {
+			$k .= " and (year(a.tanggalverifikasi)=" . $th . " or year(b.waktuverifikasi)=" . $th . ")";
+		}
+		$pu = trim((string)checkPostGet('filterPurchaser', ''));
+		if ($pu != '' and preg_match('/^[A-Za-z0-9_\-\.]+$/', $pu)) {
+			$k .= " and exists (select 1 from " . $ht . " h where h.nomor=a.nomor and h.purchaser='" . $pu . "')";
+		}
+		$st = (string)checkPostGet('filterStatus', '');
+		$sv = "(select h.statusverifikasi from " . $ht . " h where h.nomor=a.nomor limit 1)";
+		$tl = "(select h.tolakrph from " . $ht . " h where h.nomor=a.nomor limit 1)";
+		$ap = "(select p.status from " . $dbname . ".approval p where p.notransaksi=a.nomor order by p.level desc limit 1)";
+		if ($st == '1') {
+			$k .= " and " . $sv . "='1' and ifnull(" . $tl . ",'')<>'2' and " . $ap . "='1'";
+		} elseif ($st == '2') {
+			$k .= " and " . $sv . "='1' and ifnull(" . $tl . ",'')<>'2' and " . $ap . "='0'";
+		} elseif ($st == '3') {
+			$k .= " and " . $sv . "='1' and " . $tl . "='2'";
+		} elseif ($st == '4') {
+			$k .= " and not (" . $sv . "='1' and (" . $tl . "='2' or ifnull(" . $ap . ",'') in ('0','1')))";
+		}
+		return $k;
+	}
+}
+if (!function_exists('vrphJumlah')) {
+	function vrphJumlah()
+	{
+		global $dbname;
+		$r = fetchdata("select count(*) as c from (select 1 from " . $dbname . ".log_permintaanhargadt a left join " . $dbname . ".log_perintaanhargaht b on a.nomor=b.nomor where " . vrphKondisi() . " group by a.nomor,a.norph) x");
+		return (int)$r[0]['c'];
+	}
+}
+if (!function_exists('vrphDataList')) {
+	function vrphDataList($offset, $limit)
+	{
+		global $dbname;
+		return fetchdata("select a.* from " . $dbname . ".log_permintaanhargadt a left join " . $dbname . ".log_perintaanhargaht b on a.nomor=b.nomor where " . vrphKondisi() . " group by a.nomor,a.norph order by b.waktuverifikasi desc limit " . (int)$offset . "," . (int)$limit);
+	}
+}
+#warna status persetujuan: Disetujui hijau, Proses kuning, Ditolak merah, Belum diverifikasi abu (latar dan huruf)
+if (!function_exists('vrphWarnaStatus')) {
+	function vrphWarnaStatus($status)
+	{
+		$w = array(
+			'Disetujui' => array('#c6efce', '#006100'),
+			'Proses Persetujuan' => array('#ffeb9c', '#9c5700'),
+			'Ditolak' => array('#ffc7ce', '#9c0006'),
+			'Belum diverifikasi' => array('#d9d9d9', '#404040')
+		);
+		return isset($w[$status]) ? $w[$status] : array('', '');
+	}
+}
+#data lengkap per baris list (status persetujuan, PR, purchaser, verifikator, supplier pemenang, chat) dengan sedikit query per halaman
+if (!function_exists('vrphLengkapi')) {
+	function vrphLengkapi($rows)
+	{
+		global $dbname;
+		if (count($rows) == 0) {
+			return array();
+		}
+		$nomor = array();
+		$norph = array();
+		foreach ($rows as $r) {
+			$nomor[$r['nomor']] = $r['nomor'];
+			if ($r['norph'] != '') {
+				$norph[$r['norph']] = $r['norph'];
+			}
+		}
+		$in = "'" . implode("','", array_map('vrphEsc', $nomor)) . "'";
+		$hdr = array();
+		$pur = array();
+		$pic = array();
+		foreach (fetchdata("select nomor,purchaser,picverifikasi,statusverifikasi,tolakrph from " . $dbname . ".log_perintaanhargaht where nomor in (" . $in . ")") as $h) {
+			if (!isset($hdr[$h['nomor']])) {
+				$hdr[$h['nomor']] = $h;
+			}
+			$pur[$h['nomor']] = $h['purchaser'];
+			$pic[$h['nomor']] = $h['picverifikasi'];
+		}
+		$wkt = array();
+		foreach (fetchdata("select nomor,waktuverifikasi from " . $dbname . ".log_perintaanhargaht where nomor in (" . $in . ")") as $h) {
+			$wkt[$h['nomor']] = $h['waktuverifikasi'];
+		}
+		$app = array();
+		foreach (fetchdata("select notransaksi,status from " . $dbname . ".approval where notransaksi in (" . $in . ") order by notransaksi,level") as $p) {
+			$app[$p['notransaksi']] = $p['status'];
+		}
+		$chat = array();
+		foreach (fetchdata("select nomor,count(*) as c from " . $dbname . ".log_rfq_chat where nomor in (" . $in . ") group by nomor") as $c) {
+			$chat[$c['nomor']] = (int)$c['c'];
+		}
+		$whrPr = "nomor in (" . $in . ")";
+		if (count($norph) > 0) {
+			$whrPr .= " or norph in ('" . implode("','", array_map('vrphEsc', $norph)) . "')";
+		}
+		$pp = array();
+		foreach (fetchdata("select distinct norph,nomor,nopp from " . $dbname . ".log_permintaanhargadt where " . $whrPr) as $d) {
+			$kunci = ($d['norph'] != '') ? $d['norph'] : $d['nomor'];
+			$pp[$kunci][] = $d['nopp'];
+		}
+		$sup = array();
+		foreach (fetchdata("select a.nomor,b.tender,c.supplierid,c.namasupplier from " . $dbname . ".log_permintaanhargadt a left join " . $dbname . ".log_perintaanhargaht b on a.nomor=b.nomor and a.nourut=b.nourut left join " . $dbname . ".log_5supplier c on b.supplierid=c.supplierid where a.nomor in (" . $in . ") and a.score='1' group by a.nomor,c.supplierid") as $s) {
+			$sup[$s['nomor']][] = $s;
+		}
+		$idKar = array();
+		foreach (array_merge(array_values($pur), array_values($pic)) as $id) {
+			if ($id != '') {
+				$idKar[$id] = $id;
+			}
+		}
+		$nmKar = count($idKar) > 0 ? makeOption($dbname, 'datakaryawan', 'karyawanid,namakaryawan', "karyawanid in ('" . implode("','", array_map('vrphEsc', $idKar)) . "')") : array();
+
+		$hasil = array();
+		foreach ($rows as $r) {
+			$nm = $r['nomor'];
+			$tglVer = $r['tanggalverifikasi'];
+			if ($tglVer == '0000-00-00') {
+				$tglVer = substr(isset($wkt[$nm]) ? $wkt[$nm] : '', 0, 10);
+			}
+			$sv = isset($hdr[$nm]) ? $hdr[$nm]['statusverifikasi'] : '';
+			$tl = isset($hdr[$nm]) ? $hdr[$nm]['tolakrph'] : '';
+			$ap = isset($app[$nm]) ? $app[$nm] : '';
+			if ($sv == '1' && $ap == '1' && $tl != '2') {
+				$status = 'Disetujui';
+			} elseif ($sv == '1' && $ap == '0' && $tl != '2') {
+				$status = 'Proses Persetujuan';
+			} elseif ($sv == '1' && $tl == '2') {
+				$status = 'Ditolak';
+			} else {
+				$status = 'Belum diverifikasi';
+			}
+			$kunciPp = ($r['norph'] != '') ? $r['norph'] : $nm;
+			$daftarPp = isset($pp[$r['norph']]) ? $pp[$r['norph']] : (isset($pp[$nm]) ? $pp[$nm] : array());
+			$tender = false;
+			if (isset($sup[$nm])) {
+				foreach ($sup[$nm] as $s) {
+					$tender = ($s['tender'] == '1');
+				}
+			}
+			$hasil[] = array(
+				'nomor' => $nm,
+				'norph' => $r['norph'],
+				'nomorx' => ($r['norph'] != '') ? $r['norph'] : $nm,
+				'tanggal' => $tglVer,
+				'pp' => $daftarPp,
+				'chat' => isset($chat[$nm]) && $chat[$nm] > 0,
+				'purchaser' => isset($nmKar[isset($pur[$nm]) ? $pur[$nm] : '']) ? $nmKar[$pur[$nm]] : '',
+				'verifikator' => isset($nmKar[isset($pic[$nm]) ? $pic[$nm] : '']) ? $nmKar[$pic[$nm]] : '',
+				'status' => $status,
+				'supplier' => isset($sup[$nm]) ? $sup[$nm] : array(),
+				'tender' => $tender
+			);
+		}
+		return $hasil;
+	}
+}
+#keterangan filter yang aktif untuk kop tarikan
+if (!function_exists('vrphInfoFilter')) {
+	function vrphInfoFilter()
+	{
+		global $dbname, $vrphTerpotong;
+		$arrSt = array('1' => 'Disetujui', '2' => 'Proses Persetujuan', '3' => 'Ditolak', '4' => 'Belum diverifikasi');
+		$info = array();
+		$th = trim((string)checkPostGet('filterTahun', ''));
+		$info[] = 'Tahun: ' . (preg_match('/^\d{4}$/', $th) ? $th : 'Semua');
+		$st = (string)checkPostGet('filterStatus', '');
+		$info[] = 'Status: ' . (isset($arrSt[$st]) ? $arrSt[$st] : 'Semua');
+		$pu = trim((string)checkPostGet('filterPurchaser', ''));
+		if ($pu != '' and preg_match('/^[A-Za-z0-9_\-\.]+$/', $pu)) {
+			$nm = makeOption($dbname, 'datakaryawan', 'karyawanid,namakaryawan', "karyawanid='" . vrphEsc($pu) . "'");
+			$info[] = 'Purchaser: ' . (isset($nm[$pu]) ? $nm[$pu] : $pu);
+		}
+		$v = trim((string)checkPostGet('crnotransaksi', ''));
+		if ($v != '') {
+			$info[] = 'No. Transaksi: ' . stripslashes($v);
+		}
+		$tg = trim((string)checkPostGet('crtanggal', ''));
+		if (preg_match('/^\d{2}-\d{2}-\d{4}$/', $tg)) {
+			$info[] = 'Tanggal: ' . $tg;
+		}
+		if (!empty($vrphTerpotong)) {
+			$info[] = 'Dibatasi 3000 data terbaru, persempit filter bila perlu';
+		}
+		return implode(' | ', $info);
+	}
+}
+#teks yang kepanjangan dipotong dan diberi "..." supaya tidak tumpang tindih ke kolom sebelah
+if (!function_exists('vrphFit')) {
+	function vrphFit($pdf, $txt, $w, $f = 7)
+	{
+		$txt = utf8_decode($txt);
+		$pdf->SetFont('Arial', '', $f);
+		if ($pdf->GetStringWidth($txt) <= $w - 2) {
+			return $txt;
+		}
+		while (strlen($txt) > 1 && $pdf->GetStringWidth($txt . '...') > $w - 2) {
+			$txt = substr($txt, 0, -1);
+		}
+		return rtrim($txt) . '...';
+	}
+}
+
 switch ($method)
 {
 	case 'loaddata':
-		$tab="";
-		$limit=20;
-        $page=0;
-        if(isset($pages))
-		{
-			$page=$pages;
-			if($page<0) 
-				$page=0;
-        }
-		$offset=$page*$limit;
-		
-		$where = "";
-		$where.="nomor in (select nomor from ".$dbname.".log_perintaanhargaht where right(nomor,4) in (".getOrgDetail(2).") and (statusverifikasi='1' || statusverifikasi='3' || statusverifikasi='4'))";
-		$where2.="a.nomor in (select nomor from ".$dbname.".log_perintaanhargaht where right(nomor,4) in (".getOrgDetail(2).") and (statusverifikasi='1' || statusverifikasi='3' || statusverifikasi='4'))";
-		if($crnotransaksi!='')
-		{
-			// $where.=" and norph like '%".$crnotransaksi."%'";
-			// $where2.=" and a.norph like '%".$crnotransaksi."%'";
-			$where.=" and (norph like '%".$crnotransaksi."%' or nomor like '%".$crnotransaksi."%')";
-			$where2.=" and (a.norph like '%".$crnotransaksi."%' or a.nomor like '%".$crnotransaksi."%') ";
-		}
-		
-		if($crtanggal!='')
-		{
-			$txt_tgl=tanggalsystemn($crtanggal);
-			$where.=" and tanggal='".$txt_tgl."'";
-			$where2.=" and a.tanggal='".$txt_tgl."'";
-		}
-		// if(getUnitByMgrPurc($_SESSION['standard']['userid'],'verifikator')!=''){			
-		// 	$where.=" and nopp in (select nopp FROM ".$dbname.".log_prapoht where unit in (".getUnitByMgrPurc($_SESSION['standard']['userid'],'verifikator')."))";
-		// }
-		
-		// ada 2 ketentuan
-		// 1. untuk pabrik dan bulking yang verifikasi hendra jaya
-		// 2. kecuali diatas yg verifikasi purchaser masing masing
-		// jika ketentuan point nomor 2 maka hanya munculkan PR yang mereka buat saja
-		// if(getUnitByMgrPurc($_SESSION['standard']['userid'],'verifikator')==getUnitByMgrPurc($_SESSION['standard']['userid'],'purchaserid')){			
-		// 	// $where.=" and nopp in (select nopp FROM ".$dbname.".log_listverifikasi where 1=1 and (karyawanid ='".$_SESSION['standard']['userid']."' or createdby ='".$_SESSION['standard']['userid']."')) or verificator='".$_SESSION['standard']['userid']."'";
-		// 	$where.=" and (nopp in (select nopp FROM ".$dbname.".log_listverifikasi where 1=1 and (karyawanid ='".$_SESSION['standard']['userid']."' or createdby ='".$_SESSION['standard']['userid']."')) or verificator='".$_SESSION['standard']['userid']."')";
-		// }
-		
-		$arrNopp=array();
-		$sNopp="select distinct norph,nomor,nopp from ".$dbname.".log_permintaanhargadt where ".$where."";
-		$rNopp=fetchData($sNopp);
-		foreach ($rNopp as $key => $val) {
-			if($val['norph'] != ''){
-				$nomorx = $val['norph'];
-			}else{
-				$nomorx = $val['nomor'];
+		$tab = "";
+		$limit = 20;
+		$page = max(0, (int)$pages);
+		$offset = $page * $limit;
+		$jlhbrs = vrphJumlah();
+		$data = vrphLengkapi(vrphDataList($offset, $limit));
+		$no = $offset;
+		foreach ($data as $r) {
+			$no += 1;
+			$wrn = vrphWarnaStatus($r['status']);
+			$tab .= "<tr class=rowcontent>
+				<td style='text-align:right;vertical-align:top'>" . $no . "</td>
+				<td style='vertical-align:top;white-space:nowrap'>" . $r['nomor'] . "</td>
+				<td style='vertical-align:top;white-space:nowrap'>" . $r['norph'] . "</td>
+				<td style='text-align:center;vertical-align:top'>" . tanggalnormal($r['tanggal']) . "</td>
+				<td style='text-align:left;vertical-align:top'><ol type=1 style='margin:0;padding-left:22px'>";
+			foreach ($r['pp'] as $key) {
+				$tab .= "<li style='cursor:pointer;color:blue' onclick=\"previewDetail('" . $key . "',event);\">" . $key . "</li>";
 			}
-			$arrNopp[$nomorx][]=$val['nopp'];
-		}
-		
-		$jlhbrs = 0;
-		// $str="select norph as jmlhrow from ".$dbname.".log_permintaanhargadt where norph!='' ".$where." group by norph order by tanggalverifikasi desc";
-		$str="select norph as jmlhrow from ".$dbname.".log_permintaanhargadt where ".$where." group by norph order by tanggalverifikasi desc";
-		$res=$owlPDO->query($str) or die(print " Gagal: ".PDOException::getMessage());
-		$res->setFetchMode(PDO::FETCH_ASSOC);
-		while($bar=$res->fetch())
-		{
-			$jlhbrs = $jlhbrs+1;
-		}
-		
-		$no=0;
-		// $str="SELECT * FROM ".$dbname.".log_permintaanhargadt where norph!='' ".$where." group by norph ORDER BY tanggalverifikasi desc LIMIT ".$offset.",".$limit."";
-		// $str="SELECT a.* FROM ".$dbname.".log_permintaanhargadt a left join ".$dbname.".log_perintaanhargaht b on a.nomor=b.nomor where ".$where2." and a.score='1' 
-		// and b.purchaser='".$_SESSION['standard']['userid']."' group by a.nomor,a.norph ORDER BY a.tanggalverifikasi desc LIMIT ".$offset.",".$limit."";
-		$str="SELECT a.* FROM ".$dbname.".log_permintaanhargadt a left join ".$dbname.".log_perintaanhargaht b on a.nomor=b.nomor where ".$where2." and a.score='1' 
-		group by a.nomor,a.norph ORDER BY b.waktuverifikasi desc LIMIT ".$offset.",".$limit."";
-		$res=$owlPDO->query($str) or die(print " Gagal: ".PDOException::getMessage());
-		$res->setFetchMode(PDO::FETCH_ASSOC);
-		while($bar=$res->fetch()) 
-		{
-
-			if($bar['norph'] != ''){
-				$nomor_x = $bar['norph'];
-			}else{
-				$nomor_x = $bar['nomor'];
-			}
-			
-			$picverifikasi = makeOption($dbname,'log_perintaanhargaht','nomor,picverifikasi');
-			$purchaserr = makeOption($dbname,'log_perintaanhargaht','nomor,purchaser');
-			$tgl_ver = $bar['tanggalverifikasi'];
-			// $pic_ver = $bar['verificator'];
-			$pic_ver = $purchaserr[$bar['nomor']];
-			$pic_verifikasi = $picverifikasi[$bar['nomor']];
-			if($bar['tanggalverifikasi'] == '0000-00-00'){
-				$strx="select * from ".$dbname.".log_perintaanhargaht where nomor='".$bar['nomor']."'";
-				$resx=fetchdata($strx);
-				$tgl_ver = substr($resx[0]['waktuverifikasi'],0,10);
-				// $pic_ver = $resx[0]['picverifikasi'];
-			}
-			
-
-			##periksa chat
-			$strChat="select *  from ".$dbname.".log_rfq_chat where nomor='".$bar['nomor']."'";
-			$resChat=$owlPDO->query($strChat) or die(print " Gagal: ".PDOException::getMessage());
-			if(owlBaris($resChat)>0)
-			{
-				$ingChat="<img src='images/chat1.png' onclick=\"loadRFQChat('".$bar['nomor']."',event);\" class=zImgBtn>";
-			}
-			else
-			{
-				$ingChat="<img src='images/chat0.png'  onclick=\"loadRFQChat('".$bar['nomor']."',event);\" class=zImgBtn>";
-			}
-
-			$optNamaKaryawan = makeOption($dbname,'datakaryawan','karyawanid,namakaryawan');
-			$no+=1;
-			
-			$tab.="<tr class=rowcontent>
-				<td style='text-align:right;vertical-align:top'>".$no."</td>
-				<td style='vertical-align:top;'>".$bar['nomor']."</td>
-				<td style='vertical-align:top;'>".$bar['norph']."</td>
-				<td style='text-align:center;vertical-align:top'>".tanggalnormal($tgl_ver)."</td>";
-
-				$tab.="<td style='text-align:center;vertical-align:top'><ol type=1>";
-
-			$lstNopp=$arrNopp[$bar['norph']];
-			if(count($lstNopp) <= 0){
-				$lstNopp=$arrNopp[$bar['nomor']];
-			}
-
-			foreach ($lstNopp as $key) {
-				$tab.="<li style='cursor:pointer;color:blue' onclick=\"previewDetail('".$key."',event);\">".$key."</li>";
-			}
-			$tab.="</ol></td>";
-
-		    $tab.="<td style='text-align:center;vertical-align:top'>".$ingChat."</td>";
-		    $tab.="<td style='text-align:center;vertical-align:top'>".$optNamaKaryawan[$pic_ver]."</td>";
-		    $tab.="<td style='text-align:center;vertical-align:top'>".$optNamaKaryawan[$pic_verifikasi]."</td>";
-
-			// status persetujuan
-			$strp="select status from ".$dbname.".approval where notransaksi = '".$bar['nomor']."' order by level desc limit 1";
-			$resp=fetchdata($strp);
-			if(count($resp)>0){
-				$status_persetujuan = $resp[0]['status'];
-			}else{
-				$status_persetujuan = "";
-			}
-			$strv="select statusverifikasi,tolakrph from ".$dbname.".log_perintaanhargaht where nomor = '".$bar['nomor']."' order by nomor desc limit 1";
-			$resv=fetchdata($strv);
-			if(count($resv)>0){
-				$statusverifikasi_f = $resv[0]['statusverifikasi'];
-				$tolakrph_f = $resv[0]['tolakrph'];
-			}else{
-				$statusverifikasi_f = "";
-				$tolakrph_f = "";
-			}
-			
-			if($statusverifikasi_f=='1' && $status_persetujuan == '1' && $tolakrph_f != '2'){
-				$tab .= "<td style='color:blue;cursor:pointer;text-align:center' onclick=\"gethistoriapproval('" . $bar['nomor'] . "',event)\">Disetujui</td>";
-			}elseif($statusverifikasi_f=='1' && $status_persetujuan == '0' && $tolakrph_f != '2'){
-				$tab .= "<td style='color:blue;cursor:pointer;text-align:center' onclick=\"gethistoriapproval('" . $bar['nomor'] . "',event)\">Proses Persetujuan</td>";
-			}elseif($statusverifikasi_f=='1' && $tolakrph_f == '2'){
-				$tab .= "<td style='color:blue;cursor:pointer;text-align:center' onclick=\"gethistoriapproval('" . $bar['nomor'] . "',event)\">Ditolak</td>";
-			}else{
-				$tab .= "<td style='color:blue;cursor:pointer;text-align:center' onclick=\"gethistoriapproval('" . $bar['nomor'] . "',event)\">Belum di verfikasi</td>";
-			}
-
-
-			$tab.="<td><table>";
-				
-			// $str2="select c.supplierid,c.namasupplier,a.nomor, a.nopp from ".$dbname.".log_permintaanhargadt a 
-			// left join ".$dbname.".log_perintaanhargaht b on a.nomor=b.nomor and a.nourut=b.nourut
-			// left join ".$dbname.".log_5supplier c on b.supplierid=c.supplierid 
-			// where a.norph='".$bar['norph']."' group by c.supplierid";
-
-			$tenderH=0;
-			$str2="select b.tender,c.supplierid,c.namasupplier,a.nomor, a.nopp from ".$dbname.".log_permintaanhargadt a 
-			left join ".$dbname.".log_perintaanhargaht b on a.nomor=b.nomor and a.nourut=b.nourut
-			left join ".$dbname.".log_5supplier c on b.supplierid=c.supplierid 
-			where a.nomor='".$bar['nomor']."'  and a.score='1' group by c.supplierid";
-			$res2=$owlPDO->query($str2) or die(print " Gagal: ".PDOException::getMessage());
-			$res2->setFetchMode(PDO::FETCH_ASSOC);
+			$tab .= "</ol></td>";
+			$imgChat = $r['chat'] ? 'chat1.png' : 'chat0.png';
+			$tab .= "<td style='text-align:center;vertical-align:top'><img src='images/" . $imgChat . "' onclick=\"loadRFQChat('" . $r['nomor'] . "',event);\" class=zImgBtn></td>";
+			$tab .= "<td style='text-align:center;vertical-align:top'>" . $r['purchaser'] . "</td>";
+			$tab .= "<td style='text-align:center;vertical-align:top'>" . $r['verifikator'] . "</td>";
+			$tab .= "<td style='cursor:pointer;text-align:center;vertical-align:top;font-weight:bold" . ($wrn[0] != '' ? ";background-color:" . $wrn[0] . ";color:" . $wrn[1] : ";color:blue") . "' onclick=\"gethistoriapproval('" . $r['nomor'] . "',event)\">" . $r['status'] . "</td>";
+			$tab .= "<td style='vertical-align:top'><table>";
 			$nosup = 0;
-			while($bar2=$res2->fetch())
-			{
-				$tenderH=$bar2['tender'];
+			foreach ($r['supplier'] as $s) {
 				$nosup++;
-				$tab.="<tr>
-					<td style='text-align:right;vertical-align:top'>".$nosup."</td>
-					<td style='color:blue;cursor:pointer;' onclick=\"previewlinkpemenang('".$nomor_x."', '".$bar2['supplierid']."', 'Detail Pemenang Perbandingan Harga' ,event)\">".$bar2['namasupplier']."</td>
-					<td>
-						<img style='display:none' src=images/pdf.jpg class=resicon  title='Print' onclick=\"masterPDF('log_perintaanhargaht','".@$bar['nomor'].",".@$bar2['nourut']."','','log_slave_print_permintaan_penawaran',event);\">
-					</td>
+				$tab .= "<tr>
+					<td style='text-align:right;vertical-align:top'>" . $nosup . "</td>
+					<td style='color:blue;cursor:pointer;' onclick=\"previewlinkpemenang('" . $r['nomorx'] . "', '" . $s['supplierid'] . "', 'Detail Pemenang Perbandingan Harga' ,event)\">" . $s['namasupplier'] . "</td>
 				</tr>";
 			}
-			$tab.="</table></td>";
-
-			// PDF RPH PALMA
-			if($tenderH == '1'){
-				$tab.="
-						<td style='text-align:center'>
-							<img src=images/pdf.jpg class=zImgBtn title='Print' onclick=\"masterPDF('log_poht','".$nomor_x."','','log_slave_print_permintaan_penawaran_new',event);\">
-						</td>";
-			}else{
-				$tab.="
-						<td style='text-align:center'>
-							
-						</td>
-				";
+			$tab .= "</table></td>";
+			if ($r['tender']) {
+				$tab .= "<td style='text-align:center;vertical-align:top'>
+					<img src=images/pdf.jpg class=zImgBtn title='Print' onclick=\"masterPDF('log_poht','" . $r['nomorx'] . "','','log_slave_print_permintaan_penawaran_new',event);\">
+				</td>";
+			} else {
+				$tab .= "<td style='text-align:center'></td>";
 			}
-				
-			
-					
-			// $tab.="<td style='vertical-align:top;text-align:center'>
-				// <img src=images/pdf.jpg class=resicon  title='Print' onclick=\"masterPDF('log_perintaanhargaht','".$bar['nomor'].",".$bar['nourut']."','','log_slave_print_permintaan_penawaran_v2',event);\">    						
-				// <img onclick=datakeExcel(event,'".$bar['nomor']."') src=images/excel.jpg class=resicon title='MS.Excel'> 						
-			// </td>";
-				
-			$tab.="</tr>";
+			$tab .= "</tr>";
 		}
-		
-		$totrows=ceil($jlhbrs/$limit);
-		if($totrows==0)
-		{
-			$totrows=1;
+
+		$totrows = ceil($jlhbrs / $limit);
+		if ($totrows == 0) {
+			$totrows = 1;
 		}
-		
-		$isiRow='';
-		for($er=1;$er<=$totrows;$er++)
-		{
-			$sel = ($page==$er-1)? 'selected': '';
-			$isiRow.="<option value='".$er."' ".$sel.">".$er."</option>";
+		$isiRow = '';
+		for ($er = 1; $er <= $totrows; $er++) {
+			$sel = ($page == $er - 1) ? 'selected' : '';
+			$isiRow .= "<option value='" . $er . "' " . $sel . ">" . $er . "</option>";
 		}
-		
-		$frompage = (($page*$limit)+1);
-		if((($page+1)*$limit) > $jlhbrs)
-		{
+		$frompage = (($page * $limit) + 1);
+		if ((($page + 1) * $limit) > $jlhbrs) {
 			$topage = $jlhbrs;
+		} else {
+			$topage = (($page + 1) * $limit);
 		}
-		else
-		{
-			$topage = (($page+1)*$limit);
+		if ($jlhbrs == 0) {
+			$tab .= "<tr class=rowcontent><td colspan=11 align=center>" . $_SESSION['lang']['errdatanotexist'] . "</td></tr>";
+			$frompage = 0;
 		}
-		$tab.="</tr>
-		<tr>
-			<td colspan=7 align=center>
-				".$frompage." to ".$topage." Of ".  $jlhbrs."
+		$tab .= "<tr>
+			<td colspan=11 align=center>
+				" . $frompage . " to " . $topage . " Of " . $jlhbrs . "
 			</td>
 		</tr>
 		<tr>
-			<td colspan=7 align=center>";
-		
-		if($page=='0')
-		{
-			$tab.="";
+			<td colspan=11 align=center>";
+		if ($page != 0) {
+			$tab .= "<button class=mybutton onclick=loaddata(" . ($page - 1) . ");>" . $_SESSION['lang']['pref'] . "</button>";
 		}
-		else
-		{
-			$tab.="<button class=mybutton onclick=loaddata(".($page-1).");>".$_SESSION['lang']['pref']."</button>";
+		$tab .= "<select id=\"pages\" name=\"pages\" style=\"width:50px\" onchange=\"getPage()\">" . $isiRow . "</select>";
+		if (($page + 1) != $totrows) {
+			$tab .= "<button class=mybutton onclick=loaddata(" . ($page + 1) . ");>" . $_SESSION['lang']['lanjut'] . "</button>";
 		}
-		
-		$tab.="<select id=\"pages\" name=\"pages\" style=\"width:50px\" onchange=\"getPage()\">".$isiRow."</select>";
-		
-		if(($page+1) == $totrows)
-		{
-			$tab.="";
-		}
-		else
-		{
-			$tab.="<button class=mybutton onclick=loaddata(".($page+1).");>".$_SESSION['lang']['lanjut']."</button>";
-		}
-        $tab.="</td></tr>";
-		
+		$tab .= "</td></tr>";
 		echo $tab;
 	break;
-	
+
+	case 'excellist':
+		$rows = vrphDataList(0, 3001);
+		$vrphTerpotong = count($rows) > 3000;
+		$data = vrphLengkapi(array_slice($rows, 0, 3000));
+		$hdpt = setheadreport($_SESSION['empl']['kodeorganisasi'], $_SESSION['empl']['kodeorganisasi']);
+		$kolom = 10;
+		$stream = "<table>
+			<tr><td colspan=" . $kolom . "><b>" . htmlspecialchars($hdpt['nama']) . "</b></td></tr>
+			<tr><td colspan=" . $kolom . "><b>VERIFIKASI RPH</b></td></tr>
+			<tr><td colspan=" . $kolom . ">" . htmlspecialchars(vrphInfoFilter()) . "</td></tr>
+			<tr><td colspan=" . $kolom . ">Ditarik oleh " . htmlspecialchars($_SESSION['empl']['name']) . " (" . htmlspecialchars($_SESSION['standard']['username']) . ") pada " . date('d-m-Y H:i:s') . "</td></tr>
+			<tr><td colspan=" . $kolom . ">&nbsp;</td></tr>
+			</table>";
+		$stream .= "<table class=sortable cellspacing=1 cellpadding=3 border=1>
+			<thead><tr>
+				<th align=center bgcolor=#CCCCCC>No</th>
+				<th align=center bgcolor=#CCCCCC>No. Transaksi DPH</th>
+				<th align=center bgcolor=#CCCCCC>No. Transaksi RPH</th>
+				<th align=center bgcolor=#CCCCCC>Tanggal</th>
+				<th align=center bgcolor=#CCCCCC>List No. PP</th>
+				<th align=center bgcolor=#CCCCCC>Purchaser</th>
+				<th align=center bgcolor=#CCCCCC>Verificator</th>
+				<th align=center bgcolor=#CCCCCC>Status Persetujuan</th>
+				<th align=center bgcolor=#CCCCCC>Supplier Pemenang</th>
+				<th align=center bgcolor=#CCCCCC>Tender</th>
+			</tr></thead><tbody>";
+		$no = 0;
+		foreach ($data as $r) {
+			$no++;
+			$wrn = vrphWarnaStatus($r['status']);
+			$namaSup = array();
+			foreach ($r['supplier'] as $s) {
+				$namaSup[] = $s['namasupplier'];
+			}
+			$stream .= "<tr>
+				<td align=center>" . $no . "</td>
+				<td>" . htmlspecialchars($r['nomor']) . "</td>
+				<td>" . htmlspecialchars($r['norph']) . "</td>
+				<td align=center>" . tanggalnormal($r['tanggal']) . "</td>
+				<td>" . nl2br(htmlspecialchars(implode("\n", $r['pp']))) . "</td>
+				<td>" . htmlspecialchars($r['purchaser']) . "</td>
+				<td>" . htmlspecialchars($r['verifikator']) . "</td>
+				<td align=center" . ($wrn[0] != '' ? " bgcolor=" . $wrn[0] . " style='color:" . $wrn[1] . ";font-weight:bold'" : "") . ">" . htmlspecialchars($r['status']) . "</td>
+				<td>" . nl2br(htmlspecialchars(implode("\n", $namaSup))) . "</td>
+				<td align=center>" . ($r['tender'] ? 'Ya' : '') . "</td>
+			</tr>";
+		}
+		if ($no == 0) {
+			$stream .= "<tr><td colspan=" . $kolom . " align=center>Data tidak ditemukan</td></tr>";
+		}
+		$stream .= "</tbody></table>";
+		$xls = new HtmlExcel();
+		$xls->addSheet("VerifikasiRPH", $stream);
+		$xls->headers("VerifikasiRPH_" . date('YmdHis') . ".xls");
+		echo $xls->buildFile();
+		exit;
+
+	case 'pdflist':
+		$rows = vrphDataList(0, 3001);
+		$vrphTerpotong = count($rows) > 3000;
+		$data = vrphLengkapi(array_slice($rows, 0, 3000));
+		$hdpt = setheadreport($_SESSION['empl']['kodeorganisasi'], $_SESSION['empl']['kodeorganisasi']);
+		$infoFilter = vrphInfoFilter();
+		if (!class_exists('PDFListVRPH')) {
+			class PDFListVRPH extends FPDF
+			{
+				public $colW = array();
+
+				function Header()
+				{
+					global $hdpt, $infoFilter;
+					$width = $this->w - $this->lMargin - $this->rMargin;
+					if (file_exists($hdpt['logo'])) {
+						$this->Image($hdpt['logo'], $this->lMargin, $this->tMargin, 18);
+					}
+					$this->SetFont('Arial', 'B', 11);
+					$this->SetXY($this->lMargin + 22, $this->tMargin + 2);
+					$this->Cell(160, 6, utf8_decode($hdpt['nama']), 0, 1, 'L');
+					$this->SetY($this->tMargin + 15);
+					$this->SetFont('Arial', 'B', 13);
+					$this->Cell($width, 7, 'VERIFIKASI RPH', 0, 1, 'C');
+					$this->SetFont('Arial', '', 8);
+					$this->Cell($width, 5, utf8_decode($infoFilter), 0, 1, 'C');
+					$this->Cell($width, 5, utf8_decode('Ditarik oleh ' . $_SESSION['empl']['name'] . ' (' . $_SESSION['standard']['username'] . ') pada ' . date('d-m-Y H:i:s')), 0, 1, 'C');
+					$this->Ln(1);
+					$this->SetFillColor(220, 220, 220);
+					$this->SetFont('Arial', 'B', 8);
+					$judul = array('No', 'No. DPH', 'No. RPH', 'Tanggal', 'List No. PP', 'Purchaser', 'Verificator', 'Status', 'Supplier Pemenang');
+					foreach ($judul as $i => $j) {
+						$this->Cell($this->colW[$i], 6, $j, 1, 0, 'C', true);
+					}
+					$this->Ln();
+				}
+
+				function Footer()
+				{
+					$this->SetY(-12);
+					$this->SetFont('Arial', 'I', 7);
+					$this->Cell(0, 8, 'Halaman ' . $this->PageNo() . ' / {nb}', 0, 0, 'R');
+				}
+			}
+		}
+		$pdf = new PDFListVRPH('L', 'mm', 'A4');
+		$pdf->AliasNbPages();
+		$pdf->SetAutoPageBreak(false, 16);
+		$width = $pdf->w - $pdf->lMargin - $pdf->rMargin;
+		$colFixed = array(8, 38, 34, 18, 50, 28, 28, 28); #semua kolom kecuali Supplier Pemenang
+		$pdf->colW = array_merge($colFixed, array($width - array_sum($colFixed)));
+		$pdf->AddPage();
+		$h = 6;
+		$no = 0;
+		foreach ($data as $r) {
+			$no++;
+			if ($pdf->GetY() + $h > $pdf->h - $pdf->bMargin) {
+				$pdf->AddPage();
+			}
+			$c = $pdf->colW;
+			$namaSup = array();
+			foreach ($r['supplier'] as $s) {
+				$namaSup[] = $s['namasupplier'];
+			}
+			$pdf->SetFont('Arial', '', 7);
+			$pdf->Cell($c[0], $h, $no, 1, 0, 'C');
+			$pdf->Cell($c[1], $h, vrphFit($pdf, $r['nomor'], $c[1]), 1, 0, 'L');
+			$pdf->Cell($c[2], $h, vrphFit($pdf, $r['norph'], $c[2]), 1, 0, 'L');
+			$pdf->Cell($c[3], $h, tanggalnormal($r['tanggal']), 1, 0, 'C');
+			$pdf->Cell($c[4], $h, vrphFit($pdf, implode('; ', $r['pp']), $c[4]), 1, 0, 'L');
+			$pdf->Cell($c[5], $h, vrphFit($pdf, $r['purchaser'], $c[5]), 1, 0, 'L');
+			$pdf->Cell($c[6], $h, vrphFit($pdf, $r['verifikator'], $c[6]), 1, 0, 'L');
+			$wrn = vrphWarnaStatus($r['status']);
+			if ($wrn[0] != '') {
+				sscanf($wrn[0], '#%02x%02x%02x', $br, $bg, $bb);
+				sscanf($wrn[1], '#%02x%02x%02x', $fr, $fg, $fb);
+				$pdf->SetFillColor($br, $bg, $bb);
+				$pdf->SetTextColor($fr, $fg, $fb);
+			}
+			$pdf->Cell($c[7], $h, vrphFit($pdf, $r['status'], $c[7]), 1, 0, 'L', $wrn[0] != '');
+			$pdf->SetTextColor(0, 0, 0);
+			$pdf->Cell($c[8], $h, vrphFit($pdf, implode('; ', $namaSup), $c[8]), 1, 1, 'L');
+		}
+		if ($no == 0) {
+			$pdf->Cell(array_sum($pdf->colW), $h, 'Data tidak ditemukan', 1, 1, 'C');
+		}
+		$pdf->Output();
+		exit;
+
 	case'getNotifikasi':
 		$tab="";
 		$jlhitem = 0; $arrData=$lstPP=$lstBrg=[];
@@ -748,7 +970,7 @@ switch ($method)
 		
 		$tab.="<fieldset><legend>List Data</legend>";
 		$countsup = count($arrSupplier);
-		$tab.="<table cellpadding=1 cellspacing=1 border=0 class=sortable>
+		$tab.="<table cellpadding=3 cellspacing=1 border=0 class=sortable>
 			<thead>
 			<tr style='text-align:center;font-weight:bold'>
 				<td rowspan=2>Evaluation Parameter</td>
@@ -771,9 +993,9 @@ switch ($method)
 			foreach($arrnamasup as $val){
 				$tab.="<td>".$val."</td>";
 			}
-			$tab.="<tr>
+			$tab.="</tr>
 			</thead>
-			<body>";
+			<tbody>";
 			
 			$arrkodebarang = $_POST['kdbrg'];
 			// asort($arrkodebarang);
@@ -815,7 +1037,7 @@ switch ($method)
 					<td>".hidezerodecimal($arrdtbarang[$val]['qty'],2)."</td>
 					<td>".$arrdtbarang[$val]['satuan']."</td>";
 					foreach($arrSupplier as $valx){
-						$tab.="<td style='text-align:center'>".number_format($arrbarang[$valx][$val]['harga'])."</td>";
+						$tab.="<td style='text-align:right;padding-right:8px'>".number_format($arrbarang[$valx][$val]['harga'])."</td>";
 					}
 					$tab.="<td>".hidezerodecimal($arrdtbarang[$val]['lastprice'],2)."</td>";
 					
@@ -824,7 +1046,7 @@ switch ($method)
 				$tab.="<tr class='rowcontent' style='text-align:center'>
 					<td colspan=4></td>";
 					foreach($arrSupplier as $valx){
-						$tab.="<td style='text-align:center;font-weight:bold'>".number_format($arrbarang[$valx][$val]['total'])."</td>";
+						$tab.="<td style='text-align:right;font-weight:bold;padding-right:8px'>".number_format($arrbarang[$valx][$val]['total'])."</td>";
 						$arrtotrpsup[$valx]+= $arrbarang[$valx][$val]['total'];
 						$ongkir+=$arrongkir[$valx];
 					}
@@ -841,10 +1063,10 @@ switch ($method)
 						$tab.="<td></td>";
 						$tab.="</tr>";
 					}else{
-						$tab.="<tr class='rowcontent'><td colspan='".(5+(1*$countsup))."'>&nbsp;</td></tr>";
+						$tab.="<tr class='rowcontent'><td colspan='".(5+(1*$countsup))."' style='height:4px;padding:0;font-size:0;line-height:0'></td></tr>";
 					}
 				}else{
-					$tab.="<tr class='rowcontent'><td colspan='".(5+(1*$countsup))."'>&nbsp;</td></tr>";					
+					$tab.="<tr class='rowcontent'><td colspan='".(5+(1*$countsup))."' style='height:4px;padding:0;font-size:0;line-height:0'></td></tr>";					
 				}
 			}
 			
@@ -869,7 +1091,7 @@ switch ($method)
 				foreach($arrSupplier as $val){
 					// $vtothas = $arrtotrpsup[$val] + $vhppn[$val];
 					$vtothas = ($arrtotrpsup[$val]+$arrongkir[$val]);
-					$tab.="<td style='text-align:center;font-weight:bold'>".hidezerodecimal($vtothas)."</td>";
+					$tab.="<td style='text-align:right;font-weight:bold;padding-right:8px'>".hidezerodecimal($vtothas)."</td>";
 				}
 				
 			$tab.="<td></td>
@@ -943,12 +1165,12 @@ switch ($method)
 			$tab.="</tr>";
 			
 			## PEMENANG TENDER
-			$tab.="<tr class='rowcontent'><td colspan='".(6+(3*$countsup))."'>&nbsp;</td></tr>";
+			$tab.="<tr class='rowcontent'><td colspan='".(6+(3*$countsup))."' style='height:4px;padding:0;font-size:0;line-height:0'></td></tr>";
 			$no=0;
 			arsort($arrwin);
 			foreach($arrwin as $key=>$val){
 				$no++;
-				$tab.="<tr class='rowcontent' style='font-weight:bold'>
+				$tab.="<tr class='rowcontent' style='font-weight:bold".($no==1 ? ";background-color:#c6efce" : "")."'>
 					<td colspan='".(6+($countsup*2))."' style='text-align:right'>Rekomendasi Tender ".$no."</td>
 					<td colspan='".$countsup."'>".$arrnamasup[$key]."</td>
 				</tr>";
@@ -957,9 +1179,9 @@ switch ($method)
 			$tab.="</tbody>
 		</table>";
 		
-		$tab.="<br><hr><br>";
+		$tab.="<div style='border-top:1px solid #9aa9b8;margin:14px 0'></div>";
 		
-		$tab.="<table cellpadding=1 cellspacing=1 border=0 class=sortable>
+		$tab.="<table cellpadding=3 cellspacing=1 border=0 class=sortable>
 			<thead>
 			<tr class=rowheader style='text-align:center;font-weight:bold'>
 				<td rowspan=3>".$_SESSION['lang']['nourut']."</td>
@@ -1225,6 +1447,7 @@ switch ($method)
 		$res=fetchdata($str);
 		$nilai_appHO=$res[0]['nilai'];
 		
+		$nopp=isset($_POST['nopp'][0]) ? $_POST['nopp'][0] : '';
 		$str="select tipepp from ".$dbname.".log_prapoht where nopp='".$nopp."'";
 		$res=fetchdata($str);
 		$tipepp=$res[0]['tipepp'];
@@ -1283,10 +1506,10 @@ switch ($method)
 			$arrList = listNextApprove($i, $jenisApp, $unit, $nilai_subtotal_n);
 
 			if(count($arrList) == 0){
-				exit("warning : Belum ada setup approval Unit ".$namaorg_unit[$unit_HO]." dengan range nilai ".number_format($nilai_subtotal_n)." ");
+				exit("warning : Belum ada setup approval Unit ".$namaorg_unit[$unit]." dengan range nilai ".number_format($nilai_subtotal_n)." ");
 			}else{
 				if($arrList[0]['level'] != '1'){
-					exit("warning : Belum ada setup approval Unit ".$namaorg_unit[$unit_HO]." dengan range nilai ".number_format($nilai_subtotal_n)." Pada Level 1");
+					exit("warning : Belum ada setup approval Unit ".$namaorg_unit[$unit]." dengan range nilai ".number_format($nilai_subtotal_n)." Pada Level 1");
 				}
 			}
 
@@ -1367,7 +1590,7 @@ switch ($method)
 			$level=checkPostGet('level','');
 			$karyawanid=checkPostGet('karyawanid','');
 			$pemenangitem=checkPostGet('pemenangitem','');
-			$komentarmenang=checkPostGet('komentarmenang','');
+			$komentarmenang=vrphEsc(checkPostGet('komentarmenang',''));
 
 			if($norfq == ''){
 				throw new PDOException("Notransaksi Tidak boleh kosong...");
@@ -1995,21 +2218,25 @@ switch ($method)
 	break;
 	
 	case'skiprph':
-		for($i=0;$i<$countbaris;$i++)
+		try
 		{
-			$str="update ".$dbname.".log_listverifikasi set skip='1' where nopp='".$_POST['lstnopp'][$i]."' and kodebarang='".$_POST['kdbrg'][$i]."' and karyawanid='".$_SESSION['standard']['userid']."'";
-			try
+			$owlPDO->beginTransaction();
+			for($i=0;$i<(int)$countbaris;$i++)
 			{
-				$owlPDO->exec($str);
+				$stmt=$owlPDO->prepare("update ".$dbname.".log_listverifikasi set skip='1' where nopp=? and kodebarang=? and karyawanid=?");
+				$stmt->execute(array($_POST['lstnopp'][$i],$_POST['kdbrg'][$i],$_SESSION['standard']['userid']));
 			}
-			catch (PDOException $e)
-			{
-				print " Gagal  !: " . $e->getMessage() . "\n"; 
-				die(); 
+			$owlPDO->commit();
+		}
+		catch (PDOException $e)
+		{
+			if($owlPDO->inTransaction()){
+				$owlPDO->rollBack();
 			}
+			print " Gagal  !: " . $e->getMessage() . "\n";
+			die();
 		}
 	break;
-	
 	case'addData':
 		if($id_alamat_supplier=='')
 		{
@@ -2076,6 +2303,7 @@ switch ($method)
                 (nomor, tanggal, purchaser, supplierid,id_alamat_supplier,nourut) values 
                 ('".$no_permintaan."','".$tgl."','".$_SESSION['standard']['userid']."','".$supplier_id."','".$id_alamat_supplier."','".$_POST['norurut']."')";
 				
+				$owlPDO->beginTransaction();
 				try{
 					$owlPDO->exec($ins);
 
@@ -2097,21 +2325,31 @@ switch ($method)
 							catch (PDOException $e)
 							{
 								print " Gagal  !: " . $e->getMessage() . "\n"; 
+								if ($owlPDO->inTransaction()) {
+									$owlPDO->rollBack();
+								}
 								die(); 
 							}
 						}
 						catch (PDOException $e) {
 						
 						   print " Gagal  !: " . $e->getMessage() . "\n"; 
+						   if ($owlPDO->inTransaction()) {
+						   	$owlPDO->rollBack();
+						   }
 						   die(); 
 						}
                 }
                 $_POST['norurut']+=1;
+                $owlPDO->commit();
                 echo $no_permintaan."###".$_POST['norurut'];
 		}
 		catch (PDOException $e) 
 		{
 			print " Gagal  !: " . $e->getMessage() . "\n"; 
+			if ($owlPDO->inTransaction()) {
+				$owlPDO->rollBack();
+			}
 			die(); 
 		}
 	break;
@@ -2865,68 +3103,61 @@ switch ($method)
 	break;
 	
 	case 'deleted':
-        ## DELETE HEADER RPH ##
-		$str="delete from ".$dbname.".log_perintaanhargaht where nomor='".$no_permintaan."'";
-		try
-		{
-			$owlPDO->exec($str);
-			
-			## DELETE DETAIL RPH AND UPDATE VERIFIKASI PP ##
-			$str="select kodebarang,nopp from ".$dbname.".log_permintaanhargadt where nomor='".$no_permintaan."'";
-			$res=$owlPDO->query($str) or die(print " Gagal: ".PDOException::getMessage());
-			$res->setFetchMode(PDO::FETCH_ASSOC);
-			while($bar=$res->fetch())
-			{
-				$str="update ".$dbname.".log_listverifikasi set status='0' where nopp='".$bar['nopp']."' and kodebarang='".$bar['kodebarang']."' and karyawanid='".$_SESSION['standard']['userid']."'";
-				try
-				{
-					$owlPDO->exec($str);
-				}
-				catch (PDOException $e) 
-				{
-					print " Gagal  !: " . $e->getMessage() . "\n"; 
-					die(); 
-				}
+		## HAPUS RFQ: dicek dulu, lalu semua perubahan dalam satu transaksi ##
+		if ($no_permintaan == '') {
+			exit("warning: No. permintaan kosong");
+		}
+		$stmt = $owlPDO->prepare("select count(*) from " . $dbname . ".approval where notransaksi=? and status='1'");
+		$stmt->execute(array($no_permintaan));
+		if ($stmt->fetchColumn() > 0) {
+			exit("warning: RFQ " . $no_permintaan . " sudah ada persetujuan, tidak dapat dihapus");
+		}
+		$stmt = $owlPDO->prepare("select count(*) from " . $dbname . ".log_permintaanhargadt where nomor=? and norph<>''");
+		$stmt->execute(array($no_permintaan));
+		if ($stmt->fetchColumn() > 0) {
+			exit("warning: RFQ " . $no_permintaan . " sudah masuk RPH, tidak dapat dihapus");
+		}
+		$stmt = $owlPDO->prepare("select count(*) from " . $dbname . ".log_poht where nodph=?");
+		$stmt->execute(array($no_permintaan));
+		if ($stmt->fetchColumn() > 0) {
+			exit("warning: RFQ " . $no_permintaan . " sudah dipakai PO/SO, tidak dapat dihapus");
+		}
+		$stmt = $owlPDO->prepare("select kodebarang,nopp from " . $dbname . ".log_permintaanhargadt where nomor=?");
+		$stmt->execute(array($no_permintaan));
+		$dtHapus = $stmt->fetchAll(PDO::FETCH_ASSOC);
+		$stmt = $owlPDO->prepare("select namafile from " . $dbname . ".log_permintaanhargafile where nomor=?");
+		$stmt->execute(array($no_permintaan));
+		$fileHapus = $stmt->fetchAll(PDO::FETCH_COLUMN);
+		try {
+			$owlPDO->beginTransaction();
+			$stmt = $owlPDO->prepare("delete from " . $dbname . ".approval where notransaksi=?");
+			$stmt->execute(array($no_permintaan));
+			$stmt = $owlPDO->prepare("delete from " . $dbname . ".log_perintaanhargaht where nomor=?");
+			$stmt->execute(array($no_permintaan));
+			foreach ($dtHapus as $bar) {
+				$stmt = $owlPDO->prepare("update " . $dbname . ".log_listverifikasi set status='0' where nopp=? and kodebarang=? and karyawanid=?");
+				$stmt->execute(array($bar['nopp'], $bar['kodebarang'], $_SESSION['standard']['userid']));
 			}
-			
-			$str="delete from ".$dbname.".log_permintaanhargadt where nomor='".$no_permintaan."'";
-			try
-			{
-				$owlPDO->exec($str);
-				
-				$str="select namafile from ".$dbname.".log_permintaanhargafile where nomor='".$no_permintaan."'";
-				$res=$owlPDO->query($str) or die(print " Gagal: ".PDOException::getMessage());
-				$res->setFetchMode(PDO::FETCH_ASSOC);
-				while($bar=$res->fetch())
-				{
-					$path = "fileupload/rph/".$bar['namafile'];
-					unlink($path);
-				}
-				
-				$str="delete from ".$dbname.".log_permintaanhargafile where nomor='".$no_permintaan."'";
-				try
-				{
-					$owlPDO->exec($str);
-				}
-				catch (PDOException $e) 
-				{
-					print " Gagal  !: " . $e->getMessage() . "\n"; 
-					die(); 
-				}
+			$stmt = $owlPDO->prepare("delete from " . $dbname . ".log_permintaanhargadt where nomor=?");
+			$stmt->execute(array($no_permintaan));
+			$stmt = $owlPDO->prepare("delete from " . $dbname . ".log_permintaanhargafile where nomor=?");
+			$stmt->execute(array($no_permintaan));
+			$owlPDO->commit();
+		} catch (PDOException $e) {
+			if ($owlPDO->inTransaction()) {
+				$owlPDO->rollBack();
 			}
-			catch (PDOException $e) 
-			{
-				print " Gagal  !: " . $e->getMessage() . "\n"; 
-				die(); 
+			print " Gagal  !: " . $e->getMessage() . "\n";
+			die();
+		}
+		#berkas dihapus setelah data berhasil dihapus
+		foreach ($fileHapus as $namafile) {
+			$path = "fileupload/rph/" . basename($namafile);
+			if ($namafile != '' and file_exists($path)) {
+				unlink($path);
 			}
 		}
-		catch (PDOException $e) 
-		{
-			print " Gagal  !: " . $e->getMessage() . "\n"; 
-			die(); 
-		}
-     break;
-	 
+	break;
 	 case 'get_alasan_batal':
 		$str="update ".$dbname.".log_perintaanhargaht set flag='1' where nomor='".$no_permintaan."'";
 		try
@@ -2939,110 +3170,8 @@ switch ($method)
 			die(); 
 		}
 	 break;
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-       case'getSupplierNm':
+
+case'getSupplierNm':
            
            if($_SESSION['empl']['tipelokasitugas']=='HOLDING')
            {
@@ -3139,19 +3268,8 @@ switch ($method)
                  }
                     echo"</tbody></table></div>";
          break;
-		 
-		 
-		 
-		 
-		
-		 
-		 
-		 
-		 
-		 
-        
-		 
-         case'loadSuppier':
+
+case'loadSuppier':
 		  $no=0;$tabl='';
 			$sData="select a.nomor,a.supplierid,a.nourut,b.alamat,b.kota from ".$dbname.".log_perintaanhargaht a
 				left join ".$dbname.".log_5supalamat b on a.id_alamat_supplier = b.id_alamat
@@ -3180,14 +3298,8 @@ switch ($method)
 		 
          echo $tabl;
          break;
-		 
-		 
-         
-							
-									
-    
 
-	//<input type=hidden id=nopp_".$no." name=nopp_".$no." value='".$bar['nopp']."' />
+//<input type=hidden id=nopp_".$no." name=nopp_".$no." value='".$bar['nopp']."' />
 
                     
                     case'get_nopp':
@@ -3476,22 +3588,11 @@ switch ($method)
                                 }
 
                         break;
-				
-            
-                
-                
-                
-                
-            
-            
-		
-            
 
-	case'postingData':
+case'postingData':
                 
             $nomor=$_POST['nomor'];
-            $nourut=$_POST['nourut'];
-            $alasan=$_POST['alasan'];
+            $nourut=(int)$_POST['nourut'];
 
               
             $str="update ".$dbname.".log_perintaanhargaht set flag=1,catatanmenang='".$alasan."' "

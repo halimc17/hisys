@@ -1629,6 +1629,54 @@ function closeDetail() {
   document.getElementById("dynamic").style.display = "none";
 }
 
+//Posisi dialog (showDialogN) di tengah layar. Ukuran dialog berubah saat isinya selesai dimuat,
+//jadi posisinya dihitung ulang sampai pemakai menggeser dialog lewat judulnya.
+function posisiTengahDialog(id) {
+  var el = document.getElementById(id);
+  if (!el || el.style.display == "none") {
+    return;
+  }
+  var sx = window.pageXOffset || document.documentElement.scrollLeft || 0;
+  var sy = window.pageYOffset || document.documentElement.scrollTop || 0;
+  var vw = document.documentElement.clientWidth || window.innerWidth;
+  var vh = window.innerHeight || document.documentElement.clientHeight;
+  var kiri = sx + (vw - el.offsetWidth) / 2;
+  var atas = sy + (vh - el.offsetHeight) / 2;
+  el.style.left = Math.max(sx + 10, kiri) + "px";
+  el.style.top = Math.max(sy + 10, atas) + "px";
+}
+
+function tengahkanDialog(id) {
+  var el = document.getElementById(id);
+  if (!el) {
+    return;
+  }
+  el._geser = false;
+  if (!el._pasangTengah) {
+    el._pasangTengah = true;
+    //menggeser lewat judul (bukan isi dialog) menghentikan penengahan otomatis
+    el.addEventListener("mousedown", function (e) {
+      var t = e.target;
+      if (t === el || (t.parentNode === el && t.tagName != "DIV")) {
+        el._geser = true;
+      }
+    });
+    if (window.ResizeObserver) {
+      new ResizeObserver(function () {
+        if (!el._geser) {
+          posisiTengahDialog(id);
+        }
+      }).observe(el);
+    }
+  }
+  posisiTengahDialog(id);
+  //pemanggil kadang mengatur posisi sendiri setelah dialog tampil; tengahkan lagi sesudahnya
+  setTimeout(function () {
+    if (!el._geser) {
+      posisiTengahDialog(id);
+    }
+  }, 0);
+}
 function showDialog1(title, content, width, height, ev) {
   if (document.getElementById("dynamic1")) {
     c = document.createElement("div");
@@ -1662,6 +1710,7 @@ function showDialog1(title, content, width, height, ev) {
   document.getElementById("dynamic1").style.top = pos[1] + "px";
   document.getElementById("dynamic1").style.left = "75px";
   document.getElementById("dynamic1").style.display = "";
+  tengahkanDialog("dynamic1");
 }
 
 function showDialog6(title, content, width, height, ev) {
@@ -1697,6 +1746,7 @@ function showDialog6(title, content, width, height, ev) {
   document.getElementById("dynamic6").style.top = pos[1] + "px";
   document.getElementById("dynamic6").style.left = "75px";
   document.getElementById("dynamic6").style.display = "";
+  tengahkanDialog("dynamic6");
 }
 
 function showDialog1bi(title, content, width, height, ev) {
@@ -1732,6 +1782,7 @@ function showDialog1bi(title, content, width, height, ev) {
   document.getElementById("dynamic1").style.top = pos[1] + "px";
   document.getElementById("dynamic1").style.left = "75px";
   document.getElementById("dynamic1").style.display = "";
+  tengahkanDialog("dynamic1");
 }
 
 function showDialog2(title, content, width, height, ev) {
@@ -1767,6 +1818,7 @@ function showDialog2(title, content, width, height, ev) {
   document.getElementById("dynamic2").style.top = pos[1] + "px";
   document.getElementById("dynamic2").style.left = "75px";
   document.getElementById("dynamic2").style.display = "";
+  tengahkanDialog("dynamic2");
 }
 function showDialog3(title, content, width, height) {
   if (document.getElementById("dynamic2")) {
@@ -1798,6 +1850,7 @@ function showDialog3(title, content, width, height) {
   document.getElementById("dynamic2").innerHTML = cont;
   document.getElementById("dynamic2").style.left = "75px";
   document.getElementById("dynamic2").style.display = "";
+  tengahkanDialog("dynamic2");
 }
 
 function showDialog4(title, content, width, height, ev) {
@@ -1833,6 +1886,7 @@ function showDialog4(title, content, width, height, ev) {
   document.getElementById("dynamic4").style.top = pos[1] + "px";
   document.getElementById("dynamic4").style.left = pos[0] + "px";
   document.getElementById("dynamic4").style.display = "";
+  tengahkanDialog("dynamic4");
 }
 
 function showDialog5(title, content, width, height, ev) {
@@ -1868,6 +1922,7 @@ function showDialog5(title, content, width, height, ev) {
   document.getElementById("dynamic5").style.top = pos[1] + "px";
   document.getElementById("dynamic5").style.left = pos[0] + "px";
   document.getElementById("dynamic5").style.display = "";
+  tengahkanDialog("dynamic5");
 }
 
 function showDialogBi(title, content, width, height, ev) {
@@ -1905,6 +1960,7 @@ function showDialogBi(title, content, width, height, ev) {
   document.getElementById("dynamic1").style.top = pos[1] + "px";
   document.getElementById("dynamic1").style.left = "75px";
   document.getElementById("dynamic1").style.display = "";
+  tengahkanDialog("dynamic1");
 }
 
 function closeDialogBi() {
@@ -1947,6 +2003,7 @@ function showDialogBi2(title, content, width, height, ev) {
   document.getElementById("dynamic2").style.top = pos[1] + "px";
   document.getElementById("dynamic2").style.left = "75px";
   document.getElementById("dynamic2").style.display = "";
+  tengahkanDialog("dynamic2");
 }
 
 function closeDialogBi2() {
@@ -1987,6 +2044,7 @@ function showDialogx(title, content, width, height, ev) {
   document.getElementById("dynamicx").style.top = pos[1] + "px";
   document.getElementById("dynamicx").style.left = "75px";
   document.getElementById("dynamicx").style.display = "";
+  tengahkanDialog("dynamicx");
 }
 
 function closeDialogx() {
