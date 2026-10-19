@@ -275,7 +275,7 @@ while($rKelompok=$qKelompok->fetch())
 				and status='1' order by namasupplier asc";
 				*/
 		$sql="select supplierid,namasupplier from ".$dbname.".log_5supplier where 
-				supplierid in (select supplierid from ".$dbname.".log_5supkelompok where status=1 and tipe in ('SUPPLIER','KONTRAKTOR'))
+				supplierid in (select supplierid from ".$dbname.".log_5supkelompok where status=1 and tipe in (kelompok='SUPPLIER' or kelompok='KONTRAKTOR'))
 				and status='1' order by namasupplier asc";		
 				
 		$query=$owlPDO->query($sql) or die(print " Gagal: ".PDOException::getMessage());
