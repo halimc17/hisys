@@ -202,6 +202,7 @@ $frm[0]="<fieldset>
 			</tbody>
 		</table>
         <input type=hidden id=user_id name=user_id value=".$_SESSION['standard']['userid']." />
+        <input type=hidden id=pt_user value=".ptDariDetailAkses()." />
 	</table>
 </fieldset>";
 

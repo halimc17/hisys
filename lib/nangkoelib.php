@@ -6227,3 +6227,11 @@ function normalizeNumberExcel($value)
 
 	return $number;
 }
+
+# PT pengguna menurut detail akses (getOrgDetail tipe 3).
+# Hasil kosong bila akses mencakup lebih dari satu PT.
+function ptDariDetailAkses()
+{
+	$pt = array_filter(array_keys(getOrgDetail(3)));
+	return count($pt) == 1 ? reset($pt) : '';
+}

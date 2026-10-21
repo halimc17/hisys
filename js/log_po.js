@@ -210,6 +210,17 @@ function fillField(
 
             getpoheader(nopo, matauang, supplier_id);
 
+            // PPP: PPn PO yang sudah tersimpan ikut dibulatkan saat dibuka, Grand Total disesuaikan sebesar selisihnya
+            var ppnBulat = bulatkanPpnPPP(parseFloat(nil_ppn));
+            if (ppnBulat != parseFloat(nil_ppn)) {
+              var gtBulat = document.getElementById("grand_total");
+              gtBulat.value = numberFormat(
+                parseFloat(remove_comma_var(gtBulat.value)) + (ppnBulat - parseFloat(nil_ppn)),
+                2
+              );
+              nil_ppn = ppnBulat;
+            }
+
             document.getElementById("ppN").value = persenppn;
             document.getElementById("ppH").value = persenpph;
 
@@ -1209,6 +1220,7 @@ function plusAll(id) {
     //dis.value=remove_comma(dis);
     //subTot.value=remove_comma(subTot);
     nilPpn = (parseFloat(total - disc) * nPPn) / 100;
+    nilPpn = bulatkanPpnPPP(nilPpn);
     document.getElementById("hslPPn").innerHTML = nilPpn;
     document.getElementById("ppn").value = nilPpn;
   } else {
@@ -1447,6 +1459,15 @@ function checkChkPpn() {
   }
   calculatePpn();
 }
+// PPP: PPn dibulatkan ke rupiah terdekat (normal, 0,5 ke atas naik)
+function bulatkanPpnPPP(nilai) {
+  var pt = document.getElementById("pt_user");
+  if (pt && pt.value == "PPP") {
+    return Math.round(nilai);
+  }
+  return nilai;
+}
+
 function calculatePpn() {
   sb_tot = document.getElementById("total_harga_po");
   nilDiskon = document.getElementById("angDiskon");
@@ -1460,6 +1481,7 @@ function calculatePpn() {
     nilPpn =
       (parseFloat(sb_tot.value) - parseFloat(nilDiskon.value)) *
       (parseFloat(ppn.value) / 100);
+    nilPpn = bulatkanPpnPPP(nilPpn);
     document.getElementById("hslPPn").innerHTML = numberFormat(nilPpn, 2);
     document.getElementById("ppn").value = numberFormat(nilPpn, 2);
   } else {
