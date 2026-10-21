@@ -381,10 +381,12 @@ switch ($proses) {
         $umrhelp          = 0;
         $umrhelp2         = 0;
         $umrhelp3         = 0;
+        $umrhelp4         = 0;
         $tipekaryawan     = 'kosong';
         $tipekaryawanhelp = 'kosong';
         $tipekaryawanhelp2 = 'kosong';
         $tipekaryawanhelp3 = 'kosong';
+        $tipekaryawanhelp4 = 'kosong';
 
 
         ## OPERATOR/DRIVER
@@ -466,6 +468,12 @@ switch ($proses) {
                 exit("Error : Gaji Pokok untuk periode " . substr($tgl_kerja, 0, 7) . " belum ada !");
             }
 
+            $str = " select * from " . $dbname . ".datakaryawan where 1=1 and karyawanid='" . $param['kode_helper'] . "'";
+            $res = fetchdata($str);
+            foreach ($res as $bar) {
+                $tipekaryawanhelp = $bar['tipekaryawan'];
+            }
+
             #== cek data apakah sudah ada HK karyawan tersebut di hari yang sama
             $n = 0;
             $qry = selectQuery($dbname, 'vhc_runhk_vw', 'upah,premi,notransaksi', "idkaryawan='" . $param['kode_helper'] . "' and tanggal='" . $tgl_kerja . "'");
@@ -475,7 +483,7 @@ switch ($proses) {
             }
 
             #== bagi rata umrnya
-            $sql = "select * from " . $dbname . ".vhc_rundt where notransaksi='" . $param['no_trans'] . "' and operator='" . $param['kode_helper'] . "'";
+            $sql = "select * from " . $dbname . ".vhc_rundt where notransaksi='" . $param['no_trans'] . "' and (operator='" . $param['kode_helper'] . "' or helper='" . $param['kode_helper'] . "')";
             $hsl = fetchData($sql);
             $jumkary = count($hsl);
             if (count($rst) > 0 && ($rst[0]['upah'] == 0 || $rst[0]['premi'] == 0)) {
@@ -485,7 +493,7 @@ switch ($proses) {
             }
 
             #== cek transaksi yang pertama kali ke insert 
-            $string = "select distinct notransaksi from " . $dbname . ".vhc_rundt where operator='" . $param['kode_helper'] . "' ";
+            $string = "select distinct notransaksi from " . $dbname . ".vhc_rundt where (operator='" . $param['kode_helper'] . "' or helper='" . $param['kode_helper'] . "') ";
             $result = fetchdata($string);
             $notransada = [];
             foreach ($result as $val) {
@@ -519,6 +527,12 @@ switch ($proses) {
                 exit("Error : Gaji Pokok untuk periode " . substr($tgl_kerja, 0, 7) . " belum ada !");
             }
 
+            $str = " select * from " . $dbname . ".datakaryawan where 1=1 and karyawanid='" . $param['kode_helper2'] . "'";
+            $res = fetchdata($str);
+            foreach ($res as $bar) {
+                $tipekaryawanhelp2 = $bar['tipekaryawan'];
+            }
+
             #== cek data apakah sudah ada HK karyawan tersebut di hari yang sama
             $n = 0;
             $qry = selectQuery($dbname, 'vhc_runhk_vw', 'upah,premi,notransaksi', "idkaryawan='" . $param['kode_helper2'] . "' and tanggal='" . $tgl_kerja . "'");
@@ -528,7 +542,7 @@ switch ($proses) {
             }
 
             #== bagi rata umrnya
-            $sql = "select * from " . $dbname . ".vhc_rundt where notransaksi='" . $param['no_trans'] . "' and operator='" . $param['kode_helper2'] . "'";
+            $sql = "select * from " . $dbname . ".vhc_rundt where notransaksi='" . $param['no_trans'] . "' and (operator='" . $param['kode_helper2'] . "' or helper2='" . $param['kode_helper2'] . "')";
             $hsl = fetchData($sql);
             $jumkary = count($hsl);
             if (count($rst) > 0 && ($rst[0]['upah'] == 0 || $rst[0]['premi'] == 0)) {
@@ -538,7 +552,7 @@ switch ($proses) {
             }
 
             #== cek transaksi yang pertama kali ke insert 
-            $string = "select distinct notransaksi from " . $dbname . ".vhc_rundt where operator='" . $param['kode_helper2'] . "' ";
+            $string = "select distinct notransaksi from " . $dbname . ".vhc_rundt where (operator='" . $param['kode_helper2'] . "' or helper2='" . $param['kode_helper2'] . "') ";
             $result = fetchdata($string);
             $notransada = [];
             foreach ($result as $val) {
@@ -550,12 +564,130 @@ switch ($proses) {
             }
 
             if (isset($rst[0]['upah']) > 0 && count($rst) > 0 && $n > 0) {
-                $errhelp = 'Helper2';
+                $errhelp = ($errhelp != '' ? $errhelp . ', ' : '') . 'Helper2';
                 $umrhelp2 = 0;
             }
 
             if ($param['proses_pekerjaan'] == 'update_kerja') {
                 $umrhelp2 = $param['uphHelp2'];
+            }
+        }
+
+        ## HELPER 3
+        if ($param['kode_helper3'] != '') {
+
+            #UMR HELPER 3
+            $str = selectQuery($dbname, 'sdm_5gajipokok', 'jumlah', "karyawanid='{$param['kode_helper3']}' and tahun='" . substr($tgl_kerja, 0, 7) . "' and idkomponen='1'");
+            $res = fetchData($str)[0];
+            $gaji = $res['jumlah'] / 25;
+            $umrhelp3 = $gaji;
+
+            if ($umrhelp3 == '') {
+                exit("Error : Gaji Pokok untuk periode " . substr($tgl_kerja, 0, 7) . " belum ada !");
+            }
+
+            $str = " select * from " . $dbname . ".datakaryawan where 1=1 and karyawanid='" . $param['kode_helper3'] . "'";
+            $res = fetchdata($str);
+            foreach ($res as $bar) {
+                $tipekaryawanhelp3 = $bar['tipekaryawan'];
+            }
+
+            #== cek data apakah sudah ada HK karyawan tersebut di hari yang sama
+            $n = 0;
+            $qry = selectQuery($dbname, 'vhc_runhk_vw', 'upah,premi,notransaksi', "idkaryawan='" . $param['kode_helper3'] . "' and tanggal='" . $tgl_kerja . "'");
+            $rst = fetchData($qry);
+            foreach ($rst as $v) {
+                $n++;
+            }
+
+            #== bagi rata umrnya
+            $sql = "select * from " . $dbname . ".vhc_rundt where notransaksi='" . $param['no_trans'] . "' and (operator='" . $param['kode_helper3'] . "' or helper3='" . $param['kode_helper3'] . "')";
+            $hsl = fetchData($sql);
+            $jumkary = count($hsl);
+            if (count($rst) > 0 && ($rst[0]['upah'] == 0 || $rst[0]['premi'] == 0)) {
+                $umrhelp3 = ($umrhelp3);
+            } else {
+                $umrhelp3 = ($umrhelp3 / ($jumkary + 1));
+            }
+
+            #== cek transaksi yang pertama kali ke insert 
+            $string = "select distinct notransaksi from " . $dbname . ".vhc_rundt where (operator='" . $param['kode_helper3'] . "' or helper3='" . $param['kode_helper3'] . "') ";
+            $result = fetchdata($string);
+            $notransada = [];
+            foreach ($result as $val) {
+                array_push($notransada, $val['notransaksi']);
+            }
+
+            if (isset($rst[0]['upah']) == 0 && count($rst) == 0 && $n == 1) {
+                $umrhelp3 = $umrhelp3;
+            }
+
+            if (isset($rst[0]['upah']) > 0 && count($rst) > 0 && $n > 0) {
+                $errhelp = ($errhelp != '' ? $errhelp . ', ' : '') . 'Helper3';
+                $umrhelp3 = 0;
+            }
+
+            if ($param['proses_pekerjaan'] == 'update_kerja') {
+                $umrhelp3 = $param['uphHelp3'];
+            }
+        }
+
+        ## HELPER 4
+        if ($param['kode_helper4'] != '') {
+
+            #UMR HELPER 4
+            $str = selectQuery($dbname, 'sdm_5gajipokok', 'jumlah', "karyawanid='{$param['kode_helper4']}' and tahun='" . substr($tgl_kerja, 0, 7) . "' and idkomponen='1'");
+            $res = fetchData($str)[0];
+            $gaji = $res['jumlah'] / 25;
+            $umrhelp4 = $gaji;
+
+            if ($umrhelp4 == '') {
+                exit("Error : Gaji Pokok untuk periode " . substr($tgl_kerja, 0, 7) . " belum ada !");
+            }
+
+            $str = " select * from " . $dbname . ".datakaryawan where 1=1 and karyawanid='" . $param['kode_helper4'] . "'";
+            $res = fetchdata($str);
+            foreach ($res as $bar) {
+                $tipekaryawanhelp4 = $bar['tipekaryawan'];
+            }
+
+            #== cek data apakah sudah ada HK karyawan tersebut di hari yang sama
+            $n = 0;
+            $qry = selectQuery($dbname, 'vhc_runhk_vw', 'upah,premi,notransaksi', "idkaryawan='" . $param['kode_helper4'] . "' and tanggal='" . $tgl_kerja . "'");
+            $rst = fetchData($qry);
+            foreach ($rst as $v) {
+                $n++;
+            }
+
+            #== bagi rata umrnya
+            $sql = "select * from " . $dbname . ".vhc_rundt where notransaksi='" . $param['no_trans'] . "' and (operator='" . $param['kode_helper4'] . "' or helper4='" . $param['kode_helper4'] . "')";
+            $hsl = fetchData($sql);
+            $jumkary = count($hsl);
+            if (count($rst) > 0 && ($rst[0]['upah'] == 0 || $rst[0]['premi'] == 0)) {
+                $umrhelp4 = ($umrhelp4);
+            } else {
+                $umrhelp4 = ($umrhelp4 / ($jumkary + 1));
+            }
+
+            #== cek transaksi yang pertama kali ke insert 
+            $string = "select distinct notransaksi from " . $dbname . ".vhc_rundt where (operator='" . $param['kode_helper4'] . "' or helper4='" . $param['kode_helper4'] . "') ";
+            $result = fetchdata($string);
+            $notransada = [];
+            foreach ($result as $val) {
+                array_push($notransada, $val['notransaksi']);
+            }
+
+            if (isset($rst[0]['upah']) == 0 && count($rst) == 0 && $n == 1) {
+                $umrhelp4 = $umrhelp4;
+            }
+
+            if (isset($rst[0]['upah']) > 0 && count($rst) > 0 && $n > 0) {
+                $errhelp = ($errhelp != '' ? $errhelp . ', ' : '') . 'Helper4';
+                $umrhelp4 = 0;
+            }
+
+            if ($param['proses_pekerjaan'] == 'update_kerja') {
+                $umrhelp4 = $param['uphHelp4'];
             }
         }
 
@@ -578,7 +710,7 @@ switch ($proses) {
             $ketlibur = 'libur';
         }
 
-        $sql = "select * from " . $dbname . ".vhc_rundt where notransaksi='" . $param['no_trans'] . "' and jenispekerjaan='" . $param['jns_kerja'] . "' and (operator='" . $param['kode_helper2'] . "' or helper='" . $param['kode_helper'] . "' or helper2='" . $param['kode_helper2'] . "' or helper3='" . $param['kode_helper2'] . "')";
+        $sql = "select * from " . $dbname . ".vhc_rundt where notransaksi='" . $param['no_trans'] . "' and jenispekerjaan='" . $param['jns_kerja'] . "' and (operator='" . $param['kode_karyawan'] . "' or helper='" . $param['kode_helper'] . "' or helper2='" . $param['kode_helper2'] . "' or helper3='" . $param['kode_helper3'] . "' or helper4='" . $param['kode_helper4'] . "')";
         $hsl = fetchData($sql);
         $jlhkaryperpekerjaan = count($hsl);
 
@@ -599,7 +731,7 @@ switch ($proses) {
         $setupPremi = $rConfig['setuppremi'];
 
 
-        echo $umr . "####" . $umrhelp . "####" . $umrhelp2 . "####" . $umrhelp3 . "####" . $tipekaryawan . "####" . $tipekaryawanhelp . "####" . $tipekaryawanhelp2 . "####" . $tipekaryawanhelp3 . "####" . $errall . "####" . $ketlibur . "####" . $jlhkaryperpekerjaan . "####" . $setupPremi;
+        echo $umr . "####" . $umrhelp . "####" . $umrhelp2 . "####" . $umrhelp3 . "####" . $umrhelp4 . "####" . $tipekaryawan . "####" . $tipekaryawanhelp . "####" . $tipekaryawanhelp2 . "####" . $tipekaryawanhelp3 . "####" . $tipekaryawanhelp4 . "####" . $errall . "####" . $ketlibur . "####" . $jlhkaryperpekerjaan . "####" . $setupPremi;
 
         break;
     case 'cariTransaksi':
@@ -631,7 +763,7 @@ switch ($proses) {
         if ($param['kodevhc_cari'] != '') {
             $where .= " and kodevhc like '%" . trim($param['kodevhc_cari']) . "%'";
         }
-        if ($param['kontanan_cari'] != '') {
+        if (isset($param['kontanan_cari']) && $param['kontanan_cari'] != '' && $param['kontanan_cari'] != '%') {
             $where .= " and kontanan = '" . $param['kontanan_cari'] . "'";
         }
 
@@ -688,7 +820,7 @@ switch ($proses) {
         break;
     case 'loaddata':
         $limit      = 15;
-        $colspan    = 21;
+        $colspan    = 22;
         $page       = 0;
         $tgl_carisd = tanggalsystemn(checkPostGet('tgl_carisd', ''));
         if (isset($_POST['page'])) {
@@ -761,7 +893,7 @@ switch ($proses) {
                 $res2->setFetchMode(PDO::FETCH_ASSOC);
                 $rvhc = $res2->fetch();
 
-                $sdtx = "SELECT SQL_CALC_FOUND_ROWS `notransaksi`, GROUP_CONCAT(`operator`) as aroperator, GROUP_CONCAT(`helper`) as arhelper, GROUP_CONCAT(`helper2`) as arhelper2, GROUP_CONCAT(`helper3`) as arhelper3
+                $sdtx = "SELECT SQL_CALC_FOUND_ROWS `notransaksi`, GROUP_CONCAT(`operator`) as aroperator, GROUP_CONCAT(`helper`) as arhelper, GROUP_CONCAT(`helper2`) as arhelper2, GROUP_CONCAT(`helper3`) as arhelper3, GROUP_CONCAT(`helper4`) as arhelper4
                            FROM " . $dbname . ".vhc_rundt
                            WHERE notransaksi='" . $res['notransaksi'] . "'
                            GROUP BY `notransaksi`";
@@ -817,6 +949,18 @@ switch ($proses) {
                 }
                 $tab .= "</td>";
                 $datasupirarr = explode(',', $rdtx['arhelper3']);
+                $datasupir = array();
+                $tab .= "<td align=center>";
+                for ($i = 0; $i < count($datasupirarr); $i++) {
+                    if ($datasupirarr[$i] != '0000000000') {
+                        if (!isset($datasupir[$datasupirarr[$i]])) {
+                            $tab .= getNamaKaryawan($datasupirarr[$i]) . "</br>";
+                            $datasupir[$datasupirarr[$i]] = 1;
+                        }
+                    }
+                }
+                $tab .= "</td>";
+                $datasupirarr = explode(',', $rdtx['arhelper4']);
                 $datasupir = array();
                 $tab .= "<td align=center>";
                 for ($i = 0; $i < count($datasupirarr); $i++) {
@@ -905,9 +1049,9 @@ switch ($proses) {
 
         #nama operator/helper per transaksi (unik, urut sesuai input), diambil sekali untuk semua transaksi yang difilter
         $arOpt = array();
-        $resD = fetchData("select notransaksi,operator,helper,helper2,helper3 from " . $dbname . ".vhc_rundt where notransaksi in (select notransaksi from " . $dbname . ".vhc_runht where " . $whereOrg . ") order by notransaksi");
+        $resD = fetchData("select notransaksi,operator,helper,helper2,helper3,helper4 from " . $dbname . ".vhc_rundt where notransaksi in (select notransaksi from " . $dbname . ".vhc_runht where " . $whereOrg . ") order by notransaksi");
         foreach ($resD as $d) {
-            foreach (array('operator', 'helper', 'helper2', 'helper3') as $k) {
+            foreach (array('operator', 'helper', 'helper2', 'helper3', 'helper4') as $k) {
                 if ($d[$k] != '' && $d[$k] != '0000000000') {
                     $arOpt[$d['notransaksi']][$k][$d[$k]] = $d[$k];
                 }
@@ -922,7 +1066,7 @@ switch ($proses) {
 
         #kop/ditarik-oleh format standar, pakai org karyawan yang login (data lintas unit)
         $hdpt = setheadreport($_SESSION['empl']['kodeorganisasi'], $_SESSION['empl']['kodeorganisasi']);
-        $kolom = 19;
+        $kolom = 21;
         $stream = "<table>
             <tr><td colspan=" . $kolom . "><b>" . htmlspecialchars($hdpt['nama']) . "</b></td></tr>
             <tr><td colspan=" . $kolom . "><b>PEKERJAAN</b></td></tr>
@@ -943,6 +1087,7 @@ switch ($proses) {
                 <th align=center>" . $_SESSION['lang']['helper'] . " 1</th>
                 <th align=center>" . $_SESSION['lang']['helper'] . " 2</th>
                 <th align=center>" . $_SESSION['lang']['helper'] . " 3</th>
+                <th align=center>" . $_SESSION['lang']['helper'] . " 4</th>
                 <th align=center>" . $_SESSION['lang']['tanggal'] . "</th>
                 <th align=center>" . $_SESSION['lang']['vhc_jenis_bbm'] . "</th>
                 <th align=center>" . $_SESSION['lang']['vhc_jumlah_bbm'] . "</th>
@@ -958,7 +1103,7 @@ switch ($proses) {
         foreach ($resH as $r) {
             $no++;
             $nm = array();
-            foreach (array('operator', 'helper', 'helper2', 'helper3') as $k) {
+            foreach (array('operator', 'helper', 'helper2', 'helper3', 'helper4') as $k) {
                 $nm[$k] = array();
                 if (isset($arOpt[$r['notransaksi']][$k])) {
                     foreach ($arOpt[$r['notransaksi']][$k] as $kid) {
@@ -979,6 +1124,7 @@ switch ($proses) {
                 <td>" . implode(', ', $nm['helper']) . "</td>
                 <td>" . implode(', ', $nm['helper2']) . "</td>
                 <td>" . implode(', ', $nm['helper3']) . "</td>
+                <td>" . implode(', ', $nm['helper4']) . "</td>
                 <td align=center>" . tanggalnormal($r['tanggal']) . "</td>
                 <td>" . @$nmBbm[$r['jenisbbm']] . "</td>
                 <td align=right>" . $r['jlhbbm'] . "</td>
@@ -1009,12 +1155,14 @@ switch ($proses) {
         $ttlprmihelp2   = 0;
         $ttluphhelp3    = 0;
         $ttlprmihelp3   = 0;
+        $ttluphhelp4    = 0;
+        $ttlprmihelp4   = 0;
         $ttldenda       = 0;
 
-        #- Ambil Pt Untuk hidden kolom helper
+        #- Ambil PT/Unit Untuk hidden kolom helper dari setup_parameterappl TRDH
         $str = "select nilai from " . $dbname . ".setup_parameterappl where kodeparameter='TRDH' ";
         $res = fetchdata($str);
-        @$arrpt = explode(',', $res[0]['nilai']);
+        $arrpt = !empty($res[0]['nilai']) ? array_map('trim', explode(',', str_replace("'", "", $res[0]['nilai']))) : array();
 
         $hiddenHelper = '';
         if (in_array($_SESSION['empl']['kodeorganisasi'], $arrpt)) {
@@ -1022,6 +1170,14 @@ switch ($proses) {
         } else {
             $hiddenHelper = '';
         }
+
+        # Cek PT dari kodeorganisasi untuk Helper 3 & 4 via TRDH (jika ada di TRDH -> 2 helper, selain itu -> 4 helper)
+        $ptDetail = getindukPT($rKode['kodeorg']);
+        if (empty($ptDetail)) {
+            $ptDetail = $rKode['kodeorg'];
+        }
+        $isTRDH = in_array($ptDetail, $arrpt) || in_array($rKode['kodeorg'], $arrpt) || ($ptDetail == 'PPP' && empty($arrpt));
+        $hiddenHelperExtraClass = "class='helper-extra' " . ($isTRDH ? "style='display:none'" : "");
 
         $sql = "select a.*,b.namasegment from " . $dbname . ".vhc_rundt a left join " . $dbname . ".keu_5segment b on a.kodesegment=b.kodesegment where substring(notransaksi,1,4)='" . $rKode['kodeorg'] . "' and notransaksi='" . $param['no_trans'] . "' order by kmhmawal asc"; // echo $sql;
         $no = 0;
@@ -1051,17 +1207,20 @@ switch ($proses) {
                     $whrhari = " and jenishari='kerja'";
                 }
 
-                $string = "select * from " . $dbname . ".vhc_rundt where notransaksi='" . $param['no_trans'] . "' and (operator='" . $res['operator'] . "' or helper='" . $res['operator'] . "' or helper2='" . $res['operator'] . "' or helper3='" . $res['operator'] . "')";
+                $string = "select * from " . $dbname . ".vhc_rundt where notransaksi='" . $param['no_trans'] . "' and (operator='" . $res['operator'] . "' or helper='" . $res['operator'] . "' or helper2='" . $res['operator'] . "' or helper3='" . $res['operator'] . "' or helper4='" . $res['operator'] . "')";
                 $result = fetchData($string);
 
-                $string1 = "select * from " . $dbname . ".vhc_rundt where notransaksi='" . $param['no_trans'] . "' and (operator='" . $res['helper'] . "' or helper='" . $res['helper'] . "' or helper2='" . $res['helper'] . "' or helper3='" . $res['helper'] . "')";
+                $string1 = "select * from " . $dbname . ".vhc_rundt where notransaksi='" . $param['no_trans'] . "' and (operator='" . $res['helper'] . "' or helper='" . $res['helper'] . "' or helper2='" . $res['helper'] . "' or helper3='" . $res['helper'] . "' or helper4='" . $res['helper'] . "')";
                 $result1 = fetchData($string1);
 
-                $string2 = "select * from " . $dbname . ".vhc_rundt where notransaksi='" . $param['no_trans'] . "' and (operator='" . $res['helper2'] . "' or helper='" . $res['helper2'] . "' or helper2='" . $res['helper2'] . "' or helper3='" . $res['helper2'] . "')";
+                $string2 = "select * from " . $dbname . ".vhc_rundt where notransaksi='" . $param['no_trans'] . "' and (operator='" . $res['helper2'] . "' or helper='" . $res['helper2'] . "' or helper2='" . $res['helper2'] . "' or helper3='" . $res['helper2'] . "' or helper4='" . $res['helper2'] . "')";
                 $result2 = fetchData($string2);
 
-                $string3 = "select * from " . $dbname . ".vhc_rundt where notransaksi='" . $param['no_trans'] . "' and (operator='" . $res['helper3'] . "' or helper='" . $res['helper3'] . "' or helper2='" . $res['helper3'] . "' or helper3='" . $res['helper3'] . "')";
+                $string3 = "select * from " . $dbname . ".vhc_rundt where notransaksi='" . $param['no_trans'] . "' and (operator='" . $res['helper3'] . "' or helper='" . $res['helper3'] . "' or helper2='" . $res['helper3'] . "' or helper3='" . $res['helper3'] . "' or helper4='" . $res['helper3'] . "')";
                 $result3 = fetchData($string3);
+
+                $string4 = "select * from " . $dbname . ".vhc_rundt where notransaksi='" . $param['no_trans'] . "' and (operator='" . $res['helper4'] . "' or helper='" . $res['helper4'] . "' or helper2='" . $res['helper4'] . "' or helper3='" . $res['helper4'] . "' or helper4='" . $res['helper4'] . "')";
+                $result4 = fetchData($string4);
 
 
                 #=upah sopir/operator
@@ -1080,19 +1239,22 @@ switch ($proses) {
                 $sql3 = "select upah from " . $dbname . ".vhc_runhk where notransaksi='" . $param['no_trans'] . "' and idkaryawan='" . $res['helper3'] . "'";
                 $rst3 = fetchData($sql3);
 
+                #=upah helper4
+                $sql4 = "select upah from " . $dbname . ".vhc_runhk where notransaksi='" . $param['no_trans'] . "' and idkaryawan='" . $res['helper4'] . "'";
+                $rst4 = fetchData($sql4);
+
                 $premi_operator              = $res['premiopt'];
                 $premi_operator_tambahan     = $res['premitambahanopt'];
                 $premi_premihelp    = $res['premihelp'];
                 $premi_premihelp2   = $res['premihelp2'];
                 $premi_premihelp3   = $res['premihelp3'];
+                $premi_premihelp4   = isset($res['premihelp4']) ? $res['premihelp4'] : 0;
 
-                $upahnya        = ($rst[0]['upah'] / count($result));
-
-
-
-                $upahnyahelp    = ($rst1[0]['upah'] / count($result1));
-                $upahnyahelp2   = ($rst2[0]['upah'] / count($result2));
-                $upahnyahelp3   = ($rst3[0]['upah'] / count($result3));
+                $upahnya        = count($result) > 0 ? ($rst[0]['upah'] / count($result)) : 0;
+                $upahnyahelp    = count($result1) > 0 ? ($rst1[0]['upah'] / count($result1)) : 0;
+                $upahnyahelp2   = count($result2) > 0 ? ($rst2[0]['upah'] / count($result2)) : 0;
+                $upahnyahelp3   = count($result3) > 0 ? ($rst3[0]['upah'] / count($result3)) : 0;
+                $upahnyahelp4   = count($result4) > 0 ? ($rst4[0]['upah'] / count($result4)) : 0;
 
                 if (strlen($res['alokasibiaya']) == 4) {
                     $orgnya = " and unit='" . substr($res['alokasibiaya'], 0, 4) . "'";
@@ -1127,9 +1289,12 @@ switch ($proses) {
                     <td align=center " . $hiddenHelper . ">" . getNamaKaryawan($res['helper2']) . "</td>
                     <td align=right " . $hiddenHelper . ">" . number_format($upahnyahelp2, 2) . "</td>
                     <td align=right " . $hiddenHelper . ">" . number_format($premi_premihelp2, 2) . "</td>
-                    <td align=center hidden>" . getNamaKaryawan($res['helper3']) . "</td>
-                    <td align=right hidden>" . number_format($upahnyahelp3, 2) . "</td>
-                    <td align=right hidden>" . number_format($premi_premihelp3, 2) . "</td>
+                    <td align=center " . $hiddenHelperExtraClass . ">" . getNamaKaryawan($res['helper3']) . "</td>
+                    <td align=right " . $hiddenHelperExtraClass . ">" . number_format($upahnyahelp3, 2) . "</td>
+                    <td align=right " . $hiddenHelperExtraClass . ">" . number_format($premi_premihelp3, 2) . "</td>
+                    <td align=center " . $hiddenHelperExtraClass . ">" . getNamaKaryawan($res['helper4']) . "</td>
+                    <td align=right " . $hiddenHelperExtraClass . ">" . number_format($upahnyahelp4, 2) . "</td>
+                    <td align=right " . $hiddenHelperExtraClass . ">" . number_format($premi_premihelp4, 2) . "</td>
                     <td align=right style='display:none'>" . number_format($res['biaya'], 2) . "</td>
                     <td>" . $res['keterangan'] . "</td>";
 
@@ -1149,12 +1314,14 @@ switch ($proses) {
                 $ttluphhelp3 += $upahnyahelp3;
                 // $ttlprmihelp3 += $res['premihelp3'];
                 $ttlprmihelp3 += $premi_premihelp3;
+                $ttluphhelp4 += $upahnyahelp4;
+                $ttlprmihelp4 += $premi_premihelp4;
                 $ttldenda += $res['denda'];
 
                 echo "<td align=center width=25px><img src=images/application/application_edit.png class=zImgBtn  title='Edit' 
-                    onclick=\"fillFieldKrj('" . $res['jenispekerjaan'] . "','" . $res['alokasibiaya'] . "','" . $res['beratmuatan'] . "','" . $res['jumlahrit'] . "','" . $res['keterangan'] . "','" . $res['biaya'] . "','" . $res['kmhmawal'] . "','" . $res['kmhmakhir'] . "','" . $res['satuan'] . "','" . $res['kodesegment'] . "','" . $res['namasegment'] . "','" . $res['kodedept'] . "','" . $res['operator'] . "','" . $res['premiopt'] . "','" . $res['helper'] . "','" . $res['helper2'] . "','" . $res['helper3'] . "','" . $res['premihelp'] . "','" . $res['premihelp2'] . "','" . $res['premihelp3'] . "','" . $upahnya . "','" . $upahnyahelp . "','" . $upahnyahelp2 . "','" . $upahnyahelp3 . "','" . $res['denda'] . "','" . isset($resx[0]['basis']) . "','" . $res['checklembur'] . "','" . $resx[0]['premilebihbasis'] . "','" . $res['premitambahanopt'] . "');\"></td>
+                    onclick=\"fillFieldKrj('" . $res['jenispekerjaan'] . "','" . $res['alokasibiaya'] . "','" . $res['beratmuatan'] . "','" . $res['jumlahrit'] . "','" . $res['keterangan'] . "','" . $res['biaya'] . "','" . $res['kmhmawal'] . "','" . $res['kmhmakhir'] . "','" . $res['satuan'] . "','" . $res['kodesegment'] . "','" . $res['namasegment'] . "','" . $res['kodedept'] . "','" . $res['operator'] . "','" . $res['premiopt'] . "','" . $res['helper'] . "','" . $res['helper2'] . "','" . $res['helper3'] . "','" . (isset($res['helper4']) ? $res['helper4'] : '') . "','" . $res['premihelp'] . "','" . $res['premihelp2'] . "','" . $res['premihelp3'] . "','" . $premi_premihelp4 . "','" . $upahnya . "','" . $upahnyahelp . "','" . $upahnyahelp2 . "','" . $upahnyahelp3 . "','" . $upahnyahelp4 . "','" . $res['denda'] . "','" . isset($resx[0]['basis']) . "','" . $res['checklembur'] . "','" . $resx[0]['premilebihbasis'] . "','" . $res['premitambahanopt'] . "');\"></td>
 
-                    <td align=center width=25px><img src=images/application/application_delete.png class=zImgBtn  title='Delete' onclick=\"delDataKrj('" . $res['notransaksi'] . "','" . $res['jenispekerjaan'] . "','" . $res['alokasibiaya'] . "','" . $res['kodesegment'] . "','" . $res['beratmuatan'] . "','" . $res['operator'] . "','" . $res['helper'] . "','" . $res['helper2'] . "','" . $res['helper3'] . "','" . $kdkndraan[$res['notransaksi']] . "','" . $res['kmhmawal'] . "');\" >	
+                    <td align=center width=25px><img src=images/application/application_delete.png class=zImgBtn  title='Delete' onclick=\"delDataKrj('" . $res['notransaksi'] . "','" . $res['jenispekerjaan'] . "','" . $res['alokasibiaya'] . "','" . $res['kodesegment'] . "','" . $res['beratmuatan'] . "','" . $res['operator'] . "','" . $res['helper'] . "','" . $res['helper2'] . "','" . $res['helper3'] . "','" . (isset($res['helper4']) ? $res['helper4'] : '') . "','" . $kdkndraan[$res['notransaksi']] . "','" . $res['kmhmawal'] . "');\" >	
                     </td>
                     </tr>
                     ";
@@ -1176,13 +1343,16 @@ switch ($proses) {
                         <td align=right " . $hiddenHelper . "></td>
                         <td align=right " . $hiddenHelper . ">" . number_format($ttluphhelp2, 2) . "</td>
                         <td align=right " . $hiddenHelper . ">" . number_format($ttlprmihelp2, 2) . "</td>
-                        <td align=right hidden></td>
-                        <td align=right hidden>" . number_format($ttluphhelp3, 2) . "</td>
-                        <td align=right hidden>" . number_format($ttlprmihelp3, 2) . "</td>
+                        <td align=right " . $hiddenHelperExtraClass . "></td>
+                        <td align=right " . $hiddenHelperExtraClass . ">" . number_format($ttluphhelp3, 2) . "</td>
+                        <td align=right " . $hiddenHelperExtraClass . ">" . number_format($ttlprmihelp3, 2) . "</td>
+                        <td align=right " . $hiddenHelperExtraClass . "></td>
+                        <td align=right " . $hiddenHelperExtraClass . ">" . number_format($ttluphhelp4, 2) . "</td>
+                        <td align=right " . $hiddenHelperExtraClass . ">" . number_format($ttlprmihelp4, 2) . "</td>
                         <td align=right colspan=3></td>
                     </tr>";
         } else {
-            echo "<tr class=rowcontent><td colspan=25 align=center>" . $_SESSION['lang']['errdatanotexist'] . "</td></tr>";
+            echo "<tr class=rowcontent><td colspan=28 align=center>" . $_SESSION['lang']['errdatanotexist'] . "</td></tr>";
         }
         break;
     case 'insert_header':
@@ -1508,7 +1678,8 @@ switch ($proses) {
             die();
             echo "salah";
         } else { // jika data detail belum ada
-            if (($param['kode_karyawan'] != '' && $param['kode_helper'] != '') && ($param['kode_karyawan'] == $param['kode_helper'] || $param['kode_karyawan'] == $param['kode_helper2'] || $param['kode_karyawan'] == $param['kode_helper3'])) { //validasi hanya 1 jabatan di 1 hari
+            $arrKary = array_filter([$param['kode_karyawan'], $param['kode_helper'], $param['kode_helper2'], $param['kode_helper3'], $param['kode_helper4']]);
+            if (count($arrKary) != count(array_unique($arrKary))) { //validasi hanya 1 jabatan di 1 hari
                 exit("Warningsystem : Operator dan Helper tidak boleh sama dalam hari yang sama!.");
             } else {
                 $select = selectQuery($dbname, 'vhc_rundt', '*', "notransaksi='" . $param['no_trans'] . "' and jenispekerjaan='" . $param['jns_kerja'] . "' and alokasibiaya='" . $param['lokasi_kerja'] . "' and beratmuatan='" . $param['brt_muatan'] . "' and kmhmawal='" . $param['kmhm_awal'] . "' and operator='{$param['kode_karyawan']}'");
@@ -1533,13 +1704,10 @@ switch ($proses) {
                         'helper'        => $param['kode_helper'],
                         'helper2'       => $param['kode_helper2'],
                         'helper3'       => $param['kode_helper3'],
+                        'helper4'       => $param['kode_helper4'],
                         'denda'         => $param['pnltyOprt'],
                         'checklembur'   => $param['checklembur']
                     );
-
-                    if (($param['kode_helper'] == $param['kode_karyawan']) && ($param['kode_helper'] != '' && $param['kode_karyawan'] != '')) {
-                        exit("warning : Helper dan Operator tidak boleh orang yang sama!");
-                    }
 
                     $sins = insertQuery($dbname, 'vhc_rundt', $data, array_keys($data));
                     try {
@@ -1653,11 +1821,12 @@ switch ($proses) {
 
         $jumlah = $param['kmhm_akhir'] - $param['kmhm_awal'];
 
-        if (($param['kode_helper'] == $param['kode_karyawan']) && ($param['kode_helper'] != '' && $param['kode_karyawan'] != '')) {
-            exit("warning : Helper dan Operator tidak boleh orang yang sama!");
+        $arrKary = array_filter([$param['kode_karyawan'], $param['kode_helper'], $param['kode_helper2'], $param['kode_helper3'], $param['kode_helper4']]);
+        if (count($arrKary) != count(array_unique($arrKary))) {
+            exit("Warningsystem : Operator dan Helper tidak boleh orang yang sama!");
         }
 
-        $sup = "update " . $dbname . ".vhc_rundt set beratmuatan='" . $param['brt_muatan'] . "',jumlahrit='" . $param['jmlh_rit'] . "',keterangan='" . $param['ket'] . "',biaya='" . $param['biaya'] . "',kmhmakhir='" . $param['kmhm_akhir'] . "',jumlah='" . $jumlah . "',satuan='" . $param['stn'] . "',kodesegment='" . $param['kodesegment'] . "',denda='" . $param['pnltyOprt'] . "',operator='" . $param['kode_karyawan'] . "',helper='" . $param['kode_helper'] . "',checklembur='" . $param['checklembur'] . "' where notransaksi='" . $param['no_trans'] . "' " . $where . " and kmhmawal='" . $param['kmhm_awal'] . "'";
+        $sup = "update " . $dbname . ".vhc_rundt set beratmuatan='" . $param['brt_muatan'] . "',jumlahrit='" . $param['jmlh_rit'] . "',keterangan='" . $param['ket'] . "',biaya='" . $param['biaya'] . "',kmhmakhir='" . $param['kmhm_akhir'] . "',jumlah='" . $jumlah . "',satuan='" . $param['stn'] . "',kodesegment='" . $param['kodesegment'] . "',denda='" . $param['pnltyOprt'] . "',operator='" . $param['kode_karyawan'] . "',helper='" . $param['kode_helper'] . "',helper2='" . $param['kode_helper2'] . "',helper3='" . $param['kode_helper3'] . "',helper4='" . $param['kode_helper4'] . "',checklembur='" . $param['checklembur'] . "' where notransaksi='" . $param['no_trans'] . "' " . $where . " and kmhmawal='" . $param['kmhm_awal'] . "'";
         try {
             $owlPDO->exec($sup);
             $sKm = "select distinct kmhmakhir from " . $dbname . ".vhc_kmhmakhir_vw where kodevhc='" . $optKdVhc[$param['no_trans']] . "'";
@@ -1787,6 +1956,60 @@ switch ($proses) {
                         $owlPDO->exec($strvhc);
                     } catch (PDOException $e) {
                         $errorDB .= " Error update Premi dan Upah Helper 2 gagal:" . $e->getMessage() . "\n" . $strvhc;
+                    }
+                }
+            }
+
+            #= update premi helper 3 di vhcrunhk
+            if (isset($param['kode_helper3']) && $param['kode_helper3'] != '') {
+                $sql = "select * from " . $dbname . ".vhc_runhk where notransaksi='" . $param['no_trans'] . "' and idkaryawan='" . $param['kode_helper3'] . "'";
+                $hsl = fetchData($sql);
+                if (count($hsl) > 0) {
+                    $qry = "select premihelp3,denda from " . $dbname . ".vhc_rundt where notransaksi='" . $param['no_trans'] . "' and helper3='" . $param['kode_helper3'] . "'";
+                    $res = fetchData($qry);
+                    $premiall = 0;
+                    $dendaall = 0;
+                    foreach ($res as $val) {
+                        @$premiall += $val['premihelp3'];
+                        @$dendaall += $val['denda'];
+                    }
+
+                    $upahdiinputlagi = '';
+                    if (count($res) == 1) {
+                        $upahdiinputlagi = ",upah='" . $hsl[0]['upah'] . "' ";
+                    }
+                    $strvhc = "update " . $dbname . ".vhc_runhk set premi='" . round($premiall, 2) . "',penalty='" . $dendaall . "' " . $upahdiinputlagi . " where notransaksi='" . $param['no_trans'] . "' and idkaryawan='" . $param['kode_helper3'] . "'";
+                    try {
+                        $owlPDO->exec($strvhc);
+                    } catch (PDOException $e) {
+                        $errorDB .= " Error update Premi dan Upah Helper 3 gagal:" . $e->getMessage() . "\n" . $strvhc;
+                    }
+                }
+            }
+
+            #= update premi helper 4 di vhcrunhk
+            if (isset($param['kode_helper4']) && $param['kode_helper4'] != '') {
+                $sql = "select * from " . $dbname . ".vhc_runhk where notransaksi='" . $param['no_trans'] . "' and idkaryawan='" . $param['kode_helper4'] . "'";
+                $hsl = fetchData($sql);
+                if (count($hsl) > 0) {
+                    $qry = "select premihelp4,denda from " . $dbname . ".vhc_rundt where notransaksi='" . $param['no_trans'] . "' and helper4='" . $param['kode_helper4'] . "'";
+                    $res = fetchData($qry);
+                    $premiall = 0;
+                    $dendaall = 0;
+                    foreach ($res as $val) {
+                        @$premiall += $val['premihelp4'];
+                        @$dendaall += $val['denda'];
+                    }
+
+                    $upahdiinputlagi = '';
+                    if (count($res) == 1) {
+                        $upahdiinputlagi = ",upah='" . $hsl[0]['upah'] . "' ";
+                    }
+                    $strvhc = "update " . $dbname . ".vhc_runhk set premi='" . round($premiall, 2) . "',penalty='" . $dendaall . "' " . $upahdiinputlagi . " where notransaksi='" . $param['no_trans'] . "' and idkaryawan='" . $param['kode_helper4'] . "'";
+                    try {
+                        $owlPDO->exec($strvhc);
+                    } catch (PDOException $e) {
+                        $errorDB .= " Error update Premi dan Upah Helper 4 gagal:" . $e->getMessage() . "\n" . $strvhc;
                     }
                 }
             }
@@ -1942,6 +2165,8 @@ switch ($proses) {
         $prmiOprtTambahan   = $param['prmiOprtTambahan'];
         $prmiHelp   = $param['prmiHelp'];
         $prmiHelp2  = $param['prmiHelp2'];
+        $prmiHelp3  = isset($param['prmiHelp3']) ? $param['prmiHelp3'] : 0;
+        $prmiHelp4  = isset($param['prmiHelp4']) ? $param['prmiHelp4'] : 0;
 
         if ($param['blok'] != '') {
             $whrt = " and alokasibiaya='" . $param['blok'] . "'";
@@ -1956,13 +2181,15 @@ switch ($proses) {
             $prmiOprtTambahan   = $param['prmiOprtTambahan'];
             $prmiHelp   = $param['prmiHelp'];
             $prmiHelp2  = $param['prmiHelp2'];
+            $prmiHelp3  = isset($param['prmiHelp3']) ? $param['prmiHelp3'] : 0;
+            $prmiHelp4  = isset($param['prmiHelp4']) ? $param['prmiHelp4'] : 0;
         }
 
         try {
             $owlPDO->beginTransaction();
 
             //Masukan nilai premi
-            $sup_op = "UPDATE $dbname.vhc_rundt SET premiopt='" . $prmiOprt . "',premitambahanopt ='" . $prmiOprtTambahan . "',premihelp='" . $prmiHelp . "',premihelp2='" . $prmiHelp2 . "' where notransaksi='" . $param['no_trans'] . "' and jenispekerjaan='" . $param['jns_kerja'] . "' " . $whrt . " and operator='" . $param['kode_karyawan'] . "'";
+            $sup_op = "UPDATE $dbname.vhc_rundt SET premiopt='" . $prmiOprt . "',premitambahanopt ='" . $prmiOprtTambahan . "',premihelp='" . $prmiHelp . "',premihelp2='" . $prmiHelp2 . "',premihelp3='" . $prmiHelp3 . "',premihelp4='" . $prmiHelp4 . "' where notransaksi='" . $param['no_trans'] . "' and jenispekerjaan='" . $param['jns_kerja'] . "' " . $whrt . " and operator='" . $param['kode_karyawan'] . "'";
             $owlPDO->exec($sup_op);
 
             #cek sudah ada data belum operator
@@ -2045,7 +2272,65 @@ switch ($proses) {
                 } else {
                     #insert vhc_runhk
                     $str = "INSERT INTO $dbname.vhc_runhk (`notransaksi`,`idkaryawan`,`posisi`,`tanggal`,`statuskaryawan`,`upah`,`premi`,`penalty`,`keterangan`)
-                                VALUES ('" . $param['no_trans'] . "','" . $param['kode_helper2'] . "','1','" . $tgl_kerja . "','','" . ($jlhpjbtbkm == 0 ? $param['uphHelp2'] : 0) . "','" . $prmiHelp . "','" . $param['pnltyOprt'] . "','" . $param['ketOprt'] . "')";
+                                VALUES ('" . $param['no_trans'] . "','" . $param['kode_helper2'] . "','1','" . $tgl_kerja . "','','" . ($jlhpjbtbkm == 0 ? $param['uphHelp2'] : 0) . "','" . $prmiHelp2 . "','" . $param['pnltyOprt'] . "','" . $param['ketOprt'] . "')";
+                    $owlPDO->exec($str);
+                }
+            }
+
+            #cek sudah ada data belum helper 3
+            if (isset($param['kode_helper3']) && $param['kode_helper3'] != '') {
+                $sql = selectQuery($dbname, 'vhc_runhk', '*', "notransaksi='" . $param['no_trans'] . "' and idkaryawan='" . $param['kode_helper3'] . "'");
+                $hsl = fetchData($sql);
+                if (count($hsl) > 0) {
+                    $qry = selectQuery($dbname, 'vhc_rundt', 'premihelp3,denda', "notransaksi='" . $param['no_trans'] . "' and helper3 ='" . $param['kode_helper3'] . "'");
+                    $res = fetchData($qry);
+                    $premiall = 0;
+                    $dendaall = 0;
+                    foreach ($res as $val) {
+                        @$premiall += $val['premihelp3'];
+                        @$dendaall += $val['denda'];
+                    }
+
+                    $upahdiinputlagi = '';
+                    if (count($res) == 1) {
+                        $upahdiinputlagi = ",upah='" . $param['uphHelp3'] . "' ";
+                    }
+
+                    $strvhc = "UPDATE $dbname.vhc_runhk SET premi='" . round($premiall, 2) . "',penalty='$dendaall' $upahdiinputlagi WHERE notransaksi='" . $param['no_trans'] . "' and idkaryawan='" . $param['kode_helper3'] . "'";
+                    $owlPDO->exec($strvhc);
+                } else {
+                    #insert vhc_runhk
+                    $str = "INSERT INTO $dbname.vhc_runhk (`notransaksi`,`idkaryawan`,`posisi`,`tanggal`,`statuskaryawan`,`upah`,`premi`,`penalty`,`keterangan`)
+                                VALUES ('" . $param['no_trans'] . "','" . $param['kode_helper3'] . "','1','" . $tgl_kerja . "','','" . ($jlhpjbtbkm == 0 ? $param['uphHelp3'] : 0) . "','" . $prmiHelp3 . "','" . $param['pnltyOprt'] . "','" . $param['ketOprt'] . "')";
+                    $owlPDO->exec($str);
+                }
+            }
+
+            #cek sudah ada data belum helper 4
+            if (isset($param['kode_helper4']) && $param['kode_helper4'] != '') {
+                $sql = selectQuery($dbname, 'vhc_runhk', '*', "notransaksi='" . $param['no_trans'] . "' and idkaryawan='" . $param['kode_helper4'] . "'");
+                $hsl = fetchData($sql);
+                if (count($hsl) > 0) {
+                    $qry = selectQuery($dbname, 'vhc_rundt', 'premihelp4,denda', "notransaksi='" . $param['no_trans'] . "' and helper4 ='" . $param['kode_helper4'] . "'");
+                    $res = fetchData($qry);
+                    $premiall = 0;
+                    $dendaall = 0;
+                    foreach ($res as $val) {
+                        @$premiall += $val['premihelp4'];
+                        @$dendaall += $val['denda'];
+                    }
+
+                    $upahdiinputlagi = '';
+                    if (count($res) == 1) {
+                        $upahdiinputlagi = ",upah='" . $param['uphHelp4'] . "' ";
+                    }
+
+                    $strvhc = "UPDATE $dbname.vhc_runhk SET premi='" . round($premiall, 2) . "',penalty='$dendaall' $upahdiinputlagi WHERE notransaksi='" . $param['no_trans'] . "' and idkaryawan='" . $param['kode_helper4'] . "'";
+                    $owlPDO->exec($strvhc);
+                } else {
+                    #insert vhc_runhk
+                    $str = "INSERT INTO $dbname.vhc_runhk (`notransaksi`,`idkaryawan`,`posisi`,`tanggal`,`statuskaryawan`,`upah`,`premi`,`penalty`,`keterangan`)
+                                VALUES ('" . $param['no_trans'] . "','" . $param['kode_helper4'] . "','1','" . $tgl_kerja . "','','" . ($jlhpjbtbkm == 0 ? $param['uphHelp4'] : 0) . "','" . $prmiHelp4 . "','" . $param['pnltyOprt'] . "','" . $param['ketOprt'] . "')";
                     $owlPDO->exec($str);
                 }
             }
@@ -2092,6 +2377,15 @@ switch ($proses) {
             }
 
             $sdel = "delete from " . $dbname . ".vhc_runhk where notransaksi='" . $param['no_trans'] . "' and idkaryawan='" . $param['kode_helper3'] . "'";
+            try {
+                $owlPDO->exec($sdel);
+                echo "";
+            } catch (PDOException $e) {
+                print " Gagal  !: " . $e->getMessage() . "\n";
+                die();
+            }
+
+            $sdel = "delete from " . $dbname . ".vhc_runhk where notransaksi='" . $param['no_trans'] . "' and idkaryawan='" . $param['kode_helper4'] . "'";
             try {
                 $owlPDO->exec($sdel);
                 echo "";
@@ -2540,6 +2834,7 @@ function hitungpremi($param)
     $hasilnya['premihelp']  = 0;
     $hasilnya['premihelp2'] = 0;
     $hasilnya['premihelp3'] = 0;
+    $hasilnya['premihelp4'] = 0;
     $hasilnya['jnsprmi']    = '';
 
     #= Cek tipe karyawan
@@ -2651,6 +2946,7 @@ function hitungpremi_table2($param)
     $hasilnya['premihelp']  = 0;
     $hasilnya['premihelp2'] = 0;
     $hasilnya['premihelp3'] = 0;
+    $hasilnya['premihelp4'] = 0;
     $hasilnya['jnsprmi']    = '';
 
     #= Cek tipe karyawan
@@ -2819,6 +3115,80 @@ function hitungpremi_table2($param)
 
                     # 0 kan jika gak ada basis
                     $hasilnya['premihelp2'] = $resx[0]['premilebihbasis'];
+            }
+        }
+    }
+
+    ## INI PREMI HELPER 3
+    if (isset($param['kode_helper3']) && $param['kode_helper3'] != '') {
+        #== Ambil setup premi kegiatan helper lokasi kerja 
+        $strx   = selectQuery($dbname, 'vhc_5premikegiatan_v2', '*', "kodekegiatan='" . $param['jns_kerja'] . "' and unit='" . $param['lokasi_kerja'] . "'  and vhc='" . $param['jenisvhc'] . "'  and posisi in ('1') " . $whrhari . " and statuspremi='1'");
+        $resx   = fetchdata($strx);
+
+        if (count($resx) > 0) {
+            $hasilnya['jnsprmi']    = $resx[0]['jenisbasis'];
+
+            switch ($hasilnya['jnsprmi']) {
+                case 'PRESTASI':
+                    $hasilKerja = $param['brt_muatan'];
+                    if ($hasilKerja > $resx[0]['basis']) {
+                        $hasilnya['premihelp3'] = $hasilKerja * $resx[0]['premilebihbasis'];
+                    }
+                    break;
+                case 'KMHM':
+                    $hasilKerja = $param['jlhhm'];
+                    if ($hasilKerja > $resx[0]['basis']) {
+                        $hasilnya['premihelp3'] = $hasilKerja * $resx[0]['premilebihbasis'];
+                    }
+                    break;
+                case 'RIT':
+                    $hasilKerja = $param['jmlh_rit'];
+                    if ($hasilKerja > $resx[0]['basis']) {
+                        $hasilnya['premihelp3'] = $hasilKerja * $resx[0]['premilebihbasis'];
+                    }
+                    break;
+                case 'TETAP':
+                    $hasilnya['premihelp3'] = $resx[0]['premilebihbasis'];
+                    break;
+                default:
+                    $hasilnya['premihelp3'] = $resx[0]['premilebihbasis'];
+            }
+        }
+    }
+
+    ## INI PREMI HELPER 4
+    if (isset($param['kode_helper4']) && $param['kode_helper4'] != '') {
+        #== Ambil setup premi kegiatan helper lokasi kerja 
+        $strx   = selectQuery($dbname, 'vhc_5premikegiatan_v2', '*', "kodekegiatan='" . $param['jns_kerja'] . "' and unit='" . $param['lokasi_kerja'] . "'  and vhc='" . $param['jenisvhc'] . "'  and posisi in ('1') " . $whrhari . " and statuspremi='1'");
+        $resx   = fetchdata($strx);
+
+        if (count($resx) > 0) {
+            $hasilnya['jnsprmi']    = $resx[0]['jenisbasis'];
+
+            switch ($hasilnya['jnsprmi']) {
+                case 'PRESTASI':
+                    $hasilKerja = $param['brt_muatan'];
+                    if ($hasilKerja > $resx[0]['basis']) {
+                        $hasilnya['premihelp4'] = $hasilKerja * $resx[0]['premilebihbasis'];
+                    }
+                    break;
+                case 'KMHM':
+                    $hasilKerja = $param['jlhhm'];
+                    if ($hasilKerja > $resx[0]['basis']) {
+                        $hasilnya['premihelp4'] = $hasilKerja * $resx[0]['premilebihbasis'];
+                    }
+                    break;
+                case 'RIT':
+                    $hasilKerja = $param['jmlh_rit'];
+                    if ($hasilKerja > $resx[0]['basis']) {
+                        $hasilnya['premihelp4'] = $hasilKerja * $resx[0]['premilebihbasis'];
+                    }
+                    break;
+                case 'TETAP':
+                    $hasilnya['premihelp4'] = $resx[0]['premilebihbasis'];
+                    break;
+                default:
+                    $hasilnya['premihelp4'] = $resx[0]['premilebihbasis'];
             }
         }
     }
