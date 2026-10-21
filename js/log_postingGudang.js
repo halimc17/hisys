@@ -154,7 +154,7 @@ function previewDocument(tipe, notransaksi, ev) {
 	height = '400';
 	content = "<iframe frameborder=0 width=100% height=100% src='" + tujuan + "'></iframe>"
 	// showDialog2(title, content, width, height, ev);
-	alertify.popuppdf("PDF","<iframe frameborder=0 style='width:100%;height:90%;overflow:none' src='"+tujuan+"'></iframe>").set({'resizable':true, 'overflow':false}).resizeTo('80%','70%');	
+	alertify.popuppdf("PDF","<iframe frameborder=0 style='width:100%;height:90%;overflow:none' src='"+tujuan+"#zoom=page-width'></iframe>").set({'resizable':true, 'overflow':false}).resizeTo('90%','90%');	
 }
 
 function previewPosting(tipe, notransaksi, gudang, ev) {

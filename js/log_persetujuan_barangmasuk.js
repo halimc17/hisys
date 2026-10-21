@@ -99,17 +99,17 @@ function ditolakpo()
     }
 }
 
-function previewBapb(notransaksi,ev)
-{
-        param='notransaksi='+notransaksi;
-        tujuan = 'log_slave_print_bapb_pdf.php?'+param;	
- //display window
-   title=notransaksi;
-   width='800';
-   height='400';
-   content="<iframe frameborder=0 width=100% height=100% src='"+tujuan+"'></iframe>"
-   showDialog2(title,content,width,height,ev);
-
+function previewBapb(notransaksi, ev) {
+  param = "notransaksi=" + notransaksi;
+  alertify
+    .popuppdf(
+      "PDF",
+      "<iframe frameborder=0 style='width:100%;height:90%;overflow:none' src='log_slave_print_bapb_pdf.php?" +
+        param +
+        "#zoom=page-width'></iframe>"
+    )
+    .set({ resizable: true, overflow: false })
+    .resizeTo("90%", "90%");
 }
 
 // function rejected_po(nopo,kolom) {

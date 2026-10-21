@@ -957,10 +957,10 @@ function previewgrni(notransaksi, ev) {
       "PDF",
       "<iframe frameborder=0 style='width:100%;height:90%;overflow:none' src='log_slave_noninventory.php?" +
         param +
-        "'></iframe>"
+        "#zoom=page-width'></iframe>"
     )
     .set({ resizable: true, overflow: false })
-    .resizeTo("80%", "70%");
+    .resizeTo("90%", "90%");
 }
 function previewkontrak(notransaksi, ev) {
   param = "method=pdfpanjang&nokontrak=" + notransaksi;
@@ -2410,15 +2410,15 @@ function previewscr(kode, ev) {
 //#### BEGIN ACTION GR ####
 function previewgr(notransaksi, ev) {
   param = "notransaksi=" + notransaksi;
-  tujuan = "log_slave_print_bapb_pdf.php?" + param;
-  title = notransaksi;
-  width = "800";
-  height = "400";
-  content =
-    "<iframe frameborder=0 width=100% height=100% src='" +
-    tujuan +
-    "'></iframe>";
-  showDialog1(title, content, width, height, ev);
+  alertify
+    .popuppdf(
+      "PDF",
+      "<iframe frameborder=0 style='width:100%;height:90%;overflow:none' src='log_slave_print_bapb_pdf.php?" +
+        param +
+        "#zoom=page-width'></iframe>"
+    )
+    .set({ resizable: true, overflow: false })
+    .resizeTo("90%", "90%");
 }
 function detailgr(transaksi_detail, ev) {
   title = "Detail : " + transaksi_detail;

@@ -406,12 +406,7 @@ function selesaiBapb2() {
 function previewBapb(notransaksi, ev) {
 	param = 'notransaksi=' + notransaksi;
 	tujuan = 'log_slave_print_bapb_pdf.php?' + param;
-	//display window
-	title = notransaksi;
-	width = '800';
-	height = '400';
-	content = "<iframe frameborder=0 width=100% height=100% src='" + tujuan + "'></iframe>"
-		showDialog2(title, content, width, height, ev);
+	alertify.popuppdf("PDF", "<iframe frameborder=0 style='width:100%;height:90%;overflow:none' src='" + tujuan + "#zoom=page-width'></iframe>").set({'resizable': true, 'overflow': false}).resizeTo('90%', '90%');
 }
 function editBapb(notransaksi, nopo, tanggal, nosj, nofaktur, supplier) {
 	gudang = document.getElementById('sloc').options[document.getElementById('sloc').selectedIndex].value;
@@ -799,7 +794,7 @@ function detaildt(transaksi_detail) {
 					alert(con.responseText);
 				} else {
 					//document.getElementById('containerAkun').innerHTML = con.responseText;
-					alertify.popup("Detail",con.responseText).set({'resizable':true,'maximizable':true}).resizeTo('30px','300px');
+					alertify.popup("Detail",con.responseText).set({'resizable':true,'maximizable':true}).resizeTo('800px','350px');
 					loadfiles(transaksi_detail);
 				}
 			} else {
