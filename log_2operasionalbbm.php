@@ -45,6 +45,14 @@ foreach($res as $val){
 	$optSubUnit.="<option value='".$val['kodeorganisasi']."'>".$val['kodeorganisasi']." - ".$val['namaorganisasi']."</option>";
 }
 
+## GET JENIS BBM
+$optBbm = "<option value='all'>Semua BBM</option>";
+$str = "select kodebarang,namabarang from " . $dbname . ".log_5masterbarang where kodebarang like '351%' and inactive=0 order by kodebarang";
+$res = fetchdata($str);
+foreach ($res as $val) {
+	$optBbm .= "<option value='" . $val['kodebarang'] . "'>" . $val['kodebarang'] . " - " . $val['namabarang'] . "</option>";
+}
+
 ## GET PERIODE
 $optPeriode="";
 $str="select periode from ".$dbname.".sdm_5periodegaji group by periode order by periode desc";
@@ -81,10 +89,28 @@ echo"
 			</td>
 		</tr>
 		<tr>
+			<td>Jenis BBM</td>
+			<td>:</td>
+			<td>
+				<select class=select2 id='jenisbbm' style='min-width:245px'>".$optBbm."</select>
+			</td>
+		</tr>
+		<tr>
+			<td>Tampilan</td>
+			<td>:</td>
+			<td>
+				<select class=select2 id='tampilan' style='min-width:245px'>
+					<option value=''>Per Kendaraan / Alokasi</option>
+					<option value='karyawan'>Per Karyawan Penerima</option>
+				</select>
+			</td>
+		</tr>
+		<tr>
 			<td colspan=2></td>
 			<td>
 				<button onclick=\"preview('html',event)\" class='mybutton'>".$_SESSION['lang']['preview']."</button>
-				<button onclick=\"preview('excel',event)\" class='mybutton'>".$_SESSION['lang']['excel']."</button>
+				<button onclick=\"exportExcel()\" class='mybutton'>".$_SESSION['lang']['excel']."</button>
+				<button onclick=\"exportPdf()\" class='mybutton'>PDF</button>
 			</td>
 		</tr>
 	</table>

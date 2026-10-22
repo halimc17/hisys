@@ -26,6 +26,8 @@ function preview(tipeprint, ev) {
   unit = document.getElementById("unit").value;
   subunit = document.getElementById("subunit").value;
   periode = document.getElementById("periode").value;
+  jenisbbm = document.getElementById("jenisbbm").value;
+  tampilan = document.getElementById("tampilan").value;
 
   param =
     "method=preview&tipeprint=" +
@@ -35,7 +37,11 @@ function preview(tipeprint, ev) {
     "&subunit=" +
     subunit +
     "&periode=" +
-    periode;
+    periode +
+    "&jenisbbm=" +
+    jenisbbm +
+    "&tampilan=" +
+    tampilan;
   tujuan = "log_slave_2operasionalbbm.php";
   if (tipeprint != "html") {
     judul = tipeprint;
@@ -62,6 +68,27 @@ function preview(tipeprint, ev) {
   }
 }
 
+function getFilterParam() {
+  return (
+    "&unit=" + encodeURIComponent(document.getElementById("unit").value) +
+    "&periode=" + encodeURIComponent(document.getElementById("periode").value) +
+    "&jenisbbm=" + encodeURIComponent(document.getElementById("jenisbbm").value) +
+    "&tampilan=" + encodeURIComponent(document.getElementById("tampilan").value)
+  );
+}
+
+function tampilTarikan(judul, tujuan) {
+  alertify.popup(judul, "<iframe frameborder=0 style='width:100%;height:100%;overflow:none' src='" + tujuan + "'></iframe>").set({'resizable': true, 'maximizable': true, 'overflow': false}).resizeTo('80%', '70%');
+}
+
+function exportExcel() {
+  tampilTarikan('Report Ms.Excel', 'log_slave_2operasionalbbm.php?method=excellist' + getFilterParam());
+}
+
+function exportPdf() {
+  tampilTarikan('Report PDF', 'log_slave_2operasionalbbm.php?method=pdflist' + getFilterParam());
+}
+
 function printFile(param, tujuan, title, ev) {
   tujuan = tujuan + "?" + param;
   width = "";
@@ -75,7 +102,7 @@ function printFile(param, tujuan, title, ev) {
 
 function detail(kodemesin, tanggal) {
 
-  param = 'kodemesin=' + kodemesin + '&tanggal=' + tanggal;
+  param = 'kodemesin=' + kodemesin + '&tanggal=' + tanggal + '&jenisbbm=' + document.getElementById('jenisbbm').value;
   tujuan = 'log_slave_2operasionalbbm.php';
   function respog() {
       if (con.readyState == 4) {
@@ -91,6 +118,27 @@ function detail(kodemesin, tanggal) {
               error_catch(con.status);
           }
       }
+  }
+  post_response_text(tujuan + '?' + 'method=detail', param, respog);
+}
+
+function detailKaryawan(penerima, tanggal) {
+  param = 'tampilan=karyawan&penerima=' + penerima + '&tanggal=' + tanggal + '&unit=' + document.getElementById('unit').value + '&jenisbbm=' + document.getElementById('jenisbbm').value;
+  tujuan = 'log_slave_2operasionalbbm.php';
+  function respog() {
+    if (con.readyState == 4) {
+      if (con.status == 200) {
+        busy_off();
+        if (!isSaveResponse(con.responseText)) {
+          alert(con.responseText);
+        } else {
+          alertify.popup("Detail", con.responseText).set({'resizable':true,'maximizable':true}).resizeTo('80%','70%');
+        }
+      } else {
+        busy_off();
+        error_catch(con.status);
+      }
+    }
   }
   post_response_text(tujuan + '?' + 'method=detail', param, respog);
 }
