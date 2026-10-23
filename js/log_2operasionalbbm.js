@@ -122,6 +122,27 @@ function detail(kodemesin, tanggal) {
   post_response_text(tujuan + '?' + 'method=detail', param, respog);
 }
 
+function detailDivisi(divisi, tanggal) {
+  param = 'tampilan=divisi&divisi=' + encodeURIComponent(divisi) + '&tanggal=' + tanggal + '&unit=' + document.getElementById('unit').value + '&jenisbbm=' + document.getElementById('jenisbbm').value;
+  tujuan = 'log_slave_2operasionalbbm.php';
+  function respog() {
+    if (con.readyState == 4) {
+      if (con.status == 200) {
+        busy_off();
+        if (!isSaveResponse(con.responseText)) {
+          alert(con.responseText);
+        } else {
+          alertify.popup("Detail", con.responseText).set({'resizable':true,'maximizable':true}).resizeTo('80%','70%');
+        }
+      } else {
+        busy_off();
+        error_catch(con.status);
+      }
+    }
+  }
+  post_response_text(tujuan + '?' + 'method=detail', param, respog);
+}
+
 function detailKaryawan(penerima, tanggal) {
   param = 'tampilan=karyawan&penerima=' + penerima + '&tanggal=' + tanggal + '&unit=' + document.getElementById('unit').value + '&jenisbbm=' + document.getElementById('jenisbbm').value;
   tujuan = 'log_slave_2operasionalbbm.php';

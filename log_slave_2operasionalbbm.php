@@ -40,6 +40,28 @@ function bbmKeluarkan($tab, $tipeprint, $unit, $periode)
 	}
 }
 
+# divisi dari isian kodeblok: kode organisasi 6 huruf (divisi, traksi, workshop, dan lain-lain) atau awalan 6 huruf dari kode blok; selain itu kosong
+function bbmDivisi($kodeblok, $optorg)
+{
+	$kodeblok = (string)$kodeblok;
+	if (strlen($kodeblok) >= 6 && isset($optorg[substr($kodeblok, 0, 6)])) {
+		return substr($kodeblok, 0, 6);
+	}
+	return '';
+}
+
+# judul kolom 2 dan 3 menurut tampilan
+function bbmLabelKolom($tampilan)
+{
+	if ($tampilan == 'karyawan') {
+		return array('No. Kendaraan', 'Nama Karyawan');
+	}
+	if ($tampilan == 'divisi') {
+		return array('Kode Divisi', 'Nama Divisi');
+	}
+	return array('Kode', 'Nama');
+}
+
 function bbmAmbilData($unit, $periode, $kodebarang, $tampilan)
 {
 	global $dbname;
@@ -75,6 +97,25 @@ function bbmAmbilData($unit, $periode, $kodebarang, $tampilan)
 		usort($data['baris'], function ($a, $b) {
 			return strcasecmp($a['nama'], $b['nama']);
 		});
+	} else if ($tampilan == 'divisi') {
+		$optorg = makeOption($dbname, 'organisasi', 'kodeorganisasi,namaorganisasi');
+		$res = fetchdata("select kodeblok,tanggal,sum(jumlah) as jumlah from " . $dbname . ".log_transaksi_vw where kodegudang like '" . $unit . "%' and tipetransaksi = '5' and kodebarang in ('" . $in . "') and tanggal like '" . $periode . "%' group by kodeblok,tanggal");
+		$arr = array();
+		foreach ($res as $val) {
+			$dv = bbmDivisi($val['kodeblok'], $optorg);
+			@$arr[$dv]['hari'][$val['tanggal']]['jumlah'] += $val['jumlah'];
+			@$arr[$dv]['total'] += $val['jumlah'];
+		}
+		ksort($arr);
+		foreach ($arr as $dv => $dt) {
+			if ($dv === '') {
+				continue;
+			}
+			$data['baris'][] = array('kode' => $dv, 'nama' => trim($optorg[$dv]), 'hari' => $dt['hari'], 'total' => $dt['total']);
+		}
+		if (isset($arr[''])) {
+			$data['baris'][] = array('kode' => '-', 'nama' => 'Tanpa divisi (unit, SPK, dan lainnya)', 'hari' => $arr['']['hari'], 'total' => $arr['']['total']);
+		}
 	} else {
 		$optnamavhc = makeOption($dbname, 'vhc_5master', 'kodevhc,detailvhc');
 		$optjenisvhc = makeOption($dbname, 'vhc_5jenisvhc', 'jenisvhc,namajenisvhc');
@@ -126,7 +167,7 @@ function bbmInfoFilter($unit, $periode, $jenisbbm, $tampilan, $kodebarang)
 	foreach ($kodebarang as $kb) {
 		$bbm[] = isset($nmbrg[$kb]) ? $nmbrg[$kb] : $kb;
 	}
-	return 'Unit: ' . $unit . (isset($nmunit[$unit]) ? ' - ' . $nmunit[$unit] : '') . ' | Periode: ' . $periode . ' | Jenis BBM: ' . ($jenisbbm == 'all' ? 'Semua BBM' : implode(', ', $bbm)) . ' | Tampilan: ' . ($tampilan == 'karyawan' ? 'Per Karyawan Penerima' : 'Per Kendaraan / Alokasi');
+	return 'Unit: ' . $unit . (isset($nmunit[$unit]) ? ' - ' . $nmunit[$unit] : '') . ' | Periode: ' . $periode . ' | Jenis BBM: ' . ($jenisbbm == 'all' ? 'Semua BBM' : implode(', ', $bbm)) . ' | Tampilan: ' . ($tampilan == 'karyawan' ? 'Per Karyawan Penerima' : ($tampilan == 'divisi' ? 'Per Divisi' : 'Per Kendaraan / Alokasi'));
 }
 
 $method = checkPostGet('method', '');
@@ -147,6 +188,7 @@ $dftrkodebarang = explode(',', $qStr[0]['nilai']);
 $jenisbbm = checkPostGet('jenisbbm', '');
 $tampilan = checkPostGet('tampilan', '');
 $penerima = checkPostGet('penerima', '');
+$divisi = checkPostGet('divisi', '');
 # jenis BBM: kosong = sesuai setup (BRGOPRBBM), all = semua barang kelompok BBM (351), atau satu kode barang
 if ($jenisbbm == 'all') {
 	$dftrkodebarang = array();
@@ -171,6 +213,51 @@ switch ($method) {
 		break;
 
 	case 'preview':
+		if ($tampilan == 'divisi') {
+			$d = bbmAmbilData($unit, $periode, $dftrkodebarang, $tampilan);
+			if ($tipeprint == 'html') {
+				$border = "border=0";
+			} else {
+				$border = "border=1";
+			}
+			$tab = "<table cellpadding=5 cellspacing=1 " . $border . " class=sortable style='width:100%'>
+				<thead>
+				<tr class=rowheader style='text-align:center;font-weight:bold'>
+					<th>" . $_SESSION['lang']['nourut'] . "</th>
+					<th>Kode Divisi</th>
+					<th>Nama Divisi</th>";
+			foreach ($d['tgl'] as $tgl) {
+				$dayOfWeek = date('w', strtotime($tgl));
+				$tab .= "<th" . ($dayOfWeek == 0 ? " style='color:red'" : "") . ">" . substr($tgl, 8, 2) . "</th>";
+			}
+			$tab .= "<th>" . $_SESSION['lang']['total'] . "</th>
+				</tr>
+				</thead><tbody>";
+			$no = 0;
+			foreach ($d['baris'] as $r) {
+				$no++;
+				$tab .= "<tr class='rowcontent'>
+					<td align='center'>" . $no . "</td>
+					<td align='center'>" . $r['kode'] . "</td>
+					<td>" . htmlspecialchars($r['nama']) . "</td>";
+				foreach ($d['tgl'] as $tgl) {
+					if (isset($r['hari'][$tgl]) && $r['hari'][$tgl]['jumlah'] != 0) {
+						$tab .= "<td style='min-width:30px;color:blue;cursor:pointer' align='center' onclick=\"detailDivisi('" . $r['kode'] . "','" . $tgl . "')\">" . round($r['hari'][$tgl]['jumlah'], 2) . "</td>";
+					} else {
+						$tab .= "<td style='min-width:30px' align='center'></td>";
+					}
+				}
+				$tab .= "<td align='center' style='background-color:green;color:white;font-weight:bold'>" . round($r['total'], 2) . "</td></tr>";
+			}
+			$tab .= "<tr class='rowcontent' style='background-color:green;color:white;font-weight:bold'>
+				<td colspan='3' align=center>Total</td>";
+			foreach ($d['tgl'] as $tgl) {
+				$tab .= "<td align=center>" . (isset($d['totaltgl'][$tgl]) ? round($d['totaltgl'][$tgl], 2) : '') . "</td>";
+			}
+			$tab .= "<td align=center>" . round($d['total'], 2) . "</td></tr></tbody></table>";
+			bbmKeluarkan($tab, $tipeprint, $unit, $periode);
+			break;
+		}
 		if ($tampilan == 'karyawan') {
 			$gettglawal = $periode . "-01";
 			$gettglakhir = tglakhir($periode);
@@ -450,7 +537,8 @@ switch ($method) {
 		$ptinduk = makeOption($dbname, 'organisasi', 'kodeorganisasi,induk', "kodeorganisasi='" . $unit . "'");
 		$pt = isset($ptinduk[$unit]) && $ptinduk[$unit] != '' ? $ptinduk[$unit] : $unit;
 		$hdpt = setheadreport($pt, $pt);
-		$kar = $tampilan == 'karyawan';
+		$kar = ($tampilan == 'karyawan' || $tampilan == 'divisi');
+		$lbl = bbmLabelKolom($tampilan);
 		$jmltgl = count($d['tgl']);
 		$kolom = 4 + ($kar ? $jmltgl : $jmltgl * 2);
 		$stream = "<table>
@@ -464,8 +552,8 @@ switch ($method) {
 		$stream .= "<table class=sortable cellspacing=1 cellpadding=3 border=1>
 			<thead><tr>
 				<th align=center bgcolor=#CCCCCC" . $rs . ">No</th>
-				<th align=center bgcolor=#CCCCCC" . $rs . ">" . ($kar ? 'No. Kendaraan' : 'Kode') . "</th>
-				<th align=center bgcolor=#CCCCCC" . $rs . ">" . ($kar ? 'Nama Karyawan' : 'Nama') . "</th>";
+				<th align=center bgcolor=#CCCCCC" . $rs . ">" . $lbl[0] . "</th>
+				<th align=center bgcolor=#CCCCCC" . $rs . ">" . $lbl[1] . "</th>";
 		foreach ($d['tgl'] as $tg) {
 			$stream .= "<th align=center bgcolor=#CCCCCC" . ($kar ? '' : ' colspan=2') . ">" . substr($tg, 8, 2) . "</th>";
 		}
@@ -521,7 +609,8 @@ switch ($method) {
 		$pt = isset($ptinduk[$unit]) && $ptinduk[$unit] != '' ? $ptinduk[$unit] : $unit;
 		$hdpt = setheadreport($pt, $pt);
 		$infoFilter = bbmInfoFilter($unit, $periode, $jenisbbm, $tampilan, $dftrkodebarang);
-		$kar = $tampilan == 'karyawan';
+		$kar = ($tampilan == 'karyawan' || $tampilan == 'divisi');
+		$lbl = bbmLabelKolom($tampilan);
 		$tglPdf = $d['tgl'];
 		if (!class_exists('PDFListBBM')) {
 			class PDFListBBM extends FPDF
@@ -529,6 +618,7 @@ switch ($method) {
 				public $colW = array();
 				public $tglPdf = array();
 				public $kar = false;
+				public $lbl = array('Kode', 'Nama');
 
 				function Header()
 				{
@@ -550,7 +640,7 @@ switch ($method) {
 					$this->SetFillColor(220, 220, 220);
 					$this->SetFont('Arial', 'B', 6);
 					$i = 0;
-					foreach (array('No', $this->kar ? 'No. Kendaraan' : 'Kode', $this->kar ? 'Nama Karyawan' : 'Nama') as $j) {
+					foreach (array_merge(array('No'), $this->lbl) as $j) {
 						$this->Cell($this->colW[$i++], 6, $j, 1, 0, 'C', true);
 					}
 					foreach ($this->tglPdf as $tg) {
@@ -579,6 +669,7 @@ switch ($method) {
 		}
 		$pdf = new PDFListBBM('L', 'mm', 'A4');
 		$pdf->kar = $kar;
+		$pdf->lbl = $lbl;
 		$pdf->tglPdf = $tglPdf;
 		$pdf->AliasNbPages();
 		$pdf->SetAutoPageBreak(false, 16);
@@ -637,6 +728,57 @@ switch ($method) {
 
 	case 'detail':
 		$optbarang = makeOption($dbname, 'log_5masterbarang', 'kodebarang,namabarang', "kodebarang like '351%'");
+		if ($tampilan == 'divisi') {
+			$optorg = makeOption($dbname, 'organisasi', 'kodeorganisasi,namaorganisasi');
+			$optkegiatan = makeOption($dbname, 'setup_kegiatan', 'kodekegiatan,namakegiatan');
+			$dvcari = ($divisi == '-') ? '' : $divisi;
+			$res = fetchdata("select * from " . $dbname . ".log_transaksi_vw where tanggal = '" . $tanggal . "' and kodegudang like '" . $unit . "%' and tipetransaksi = '5' and kodebarang in ('" . implode("','", $dftrkodebarang) . "') order by notransaksi");
+			$ids = array();
+			foreach ($res as $val) {
+				if (bbmDivisi($val['kodeblok'], $optorg) === $dvcari && $val['namapenerima'] != '') {
+					$ids[intval($val['namapenerima'])] = intval($val['namapenerima']);
+				}
+			}
+			$optkary = array();
+			if (count($ids) > 0) {
+				foreach (fetchdata("select lpad(karyawanid,10,'0') as id,namakaryawan from " . $dbname . ".datakaryawan where karyawanid in (" . implode(',', $ids) . ")") as $kary) {
+					$optkary[$kary['id']] = $kary['namakaryawan'];
+				}
+			}
+			$tab = "<table cellpadding=5 cellspacing=1 class=sortable style='width:100%'>
+				<thead>
+				<tr class=rowheader style='text-align:center;font-weight:bold'>
+					<th>" . $_SESSION['lang']['nourut'] . "</th>
+					<th>" . $_SESSION['lang']['notransaksi'] . "</th>
+					<th>Bahan Bakar</th>
+					<th>Penerima</th>
+					<th>" . $_SESSION['lang']['kode'] . "</th>
+					<th>Jumlah</th>
+					<th>" . $_SESSION['lang']['kegiatan'] . "</th>
+					<th>" . $_SESSION['lang']['catatan'] . "</th>
+				</tr>
+				</thead><tbody>";
+			$no = 0;
+			foreach ($res as $val) {
+				if (bbmDivisi($val['kodeblok'], $optorg) !== $dvcari) {
+					continue;
+				}
+				$no++;
+				$tab .= "<tr class='rowcontent'>
+					<td align='center'>" . $no . "</td>
+					<td align='center'>" . $val['notransaksi'] . "</td>
+					<td align='center'>" . $optbarang[$val['kodebarang']] . "</td>
+					<td align='center'>" . (isset($optkary[$val['namapenerima']]) ? $optkary[$val['namapenerima']] : $val['namapenerima']) . "</td>
+					<td align='center'>" . ($val['kodemesin'] != '' ? $val['kodemesin'] : $val['kodeblok']) . "</td>
+					<td align='center'>" . $val['jumlah'] . "</td>
+					<td align='center'>" . $optkegiatan[$val['kodekegiatan']] . "</td>
+					<td align='center'>" . $val['keterangan'] . "</td>
+					</tr>";
+			}
+			$tab .= "</tbody></table>";
+			echo $tab;
+			break;
+		}
 		if ($tampilan == 'karyawan') {
 			$optkegiatan = makeOption($dbname, 'setup_kegiatan', 'kodekegiatan,namakegiatan');
 			$str = "select * from " . $dbname . ".log_transaksi_vw where namapenerima='" . $penerima . "' and tanggal = '" . $tanggal . "' and kodegudang like '" . $unit . "%' and tipetransaksi = '5' and kodebarang in ('" . implode("','", $dftrkodebarang) . "') order by notransaksi";

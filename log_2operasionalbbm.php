@@ -102,6 +102,7 @@ echo"
 				<select class=select2 id='tampilan' style='min-width:245px'>
 					<option value=''>Per Kendaraan / Alokasi</option>
 					<option value='karyawan'>Per Karyawan Penerima</option>
+					<option value='divisi'>Per Divisi</option>
 				</select>
 			</td>
 		</tr>
