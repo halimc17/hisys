@@ -13,6 +13,15 @@
     }
     sibuk = true;
     var q = antrean.shift();
+    if (q.penanda) {
+      try {
+        q.penanda();
+      } finally {
+        sibuk = false;
+        setTimeout(lanjut, 0);
+      }
+      return;
+    }
     var selesai = false;
     function bungkus() {
       try {
@@ -42,7 +51,77 @@
     antrean.push({ tujuan: tujuan, param: param, fn: fn });
     lanjut();
   };
+
+  // jalankan fn setelah semua permintaan yang sudah antre selesai
+  window.setelahAntrean = function (fn) {
+    antrean.push({ penanda: fn });
+    lanjut();
+  };
 })();
+
+// Saat form Edit diisi, event change select2 memuat ulang pilihan select yang bergantung (lokasi tugas, divisi,
+// status karyawan, sistem gaji, golongan) lewat AJAX, sehingga pilihan terisi lagi dengan daftar baru dan nilai karyawan
+// hilang (tampil "Pilih Data"). Nilai dari XML disimpan dulu, lalu dipasang ulang setelah semua pemuatan selesai,
+// tanpa memicu onchange (hanya menyegarkan tampilan select2).
+function isiTanpaPemicu(id, nilai) {
+  var el = document.getElementById(id);
+  if (!el || nilai === undefined || nilai === null || nilai === "*") {
+    return;
+  }
+  var ada = false;
+  for (var i = 0; i < el.options.length; i++) {
+    if (el.options[i].value == nilai) {
+      el.selectedIndex = i;
+      ada = true;
+      break;
+    }
+  }
+  // Daftar lokasi tugas hanya memuat unit milik pengguna yang login (kecuali holding atau kanwil), sehingga lokasi
+  // karyawan dari unit lain tidak ada di daftar dan tampil "Pilih Data". Tambahkan pilihannya agar tampil dan tersimpan benar.
+  if (!ada && id == "lokasitugas" && nilai !== "") {
+    el.options[el.options.length] = new Option(nilai, nilai);
+    el.selectedIndex = el.options.length - 1;
+    ada = true;
+  }
+  if (ada && window.jQuery) {
+    // ubah tampilan select2 saja; trigger("change...") akan menjalankan atribut onchange dan memuat ulang pilihan lain
+    var tampil = jQuery(el).next(".select2-container").find(".select2-selection__rendered");
+    var opsi = el.options[el.selectedIndex];
+    if (tampil.length && opsi) {
+      tampil.text(opsi.text).attr("title", opsi.text);
+    }
+  }
+}
+
+function terapkanNilaiEdit() {
+  var n = {
+    lokasitugas: window.lokasitugas,
+    subbagian: window.subbagian,
+    statuskaryawan: window.statuskaryawan,
+    sistemgaji: window.sistemgaji,
+    kodegolongan: window.kodegolongan,
+  };
+  var alokasiXml = window.alokasi;
+  setelahAntrean(function () {
+    isiTanpaPemicu("lokasitugas", n.lokasitugas);
+    isiTanpaPemicu("statuskaryawan", n.statuskaryawan);
+    isiTanpaPemicu("sistemgaji", n.sistemgaji);
+    isiTanpaPemicu("kodegolongan", n.kodegolongan);
+    var a = document.getElementById("alokasi");
+    if (a && alokasiXml !== undefined && alokasiXml !== "*") {
+      a.value = alokasiXml;
+    }
+    // divisi bergantung pada lokasi tugas: muat daftar divisi lokasi itu, lalu pilih divisi karyawan
+    if (n.lokasitugas && n.lokasitugas !== "*" && typeof getDivisiX2 === "function") {
+      getDivisiX2(n.lokasitugas, "subbagian", "pilihdata");
+      setelahAntrean(function () {
+        isiTanpaPemicu("subbagian", n.subbagian);
+      });
+    } else {
+      isiTanpaPemicu("subbagian", n.subbagian);
+    }
+  });
+}
 
 function gettanggalangkat(){
 	statuskaryawan= document.getElementById('statuskaryawan').value;
@@ -727,8 +806,17 @@ function simpanKaryawan() {
 		kota='-';
 	}
 	
-	if (noktp == '' || alamataktif == '' || kota == '' || tempatlahir == '' || tanggallahir.length != 10 || tanggalmasuk.length != 10 || statuskaryawan == '') {
-		alertify.alert('ID.Num/KTP,Address/Alamat, City/Kota,\nPlace Of Birth/Tempat lahir, Birth.Date/Tgl.lahir,\nJoin.date/Tgl.Masuk,\nStatus Karyawan\n are Obligatory');
+	// sebutkan field yang kosong, bukan satu pesan umum
+	var kurang = [];
+	if (noktp == '') { kurang.push('No. KTP'); }
+	if (alamataktif == '') { kurang.push('Alamat KTP'); }
+	if (kota == '') { kurang.push('Kota'); }
+	if (tempatlahir == '') { kurang.push('Tempat Lahir'); }
+	if (tanggallahir.length != 10) { kurang.push('Tanggal Lahir (dd-mm-yyyy)'); }
+	if (tanggalmasuk.length != 10) { kurang.push('Tanggal Masuk (dd-mm-yyyy)'); }
+	if (statuskaryawan == '') { kurang.push('Status Karyawan'); }
+	if (kurang.length > 0) {
+		alertify.alert('Wajib diisi / Obligatory:\n' + kurang.join(', '));
 	} else if ((tipekaryawan == '6') && (tanggalkeluar == '' || tanggalkeluar == '00-00-0000')) {
 		alertify.alert('ID: Karyawan kontrak harus diisi tanggal keluarnya sebagai tanggal akhir kontrak\nEN:Employee with Contract agreement must be filled discharge date as the end date of the contract');
 	} else if ((tipekaryawan == '4') && (statuskaryawan != 'Aktif' && statuskaryawan != 'Keluar' && statuskaryawan != 'Percobaan' )) {
@@ -2525,6 +2613,7 @@ function loadFormKaryawan(tex) {
 
 	//=========================
 	//enable save button each tab
+	terapkanNilaiEdit();
 	disabledonpayroll(tipekaryawan);
 	enableOtherButton();
 	loadExperience('queryonly', karyawanid);
@@ -2959,6 +3048,7 @@ function loadFormKaryawanhist(tex) {
 
 	//=========================
 	//enable save button each tab
+	terapkanNilaiEdit();
 	disabledonpayroll(tipekaryawan);
 	enableOtherButton();
 	loadExperience('queryonly', karyawanid);

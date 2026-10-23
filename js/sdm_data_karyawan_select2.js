@@ -12,11 +12,14 @@
 			if (!$box.length) {
 				return;
 			}
-			var tampil = $.trim($box.find('.select2-selection__rendered').text());
+			var $tampil = $box.find('.select2-selection__rendered');
+			var tampil = $.trim($tampil.text());
 			var opt = this.options[this.selectedIndex];
 			var asli = opt ? $.trim(opt.text) : '';
 			if (tampil !== asli) {
-				$el.trigger('change.select2');
+				// hanya ubah teks tampilan. Jangan memakai trigger('change.select2'): jQuery ikut menjalankan atribut onchange
+				// (getEstateX, getDivisiX2, dan lain-lain) sehingga pilihan select lain dimuat ulang dan nilainya hilang.
+				$tampil.text(asli).attr('title', asli);
 			}
 		});
 	}
