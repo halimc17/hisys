@@ -1,3 +1,49 @@
+// Permintaan AJAX halaman Data Karyawan dijalankan berurutan.
+// Objek `con` dipakai bersama oleh semua permintaan, sehingga permintaan baru (misalnya yang dipicu event change
+// select2 saat form Edit diisi) membatalkan permintaan yang sedang berjalan. Akibatnya rantai pemuatan list
+// (pengalaman, pendidikan, training, keluarga, alamat) terhenti dan list kosong.
+(function () {
+  var aslinya = post_response_text;
+  var antrean = [];
+  var sibuk = false;
+
+  function lanjut() {
+    if (sibuk || antrean.length == 0) {
+      return;
+    }
+    sibuk = true;
+    var q = antrean.shift();
+    var selesai = false;
+    function bungkus() {
+      try {
+        q.fn();
+      } finally {
+        if (con.readyState == 4 && !selesai) {
+          selesai = true;
+          sibuk = false;
+          setTimeout(lanjut, 0);
+        }
+      }
+    }
+    try {
+      aslinya(q.tujuan, q.param, bungkus);
+    } catch (e) {
+      sibuk = false;
+      setTimeout(lanjut, 0);
+      throw e;
+    }
+  }
+
+  post_response_text = function (tujuan, param, fn) {
+    if (!isSaveResponse(param)) {
+      alertify.alert("errorcode : Hindari penggunaan kata : ERROR, WARNING dan GAGAL");
+      throw Error("Stop!");
+    }
+    antrean.push({ tujuan: tujuan, param: param, fn: fn });
+    lanjut();
+  };
+})();
+
 function gettanggalangkat(){
 	statuskaryawan= document.getElementById('statuskaryawan').value;
 	tipekaryawan= document.getElementById('tipekaryawan').value;
@@ -964,15 +1010,15 @@ function simpanPengalaman() {
 	} else if (namaperusahaan == '' || bidangusaha == '' || jabatan == '') {
 		alertify.alert('Data Incomplete');
 	} else {
-		param = 'namaperusahaan=' + namaperusahaan + '&bidangusaha=' + bidangusaha;
-		param += '&blnmasuk=' + blnmasuk + '&thnmasuk=' + thnmasuk;
-		param += '&blnkeluar=' + blnkeluar + '&thnkeluar=' + thnkeluar;
-		param += '&jabatan=' + jabatan + '&bagian=' + bagian;
-		param += '&alamat=' + alamat + '&karyawanid=' + karyawanid;
-		param += '&gajipokok=' + gajipokok + '&alasanberhenti=' + alasanberhenti;
-		param += '&tunjangan=' + tunjangan + '&lokasicuti=' + lokasicuti;
-		param += '&method=' + method;
-		param += '&nomor=' + nomor;
+		param = 'namaperusahaan=' + encodeURIComponent(namaperusahaan) + '&bidangusaha=' + encodeURIComponent(bidangusaha);
+		param += '&blnmasuk=' + encodeURIComponent(blnmasuk) + '&thnmasuk=' + encodeURIComponent(thnmasuk);
+		param += '&blnkeluar=' + encodeURIComponent(blnkeluar) + '&thnkeluar=' + encodeURIComponent(thnkeluar);
+		param += '&jabatan=' + encodeURIComponent(jabatan) + '&bagian=' + encodeURIComponent(bagian);
+		param += '&alamat=' + encodeURIComponent(alamat) + '&karyawanid=' + encodeURIComponent(karyawanid);
+		param += '&gajipokok=' + encodeURIComponent(gajipokok) + '&alasanberhenti=' + encodeURIComponent(alasanberhenti);
+		param += '&tunjangan=' + encodeURIComponent(tunjangan) + '&lokasicuti=' + encodeURIComponent(lokasicuti);
+		param += '&method=' + encodeURIComponent(method);
+		param += '&nomor=' + encodeURIComponent(nomor);
 
 		tujuan = 'sdm_slave_save_riwayat_pekerjaan.php';
 		post_response_text(tujuan, param, respog);
@@ -1046,19 +1092,19 @@ function simpanPendidikan() {
 	pendidikanketerangan = trim(document.getElementById('pendidikanketerangan').value);
 	karyawanid = document.getElementById('karyawanid').value;
 
-	if (tahunlulus == '' || namasekolah == '') {
+	if (levelpendidikan2 == '' || tahunlulus == '' || namasekolah == '') {
 		alertify.alert('Data incomplete');
 	} else if (levelpendidikan2 > levelpendidikan) {
 		alertify.alert('Education level greater than listed in main data');
 		return;
 	} else {
-		param = 'levelpendidikan=' + levelpendidikan2 + '&tahunlulus=' + tahunlulus;
-		param += '&spesialisasi=' + spesialisasi + '&gelar=' + gelar;
-		param += '&namasekolah=' + namasekolah + '&nilai=' + nilai;
-		param += '&pendidikankota=' + pendidikankota + '&pendidikanketerangan=' + pendidikanketerangan;
-		param += '&method=' + method;
-		param += '&kode=' + kode;
-		param += '&karyawanid=' + karyawanid;
+		param = 'levelpendidikan=' + encodeURIComponent(levelpendidikan2) + '&tahunlulus=' + encodeURIComponent(tahunlulus);
+		param += '&spesialisasi=' + encodeURIComponent(spesialisasi) + '&gelar=' + encodeURIComponent(gelar);
+		param += '&namasekolah=' + encodeURIComponent(namasekolah) + '&nilai=' + encodeURIComponent(nilai);
+		param += '&pendidikankota=' + encodeURIComponent(pendidikankota) + '&pendidikanketerangan=' + encodeURIComponent(pendidikanketerangan);
+		param += '&method=' + encodeURIComponent(method);
+		param += '&kode=' + encodeURIComponent(kode);
+		param += '&karyawanid=' + encodeURIComponent(karyawanid);
 		// alertify.alert(param);
 		// return;
 		tujuan = 'sdm_slave_save_riwayat_pendidikan.php';
@@ -1128,13 +1174,13 @@ function simpanTraining() {
 	if (jenistraining == '' || judultraining == '' || penyelenggara == '') {
 		alertify.alert('Data incomplete');
 	} else {
-		param = 'jenistraining=' + jenistraining + '&judultraining=' + judultraining;
-		param += '&penyelenggara=' + penyelenggara;
+		param = 'jenistraining=' + encodeURIComponent(jenistraining) + '&judultraining=' + encodeURIComponent(judultraining);
+		param += '&penyelenggara=' + encodeURIComponent(penyelenggara);
 		// param+='&trainingblnmulai='+trainingblnmulai+'&trainingthnmulai='+trainingthnmulai+'&trainingblnselesai='+trainingblnselesai+'&trainingthnselesai='+trainingthnselesai;
-		param += '&tanggalmulai=' + tanggalmulai + '&tanggalselesai=' + tanggalselesai;
-		param += '&sertifikat=' + sertifikat;
-		param += '&karyawanid=' + karyawanid + '&biaya=' + biaya;
-		param += '&method=' + method + '&nomor=' + nomor;
+		param += '&tanggalmulai=' + encodeURIComponent(tanggalmulai) + '&tanggalselesai=' + encodeURIComponent(tanggalselesai);
+		param += '&sertifikat=' + encodeURIComponent(sertifikat);
+		param += '&karyawanid=' + encodeURIComponent(karyawanid) + '&biaya=' + encodeURIComponent(biaya);
+		param += '&method=' + encodeURIComponent(method) + '&nomor=' + encodeURIComponent(nomor);
 		tujuan = 'sdm_slave_save_riwayat_training.php';
 		post_response_text(tujuan, param, respog);
 	}
@@ -1210,13 +1256,13 @@ function simpanKeluarga() {
 	if (keluarganama == '') {
 		alertify.alert('Data incomplete');
 	} else {
-		param = 'keluarganama=' + keluarganama + '&keluargajk=' + keluargajk;
-		param += '&keluargatmplahir=' + keluargatmplahir + '&keluargatgllahir=' + keluargatgllahir;
-		param += '&keluargapekerjaan=' + keluargapekerjaan + '&keluargatelp=' + keluargatelp;
-		param += '&keluargaemail=' + keluargaemail + '&karyawanid=' + karyawanid;
-		param += '&hubungankeluarga=' + hubungankeluarga + '&keluargastatus=' + keluargastatus;
-		param += '&keluargapendidikan=' + keluargapendidikan + '&keluargatanggungan=' + keluargatanggungan + '&keluargaemplasment=' + keluargaemplasment + '&keluargabpjstanggungan=' + keluargabpjstanggungan;
-		param += '&method=' + method + '&nomor=' + nomor;
+		param = 'keluarganama=' + encodeURIComponent(keluarganama) + '&keluargajk=' + encodeURIComponent(keluargajk);
+		param += '&keluargatmplahir=' + encodeURIComponent(keluargatmplahir) + '&keluargatgllahir=' + encodeURIComponent(keluargatgllahir);
+		param += '&keluargapekerjaan=' + encodeURIComponent(keluargapekerjaan) + '&keluargatelp=' + encodeURIComponent(keluargatelp);
+		param += '&keluargaemail=' + encodeURIComponent(keluargaemail) + '&karyawanid=' + encodeURIComponent(karyawanid);
+		param += '&hubungankeluarga=' + encodeURIComponent(hubungankeluarga) + '&keluargastatus=' + encodeURIComponent(keluargastatus);
+		param += '&keluargapendidikan=' + encodeURIComponent(keluargapendidikan) + '&keluargatanggungan=' + encodeURIComponent(keluargatanggungan) + '&keluargaemplasment=' + encodeURIComponent(keluargaemplasment) + '&keluargabpjstanggungan=' + encodeURIComponent(keluargabpjstanggungan);
+		param += '&method=' + encodeURIComponent(method) + '&nomor=' + encodeURIComponent(nomor);
 		//alertify.alert(param);
 		tujuan = 'sdm_slave_save_keluarga.php';
 		post_response_text(tujuan, param, respog);
@@ -1260,6 +1306,13 @@ function delKeluarga(karyawanid, nomor) {
 				error_catch(con.status);
 			}
 		}
+	}
+}
+
+// anak belum menikah: status perkawinan ikut "BelumKawin" saat hubungan dipilih Anak
+function sesuaikanStatusKeluarga() {
+	if (document.getElementById('hubungankeluarga').value == 'Anak') {
+		setValue2('keluargastatus', 'BelumKawin');
 	}
 }
 
@@ -1353,10 +1406,10 @@ function simpanAlamat() {
 	if (alamatalamat == '') {
 		alertify.alert('Data incomplete');
 	} else {
-		param = 'alamatalamat=' + alamatalamat + '&karyawanid=' + karyawanid;
-		param += '&alamatkota=' + alamatkota + '&alamatkodepos=' + alamatkodepos;
-		param += '&alamattelepon=' + alamattelepon + '&alamatemplasement=' + alamatemplasement;
-		param += '&alamatstatus=' + alamatstatus + '&alamatprovinsi=' + alamatprovinsi+'&method='+method + '&nomor='+nomor;
+		param = 'alamatalamat=' + encodeURIComponent(alamatalamat) + '&karyawanid=' + encodeURIComponent(karyawanid);
+		param += '&alamatkota=' + encodeURIComponent(alamatkota) + '&alamatkodepos=' + encodeURIComponent(alamatkodepos);
+		param += '&alamattelepon=' + encodeURIComponent(alamattelepon) + '&alamatemplasement=' + encodeURIComponent(alamatemplasement);
+		param += '&alamatstatus=' + encodeURIComponent(alamatstatus) + '&alamatprovinsi=' + encodeURIComponent(alamatprovinsi)+'&method=' + encodeURIComponent(method) + '&nomor=' + encodeURIComponent(nomor);
 		// return;
 		tujuan = 'sdm_slave_save_alamat_karyawan.php';
 		if (confirm('Saving, are you sure..?')) {
@@ -1471,9 +1524,9 @@ function simpanRAK() {
 				} else if (data == "") {
 					alertify.alert('Data Upload kosong !');
 				} else {
-					param = 'jumlahpotongan=' + jumlahpotongan + '&karyawanid=' + karyawanid;
-					param += '&listkoperasi=' + listkoperasidata + '&jenispotongan=' + jenispotongandata;
-					param += '&tahunpotongan=' + tahunpotongandata + '&fileupload=' + data;
+					param = 'jumlahpotongan=' + encodeURIComponent(jumlahpotongan) + '&karyawanid=' + encodeURIComponent(karyawanid);
+					param += '&listkoperasi=' + encodeURIComponent(listkoperasidata) + '&jenispotongan=' + encodeURIComponent(jenispotongandata);
+					param += '&tahunpotongan=' + encodeURIComponent(tahunpotongandata) + '&fileupload=' + encodeURIComponent(data);
 					tujuan = 'sdm_slave_save_keanggotaan_karyawan.php?method=insert';
 					if (confirm('Saving, are you sure..?')) {
 						post_response_text(tujuan, param, respog);

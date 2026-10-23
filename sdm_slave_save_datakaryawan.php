@@ -526,9 +526,10 @@ switch ($method) {
 			die();
 		}
 		break;
-	case 'delete':
-		$strx = "delete from " . $dbname . ".datakaryawan where karyawanid=" . $karyawanid;
-		break;
+	// hapus karyawan dinonaktifkan: fitur ini memang tidak ada. Method 'delete' kini jatuh ke default (tidak menjalankan apa pun)
+	// case 'delete':
+	// 	$strx = "delete from " . $dbname . ".datakaryawan where karyawanid=" . $karyawanid;
+	// 	break;
 	case 'update':
 
 		if ($tipekaryawan == '4' and $sistemgaji != 'Harian') {

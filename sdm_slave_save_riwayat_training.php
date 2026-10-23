@@ -1,7 +1,8 @@
-<?
+<?php
 require_once('master_validation.php');
 require_once('config/connection.php');
 require_once('lib/nangkoelib.php');
+require_once('lib/sdm_karyawan_helper.php');
 
 $jenistraining=checkPostGet('jenistraining','');
 $judultraining=checkPostGet('judultraining','');
@@ -9,79 +10,97 @@ $penyelenggara=checkPostGet('penyelenggara','');
 $tanggalmulai=checkPostGet('tanggalmulai','');
 $tanggalselesai=checkPostGet('tanggalselesai','');
 
-$sertifikat=checkPostGet('sertifikat','');
+$sertifikat=checkPostGet('sertifikat','')=='1'?1:0;
 $biaya=checkPostGet('biaya','');
+if($biaya=='' or !is_numeric($biaya))
+   $biaya=0;
 
-$karyawanid=checkPostGet('karyawanid','');
-$nomor=checkPostGet('nomor','');
+$karyawanid=sdmId(checkPostGet('karyawanid',''));
+$nomor=sdmId(checkPostGet('nomor',''));
+$method=checkPostGet('method','');
 
-if(isset($nilai) and $nilai=='')
-   $nilai=0;
 if(isset($_POST['del']) or ($tanggalmulai!='' and $tanggalselesai!='') or isset($_POST['queryonly']))
 {
-if(isset($_POST['del']) and $_POST['del']=='true')
-{
-        $str="delete from ".$dbname.".sdm_karyawantraining where nomor=".$nomor;
-}
-else if(isset($_POST['queryonly']))
-{
-        $str="";
-}
-else
-{
-        if ($_POST['method'] == 'insert') {
-                $str="insert into ".$dbname.".sdm_karyawantraining
-                (	`karyawanid`,
-                                `jenistraining`,
-                                `tanggalmulai`,
-                                `tanggalselesai`,
-                                `judultraining`,
-                                `penyelenggara`,
-                                `sertifikat`,
-                                `biaya`
-                        )
-                        values(".$karyawanid.",
-                        '".$jenistraining."',
-                        '".tanggalsystem($tanggalmulai)."',
-                        '".tanggalsystem($tanggalselesai)."',
-                        '".$judultraining."',
-                        '".$penyelenggara."',
-                        '".$sertifikat."',
-                        '".$biaya."'
-                        )";
-        }else{
-                ##query update
-                $str="update ".$dbname.".sdm_karyawantraining set karyawanid='".$karyawanid."',jenistraining='".$jenistraining."', judultraining='".$judultraining."', tanggalmulai='".tanggalsystem($tanggalmulai)."', tanggalselesai='".tanggalsystem($tanggalselesai)."',penyelenggara='".$penyelenggara."', sertifikat='".$sertifikat."', biaya='".$biaya."' where nomor='".$nomor."'";
-    
+        $galat='';
+        try{
+                if(isset($_POST['del']) and $_POST['del']=='true')
+                {
+                        $cek=$owlPDO->prepare("select count(*) from ".$dbname.".sdm_karyawantraining where nomor=? and karyawanid=?");
+                        $cek->execute(array($nomor,$karyawanid));
+                        if($cek->fetchColumn()==0)
+                        {
+                                $galat=" Gagal  !: Data tidak ditemukan.\n";
+                        }
+                        else
+                        {
+                                $st=$owlPDO->prepare("delete from ".$dbname.".sdm_karyawantraining where nomor=? and karyawanid=?");
+                                $st->execute(array($nomor,$karyawanid));
+                        }
+                }
+                else if(!isset($_POST['queryonly']))
+                {
+                        $tglmulai=sdmTglSistem($tanggalmulai);
+                        $tglselesai=sdmTglSistem($tanggalselesai);
+                        if($tglmulai===null or $tglselesai===null)
+                        {
+                                $galat=" Gagal  !: Tanggal mulai dan tanggal selesai tidak valid.\n";
+                        }
+                        else if($method=='insert')
+                        {
+                                $st=$owlPDO->prepare("insert into ".$dbname.".sdm_karyawantraining
+                                        (`karyawanid`,`jenistraining`,`tanggalmulai`,`tanggalselesai`,`judultraining`,`penyelenggara`,`sertifikat`,`biaya`)
+                                        values(?,?,?,?,?,?,?,?)");
+                                $st->execute(array($karyawanid,$jenistraining,$tglmulai,$tglselesai,$judultraining,$penyelenggara,$sertifikat,$biaya));
+                        }
+                        else
+                        {
+                                $cek=$owlPDO->prepare("select count(*) from ".$dbname.".sdm_karyawantraining where nomor=? and karyawanid=?");
+                                $cek->execute(array($nomor,$karyawanid));
+                                if($cek->fetchColumn()==0)
+                                {
+                                        $galat=" Gagal  !: Data tidak ditemukan.\n";
+                                }
+                                else
+                                {
+                                        $st=$owlPDO->prepare("update ".$dbname.".sdm_karyawantraining set jenistraining=?,judultraining=?,tanggalmulai=?,tanggalselesai=?,
+                                                penyelenggara=?,sertifikat=?,biaya=? where nomor=? and karyawanid=?");
+                                        $st->execute(array($jenistraining,$judultraining,$tglmulai,$tglselesai,$penyelenggara,$sertifikat,$biaya,$nomor,$karyawanid));
+                                }
+                        }
+                }
         }
-}
- if($str!=''){
-    try{$owlPDO->exec($str); }catch (PDOException $e) {print " Gagal  !: " . $e->getMessage() . "\n";}
- }
-         $str="select a.*,case a.sertifikat when 0 then 'N' else 'Y' end as bersertifikat, b.jenistraining as jnstraining 
+        catch(PDOException $e)
+        {
+                $galat=sdmGalat($e,'Training dengan penyelenggara dan tanggal mulai yang sama sudah ada.');
+        }
+        if($galat!='')
+        {
+                print $galat;
+        }
+         $st=$owlPDO->prepare("select a.*,case a.sertifikat when 0 then 'N' else 'Y' end as bersertifikat, b.jenistraining as jnstraining
                from ".$dbname.".sdm_karyawantraining a
                    left join ".$dbname.".sdm_5jenistraining b
                    on a.jenistraining = b.kodetraining
-                        where a.karyawanid=".$karyawanid." 
-                        order by a.tanggalmulai desc";	
-        $res=$owlPDO->query($str) or die(print " Gagal: ".PDOException::getMessage());
-        $res->setFetchMode(PDO::FETCH_OBJ);
+                        where a.karyawanid=?
+                        order by a.tanggalmulai desc");
+        $st->execute(array($karyawanid));
+        $st->setFetchMode(PDO::FETCH_OBJ);
          $no=0;
-         while($bar=$res->fetch())
+         while($bar=$st->fetch())
          {
-         $no+=1;	
+         $no+=1;
          echo"	  <tr class=rowcontent>
                           <td class=firsttd align=center>".$no."</td>
-                          <td>".$bar->jnstraining."</td>			  
-                          <td>".$bar->judultraining."</td>
-                          <td>".$bar->penyelenggara."</td>			  
-                          <td>".tanggalnormal($bar->tanggalmulai)."</td>			  
-                          <td>".tanggalnormal($bar->tanggalselesai)."</td>
+                          <td>".sdmH($bar->jnstraining)."</td>
+                          <td>".sdmH($bar->judultraining)."</td>
+                          <td>".sdmH($bar->penyelenggara)."</td>
+                          <td>".sdmTgl($bar->tanggalmulai)."</td>
+                          <td>".sdmTgl($bar->tanggalselesai)."</td>
                           <td>".$bar->bersertifikat."</td>
-                          <td align=right>".$bar->biaya."</td>
-                          <td style='text-align:center;'><img src=images/skyblue/delete.png class=resicon  title='Delete' onclick=\"delTraining('".$karyawanid."','".$bar->nomor."');\"></td>
-                          <td align=center><img src=images/application/application_edit.png class=resicon  title='Edit' onclick=\"editTraining('".$bar->jenistraining."','".$bar->judultraining."','".tanggalnormal($bar->tanggalmulai)."','".tanggalnormal($bar->tanggalselesai)."','".$bar->penyelenggara."','".$bar->sertifikat."','".$bar->biaya."','".$bar->nomor."');\"></td>
-                        </tr>";	 	
+                          <td align=right>".sdmUang($bar->biaya)."</td>
+                          <td style='text-align:center;'><img src=images/skyblue/delete.png class=resicon  title='Delete' onclick=\"delTraining('".$karyawanid."','".sdmJs($bar->nomor)."');\"></td>
+                          <td align=center><img src=images/application/application_edit.png class=resicon  title='Edit' onclick=\"editTraining('".sdmJs($bar->jenistraining)."','".sdmJs($bar->judultraining)."','".sdmJs(sdmTgl($bar->tanggalmulai))."','".sdmJs(sdmTgl($bar->tanggalselesai))."','".sdmJs($bar->penyelenggara)."','".sdmJs($bar->sertifikat)."','".sdmJs($bar->biaya)."','".sdmJs($bar->nomor)."');\"></td>
+                        </tr>";
          }
 }
 else

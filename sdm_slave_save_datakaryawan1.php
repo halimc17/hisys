@@ -2,10 +2,11 @@
 require_once('master_validation.php');
 require_once('config/connection.php');
 require_once('lib/nangkoelib.php');
+require_once('lib/sdm_karyawan_helper.php');
 require_once('lib/fpdf.php');
 require_once('lib/zLib.php');
 
-$karyawanid=$_GET['karyawanid'];
+$karyawanid=sdmId(isset($_GET['karyawanid']) ? $_GET['karyawanid'] : 0);
 //$namakaryawan=$_GET['namakaryawan'];
 
 //=============

@@ -1,13 +1,17 @@
-<?
+<?php
 require_once('master_validation.php');
 require_once('config/connection.php');
 require_once('lib/nangkoelib.php');
+require_once('lib/sdm_karyawan_helper.php');
 require_once('lib/zLib.php');
 $method	= "";
 $result = array();
-$tipedoc=""; 
+$tipedoc="";
 $karyawanid='';
 $fileupload='';
+$kriteriaefil='';
+$tipefile='';
+$namafile='';
 
 if(isset($_GET['method'])){
 	$method = $_GET['method'];
@@ -31,55 +35,58 @@ if(isset($_POST['namafile'])){
 	$namafile = $_POST['namafile'];
 }
 $param = $_POST;if(count($param)==0){$param = $_GET;}
+$karyawanidNum = sdmId($karyawanid);
 
+# nama berkas aman: tanpa folder dan karakter khusus
+function dok_namaaman($v){
+	$v = basename(str_replace('\\', '/', (string)$v));
+	$v = preg_replace('/[^A-Za-z0-9._ -]/', '_', $v);
+	return ltrim($v, '.');
+}
+# simpan berkas dari data URI; hanya jpg, png, pdf. Hasil false bila berkas ditolak
 function upload_file($pathlocation,$data,$rename){
-	$result = "";
-	$ext ="";
-	if($data != ""){
-		$fileTrans	=$data;
-		if($fileTrans != ""){
-			$path = $pathlocation;
-			if (!file_exists($path)) {
-				mkdir($path, 0777, true);
-			}
-			$newFile=$fileTrans;
-			$file =explode(',',$newFile);
-			
-			$file =str_replace(' ', '+', $file[1]);
-			$stream = base64_decode($file);
-			$f = finfo_open();
-			$mime_type = finfo_buffer($f, $stream, FILEINFO_MIME_TYPE);
-
-			if ($mime_type=="image/jpeg" ){
-				$ext = ".jpg";
-			}elseif ($mime_type=="image/png" ){
-				$ext = ".png";
-			}elseif ($mime_type=="application/pdf" ){
-				$ext = ".pdf";
-			}
-			$filename= $path.$rename.$ext;	
-			file_put_contents($filename, $stream);			
-		}
-		$result = $rename.$ext;
+	if($data == ""){
+		return "";
 	}
-	return $result;
+	$file = explode(',',$data);
+	if(count($file) < 2){
+		return false;
+	}
+	$stream = base64_decode(str_replace(' ', '+', $file[1]), true);
+	if($stream === false || $stream === ""){
+		return false;
+	}
+	$f = finfo_open();
+	$mime_type = finfo_buffer($f, $stream, FILEINFO_MIME_TYPE);
+	$allowed = array("image/jpeg" => ".jpg", "image/png" => ".png", "application/pdf" => ".pdf");
+	if(!isset($allowed[$mime_type])){
+		return false;
+	}
+	if (!file_exists($pathlocation)) {
+		mkdir($pathlocation, 0755, true);
+	}
+	$filename = $rename.$allowed[$mime_type];
+	file_put_contents($pathlocation.$filename, $stream);
+	return $filename;
 }
 $str = array();
 switch($method){
 
 	case 'showupload':
-		if($param['jenis']!='' and $param['jenis']!='undefined'){
-			$where=" and id='".$param['jenis']."'";
+		$optkriteria = '';
+		if(isset($param['jenis']) and preg_match('/^[A-Za-z0-9_-]+$/', $param['jenis'])){
+			$restipe = $owlPDO->prepare("select * from ".$dbname.".sdm_5tipedokumen where isactive='1' and id=?");
+			$restipe->execute(array($param['jenis']));
+		}else{
+			$restipe = $owlPDO->prepare("select * from ".$dbname.".sdm_5tipedokumen where isactive='1'");
+			$restipe->execute();
 		}
-		$tab="";
-		$cektipe="select * from ".$dbname.".sdm_5tipedokumen where isactive='1' ".$where."";
-		$restipe = $owlPDO->query($cektipe) or die(print " Gagal: " . PDOException::getMessage());
 		$restipe->setFetchMode(PDO::FETCH_OBJ);
 		while($baru=$restipe->fetch()){
-			@$optkriteria.="<option value='".$baru->id."'>".$baru->namatipe."</option>";
-	    }	
-		
-		$tab.="<table cellspacing='1' border='0' id='uploadpopup'>
+			$optkriteria.="<option value='".sdmH($baru->id)."'>".sdmH($baru->namatipe)."</option>";
+	    }
+
+		$tab="<table cellspacing='1' border='0' id='uploadpopup'>
 			<tr>
 				<td>Kriteria</td>
 				<td>:</td>
@@ -102,7 +109,7 @@ switch($method){
 			</tr>
 		</table>
 		<p />";
-		
+
 		$tab.="
 			<table class='sortable' cellpadding=5 cellspacing='1' border='0' width=100%>
 				<thead>
@@ -118,7 +125,7 @@ switch($method){
 				</tbody>
 			</table>
 		";
-		
+
 		echo $tab;
 	break;
 
@@ -128,44 +135,25 @@ switch($method){
 	}
         $tgl = date("YmdHis");
         $data = $_POST;
-        
-        if($data['fileupload']!='')
+
+        if(isset($data['fileupload']) and $data['fileupload']!='')
         {
-            if($_FILES['file']['error']==0)
+            if(isset($_FILES['file']) and $_FILES['file']['error']==0)
             {
-                $filetype = strtolower('.'.substr($_FILES['file']['name'],strripos($_FILES['file']['name'],'.')+1));
-                $newfilename = str_replace($filetype,'',$_FILES['file']['name']);
+                $namaasli = dok_namaaman($_FILES['file']['name']);
+                $filetype = strtolower('.'.substr($namaasli,strripos($namaasli,'.')+1));
+                $newfilename = substr($namaasli,0,strripos($namaasli,'.'));
+                if($newfilename==='' or $newfilename===false)
+                {
+                    $newfilename = 'dokumen';
+                }
                 $filename = $newfilename."_".$tgl."".$filetype;
-                $file_tmpname = $_FILES['file']['tmp_name'];        
-                
-                if(($filetype=='.jpeg')||($filetype=='.jpg')||($filetype=='.png')||($filetype=='.pdf')||($filetype=='.xls')||($filetype=='.xlsx')||($filetype=='.doc')||($filetype=='.docx')||($filetype=='.rar'))
+                $file_tmpname = $_FILES['file']['tmp_name'];
+
+                if(in_array($filetype, array('.jpeg','.jpg','.png','.pdf','.xls','.xlsx','.doc','.docx','.rar')))
                 {
                     if($_FILES['file']['size'] <= 512000)
                     {
-                        $newdata = array(
-                            'idfiledt'=>$idfiledt,
-                            'tipe'=>'1',
-                            'location'=>'fileupload/karyawan/'.$filename,
-                            'namafile'=>$filename,
-                            'formaticon'=>$filetype,
-                            'kriteriaefil'=>$kriteriaefil,
-                            'size'=>$_FILES['file']['size']
-                        );
-                        
-                        if($_SESSION['efiltgh'] != array())
-                        {
-                           /* foreach($_SESSION['efiltgh'] as $key=>$row)
-                            {
-                                if($row['namafile'] == $filename)
-                                {
-                                    exit("Warning : Item ini sudah pernah diinput sebelumnya.");
-                                }
-                            }
-                            array_push($_SESSION['efiltgh'],$newdata);
-                        }else{
-                            array_push($_SESSION['efiltgh'],$newdata);
-                        }*/
-                    }
                         move_uploaded_file($file_tmpname,"fileupload/karyawan/$filename");
                     }
                     else
@@ -176,26 +164,14 @@ switch($method){
                     exit("Warning : Format file upload harus jpg, jpeg, png, pdf, xls, xlsx, doc, docx, rar");
                 }
 
-                $str = "
-                insert into ".$dbname.".sdm_karyawandokumen
-             (`karyawanid`,
-              `tipedokumen`,
-              `namafile`,
-              `tipefile`,
-              `updateby`
-              )
-              values('".$karyawanid."',
-              '".$kriteriaefil."',
-              '".$filename."',
-              '".$filetype."',              
-              '".$_SESSION['standard']['userid']."'
-              )";
                 try{
-                    $owlPDO->exec($str);
-                    // copy($val['location'], "filegis/".$val['namafile']);
-                }catch (PDOException $e){print "DB Error  1!: ".$e->getMessage()."<br/>";die();}
-            
-            
+                    $st = $owlPDO->prepare("insert into ".$dbname.".sdm_karyawandokumen (`karyawanid`,`tipedokumen`,`namafile`,`tipefile`,`updateby`) values(?,?,?,?,?)");
+                    $st->execute(array($karyawanidNum,$kriteriaefil,$filename,$filetype,$_SESSION['standard']['userid']));
+                }catch (PDOException $e){
+                    error_log('data karyawan upload: '.$e->getMessage());
+                    print "Gagal, DB Error: data tidak dapat disimpan.<br/>";
+                    die();
+                }
             }
         }
     break;
@@ -203,100 +179,104 @@ switch($method){
     case 'loadfileskar':
       	$nmtipe=makeOption($dbname,'sdm_5tipedokumen','id,namatipe');
         $tab = "";
-        $q="select * from ".$dbname.".sdm_karyawandokumen  where karyawanid = '".$karyawanid."'";
-        $redy=$owlPDO->query($q) or die(print " Gagal: ".PDOException::getMessage());
+        $no = 0;
+        $redy=$owlPDO->prepare("select * from ".$dbname.".sdm_karyawandokumen where karyawanid = ?");
+        $redy->execute(array($karyawanidNum));
         $redy->setFetchMode(PDO::FETCH_OBJ);
-        $html = "";
         while($r=$redy->fetch()){
 			$no+=1;
 			$tab.="<tr class=rowcontent >
 				<td style='text-align:center'>".$no."</td>
-				<td style='text-align:center'>".$r->tipefile."</td>
-				<td style='text-align:center'>".$nmtipe[$r->tipedokumen]."</td>
-				<td style='text-align:center'>".$r->namafile."</td>
+				<td style='text-align:center'>".sdmH($r->tipefile)."</td>
+				<td style='text-align:center'>".sdmH(isset($nmtipe[$r->tipedokumen]) ? $nmtipe[$r->tipedokumen] : '')."</td>
+				<td style='text-align:center'>".sdmH($r->namafile)."</td>
 				<td style='text-align:center;width:25px'>
-					<a href='fileupload/karyawan/$r->namafile' download><img src=images/uploader/dwnld8.png class=resicon  title='PNG'></a>
-				</td>	
+					<a href='fileupload/karyawan/".rawurlencode($r->namafile)."' download><img src=images/uploader/dwnld8.png class=resicon  title='PNG'></a>
+				</td>
 				<td style='text-align:center;width:25px'>
-					<img src=images/application/application_delete.png class=resicon  title='Delete' onclick=\"deletefile('".$karyawanid."','".$r->tipedokumen."','".$r->namafile."');\" ></td>
+					<img src=images/application/application_delete.png class=resicon  title='Delete' onclick=\"deletefile('".$karyawanidNum."','".sdmJs($r->tipedokumen)."','".sdmJs($r->namafile)."');\" ></td>
 				</tr>";
-        }  
+        }
         echo $tab;
     break;
 
     case'deletefile':
-        
-            
-
-        $query="delete from `".$dbname."`.`sdm_karyawandokumen` where karyawanid='".$karyawanid."' and tipedokumen='".$tipefile."' and namafile='".$namafile."'";
-
-
+        $nm = dok_namaaman($namafile);
         try {
-            $owlPDO->exec($query);
+            $cek = $owlPDO->prepare("select count(*) from `".$dbname."`.`sdm_karyawandokumen` where karyawanid=? and tipedokumen=? and namafile=?");
+            $cek->execute(array($karyawanidNum,$tipefile,$nm));
+            if($cek->fetchColumn()==0){
+                print " Gagal  !: Data tidak ditemukan.";
+                break;
+            }
+            $st = $owlPDO->prepare("delete from `".$dbname."`.`sdm_karyawandokumen` where karyawanid=? and tipedokumen=? and namafile=?");
+            $st->execute(array($karyawanidNum,$tipefile,$nm));
         } catch (PDOException $e) {
-            print " Gagal, DB Error  3!: ".$e->getMessage()."<br/>";
+            error_log('data karyawan upload: '.$e->getMessage());
+            print " Gagal, DB Error: data tidak dapat dihapus.<br/>";
             die();
         }
-
-            $path = "fileupload/karyawan/".$namafile;
+        foreach(array("fileupload/karyawan/".$nm, "fileupload/karyawan/".$karyawanidNum."/".$nm) as $path){
+            if(is_file($path)){
                 unlink($path);
-            
-        
+            }
+        }
     break;
 	case 'insert':
-
-		
-		$path = "./fileupload/karyawan/".$karyawanid."/";
+		if($karyawanidNum == 0 || !preg_match('/^[A-Za-z0-9_-]{1,20}$/', $tipedoc)){
+			$result['wrong'] = "true";
+			$result['message'] = "Gagal  !: Data tidak lengkap atau tidak valid.";
+			$result['karyawanid'] = '';
+			$result['namafile'] = '';
+			break;
+		}
+		$path = "./fileupload/karyawan/".$karyawanidNum."/";
 		$rename = "document_".$tipedoc;
 		$namefile = upload_file($path,$fileupload,$rename);
-		$find = selectQuery($dbname,"sdm_karyawandokumen","karyawanid","karyawanid=".$karyawanid." and tipedokumen ='".$tipedoc."'");
-		$sdm_karyawandokumen = fetchData($find);
-		if(count($sdm_karyawandokumen) == 0){ 
-			$str[] ="insert into ".$dbname.".sdm_karyawandokumen
-			 (`karyawanid`,
-			  `tipedokumen`,
-			  `namafile`,
-			  `updateby`
-			  )
-			  values(".$karyawanid.",
-			  '".$tipedoc."',
-			  '".$namefile."',
-			  '".$_SESSION['standard']['userid']."'
-			  )";
-		}else{
-			$str[] ="update ".$dbname.".sdm_karyawandokumen set
-			 `namafile` ='$namefile',
-			 `updateby` ='".$_SESSION['standard']['userid']."'
-			 where karyawanid=".$karyawanid." and tipedokumen ='".$tipedoc."'";
+		if($namefile === false){
+			$result['wrong'] = "true";
+			$result['message'] = "Gagal  !: Berkas harus berupa JPG, PNG, atau PDF yang valid.";
+			$result['karyawanid'] = '';
+			$result['namafile'] = '';
+			break;
 		}
-	
-	if(count($str)>0){
+		$find = $owlPDO->prepare("select karyawanid from ".$dbname.".sdm_karyawandokumen where karyawanid=? and tipedokumen=?");
+		$find->execute(array($karyawanidNum,$tipedoc));
+		if(count($find->fetchAll()) == 0){
+			$str[] = array("insert into ".$dbname.".sdm_karyawandokumen (`karyawanid`,`tipedokumen`,`namafile`,`updateby`) values(?,?,?,?)",
+				array($karyawanidNum,$tipedoc,$namefile,$_SESSION['standard']['userid']));
+		}else{
+			$str[] = array("update ".$dbname.".sdm_karyawandokumen set `namafile`=?,`updateby`=? where karyawanid=? and tipedokumen=?",
+				array($namefile,$_SESSION['standard']['userid'],$karyawanidNum,$tipedoc));
+		}
+
 		for($i=0; $i<count($str); $i++){
 			try{
-				$owlPDO->exec($str[$i]);
-				$result['wrong'] = "false"; 
-				$result['message'] = ""; 
-				$result['karyawanid'] = $karyawanid; 
-				$result['namafile'] = $namefile; 
+				$st = $owlPDO->prepare($str[$i][0]);
+				$st->execute($str[$i][1]);
+				$result['wrong'] = "false";
+				$result['message'] = "";
+				$result['karyawanid'] = $karyawanid;
+				$result['namafile'] = $namefile;
 			}catch(PDOException $e){
-				$result['wrong'] = "true"; 
-				$result['message'] = "Gagal  !: " . $e->getMessage();
-				$result['karyawanid'] = ''; 
-				$result['namafile'] = ''; 
+				error_log('data karyawan upload: '.$e->getMessage());
+				$result['wrong'] = "true";
+				$result['message'] = "Gagal  !: Data tidak dapat disimpan.";
+				$result['karyawanid'] = '';
+				$result['namafile'] = '';
 			}
 		}
-	}
 	break;
 	case 'loaddata';
-		$find = selectQuery($dbname,"sdm_karyawandokumen","*","karyawanid=".$karyawanid."");
-		$data['listdoc'] = fetchData($find);
-		$find = selectQuery($dbname,"sdm_5tipedokumen","*","untuk = 'KARYAWAN' and isactive = '1'");
-		$data['listtipe'] = fetchData($find);
+		$find = $owlPDO->prepare("select * from ".$dbname.".sdm_karyawandokumen where karyawanid=?");
+		$find->execute(array($karyawanidNum));
+		$data['listdoc'] = $find->fetchAll(PDO::FETCH_ASSOC);
+		$find = $owlPDO->query("select * from ".$dbname.".sdm_5tipedokumen where untuk = 'KARYAWAN' and isactive = '1'");
+		$data['listtipe'] = $find->fetchAll(PDO::FETCH_ASSOC);
 		$result = $data;
 	break;
 }
 
-if(!empty($result)){	
+if(!empty($result)){
 	echo json_encode($result);
 }
-?>

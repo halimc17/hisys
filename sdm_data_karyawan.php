@@ -1173,7 +1173,7 @@ $frm[4]="<fieldset style='width:".$widthfieldset."px;'><legend>".$_SESSION['lang
                     <td>".$_SESSION['lang']['tanggallahir']."</td><td><input type=text class=myinputtext id=keluargatgllahir  style=width:200px onmousemove=setCalendar(this.id) size=10 maxlength=10 onkeypress=\"return false;\" readonly></td>
                  </tr>
                  <tr>
-                        <td>".$_SESSION['lang']['hubungan']."</td><td><select class='select2' id=hubungankeluarga  style='width:205px;'>".$opthubk."</select></td>
+                        <td>".$_SESSION['lang']['hubungan']."</td><td><select class='select2' id=hubungankeluarga  style='width:205px;' onchange=sesuaikanStatusKeluarga();>".$opthubk."</select></td>
                         <td>".$_SESSION['lang']['statusperkawinan']."</td><td><select class='select2' id=keluargastatus style='width:205px;'>".$optstk."</select></td>	 
                  </tr> 
                  <tr>

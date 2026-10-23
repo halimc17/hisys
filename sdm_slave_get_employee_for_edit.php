@@ -5,11 +5,13 @@ require_once('master_validation.php');
 require_once('config/connection.php');
 require_once('lib/nangkoelib.php');
 require_once('lib/zLib.php');
+require_once('lib/sdm_karyawan_helper.php');
 
 $karyawanid=$_POST['karyawanid'];
 if(empty($karyawanid)){
 	$karyawanid=$_GET['karyawanid'];
 }
+$karyawanid=sdmId($karyawanid);
 $str="select * from ".$dbname.".datakaryawan where karyawanid='".$karyawanid ."' limit 1";
 $res=$owlPDO->query($str) or die(print " Gagal: ".PDOException::getMessage());
 $res->setFetchMode(PDO::FETCH_OBJ);
@@ -41,6 +43,15 @@ while($bar=$res->fetch()){
 	//return XML format
 	//The receiver(js) will error when content is blank
 	// so check it first and if it blank replace with *
+	# semua nilai dari database dibuat aman untuk XML (& < > dan byte bukan UTF-8 sebelumnya merusak XML)
+	foreach (get_object_vars($bar) as $kol => $nilai) {
+		$bar->$kol = sdmXml($nilai);
+	}
+	foreach (array('namaprov', 'namakab', 'namakec', 'namades') as $nmarr) {
+		foreach ($$nmarr as $kk => $vv) {
+			${$nmarr}[$kk] = sdmXml($vv);
+		}
+	}
     header('Content-type: text/xml');  
 	echo "<?xml version=\"1.0\" encoding=\"utf-8\"?>
             <karyawan>
