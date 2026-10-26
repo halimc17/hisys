@@ -156,42 +156,75 @@ switch ($method) {
 		if ($param['periode'] == '') {
 			exit("Warning : Periode harus dipilih.");
 		}
-
-
-
+		if (!preg_match('/^\d{4}-\d{2}$/', $param['periode'])) {
+			exit("Warning : Periode tidak valid.");
+		}
+		$fTipe = isset($param['tipekaryawan']) ? trim($param['tipekaryawan']) : '';
+		$fOrg = isset($param['kodeorg']) ? trim($param['kodeorg']) : '';
+		$fTgl = isset($param['tgl1']) ? trim($param['tgl1']) : '';
+		if ($fTipe != '' && !ctype_digit($fTipe)) {
+			exit("Warning : Tipe karyawan tidak valid.");
+		}
+		$unitAkses = getOrgDetail(2);
+		if ($fOrg != '' && (!preg_match('/^[A-Za-z0-9_]+$/', $fOrg) || strpos($unitAkses, "'" . $fOrg . "'") === false)) {
+			exit("Warning : Unit tidak valid atau di luar hak akses Anda.");
+		}
+		if ($fTgl != '' && !preg_match('/^\d{2}-\d{2}-\d{4}$/', $fTgl)) {
+			exit("Warning : Format tanggal tidak valid.");
+		}
+		$fTglDb = $fTgl != '' ? tanggalsystemn($fTgl) : '';
 
 		$where = "";
-		if ($param['tipekaryawan'] != '') {
-			$where .= " and tipekaryawan='" . $param['tipekaryawan'] . "'";
+		if ($fTipe != '') {
+			$where .= " and tipekaryawan='" . $fTipe . "'";
 		}
-
-		if ($param['kodeorg'] != '') {
-			$where .= " and lokasitugas='" . $param['kodeorg'] . "'";
+		if ($fOrg != '') {
+			$where .= " and lokasitugas='" . $fOrg . "'";
 		} else {
-			$where .= "and lokasitugas in (" . getOrgDetail(2) . ")";
+			$where .= " and lokasitugas in (" . $unitAkses . ")";
 		}
+		$exAdmin = " and namakaryawan not like '%ADMINISTRATOR%'";
 
-
-		## Cek datakaryawan bulanan
-		$str = "select * from " . $dbname . ".datakaryawan_hist where 1=1 and version_type='B' and periodegaji='" . $param['periode'] . "' " . $where . " order by namakaryawan";
-		$res = fetchdata($str);
-		if (count($res) > 0) {
-			$table = "datakaryawan_hist";
-			$where .= " and version_type='B' and periodegaji='" . $param['periode'] . "'";
-		} else {
-			$table = "datakaryawan";
-		}
-
-		$str = "select *  from " . $dbname . ".kecamatan where idkec in (select kecamatan from " . $dbname . "." . $table . " where 1=1 " . $where . ")";
-		$res = fetchdata($str);
+		## Data bulanan (snapshot B) periode yang dipilih
+		$res = fetchdata("select * from " . $dbname . ".datakaryawan_hist where 1=1 " . $where . " and version_type='B' and periodegaji='" . $param['periode'] . "'" . $exAdmin);
+		$unitSnapshot = array();
 		foreach ($res as $bar) {
-			$kec[$bar['idkec']] = $bar['kecamatan'];
+			$unitSnapshot[addslashes($bar['lokasitugas'])] = 1;
 		}
+		## Periode berjalan (belum ada snapshot lengkap): unit tanpa snapshot memakai data karyawan saat ini
+		if ($param['periode'] >= date('Y-m')) {
+			$whereNow = $where;
+			if (!empty($unitSnapshot)) {
+				$whereNow .= " and lokasitugas not in ('" . implode("','", array_keys($unitSnapshot)) . "')";
+			}
+			$resNow = fetchdata("select * from " . $dbname . ".datakaryawan where 1=1 " . $whereNow . $exAdmin);
+			$res = array_merge($res, $resNow);
+		}
+		usort($res, function ($a, $b) {
+			return strcasecmp($a['namakaryawan'], $b['namakaryawan']);
+		});
 
-		$str = "select *  from " . $dbname . ".desa where iddes in (select desa from " . $dbname . "." . $table . " where 1=1 " . $where . ")";
-		$res = fetchdata($str);
+		$idKec = $idDes = array();
 		foreach ($res as $bar) {
-			$des[$bar['iddes']] = $bar['desa'];
+			if ($bar['kecamatan'] != '') {
+				$idKec[addslashes($bar['kecamatan'])] = 1;
+			}
+			if ($bar['desa'] != '') {
+				$idDes[addslashes($bar['desa'])] = 1;
+			}
+		}
+		$kec = $des = array();
+		if (!empty($idKec)) {
+			$rk = fetchdata("select * from " . $dbname . ".kecamatan where idkec in ('" . implode("','", array_keys($idKec)) . "')");
+			foreach ($rk as $bar) {
+				$kec[$bar['idkec']] = $bar['kecamatan'];
+			}
+		}
+		if (!empty($idDes)) {
+			$rd = fetchdata("select * from " . $dbname . ".desa where iddes in ('" . implode("','", array_keys($idDes)) . "')");
+			foreach ($rd as $bar) {
+				$des[$bar['iddes']] = $bar['desa'];
+			}
 		}
 
 		$optjk = array("L" => "Laki - Laki", "P" => "Perempuan");
@@ -205,8 +238,6 @@ switch ($method) {
 		$optNIKLAMA = makeOption($dbname, 'datakaryawan_hist', 'karyawanid,nik', " version_type='B' and periodegaji='" . $periodeLalu . "' ");
 
 		$data = array();
-		$str = "select * from " . $dbname . "." . $table . " where 1=1 " . $where . " and namakaryawan not like '%ADMINISTRATOR%' order by namakaryawan";
-		$res = fetchdata($str);
 		foreach ($res as $bar) {
 			$no++;
 			if ($bar['tanggalmasuk'] == "0000-00-00") {
@@ -237,17 +268,12 @@ switch ($method) {
 				$subbagian = "";
 			}
 
-			$days = $months = $years = $hari = $jam = $menit = 0;
-			$waktuawal = $bar['tanggallahir'];
-			$waktuakhir = date("Y-m-d");
-			$diff      = (strtotime($waktuakhir) - strtotime($waktuawal));
-			$years     = floor($diff / (365 * 60 * 60 * 24));
-			$months    = floor(($diff - $years * 365 * 60 * 60 * 24) / (30 * 60 * 60 * 24));
-			$days      = floor(($diff - $years * 365 * 60 * 60 * 24 - $months * 30 * 60 * 60 * 24) / (60 * 60 * 24));
-
-			$hari      = floor($diff / (60 * 60 * 24));
-			$jam       = floor(($diff - ($hari * (60 * 60 * 24))) / (60 * 60));
-			$menit     = floor(($diff - (($hari * (60 * 60 * 24)) + ($jam * (60 * 60)))) / 60);
+			$years = $umurtext = '';
+			if ($bar['tanggallahir'] != '' && strtotime($bar['tanggallahir']) !== false) {
+				$selisih = date_diff(date_create($bar['tanggallahir']), date_create(date('Y-m-d')));
+				$years = $selisih->y;
+				$umurtext = $selisih->y . " tahun, " . $selisih->m . " bulan, " . $selisih->d . " hari";
+			}
 
 			$data[] = array(
 				$no,
@@ -277,8 +303,8 @@ switch ($method) {
 				strtoupper($bar['tanggalkeluar']),
 				strtoupper($bar['tempatlahir']),
 				strtoupper($bar['tanggallahir']),
-				$years,
-				$years . " tahun, " . $months . " bulan, " . $days . " hari",
+					$years,
+					$umurtext,
 				strtoupper($nmnegara[$bar['warganegara']]),
 				strtoupper($optjk[$bar['jeniskelamin']]),
 				strtoupper($bar['agama']),
@@ -316,153 +342,56 @@ switch ($method) {
 		</tfoot>
 		</table>";
 
-		echo "<fieldset style='float:left;'>
-        <legend>Info</legend>";
-		$datatab = '';
-		$jumlahaktif = array();
-		$res = $owlPDO->query($str) or die(print " Gagal: " . PDOException::getMessage());
-		$res->setFetchMode(PDO::FETCH_OBJ);
-		$numrows = owlBaris($res);
-		// exit("warning : ".$numrows." ");
-		if ($numrows < 1) {
-			// $datatab= "###";
-			$nox = 0;
-			foreach ($datatipe as $tipekar => $textdata) {
-				if (!isset($jumlahaktif[$tipekar])) {
-					$jumlahaktif[$tipekar] = 0;
-				}
-				if ($nox == $datacount) {
-					$datacountmax = $datacountmax - $datacount;
-					$datacount = $datacountmax;
-					$datatab .= ", ";
-					$nox = 0;
-				}
-
-				if ($nox == 0) {
-					$datatab .= "<b> " . $textdata . " </b> Aktif : " . $jumlahaktif[$tipekar] . " Orang";
-				} else {
-					$datatab .= ",  " . $textdata . " Aktif : " . $jumlahaktif[$tipekar] . " Orang";
-				}
-				$nox++;
+		## Info jumlah karyawan aktif / tidak aktif per tipe (menurut tanggal status bila diisi)
+		$jmlAktif = $jmlTidak = array();
+		foreach ($res as $bar) {
+			$keluar = $bar['tanggalkeluar'];
+			$sudahKeluar = ($keluar != '' && $keluar != '0000-00-00');
+			if ($fTglDb != '') {
+				$sudahKeluar = $sudahKeluar && $keluar <= $fTglDb;
 			}
-		} else {
-			while ($bar = $res->fetch()) {
-				if ($param['tgl1'] != "") {
-					if ($bar->tanggalkeluar == '0000-00-00' || $bar->tanggalkeluar > tanggalsystemn($param['tgl1'])) {
-						$valueTglKeluar = '-';
-						if (!isset($jumlahaktif[$bar->tipekaryawan])) {
-							$jumlahaktif[$bar->tipekaryawan] = 0;
-						}
-						$jumlahaktif[$bar->tipekaryawan] += 1;
-					}
-				} else {
-					if ($bar->tanggalkeluar == '0000-00-00') {
-						$valueTglKeluar = '-';
-						if (!isset($jumlahaktif[$bar->tipekaryawan])) {
-							$jumlahaktif[$bar->tipekaryawan] = 0;
-						}
-						$jumlahaktif[$bar->tipekaryawan] += 1;
-					}
-				}
-			}
-			// $datatab= "###";
-			$nox = 0;
-			foreach ($datatipe as $tipekar => $textdata) {
-				if (!isset($jumlahaktif[$tipekar])) {
-					$jumlahaktif[$tipekar] = 0;
-				}
-				if ($nox == $datacount) {
-					$datacountmax = $datacountmax - $datacount;
-					$datacount = $datacountmax;
-					$datatab .= ", ";
-					$nox = 0;
-				}
-
-				if ($nox == 0) {
-					$datatab .= "<b> " . $textdata . " </b> Aktif : " . $jumlahaktif[$tipekar] . " Orang";
-				} else {
-					$datatab .= ",  <b> " . $textdata . " </b> Aktif : " . $jumlahaktif[$tipekar] . " Orang";
-				}
-				$nox++;
+			if ($sudahKeluar) {
+				$jmlTidak[$bar['tipekaryawan']] = (isset($jmlTidak[$bar['tipekaryawan']]) ? $jmlTidak[$bar['tipekaryawan']] : 0) + 1;
+			} else {
+				$jmlAktif[$bar['tipekaryawan']] = (isset($jmlAktif[$bar['tipekaryawan']]) ? $jmlAktif[$bar['tipekaryawan']] : 0) + 1;
 			}
 		}
-
-		$datatab1 = '';
-		$jumlahaktif = array();
-		$res = $owlPDO->query($str) or die(print " Gagal: " . PDOException::getMessage());
-		$res->setFetchMode(PDO::FETCH_OBJ);
-		$numrows = owlBaris($res);
-		if ($numrows < 1) {
-			// $datatab1= "###";
-			$nox = 0;
-			foreach ($datatipe as $tipekar => $textdata) {
-				if (!isset($jumlahaktif[$tipekar])) {
-					$jumlahaktif[$tipekar] = 0;
-				}
-				if ($nox == $datacount) {
-					$datacountmax = $datacountmax - $datacount;
-					$datacount = $datacountmax;
-					$datatab1 .= ", ";
-					$nox = 0;
-				}
-
-				if ($nox == 0) {
-					$datatab1 .= "<b> " . $textdata . " </b> Tidak Aktif : " . $jumlahaktif[$tipekar] . " Orang";
-				} else {
-					$datatab1 .= ", <b> " . $textdata . " </b> Tidak Aktif : " . $jumlahaktif[$tipekar] . " Orang";
-				}
-				$nox++;
-			}
-		} else {
-			while ($bar = $res->fetch()) {
-				if ($param['tgl1'] != "") {
-					if ($bar->tanggalkeluar != '0000-00-00') {
-						if ($bar->tanggalkeluar <= tanggalsystemn($param['tgl1'])) {
-							$valueTglKeluar = '-';
-							if (!isset($jumlahaktif[$bar->tipekaryawan])) {
-								$jumlahaktif[$bar->tipekaryawan] = 0;
-							}
-							$jumlahaktif[$bar->tipekaryawan] += 1;
-						}
-					}
-				} else {
-					if ($bar->tanggalkeluar != '0000-00-00') {
-						$valueTglKeluar = '-';
-						if (!isset($jumlahaktif[$bar->tipekaryawan])) {
-							$jumlahaktif[$bar->tipekaryawan] = 0;
-						}
-						$jumlahaktif[$bar->tipekaryawan] += 1;
-					}
-				}
-			}
-			// $datatab1= "###";
-			$nox = 0;
-			foreach ($datatipe as $tipekar => $textdata) {
-				if (!isset($jumlahaktif[$tipekar])) {
-					$jumlahaktif[$tipekar] = 0;
-				}
-				if ($nox == $datacount) {
-					$datacountmax = $datacountmax - $datacount;
-					$datacount = $datacountmax;
-					$datatab1 .= ", ";
-					$nox = 0;
-				}
-
-				if ($nox == 0) {
-					$datatab1 .= "<b> " . $textdata . " </b> Tidak Aktif : " . $jumlahaktif[$tipekar] . " Orang";
-				} else {
-					$datatab1 .= ",  <b> " . $textdata . " </b> Tidak Aktif : " . $jumlahaktif[$tipekar] . " Orang";
-				}
-				$nox++;
+		$kolomTipe = array();
+		foreach ($datatipe as $idTipe => $namaTipe) {
+			$a = isset($jmlAktif[$idTipe]) ? $jmlAktif[$idTipe] : 0;
+			$t = isset($jmlTidak[$idTipe]) ? $jmlTidak[$idTipe] : 0;
+			if ($a + $t > 0) {
+				$kolomTipe[$idTipe] = array($namaTipe, $a, $t);
 			}
 		}
+		$thInfo = "<th>STATUS</th>";
+		$trAktif = "<td>Aktif</td>";
+		$trTidak = "<td>Tidak Aktif</td>";
+		$trTotal = "<td><b>Total</b></td>";
+		$sumA = $sumT = 0;
+		foreach ($kolomTipe as $kt) {
+			$thInfo .= "<th>" . htmlspecialchars($kt[0]) . "</th>";
+			$trAktif .= "<td align=right>" . $kt[1] . "</td>";
+			$trTidak .= "<td align=right>" . $kt[2] . "</td>";
+			$trTotal .= "<td align=right><b>" . ($kt[1] + $kt[2]) . "</b></td>";
+			$sumA += $kt[1];
+			$sumT += $kt[2];
+		}
+		$thInfo .= "<th>TOTAL</th>";
+		$trAktif .= "<td align=right><b>" . $sumA . "</b></td>";
+		$trTidak .= "<td align=right><b>" . $sumT . "</b></td>";
+		$trTotal .= "<td align=right><b>" . ($sumA + $sumT) . "</b></td>";
+		$info = "<fieldset style='float:left;'><legend>Info</legend><table class='sortable' cellspacing='1' cellpadding='3' border='0'><thead><tr class=rowheader>" . $thInfo . "</tr></thead><tbody><tr class=rowcontent>" . $trAktif . "</tr><tr class=rowcontent>" . $trTidak . "</tr><tr class=rowcontent>" . $trTotal . "</tr></tbody></table></fieldset><div style='clear:both;'></div>";
 
-
-		// echo $datatab;
-		// echo "</br>";
-		// echo $datatab1;
-		// echo "</fieldset>";
-		echo $tab . "####" . json_encode($data);
+		## teks di-escape (data dirender DataTables sebagai HTML); byte non-UTF-8 diganti agar JSON tidak gagal
+		foreach ($data as $k => $row) {
+			foreach ($row as $i => $v) {
+				if (is_string($v)) {
+					$data[$k][$i] = htmlspecialchars($v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+				}
+			}
+		}
+		echo $info . $tab . "####" . json_encode($data);
 		break;
 
 	case 'excel':
