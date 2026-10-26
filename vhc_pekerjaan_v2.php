@@ -328,7 +328,8 @@
     echo "<div id=detail style='display:none;'>";
     OPEN_BOX();
     echo"<fieldset><legend>".$_SESSION['lang']['vhc_detail_pekerjaan']."</legend>";
-    echo"<table cellspacing=1 cellpadding=1 border=0>
+    echo"<style>#tblDetailKerja td{white-space:nowrap}#tblDetailKerja td.gl{padding-left:26px}#tblDetailKerja input.myinputtextnumber,#tblDetailKerja input.myinputtext{box-sizing:border-box}</style>";
+    echo"<table id=tblDetailKerja cellspacing=1 cellpadding=3 border=0>
 
     <tr>
         <td>".$_SESSION['lang']['vhc_jenis_pekerjaan']."&nbsp;<font style='font-size:10px;color:blue;'>(1)</font></td>
@@ -336,24 +337,24 @@
         <td colspan=4><select class=select2 id=jns_kerja name=jns_kerja onchange=getSatuan(this.value) style=width:255px; tabindex=1></select><input type=hidden name=old_jnskerja id=old_jnskerja />
         </td>
         
-        <td>".$_SESSION['lang']['operator']."&nbsp;/&nbsp;".$_SESSION['lang']['supir']."<font style='font-size:10px;color:blue;'>(8)</font></td>
+        <td class=gl>".$_SESSION['lang']['operator']."&nbsp;/&nbsp;".$_SESSION['lang']['supir']."<font style='font-size:10px;color:blue;'>(8)</font></td>
         <td>:</td>
-        <td><select class=select2 id=kode_karyawan name=kode_karyawan style=width:154px; onchange=getUmr(); tabindex=8></select></select>
-            <input type=number hidden id=kode_karyawan_old tabindex=11 name=kode_karyawan_old class=myinputtext style=width:150px; />
+        <td><select class=select2 id=kode_karyawan name=kode_karyawan style=width:160px; onchange=getUmr(); tabindex=8></select>
+            <input type=number hidden id=kode_karyawan_old tabindex=11 name=kode_karyawan_old class=myinputtext style=width:160px; />
         </td>
 
-        <td >".$_SESSION['lang']['helper']." 1 &nbsp;<font style='font-size:10px;color:blue;' tabindex=10>(10)</font></td>
+        <td class=gl>".$_SESSION['lang']['helper']." 1 &nbsp;<font style='font-size:10px;color:blue;' tabindex=10>(10)</font></td>
         <td >:</td>
         <td >
-            <select id=kode_helper tabindex=12 class=select2 name=kode_helper style=width:154px; onchange=getUmr();><option value=''></select></select>
-            <input hidden type=text id=kode_helper_old tabindex=11 name=kode_helper_old class=myinputtextnumber style=width:150px; onkeypress='return angka_doang(event)' value=0 />
+            <select id=kode_helper tabindex=12 class=select2 name=kode_helper style=width:160px; onchange=getUmr();><option value=''></select>
+            <input hidden type=text id=kode_helper_old tabindex=11 name=kode_helper_old class=myinputtextnumber style=width:160px; onkeypress='return angka_doang(event)' value=0 />
         </td>
 
-        <td ".$hiddenHelper.">".$_SESSION['lang']['helper']." 2 &nbsp;<font style='font-size:10px;color:blue;' tabindex=11>(11)</font></td>
+        <td class=gl ".$hiddenHelper.">".$_SESSION['lang']['helper']." 2 &nbsp;<font style='font-size:10px;color:blue;' tabindex=11>(11)</font></td>
         <td ".$hiddenHelper.">:</td>
         <td ".$hiddenHelper.">
-            <select id=kode_helper2 tabindex=12 class=select2 name=kode_helper2 style=width:154px; onchange=getUmr();><option value=''></select></select>
-            <input hidden type=text id=kode_helper_old2 tabindex=11 name=kode_helper_old2 class=myinputtextnumber style=width:150px; onkeypress='return angka_doang(event)' value=0 />
+            <select id=kode_helper2 tabindex=12 class=select2 name=kode_helper2 style=width:160px; onchange=getUmr();><option value=''></select>
+            <input hidden type=text id=kode_helper_old2 tabindex=11 name=kode_helper_old2 class=myinputtextnumber style=width:160px; onkeypress='return angka_doang(event)' value=0 />
         </td>
 
     </tr>
@@ -363,28 +364,28 @@
         <td>:</td>
         <td colspan=4><select  class=select2 id=lokasi_kerja name=lokasi_kerja  style=width:255px; onchange=\"getBlok('','')\" tabindex=2><option value=''>".$_SESSION['lang']['pilihdata']."</option></select> <input type=hidden name=old_lokkerja id=old_lokkerja /></td>
 
-        <td>".$_SESSION['lang']['upahkerja']." Operator</td>
+        <td class=gl>".$_SESSION['lang']['upahkerja']." Operator</td>
         <td>:</td>
         <td>
-            <input type=text id=uphOprt name=uphOprt  class=myinputtextnumber style=width:150px; onkeypress='return angka_doang(event)' ".$nonDisabled."/>
-            <input type=text hidden id=uphOprt_libur name=uphOprt_libur  class=myinputtextnumber style=width:150px; onkeypress='return angka_doang(event)' />
-            <input type=text hidden id=uphOprt_old name=uphOprt_old  class=myinputtextnumber style=width:150px; onkeypress='return angka_doang(event)' />
+            <input type=text id=uphOprt name=uphOprt  class=myinputtextnumber style=width:160px; onkeypress='return angka_doang(event)' ".$nonDisabled."/>
+            <input type=text hidden id=uphOprt_libur name=uphOprt_libur  class=myinputtextnumber style=width:160px; onkeypress='return angka_doang(event)' />
+            <input type=text hidden id=uphOprt_old name=uphOprt_old  class=myinputtextnumber style=width:160px; onkeypress='return angka_doang(event)' />
         </td>
 
-        <td >".$_SESSION['lang']['upahkerja']." ".$_SESSION['lang']['helper']." 1</td>
+        <td class=gl>".$_SESSION['lang']['upahkerja']." ".$_SESSION['lang']['helper']." 1</td>
         <td >:</td>
         <td >
-            <input type=text id=uphHelp name=uphHelp  class=myinputtextnumber style=width:150px; onkeypress='return angka_doang(event)' />
-            <input type=text hidden id=uphHelp_libur name=uphHelp_libur  class=myinputtextnumber style=width:150px; onkeypress='return angka_doang(event)'  />
-            <input type=text hidden id=uphHelp_old name=uphHelp_old  class=myinputtextnumber style=width:150px; onkeypress='return angka_doang(event)' />
+            <input type=text id=uphHelp name=uphHelp  class=myinputtextnumber style=width:160px; onkeypress='return angka_doang(event)' />
+            <input type=text hidden id=uphHelp_libur name=uphHelp_libur  class=myinputtextnumber style=width:160px; onkeypress='return angka_doang(event)'  />
+            <input type=text hidden id=uphHelp_old name=uphHelp_old  class=myinputtextnumber style=width:160px; onkeypress='return angka_doang(event)' />
         </td>
 
-        <td ".$hiddenHelper.">".$_SESSION['lang']['upahkerja']." ".$_SESSION['lang']['helper']." 2</td>
+        <td class=gl ".$hiddenHelper.">".$_SESSION['lang']['upahkerja']." ".$_SESSION['lang']['helper']." 2</td>
         <td ".$hiddenHelper.">:</td>
         <td ".$hiddenHelper.">
-            <input type=text id=uphHelp2 name=uphHelp2  class=myinputtextnumber style=width:150px; onkeypress='return angka_doang(event)' />
-            <input type=text hidden id=uphHelp_libur2 name=uphHelp_libur2  class=myinputtextnumber style=width:150px; onkeypress='return angka_doang(event)'  />
-            <input type=text hidden id=uphHelp_old2 name=uphHelp_old2  class=myinputtextnumber style=width:150px; onkeypress='return angka_doang(event)' />
+            <input type=text id=uphHelp2 name=uphHelp2  class=myinputtextnumber style=width:160px; onkeypress='return angka_doang(event)' />
+            <input type=text hidden id=uphHelp_libur2 name=uphHelp_libur2  class=myinputtextnumber style=width:160px; onkeypress='return angka_doang(event)'  />
+            <input type=text hidden id=uphHelp_old2 name=uphHelp_old2  class=myinputtextnumber style=width:160px; onkeypress='return angka_doang(event)' />
         </td>
 
     </tr>
@@ -392,27 +393,27 @@
     <tr>
         <td>".$_SESSION['lang']['blok']."&nbsp;<font style='font-size:10px;color:blue;'>(3)</font></td>
         <td>:</td>
-        <td colspan=4><select id=blok  class=select2 name=blok style=width:255px;  tabindex=3><option value=''>".$_SESSION['lang']['pilihdata']."</option></select></td>
+        <td colspan=4><select id=blok  class=select2 name=blok style=width:255px;  tabindex=3 onchange=hitungUlangPremi();><option value=''>".$_SESSION['lang']['pilihdata']."</option></select></td>
         
-        <td>".$_SESSION['lang']['premi']." (Rp) ".$_SESSION['lang']['operator']."</td>
+        <td class=gl>".$_SESSION['lang']['premi']." (Rp) ".$_SESSION['lang']['operator']."</td>
         <td>:</td>
         <td>
-            <input disabled type=text id=prmiOprt tabindex=11 name=prmiOprt class=myinputtextnumber style=width:150px; onkeypress='return angka_doang(event)' onclick=\"this.select();\" value=0 />&nbsp;<input type='checkbox' id='checklembur' name='checklembur' onclick=\"adalembur();\"></td>
-            <input hidden type=text id=prmiOprt_old tabindex=11 name=prmiOprt_old class=myinputtextnumber style=width:150px; onkeypress='return angka_doang(event)' onclick=\"this.select();\" value=0 />
+            <input disabled type=text id=prmiOprt tabindex=11 name=prmiOprt class=myinputtextnumber style=width:160px; onkeypress='return angka_doang(event)' onclick=\"this.select();\" value=0 />&nbsp;<input type='checkbox' id='checklembur' name='checklembur' onclick=\"adalembur();\">
+            <input hidden type=text id=prmiOprt_old tabindex=11 name=prmiOprt_old class=myinputtextnumber style=width:160px; onkeypress='return angka_doang(event)' onclick=\"this.select();\" value=0 />
         </td>
 
-        <td >".$_SESSION['lang']['premi']." (Rp) ".$_SESSION['lang']['helper']." 1</td>
+        <td class=gl>".$_SESSION['lang']['premi']." (Rp) ".$_SESSION['lang']['helper']." 1</td>
         <td >:</td>
         <td >
-            <input  type=text id=prmiHelp tabindex=14 name=prmiHelp class=myinputtextnumber style=width:150px; onkeypress='return angka_doang(event)' onclick=\"this.select();\" value=0 />
-            <input hidden type=text id=prmiHelp_old tabindex=11 name=prmiHelp_old class=myinputtextnumber style=width:150px; onkeypress='return angka_doang(event)' onclick=\"this.select();\" value=0 />
+            <input  type=text id=prmiHelp tabindex=14 name=prmiHelp class=myinputtextnumber style=width:160px; onkeypress='return angka_doang(event)' onclick=\"this.select();\" value=0 />
+            <input hidden type=text id=prmiHelp_old tabindex=11 name=prmiHelp_old class=myinputtextnumber style=width:160px; onkeypress='return angka_doang(event)' onclick=\"this.select();\" value=0 />
         </td>
 
-        <td ".$hiddenHelper.">".$_SESSION['lang']['premi']." (Rp) ".$_SESSION['lang']['helper']." 2</td>
+        <td class=gl ".$hiddenHelper.">".$_SESSION['lang']['premi']." (Rp) ".$_SESSION['lang']['helper']." 2</td>
         <td ".$hiddenHelper.">:</td>
         <td ".$hiddenHelper.">
-            <input  type=text id=prmiHelp2 tabindex=14 name=prmiHelp2 class=myinputtextnumber style=width:150px; onkeypress='return angka_doang(event)' onclick=\"this.select();\" />
-            <input hidden type=text id=prmiHelp_old2 tabindex=11 name=prmiHelp_old2 class=myinputtextnumber style=width:150px; onkeypress='return angka_doang(event)' onclick=\"this.select();\" value=0 />
+            <input  type=text id=prmiHelp2 tabindex=14 name=prmiHelp2 class=myinputtextnumber style=width:160px; onkeypress='return angka_doang(event)' onclick=\"this.select();\" />
+            <input hidden type=text id=prmiHelp_old2 tabindex=11 name=prmiHelp_old2 class=myinputtextnumber style=width:160px; onkeypress='return angka_doang(event)' onclick=\"this.select();\" value=0 />
         </td>
 
         <td hidden>*Jika pekerjaan dilakukan di Kebun (Obligatory if activity location on estate) &nbsp; => Harus di isi untuk karyawan internal (Obligatory if internal operator used)<td>
@@ -440,49 +441,49 @@
         
         <td valign=bottom>".$_SESSION['lang']['prestasi']."&nbsp;<font style='font-size:10px;color:blue;'>(5)</font></td>
         <td valign=middle>:</td>
-        <td valign=bottom><input type=text class=myinputtextnumber id=brt_muatan name=brt_muatan maxlength=6  onkeyup=\"getUmr();\" onkeypress=\"return angka_doang(event);\" onclick=\"this.select();\" style=width:75px;  tabindex=5/>&nbsp;<span id='satuan'></span>
-        <input hidden type=text class=myinputtextnumber id=oldbrt_muatan name=oldbrt_muatan maxlength=6 onkeypress=\"return angka_doang(event);\" style=width:80px; />&nbsp;<span id='satuan'>
+        <td valign=bottom><input type=text class=myinputtextnumber id=brt_muatan name=brt_muatan maxlength=10  onkeyup=\"getPremi();\" onkeypress=\"return angka_doang(event);\" onclick=\"this.select();\" style=width:85px;  tabindex=5/><span id='satuan' style='display:inline-block;min-width:34px;margin-left:6px;vertical-align:middle;color:#444'></span>
+        <input hidden type=text class=myinputtextnumber id=oldbrt_muatan name=oldbrt_muatan maxlength=6 onkeypress=\"return angka_doang(event);\" style=width:80px; />
         </td>
 
-        <td ".$hiddenHelper." >".$_SESSION['lang']['premi']." Tambahan (Rp) ".$_SESSION['lang']['operator']."</td>
+        <td class=gl ".$hiddenHelper." >".$_SESSION['lang']['premi']." Tambahan (Rp) ".$_SESSION['lang']['operator']."</td>
         <td ".$hiddenHelper." >:</td>
         <td ".$hiddenHelper." >
-            <input type=text id=prmiOprtTambahan tabindex=11 name=prmiOprtTambahan class=myinputtextnumber style=width:150px; onkeypress='return angka_doang(event)' onclick=\"this.select();\" value=0 /></td>
+            <input type=text id=prmiOprtTambahan tabindex=11 name=prmiOprtTambahan class=myinputtextnumber style=width:160px; onkeypress='return angka_doang(event)' onclick=\"this.select();\" value=0 />
         </td>
 
         <td hidden>".$_SESSION['lang']['premi']."</td>
         <td hidden>:</td>
-        <td hidden><input type=text id=prmiOprt onfocus=getPremi();  name=prmiOprt class=myinputtextnumber style=width:150px; onkeypress='return angka_doang(event)'  value=0 /></td>
+        <td hidden><input type=text id=prmiOprt onfocus=getPremi();  name=prmiOprt class=myinputtextnumber style=width:160px; onkeypress='return angka_doang(event)'  value=0 /></td>
     </tr>
 
 
     <tr>
         <td>".$_SESSION['lang']['vhc_kmhm_awal']."&nbsp;<font style='font-size:10px;color:blue;'>(6)</font></td>
         <td>:</td>
-        <td><input type=text onkeyup=getjumlah('awal'); class=myinputtextnumber  onkeydown=\"getPremi();\" id=kmhm_awal name=kmhm_awal maxlength=8 onkeypress=\"return angka_doang(event);\" style=width:85px;  tabindex=6/></td>
+        <td><input type=text onkeyup=\"getjumlah('awal');getPremi();\" class=myinputtextnumber id=kmhm_awal name=kmhm_awal maxlength=12 onkeypress=\"return angka_doang(event);\" style=width:85px;  tabindex=6/></td>
 
         <td>".$_SESSION['lang']['akhir']."&nbsp;<font style='font-size:10px;color:blue;'>(7)</font></td>
         <td>:</td>
-        <td><input type=text onkeyup=getjumlah('akhir'); class=myinputtextnumber  onkeydown=\"getPremi();\" id=kmhm_akhir name=kmhm_akhir maxlength=8  onkeypress=\"return angka_doang(event);\" onclick=\"this.select();\" style=width:75px;  tabindex=7/></td>
+        <td><input type=text onkeyup=\"getjumlah('akhir');getPremi();\" class=myinputtextnumber id=kmhm_akhir name=kmhm_akhir maxlength=12  onkeypress=\"return angka_doang(event);\" onclick=\"this.select();\" style=width:85px;  tabindex=7/></td>
 
-        <td>".$_SESSION['lang']['rupiahpenalty']."</td>
+        <td class=gl>".$_SESSION['lang']['rupiahpenalty']."</td>
         <td valign=middle>:</td>
-        <td valign=middle><input type=text id=pnltyOprt name=pnltyOprt class=myinputtextnumber style=width:150px; onkeypress='return angka_doang(event)' maxlength=8 value=0 disabled/>&nbsp;<input type='checkbox' id=checkdenda name='checkdenda' onclick='adadenda();'></td>
+        <td valign=middle><input type=text id=pnltyOprt name=pnltyOprt class=myinputtextnumber style=width:160px; onkeypress='return angka_doang(event)' maxlength=12 value=0 disabled/>&nbsp;<input type='checkbox' id=checkdenda name='checkdenda' onclick='adadenda();'></td>
     </tr>
 
     <tr>
         <td valign=top>".$_SESSION['lang']['satuan']."</td>
         <td valign=top>:</td>
-        <td valign=top><select id=stn class=select2 name=stn style=width:92px;>".$optsatuan."</select></td>
+        <td valign=top><select id=stn class=select2 name=stn style=width:92px; onchange=hitungUlangPremi();>".$optsatuan."</select></td>
         
         <td valign=top>".$_SESSION['lang']['jumlah']."</td>
         <td valign=top>:</td>
-        <td valign=top><input class=myinputtextnumber onkeyup=getjumlah('jumlah'); onclick=\"this.select();\" id=jlhhm name=jlhhm style=width:75px;></td>
+        <td valign=top><input class=myinputtextnumber onkeyup=\"getjumlah('jumlah');getPremi();\" onclick=\"this.select();\" id=jlhhm name=jlhhm style=width:85px;></td>
 
-        <td valign=top rowspan=2>".$_SESSION['lang']['keterangan']."&nbsp;<font style='font-size:10px;color:blue;'>(9)</font></td>
+        <td valign=top rowspan=2 class=gl>".$_SESSION['lang']['keterangan']."&nbsp;<font style='font-size:10px;color:blue;'>(9)</font></td>
         <td valign=top rowspan=2>:</td>
         <td valign=top rowspan=2 rowspan=3>
-        <textarea rows='3' maxlength='200' id='ket' type='text' onkeypress='return tanpa_kutip(event)' style='width:136px;height:22px' tabindex=9></textarea>
+        <textarea rows='3' maxlength='200' id='ket' type='text' onkeypress='return tanpa_kutip(event)' style='width:160px;height:56px' tabindex=9></textarea>
         </td>
 
         <td hidden>".$_SESSION['lang']['biaya']." Rp</td>
@@ -494,32 +495,35 @@
         <td hidden>".$_SESSION['lang']['keterangan']."</td>
         <td hidden>:</td>
         <td hidden>
-            <input type=text class=myinputtext id=ketOprt name=ket maxlength=45 onkeypress=\"return tanpa_kutip(event);\" style=width:150px; />
+            <input type=text class=myinputtext id=ketOprt name=ket maxlength=45 onkeypress=\"return tanpa_kutip(event);\" style=width:160px; />
         </td>
     </tr>
     <tr>    
         <td valign=top rowspan=1 hidden>".$_SESSION['lang']['helper']." 3 &nbsp;<font style='font-size:10px;color:blue;' tabindex=12>(12)</font></td>
         <td valign=top rowspan=1 hidden>:</td>
         <td valign=top rowspan=1 hidden>
-            <select id=kode_helper3 tabindex=12 class=select2 name=kode_helper3 style=width:154px; onchange=getUmr();><option value=''></select></select>
-            <input hidden type=text id=kode_helper_old3 tabindex=11 name=kode_helper_old3 class=myinputtextnumber style=width:150px; onkeypress='return angka_doang(event)' value=0 />
+            <select id=kode_helper3 tabindex=12 class=select2 name=kode_helper3 style=width:160px; onchange=getUmr();><option value=''></select>
+            <input hidden type=text id=kode_helper_old3 tabindex=11 name=kode_helper_old3 class=myinputtextnumber style=width:160px; onkeypress='return angka_doang(event)' value=0 />
         </td>
 
         <td valign=top rowspan=1 hidden>".$_SESSION['lang']['premi']." ".$_SESSION['lang']['helper']." 3</td>
         <td valign=top rowspan=1 hidden>:</td>
         <td valign=top rowspan=1 hidden>
-            <input disabled type=text id=prmiHelp3 tabindex=14 name=prmiHelp3 class=myinputtextnumber style=width:150px; onkeypress='return angka_doang(event)' onclick=\"this.select();\"/>
-            <input hidden type=text id=prmiHelp_old3 tabindex=11 name=prmiHelp_old3 class=myinputtextnumber style=width:150px; onkeypress='return angka_doang(event)' onclick=\"this.select();\" value=0 />
+            <input disabled type=text id=prmiHelp3 tabindex=14 name=prmiHelp3 class=myinputtextnumber style=width:160px; onkeypress='return angka_doang(event)' onclick=\"this.select();\"/>
+            <input hidden type=text id=prmiHelp_old3 tabindex=11 name=prmiHelp_old3 class=myinputtextnumber style=width:160px; onkeypress='return angka_doang(event)' onclick=\"this.select();\" value=0 />
         </td>
     </tr>
     <tr>    
         <td valign=top hidden>".$_SESSION['lang']['upah']." ".$_SESSION['lang']['helper']." 3</td>
         <td valign=top hidden>:</td>
         <td valign=top hidden>
-            <input type=text id=uphHelp3 name=uphHelp3  class=myinputtextnumber style=width:150px; onkeypress='return angka_doang(event)' disabled/>
-            <input type=text hidden id=uphHelp_libur3 name=uphHelp_libur3  class=myinputtextnumber style=width:150px; onkeypress='return angka_doang(event)'  />
-            <input type=text hidden id=uphHelp_old3 name=uphHelp_old3  class=myinputtextnumber style=width:150px; onkeypress='return angka_doang(event)' />
+            <input type=text id=uphHelp3 name=uphHelp3  class=myinputtextnumber style=width:160px; onkeypress='return angka_doang(event)' disabled/>
+            <input type=text hidden id=uphHelp_libur3 name=uphHelp_libur3  class=myinputtextnumber style=width:160px; onkeypress='return angka_doang(event)'  />
+            <input type=text hidden id=uphHelp_old3 name=uphHelp_old3  class=myinputtextnumber style=width:160px; onkeypress='return angka_doang(event)' />
         </td>
+    </tr>
+    <tr>
+        <td colspan=15 id=infoUpah style='color:#a00;font-size:11px;white-space:normal;padding-left:4px'></td>
     </tr>
     <tr>
         <td><td>
@@ -538,7 +542,7 @@
     </table>";
 
     echo"</fieldset>";
-    echo"<fieldset><legend>".$_SESSION['lang']['datatersimpan']."</legend><table cellpadding=5 cellspacing=1 border=0  class=sortable>
+    echo"<fieldset><legend>".$_SESSION['lang']['datatersimpan']."</legend><div style='overflow-x:auto'><table cellpadding=5 cellspacing=1 border=0 class=sortable style='width:100%'>
             <thead>
             <tr class=\"rowheader\">
             <th align=center>No.</th>
@@ -575,7 +579,7 @@
             <th align=center colspan=2>Action</th>
             </tr></thead><tbody id=containdetail>
             ";
-    echo"</tbody></table></fieldset>";
+    echo"</tbody></table></div></fieldset>";
     CLOSE_BOX();
     echo "</div>";
     echo close_body();

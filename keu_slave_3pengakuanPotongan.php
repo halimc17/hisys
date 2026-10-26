@@ -27,7 +27,7 @@ if($tipeorg[$_POST['kodeorg']]!="HOLDING" and $tipeorg[$_POST['kodeorg']]!="BULK
 		$wh=" and (nojurnal like '%KBNB%' or nojurnal like '%GJH%')";
 	}
 	
-	$sCek="select * from ".$dbname.".keu_jurnalht where 1=1 ".$wh." and tanggal like '".$_POST['periode']."%' and nojurnal like '%".$_POST['kodeorg']."%'";
+	$sCek="select * from ".$dbname.".keu_jurnalht where 1=1 ".$wh." and ".sqlRentangPeriode($_POST['periode'])." and nojurnal like '%".$_POST['kodeorg']."%'";
 	$rCek=fetchdata($sCek);
 	if(count($rCek)==0){
 		exit('warning: Jalankan Proses Gaji Karyawan Tidak Langsung');
@@ -36,7 +36,7 @@ if($tipeorg[$_POST['kodeorg']]!="HOLDING" and $tipeorg[$_POST['kodeorg']]!="BULK
 if($tipeorg[$_POST['kodeorg']]=="KEBUN"){
     $sCek="select * from ".$dbname.".keu_jurnalht where 
            (nojurnal like '%M0%' or nojurnal like '%M1%' or nojurnal like '%PKS01%' or nojurnal like '%PKS02%') 
-		   and tanggal like '".$_POST['periode']."%' and nojurnal like '%".$_POST['kodeorg']."%'";
+		   and ".sqlRentangPeriode($_POST['periode'])." and nojurnal like '%".$_POST['kodeorg']."%'";
   $rCek=fetchdata($sCek);
   if(count($rCek)==0){
     exit('warning: Jalankan Proses Gaji Karyawan Langsung');
@@ -92,7 +92,7 @@ if($nodata==0){
 #perawatan:
 $str="select distinct karyawanid,kodeorg,left(kodekegiatan,3) as kelompok from ".$dbname.".kebun_kehadiran_vw
       where kodekegiatan like '126%' or kodekegiatan like '128%' or kodekegiatan like '621%'
-      and tanggal like '".$_POST['periode']."%' and kodeorg like '".$_POST['kodeorg']."%'";
+      and ".sqlRentangPeriode($_POST['periode'])." and kodeorg like '".$_POST['kodeorg']."%'";
 	  // exit("Error:$str");
 $res=$owlPDO->query($str) or die(print " Gagal: ".PDOException::getMessage());
 $res->setFetchMode(PDO::FETCH_OBJ);
@@ -102,7 +102,7 @@ while($bar=$res->fetch())
 }
 
 $str="select distinct karyawanid,kodeorg from ".$dbname.".kebun_prestasi_vw
-      where tanggal like '".$_POST['periode']."%' and kodeorg like '".$_POST['kodeorg']."%'";
+      where ".sqlRentangPeriode($_POST['periode'])." and kodeorg like '".$_POST['kodeorg']."%'";
 $res=$owlPDO->query($str) or die(print " Gagal: ".PDOException::getMessage());
 $res->setFetchMode(PDO::FETCH_OBJ);
 while($bar=$res->fetch())

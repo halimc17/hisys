@@ -265,7 +265,7 @@ while($bar=$res->fetch())
 
  #==========================================================================================
 	#ambil kendaraan atau mesin yang menempel pada orang
-	$str="select vhc,karyawanid from ".$dbname.".vhc_5operator where aktif='1'";
+	$str="select vhc,karyawanid from ".vhcOperatorTabel($param['periode'])." where aktif='1'";
 	$res=$owlPDO->query($str) or die(print " Gagal: ".PDOException::getMessage());
 	$res->setFetchMode(PDO::FETCH_OBJ);
 	while($bar=$res->fetch()){
@@ -355,7 +355,7 @@ while($bar=$res->fetch())
     # Add NEW
     # Case : Ada Karyawan Plasma Supervisi, untuk Premi Brondolan di bentuk Jurnalnya saat Premi Pemanen / Kemandoran
     # Cek apakah sudah ada Jurnal Premi Brondolan yang sudah Terbentuk
-    $sql = "select nik,sum(jumlah) as jumlah from ".$dbname.".keu_jurnaldt_vw where 5=5 ".$wherekegx." and debet > 0 and periode='".$param['periode']."' and kodejurnal='PNN03' and noreferensi like '%PNN02%' GROUP BY nik";
+    $sql = "select nik,sum(jumlah) as jumlah from ".$dbname.".keu_jurnaldt_vw where 5=5 ".$wherekegx." and debet > 0 and periode='".$param['periode']."' and kodejurnal='PNN03' and nojurnal in (select nojurnal from ".$dbname.".keu_jurnalht where kodejurnal='PNN03' and ".sqlRentangPeriode($param['periode']).") and noreferensi like '%PNN02%' GROUP BY nik";
     $res = fetchData($sql,"OBJECT");
     foreach($res as $val):
       // if(in_array($val->nik,$pejabatbkm)): # Cek apakah Pejabat BKM / Karyawan Supervisi

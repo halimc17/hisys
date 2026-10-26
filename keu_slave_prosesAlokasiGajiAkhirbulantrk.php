@@ -4,6 +4,9 @@ require_once('master_validation.php');
 include_once('lib/nangkoelib.php');
 include_once('lib/zLib.php');
 
+# Alokasi gaji tahap 2 (gaji traksi/bengkel ke lokasi/blok) dimatikan; biaya kendaraan dialokasikan lewat ALKJAM. Ubah ke true untuk menghidupkan lagi.
+if (!defined('ALK_GAJI_TRAKSI_TAHAP2')) define('ALK_GAJI_TRAKSI_TAHAP2', false);
+
 $param = $_POST;
 
 // ini_set('display_errors', 1);
@@ -408,6 +411,7 @@ function prosesGajiWs()
 	global $owlPDO;
 	global $orgpt;
 	global $arrkomponen;
+	global $namakomponen;
 	#WSG0	Gaji Bengkel	
 	#WSG1	Biaya Lebur Bengkel
 	#WSG2	Biaya Tunjangan Lain Bengkel
@@ -497,6 +501,8 @@ function prosesGajiWs()
 	# END NEW
 	#====================================================================================================#
 	
+	$ptpenggunaarr = array(); # dipakai update counter di akhir fungsi (tahap 2 mengisi ulang)
+	$ptpenggunaarr[$param['kodeorg']] = $orgpt;
 	$konter = array();
 	$insHead = 'insert into keu_jurnalht (nojurnal,kodeJurnal,tanggal,tanggalentry,posting,totaldebet,totalkredit,amountkoreksi,noreferensi,autojurnal,matauang,kurs,revisi) values ';
 	$insHead2 = '';
@@ -505,12 +511,15 @@ function prosesGajiWs()
 	if ($kodevhcx == '') { # Jika Workshop tidak memperbaiki kendaraan
 		#output pada jurnal kolom noreferensi ALK_WS_GYMH 
 		for ($i = 0; $i < count($arrkomponen); $i++) {
+			$param['namakomponen'] = $namakomponen[$arrkomponen[$i]]; # nama komponen untuk keterangan jurnal
 			if ($arrkomponen[$i] == 1 or $arrkomponen[$i] == 14)
 				$group = 'WSG0';
 			else if ($arrkomponen[$i] == 16 or $arrkomponen[$i] == 32 or $arrkomponen[$i] == 33)
 				$group = 'WSG1';
-			else if ($arrkomponen[$i] == 70 or $arrkomponen[$i] == 71 or $arrkomponen[$i] == 72 or $arrkomponen[$i] == 73 or $arrkomponen[$i] == 80)
+			else if ($arrkomponen[$i] == 70 or $arrkomponen[$i] == 72 or $arrkomponen[$i] == 73 or $arrkomponen[$i] == 80)
 				$group = 'WSG6';
+			else if ($arrkomponen[$i] == 71)
+				$group = 'WSG7';
 			else if ($arrkomponen[$i] == 28)
 				$group = 'WSG3';
 			else if ($arrkomponen[$i] == 26)
@@ -598,10 +607,14 @@ function prosesGajiWs()
 	} else {
 		//$dataRes['header']=Array();
 		for ($i = 0; $i < count($arrkomponen); $i++) {
+			$param['namakomponen'] = $namakomponen[$arrkomponen[$i]]; # nama komponen untuk keterangan jurnal
 			$dataRes['detail'] = array();
 
 			$param['komponen'] = $arrkomponen[$i];
 			$param['jumlah'] = $param['jumlah' . $arrkomponen[$i]];
+			if ($param['jumlah'] == 0) {
+				continue; # komponen bernilai nol tidak perlu dijurnalkan
+			}
 			# Jika Workshop memperbaiki kendaraan
 			# Buat per komponenn nya
 			#output pada jurnal kolom noreferensi ALK_WS_GYMH  
@@ -702,6 +715,10 @@ function prosesGajiWs()
 			// 	"' and kodekelompok='".$kodeJurnal."' and kodeunit='".$param['kodeorg']."' and periode='".$param['periode']."' ");
 			// $owlPDO->exec($updJurnal);
 
+
+			if (!ALK_GAJI_TRAKSI_TAHAP2) {
+				continue;
+			}
 
 			#3 ambil semua lokasi kegiatan
 			$str = "select sum(a.jumlah) as jlh,a.alokasibiaya,b.noakun,b.setupkegiatan from " . $dbname . ".vhc_rundt_detail a
@@ -1207,6 +1224,7 @@ function prosesGajiTraksi()
 	global $owlPDO;
 	global $orgpt;
 	global $arrkomponen;
+	global $namakomponen;
 	#VHCG0	Gaji Kendaraan/A.Berat		
 	#VHCG1	Biaya Lebur Kendaraan/A.Berat	
 	#VHCG2	Biaya Tunjangan Lain Kend./A.Berat	
@@ -1247,7 +1265,7 @@ function prosesGajiTraksi()
 	if ($kodekend != 'NOVHC') {
 
 		# Cek
-			$str = "select vhc from " . $dbname . ".vhc_5operator 
+			$str = "select vhc from " . vhcOperatorTabel($param['periode']) . " 
 				where karyawanid='" . $param['karyawanid'] . "' and aktif='1'";
 
 				$kodevhcx = '';
@@ -1295,12 +1313,19 @@ function prosesGajiTraksi()
 					$counttemp++;
 				}
 
+				$jamvhc = array();
 				$res = $owlPDO->query($str) or die(print " Gagal: " . PDOException::getMessage());
 				$res->setFetchMode(PDO::FETCH_OBJ);
 				while ($bar = $res->fetch()) {
 					$no++;
 					$biayavhc[$bar->kodevhc] = floor(($bar->jlh / $tempjam) * $param['jumlah']);
 					$arrvhc[$bar->kodevhc] = $bar->kodevhc;
+					$jamvhc[$bar->kodevhc] = $bar->jlh;
+				}
+				# sisa pembulatan masuk ke kendaraan dengan jam terbanyak, agar total sama dengan gaji
+				if (!empty($jamvhc)) {
+					arsort($jamvhc);
+					$biayavhc[key($jamvhc)] += round($param['jumlah'] - array_sum($biayavhc), 2);
 				}
 
 				# Jika kosong = tidak ada pekerjaan traksi [Pasti Umum], lempar ke proses Traksi Umum
@@ -1313,8 +1338,12 @@ function prosesGajiTraksi()
 
 		#output pada jurnal kolom noreferensi ALK_TRK_GYMH 
 		for ($i = 0; $i < count($arrkomponen); $i++) {
+			$param['namakomponen'] = $namakomponen[$arrkomponen[$i]]; # nama komponen untuk keterangan jurnal
 			$param['komponen'] = $arrkomponen[$i];
 			$param['jumlah'] = $param['jumlah' . $arrkomponen[$i]];
+			if ($param['jumlah'] == 0) {
+				continue; # komponen bernilai nol tidak perlu dijurnalkan
+			}
 			if ($param['komponen'] == 1 or $param['komponen'] == 14)
 				$group = 'VHCG0';
 			else if ($param['komponen'] == 16 or $param['komponen'] == 32 or $param['komponen'] == 33)
@@ -1346,11 +1375,48 @@ function prosesGajiTraksi()
 				$akunkredit = $bar->noakunkredit;
 			}
 
+			if (in_array($param['komponen'], array(70, 71, 72, 73, 80))) {
+				# BPJS tidak dibagi ke kendaraan: satu jurnal ke akun beban BPJS (akun 7), tanpa kode kendaraan
+				$kodeJurnal = $group;
+				if (!isset($konter[$kodeJurnal][$param['kodeorg']])) {
+					$queryJ = selectQuery(
+						$dbname,
+						'keu_5kelompokjurnal',
+						'nokounter',
+						"kodeorg='" . $orgpt . "' and kodekelompok='" . $kodeJurnal . "' and kodeunit='" . $param['kodeorg'] . "' and periode='" . $param['periode'] . "' "
+					);
+					$tmpKonter = fetchData($queryJ);
+					$konter[$kodeJurnal][$param['kodeorg']] = addZero($tmpKonter[0]['nokounter'] + 1, 3);
+				} else {
+					if (intval($konter[$kodeJurnal][$param['kodeorg']]) > 99999) {
+						$tambah = 6;
+					} else if (intval($konter[$kodeJurnal][$param['kodeorg']]) > 9999) {
+						$tambah = 5;
+					} else if (intval($konter[$kodeJurnal][$param['kodeorg']]) >= 999 and intval($konter[$kodeJurnal][$param['kodeorg']]) <= 9998) {
+						$tambah = 4;
+					} else {
+						$tambah = 3;
+					}
+					$konter[$kodeJurnal][$param['kodeorg']] = addZero(intval($konter[$kodeJurnal][$param['kodeorg']]) + 1, $tambah);
+				}
 
+				#= cek konter dari jurnal
+				$str = "select max((substring_index(nojurnal,'/',-1)*1)) as konter from " . $dbname . ".keu_jurnaldt_vw where kodeorg='" . trim($param['kodeorg']) . "' and kodejurnal='" . $kodeJurnal . "' and periode='" . $param['periode'] . "'";
+				$res = fetchdata($str);
+				foreach ($res as $bar) {
+					if (($bar['konter'] + 1) > $konter[$kodeJurnal][$param['kodeorg']]) {
+						$konter[$kodeJurnal][$param['kodeorg']] = ($bar['konter'] + 1);
+					}
+				}
 
-
-
-			$str = "select vhc from " . $dbname . ".vhc_5operator 
+				$nojurnal = str_replace("-", "", $tanggal) . "/" . $param['kodeorg'] . "/" . $kodeJurnal . "/" . $konter[$kodeJurnal][$param['kodeorg']];
+				$ket = $param['namakomponen'] . " " . $param['periode'] . " By.Traksi";
+				$insHead2 .= ($insHead2 == '' ? " " : " ,") . "('" . $nojurnal . "','" . $kodeJurnal . "','" . $tanggal . "','" . date('Ymd') . "','1','" . $param['jumlah'] . "','" . (-1 * $param['jumlah']) . "','0','ALK_TRK_GYMH','1','IDR','1','0')";
+				$insDet2 .= ($insDet2 == '' ? "" : ",") . "('" . $nojurnal . "','" . $tanggal . "','1','" . $akundebet . "','" . $ket . "','" . (1 * $param['jumlah']) . "','IDR','1','" . $param['kodeorg'] . "','','','','" . $param['karyawanid'] . "','','','ALK_TRK_GYMH','','','','','0','" . $defSegment . "')";
+				$insDet2 .= ",('" . $nojurnal . "','" . $tanggal . "','2','" . $akunkredit . "','" . $ket . "','" . (-1 * $param['jumlah']) . "','IDR','1','" . $param['kodeorg'] . "','','','','" . $param['karyawanid'] . "','','','ALK_TRK_GYMH','','','','','0','" . $defSegment . "')";
+				continue;
+			}
+			$str = "select vhc from " . vhcOperatorTabel($param['periode']) . " 
 			where karyawanid='" . $param['karyawanid'] . "' and aktif='1'";
 
 			$kodevhcx = '';
@@ -1398,15 +1464,25 @@ function prosesGajiTraksi()
 				$counttemp++;
 			}
 
+			$jamvhc = array();
 			$res = $owlPDO->query($str) or die(print " Gagal: " . PDOException::getMessage());
 			$res->setFetchMode(PDO::FETCH_OBJ);
 			while ($bar = $res->fetch()) {
 				$no++;
 				$biayavhc[$bar->kodevhc] = floor(($bar->jlh / $tempjam) * $param['jumlah']);
 				$arrvhc[$bar->kodevhc] = $bar->kodevhc;
+				$jamvhc[$bar->kodevhc] = $bar->jlh;
+			}
+			# sisa pembulatan masuk ke kendaraan dengan jam terbanyak, agar total sama dengan gaji
+			if (!empty($jamvhc)) {
+				arsort($jamvhc);
+				$biayavhc[key($jamvhc)] += round($param['jumlah'] - array_sum($biayavhc), 2);
 			}
 
 			foreach ($arrvhc as $key => $kodekend) {
+					if ($biayavhc[$kodekend] == 0) {
+						continue; # bagian kendaraan ini nol (pembulatan), tidak perlu dijurnalkan
+					}
 				#proses data
 				$kodeJurnal = $group;
 				#======================== Nomor Jurnal =============================
@@ -1699,6 +1775,10 @@ function prosesGajiTraksi()
 
 
 
+			if (!ALK_GAJI_TRAKSI_TAHAP2) {
+				continue;
+			}
+
 			$arrUnit = array();
 			$param['kodevhc'] = $kodekend;
 			#1 ambil periode akuntansi
@@ -1724,7 +1804,7 @@ function prosesGajiTraksi()
 
 			$group = 'VHC0';
 
-			$str = "select vhc from " . $dbname . ".vhc_5operator 
+			$str = "select vhc from " . vhcOperatorTabel($param['periode']) . " 
 			where karyawanid='" . $param['karyawanid'] . "' and aktif='1'";
 
 			$kodevhcx = '';
@@ -2395,6 +2475,7 @@ function prosesGajiTraksiUmum()
 	global $owlPDO;
 	global $orgpt;
 	global $arrkomponen;
+	global $namakomponen;
 	#WSG0	Gaji Bengkel	
 	#WSG1	Biaya Lebur Bengkel
 	#WSG2	Biaya Tunjangan Lain Bengkel
@@ -2482,6 +2563,7 @@ function prosesGajiTraksiUmum()
 		$res = fetchData($sql);
 		$umrgaji = $res[0]['umrgaji'];
 		for ($i = 0; $i < count($arrkomponen); $i++) {
+			$param['namakomponen'] = $namakomponen[$arrkomponen[$i]]; # nama komponen untuk keterangan jurnal
 			$param['komponen'] = $arrkomponen[$i];
 			$param['jumlah'] = $param['jumlah' . $arrkomponen[$i]];
 			//echo '<br> komp : '.$param['komponen'].', jumlah :'.$param['jumlah'].' ,sisa : '.$param['jumlah']-$umrgaji.'<br>';
@@ -2598,8 +2680,13 @@ function prosesGajiTraksiUmum()
 			}
 		}
 	} else { # Jika Workshop memperbaiki kendaraan
+		if (!ALK_GAJI_TRAKSI_TAHAP2) {
+			return;
+		}
+
 	
 		for ($i = 0; $i < count($arrkomponen); $i++) {
+			$param['namakomponen'] = $namakomponen[$arrkomponen[$i]]; # nama komponen untuk keterangan jurnal
 			#3 ambil semua lokasi kegiatan
 			$str = "select sum(a.jumlah) as jlh,a.alokasibiaya,b.noakun,b.setupkegiatan from " . $dbname . ".vhc_rundt_detail a
 					left join " . $dbname . ".vhc_kegiatan b on a.jenispekerjaan=b.kodekegiatan
@@ -3675,6 +3762,10 @@ function prosesGajiTraksiUmumv2()
 		}
 
 
+
+		if (!ALK_GAJI_TRAKSI_TAHAP2) {
+			return;
+		}
 
 		$arrUnit = array();
 		$param['kodevhc'] = $kodekend;

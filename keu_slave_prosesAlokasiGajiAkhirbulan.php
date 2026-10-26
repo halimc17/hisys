@@ -3,6 +3,9 @@ require_once('master_validation.php');
 include_once('lib/nangkoelib.php');
 include_once('lib/zLib.php');
 
+# Alokasi gaji tahap 2 (gaji traksi/bengkel ke lokasi/blok) dimatikan; biaya kendaraan dialokasikan lewat ALKJAM. Ubah ke true untuk menghidupkan lagi.
+if (!defined('ALK_GAJI_TRAKSI_TAHAP2')) define('ALK_GAJI_TRAKSI_TAHAP2', false);
+
 $param = $_POST;
 $orgpt  = "";
 $dataorg = array();
@@ -744,6 +747,10 @@ function prosesGajiWs()
 				"' and kodekelompok='" . $kodeJurnal . "' and kodeunit='" . $param['kodeorg'] . "' and periode='" . $param['periode'] . "' "
 		);
 		$owlPDO->exec($updJurnal);
+
+		if (!ALK_GAJI_TRAKSI_TAHAP2) {
+			return;
+		}
 
 		#3 ambil semua lokasi kegiatan
 		$str = "SELECT SUM(a.jumlah) as jlh,a.alokasibiaya,b.noakun,b.setupkegiatan,a.kodesegment 
@@ -2042,6 +2049,10 @@ function prosesGajiTraksi()
 
 
 
+		if (!ALK_GAJI_TRAKSI_TAHAP2) {
+			return;
+		}
+
 		$arrUnit = array();
 		$param['kodevhc'] = $kodekend;
 		#1 ambil periode akuntansi
@@ -3008,6 +3019,10 @@ function prosesGajiTraksiUmum()
 			$owlPDO->exec($updJurnal);
 		}
 	} else { # Jika Workshop memperbaiki kendaraan
+		if (!ALK_GAJI_TRAKSI_TAHAP2) {
+			return;
+		}
+
 		#3 ambil semua lokasi kegiatan
 		$str = "select sum(a.jumlah) as jlh,a.alokasibiaya,b.noakun,b.setupkegiatan from " . $dbname . ".vhc_rundt_detail a
 				left join " . $dbname . ".vhc_kegiatan b on a.jenispekerjaan=b.kodekegiatan
@@ -4179,6 +4194,10 @@ function prosesGajiTraksiUmumv2()
 
 
 
+		if (!ALK_GAJI_TRAKSI_TAHAP2) {
+			return;
+		}
+
 		$arrUnit = array();
 		$param['kodevhc'] = $kodekend;
 		#1 ambil periode akuntansi
@@ -4905,6 +4924,12 @@ function prosesGajiAfdeling()
 	global $owlPDO;
 	global $orgpt;
 
+	# BPJS tidak dialokasikan per blok, cukup satu jurnal ke akun beban BPJS seperti karyawan lain
+	if (in_array($param['komponen'], array(70, 71, 72, 73, 80))) {
+		prosesGajiKebun();
+		return;
+	}
+
 	// KBNL0	Biaya pengawasan BBT
 	// KBNL1	Biaya pengawasan TBM
 	// KBNL2	Biaya pengawasan TM
@@ -4967,6 +4992,10 @@ function prosesGajiAfdeling()
 				#= algoritma ambil total rupiah dan bandingkan dengan yang sudah dialokasi
 				#= kurangnya ditambahkan di blok dan kegiatan terakhir 
 				$sisapembulatan = $param['jumlah'] - $tporsi;
+			}
+
+			if ($porsi + $sisapembulatan == 0) {
+				continue; # bagian blok ini nol (pembulatan), tidak perlu dijurnalkan
 			}
 
 			$dataRes['header'] = array();
@@ -5337,8 +5366,10 @@ function prosesbulking()
 			$group = 'BLK07';
 		else if ($param['komponen'] == 21) #klaim pengobatan 
 			$group = 'BLK08';
-		else if ($param['komponen'] == 70 or $param['komponen'] == 71 or $param['komponen'] == 72 or $param['komponen'] == 73 or $param['komponen'] == 80)
+		else if ($param['komponen'] == 70 or $param['komponen'] == 72 or $param['komponen'] == 73 or $param['komponen'] == 80)
 			$group = 'BLK10';
+		else if ($param['komponen'] == 71)
+			$group = 'KBNB7'; #BPJS Kesehatan ke grup Kesehatan
 		else
 			$group = 'BLK05'; #gaji
 	} else {
@@ -5348,8 +5379,10 @@ function prosesbulking()
 			$group = 'BLK03';
 		else if ($param['komponen'] == 21) #klaim pengobatan 
 			$group = 'BLK04';
-		else if ($param['komponen'] == 70 or $param['komponen'] == 71 or $param['komponen'] == 72 or $param['komponen'] == 73 or $param['komponen'] == 80)
+		else if ($param['komponen'] == 70 or $param['komponen'] == 72 or $param['komponen'] == 73 or $param['komponen'] == 80)
 			$group = 'BLK09';
+		else if ($param['komponen'] == 71)
+			$group = 'KBNB7'; #BPJS Kesehatan ke grup Kesehatan
 		else
 			$group = 'BLK01'; #gaji	
 	}
@@ -5490,6 +5523,9 @@ function prosesGajiKebun()
 	global $owlPDO;
 	global $orgpt;
 
+	if ($param['jumlah'] == 0) {
+		return; # komponen bernilai nol tidak perlu dijurnalkan
+	}
 
 	#karyawan kebun
 	#output pada jurnal kolom noreferensi ALK_GAJI  
@@ -5768,8 +5804,10 @@ function prosesrnd()
 		$group = 'RNDB4';
 	elseif ($param['komponen'] == 21) #Klaim Pengobatan
 		$group = 'RNDB5';
-	else if ($param['komponen'] == 70 or $param['komponen'] == 71 or $param['komponen'] == 72 or $param['komponen'] == 73 or $param['komponen'] == 80)
+	else if ($param['komponen'] == 70 or $param['komponen'] == 72 or $param['komponen'] == 73 or $param['komponen'] == 80)
 		$group = 'RNDB6';
+	else if ($param['komponen'] == 71)
+		$group = 'KBNB7'; #BPJS Kesehatan ke grup Kesehatan
 	else
 		$group = 'RNDB2';  //defaultnya tunjangan
 
@@ -5919,8 +5957,10 @@ function prosesho()
 		$group = 'GJHO5';
 	elseif ($param['komponen'] == 21) #Klaim Pengobatan
 		$group = 'GJHO6';
-	else if ($param['komponen'] == 70 or $param['komponen'] == 71 or $param['komponen'] == 72 or $param['komponen'] == 73 or $param['komponen'] == 80)
+	else if ($param['komponen'] == 70 or $param['komponen'] == 72 or $param['komponen'] == 73 or $param['komponen'] == 80)
 		$group = 'GJHO7';
+	else if ($param['komponen'] == 71)
+		$group = 'KBNB7'; #BPJS Kesehatan ke grup Kesehatan
 	else
 		$group = 'GJHO3';  //defaultnya tunjangan
 

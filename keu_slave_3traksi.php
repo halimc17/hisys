@@ -18,7 +18,7 @@ $tahunbulan = implode("", explode('-', $param['periode']));
 if (@$dataorg[$kodeorg]->tipe != "HOLDING") {
 	$sCek = "select * from " . $dbname . ".keu_jurnalht where 
          nojurnal like '%KBNB%' 
-         and tanggal like '" . $_POST['periode'] . "%' and nojurnal like '%" . $kodeorg . "%'";
+         and " . sqlRentangPeriode($_POST['periode']) . " and nojurnal like '%" . $kodeorg . "%'";
 	$rCek = fetchdata($sCek);
 	/*  if(count($rCek)==0){
     exit('warning: Jalankan Proses Gaji Karyawan Tidak Langsung');
@@ -30,14 +30,14 @@ if (@$dataorg[$kodeorg]->tipe != "HOLDING") {
 	$rPot = fetchdata($sPot);
 	if (count($rPot) != 0) {
 		$sCek = "select * from " . $dbname . ".keu_jurnalht where 
-         nojurnal like '%POT%' and tanggal like '" . $_POST['periode'] . "%' and nojurnal like '%" . $kodeorg . "%'";
+         nojurnal like '%POT%' and " . sqlRentangPeriode($_POST['periode']) . " and nojurnal like '%" . $kodeorg . "%'";
 		$rCek = fetchdata($sCek);
 		if (count($rCek) == 0) {
 			exit('warning: Jalankan Proses Penarikan Potongan Gaji');
 		}
 	}
 	$sCek = "select * from " . $dbname . ".keu_jurnalht where 
-         nojurnal like '%DEP%' and tanggal like '" . $_POST['periode'] . "%' and nojurnal like '%" . $kodeorg . "%'";
+         nojurnal like '%DEP%' and " . sqlRentangPeriode($_POST['periode']) . " and nojurnal like '%" . $kodeorg . "%'";
 	$rCek = fetchdata($sCek);
 	/*if(count($rCek)==0){
 	    	exit('warning: Jalankan Proses Depresiasi');
@@ -120,7 +120,7 @@ while ($bar = $res->fetch()) {
 #antisipasi penggantian kegiatan traksi
 $str = "select distinct a.notransaksi,a.jenispekerjaan from " . $dbname . ".vhc_rundt a
     left join " . $dbname . ".vhc_runht b on a.notransaksi=b.notransaksi
-    where b.tanggal like '" . $periode . "%' and kodeorg='" . $kodeorg . "'
+    where " . sqlRentangPeriode($periode, 'b.tanggal') . " and kodeorg='" . $kodeorg . "'
     and a.jenispekerjaan not in (SELECT kodekegiatan FROM " . $dbname . ".vhc_kegiatan)";
 $res = $owlPDO->query($str) or die(print " Gagal: " . PDOException::getMessage());
 $res->setFetchMode(PDO::FETCH_OBJ);
@@ -151,7 +151,7 @@ $str = "select sum(debet-kredit) as jumlah from " . $dbname . ".keu_jurnaldt_vw
 	  where noakun >='" . $dariakun . "' and noakun<='" . $sampaiakun . "' 
 	  and kodeorg like '" . $kodeorg . "%' 
 	  and tanggal>='" . $tgmulai . "' and tanggal<='" . $tgsampai . "'
-	  and (noreferensi not in('ALK_KERJA_AB','ALK_BY_WS','ALK_WS_GYMH','ALK_MAINTENANCE') or noreferensi is NULL)";
+	  and (noreferensi not in('ALK_KERJA_AB','ALK_BY_WS','ALK_MAINTENANCE') or noreferensi is NULL)";
 $bybengkel = 0;
 $strBengkel = $str;
 $res = $owlPDO->query($str) or die(print " Gagal: " . PDOException::getMessage());
@@ -234,15 +234,19 @@ while ($bar = $res->fetch()) {
 	$kend[$bar->kodevhc] = $bar->dt;
 }
 
+#biaya bengkel dibagi ke kendaraan/stasiun sesuai jam servis, sisa pembulatan masuk ke yang jamnya paling banyak
+$jamterbanyak = -1;
 foreach ($kend as $key => $val) {
-	// @$byrinci[$key]=floor(($val/$totaljamservice)*$bybengkel);
-	// @$byrinci[$key]=floor(($val/$totaljamservice));
-	@$byrinci[$key] = $val;
-	// @$byrinci[$key]=$totaljamservice;
+	@$byrinci[$key] = ($totaljamservice > 0) ? floor(($val / $totaljamservice) * $bybengkel) : 0;
 	@$tbyrinci += $byrinci[$key];
-	$kendaraanpembulatanbengkel = $key;
+	if ($val > $jamterbanyak) {
+		$jamterbanyak = $val;
+		$kendaraanpembulatanbengkel = $key;
+	}
 }
-$jumlahpembulatanbengkel[$kendaraanpembulatanbengkel] = round($bybengkel - $tbyrinci, 0);
+if (isset($kendaraanpembulatanbengkel)) {
+	$jumlahpembulatanbengkel[$kendaraanpembulatanbengkel] = round($bybengkel - $tbyrinci, 0);
+}
 // echo "<pre>";
 // print_r($jumlahpembulatanbengkel);
 // print_r($strBengkel);
@@ -270,7 +274,7 @@ $str = "select sum(debet-kredit) as jlh,kodevhc from " . $dbname . ".keu_jurnald
 	  and tanggal>='" . $tgmulai . "' and tanggal<='" . $tgsampai . "' 
 	  and nojurnal like '%" . $kodeorg . "%'
 	  and (noakun between '" . $akunkdari . "' and '" . $akunksampai . "')   
-	  and (noreferensi not in('ALK_KERJA_AB','ALK_BY_WS','ALK_TRK_GYMH','ALK_WS_GYMH') or noreferensi is NULL) 
+	  and (noreferensi not in('ALK_KERJA_AB','ALK_BY_WS','ALK_WS_GYMH') or noreferensi is NULL) 
 	  group by kodevhc";
 $res = $owlPDO->query($str) or die(print " Gagal: " . PDOException::getMessage());
 $res->setFetchMode(PDO::FETCH_OBJ);

@@ -798,7 +798,7 @@ function prosesAlokasi()
         $akunksampai = $barh->sampaidebet;
     }
 
-    $str = "select sum(jumlah) as jumlah, kodevhc from " . $dbname . ".keu_jurnaldt_vw where  noakun not in (4110299,4110199)  and tanggal>='" . $tgmulai . "' and tanggal<='" . $tgsampai . "' and (noakun between '" . $akunkdari . "' and '" . $akunksampai . "') and (noreferensi not in ('ALK_KERJA_AB','ALK_TRK_GYMH') or noreferensi is NULL) and kodevhc='" . $param['kodevhc'] . "' ";
+    $str = "select sum(jumlah) as jumlah, kodevhc from " . $dbname . ".keu_jurnaldt_vw where  noakun not in (4110299,4110199)  and tanggal>='" . $tgmulai . "' and tanggal<='" . $tgsampai . "' and (noakun between '" . $akunkdari . "' and '" . $akunksampai . "') and (noreferensi not in ('ALK_KERJA_AB') or noreferensi is NULL) and kodevhc='" . $param['kodevhc'] . "' ";
 
     $res = fetchdata($str);
     foreach ($res as $bar) {
@@ -806,17 +806,21 @@ function prosesAlokasi()
     }
 
     #3 ambil semua lokasi kegiatan
-    $str = "select sum(a.jumlah) as jlh,a.alokasibiaya,b.noakun,b.setupkegiatan from " . $dbname . ".vhc_rundt_detail a
+    $str = "select sum(a.jumlah) as jlh,a.alokasibiaya,b.noakun,b.setupkegiatan,a.notransaksi from " . $dbname . ".vhc_rundt_detail a
             left join " . $dbname . ".vhc_kegiatan b on a.jenispekerjaan=b.kodekegiatan
             left join " . $dbname . ".vhc_runht c on a.notransaksi=c.notransaksi     
             where c.kodevhc='" . $param['kodevhc'] . "'
             and c.tanggal>='" . $tgmulai . "' and c.tanggal <='" . $tgsampai . "' and alokasibiaya!='' 
             and jenispekerjaan!=''    
-            group by jenispekerjaan,noakun,alokasibiaya,kodesegment order by tanggal asc";
+            and a.jumlah>0
+            group by a.notransaksi,jenispekerjaan,noakun,alokasibiaya,kodesegment order by c.tanggal asc,a.notransaksi asc";
 
     // exit("Error:".$str);
 
     $lokasi = array();
+    $notrans = array();
+    $gabung = array();
+    $cacheLokasi = array();
     $biaya = array();
     $jam  = array();
     $akun = array();
@@ -886,6 +890,7 @@ function prosesAlokasi()
                     }
                 }
                 $lokasi[] = $bar->alokasibiaya;
+                $notrans[] = $bar->notransaksi;
                 $jam[] = $bar->jlh;
                 if ($no == $counttemp or ($tempjumlah - floor(($bar->jlh / $tempjamx) * $param['jumlahbiayakendaraan'])) <= 0) {
                     $biaya[] = $tempjumlah;
@@ -904,6 +909,7 @@ function prosesAlokasi()
                 $segment[] = $bar->kodesegment;
             } else {
                 $lokasi[] = $bar->alokasibiaya;
+                $notrans[] = $bar->notransaksi;
                 $akun[]  = $bar->noakun;
                 $jam[] = $bar->jlh;
                 if ($no == $counttemp or ($tempjumlah - floor(($bar->jlh / $tempjamx) * $param['jumlahbiayakendaraan'])) <= 0) {
@@ -960,6 +966,12 @@ function prosesAlokasi()
         $dataRes['detail'] = array();
         $intern = true;
 
+        #hasil pencarian pengguna dan akun lawan sama untuk lokasi yang sama, cukup dicari sekali
+        $kunciLokasi = $lokasi[$key];
+        $akunsendiri = '';
+        if (isset($cacheLokasi[$kunciLokasi])) {
+            extract($cacheLokasi[$kunciLokasi]);
+        } else {
         $pengguna = substr($lokasi[$key], 0, 4);
         if (substr($lokasi[$key], 0, 2) == 'AK' or substr($lokasi[$key], 0, 2) == 'PB') {
             if (substr($lokasi[$key], 0, 2) == 'AK') {
@@ -1087,382 +1099,71 @@ function prosesAlokasi()
         } else {
             $intern = true;
         }
+        $cacheLokasi[$kunciLokasi] = compact('pengguna', 'supplierrxx', 'ptpengguna', 'akunpengguna', 'akunsendiri', 'intern');
+        }
+        $akunpekerjaan = $akun[$key];
 
+        if ($nilai == 0) {
+            continue;
+        }
+
+        #semua baris satu kendaraan digabung: satu jurnal VHC1 per unit dengan banyak baris debet dan satu baris kredit
         if ($intern) {
-            #proses data
-            $kodeJurnal = $group;
-            #======================== Nomor Jurnal =============================
-            # Get Journal Counter
-            $queryJ = selectQuery(
-                $dbname,
-                'keu_5kelompokjurnal',
-                'nokounter',
-                "kodeorg='" . $orgpt . "' and kodekelompok='" . $kodeJurnal . "'  and kodeunit='" . trim($param['kodeorg']) . "' and periode='" . $param['periode'] . "'  "
-            );
-            $tmpKonter = fetchData($queryJ);
-            $konter = addZero($tmpKonter[0]['nokounter'] + 1, 3);
-
-
-            #= cek konter dari jurnal
-            $str = "select max((substring_index(nojurnal,'/',-1)*1)) as konter from " . $dbname . ".keu_jurnaldt_vw where kodeorg='" . trim($param['kodeorg']) . "' and kodejurnal='" . $kodeJurnal . "' and periode='" . $param['periode'] . "'";
-            $res = fetchdata($str);
-            foreach ($res as $bar) {
-                $konterjurnal = ($bar['konter'] + 1);
-            }
-
-            if ($konterjurnal > $konter) {
-                $konter = $konterjurnal;
-            }
-
-
-            # Transform No Jurnal dari No Transaksi
-            $nojurnal = str_replace("-", "", $tanggal) . "/" . $param['kodeorg'] . "/" . $kodeJurnal . "/" . $konter;
-            #======================== /Nomor Jurnal ============================
-            # Prep Header
-            $dataRes['header'] = array(
-                'nojurnal' => $nojurnal,
-                'kodejurnal' => $kodeJurnal,
-                'tanggal' => $tanggal,
-                'tanggalentry' => date('Ymd'),
-                'posting' => 1,
-                'totaldebet' => $biaya[$key],
-                'totalkredit' => -1 * $biaya[$key],
-                'amountkoreksi' => '0',
-                'noreferensi' => 'ALK_KERJA_AB',
-                'autojurnal' => '1',
-                'matauang' => 'IDR',
-                'kurs' => '1',
-                'revisi' => '0'
-            );
-            # Data Detail
-            $noUrut = 1;
-            # Debet
-            $dataRes['detail'][] = array(
-                'nojurnal' => $nojurnal,
-                'tanggal' => $tanggal,
-                'nourut' => $noUrut,
+            $gabung['T']['unit'] = $param['kodeorg'];
+            $gabung['T']['pt'] = $orgpt;
+            $gabung['T']['akunkredit'] = $akunalok;
+            $gabung['T']['baris'][] = array(
                 'noakun' => $akunpekerjaan,
-                'keterangan' => $param['periode'] . ':Biaya Kendaraan ' . $param['kodevhc'],
                 'jumlah' => $biaya[$key],
-                'matauang' => 'IDR',
-                'kurs' => '1',
-                'kodeorg' => $param['kodeorg'],
                 'kodekegiatan' => $kegiatan[$key],
                 'kodeasset' => $kodeasset[$key],
-                'kodebarang' => '',
-                'nik' => 0,
-                'kodecustomer' => '',
                 'kodesupplier' => $supplierrxx,
-                'noreferensi' => 'ALK_KERJA_AB',
-                'noaruskas' => '',
-                'kodevhc' => $param['kodevhc'],
-                'nodok' => '',
+                'nodok' => $notrans[$key],
                 'kodeblok' => $lokasi[$key],
-                'revisi' => '0',
                 'kodesegment' => $segment[$key]
             );
-            $noUrut++;
-
-            # Kredit
-            $dataRes['detail'][] = array(
-                'nojurnal' => $nojurnal,
-                'tanggal' => $tanggal,
-                'nourut' => $noUrut,
-                'noakun' => $akunalok,
-                'keterangan' => $param['periode'] . ':Alokasi biaya kend ' . $param['kodevhc'],
-                'jumlah' => -1 * $biaya[$key],
-                'matauang' => 'IDR',
-                'kurs' => '1',
-                'kodeorg' => $param['kodeorg'],
-                'kodekegiatan' => $kegiatan[$key],
-                'kodeasset' => '',
-                'kodebarang' => '',
-                'nik' => '0',
-                'kodecustomer' => '',
-                'kodesupplier' => '',
-                'noreferensi' => 'ALK_KERJA_AB',
-                'noaruskas' => '',
-                'kodevhc' => $param['kodevhc'],
-                'nodok' => '',
-                'kodeblok' => $lokasi[$key],
-                'revisi' => '0',
-                'kodesegment' => $segment[$key]
-            );
-            $noUrut++;
-            $insHead = insertQuery($dbname, 'keu_jurnalht', $dataRes['header']);
-            $owlPDO->exec($insHead);
-
-            #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> Insert Detail
-            foreach ($dataRes['detail'] as $row) {
-                $insDet = insertQuery($dbname, 'keu_jurnaldt', $row);
-                $owlPDO->exec($insDet);
-            }
-            # Header and Detail inserted
-            #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> Update Kode Jurnal
-            $updJurnal = updateQuery(
-                $dbname,
-                'keu_5kelompokjurnal',
-                array('nokounter' => $konter),
-                "kodeorg='" . $orgpt . "' and kodekelompok='" . $kodeJurnal . "'  and kodeunit='" . trim($param['kodeorg']) . "' and periode='" . $param['periode'] . "'  "
-            );
-            $owlPDO->exec($updJurnal);
         } else {
-            # Data Detail
-            $noUrut = 1;
-            #proses data
-            $kodeJurnal = $group;
-            #======================== Nomor Jurnal =============================
-            # Get Journal Counter
-            $queryJ = selectQuery(
-                $dbname,
-                'keu_5kelompokjurnal',
-                'nokounter',
-                "kodeorg='" . $orgpt . "' and kodekelompok='" . $kodeJurnal . "'  and kodeunit='" . trim($param['kodeorg']) . "' and periode='" . $param['periode'] . "'  "
-            );
-            $tmpKonter = fetchData($queryJ);
-            $konter = addZero($tmpKonter[0]['nokounter'] + 1, 3);
-
-            #= cek konter dari jurnal
-            $str = "select max((substring_index(nojurnal,'/',-1)*1)) as konter from " . $dbname . ".keu_jurnaldt_vw where kodeorg='" . trim($param['kodeorg']) . "' and kodejurnal='" . $kodeJurnal . "' and periode='" . $param['periode'] . "'";
-            $res = fetchdata($str);
-            foreach ($res as $bar) {
-                $konterjurnal = ($bar['konter'] + 1);
-            }
-
-            if ($konterjurnal > $konter) {
-                $konter = $konterjurnal;
-            }
-
-
-
-            # Transform No Jurnal dari No Transaksi
-            $nojurnal = str_replace("-", "", $tanggal) . "/" . trim($param['kodeorg']) . "/" . $kodeJurnal . "/" . $konter;
-            $str = "select tutupbuku from " . $dbname . ".setup_periodeakuntansi where periode='" . $param['periode'] . "' and tutupbuku = '1' 
+            $str = "select tutupbuku from " . $dbname . ".setup_periodeakuntansi where periode='" . $param['periode'] . "' and tutupbuku = '1'
             and kodeorg='" . $pengguna . "'";
             $rstr = fetchData($str);
-            $arrUnit = array();
             if (count($rstr) == '0') { //klo blm tutup buku
-                #======================== /Nomor Jurnal ============================
-                # Prep Header
-                $dataRes['header'] = array(
-                    'nojurnal' => $nojurnal,
-                    'kodejurnal' => $kodeJurnal,
-                    'tanggal' => $tanggal,
-                    'tanggalentry' => date('Ymd'),
-                    'posting' => 1,
-                    'totaldebet' => $biaya[$key],
-                    'totalkredit' => -1 * $biaya[$key],
-                    'amountkoreksi' => '0',
-                    'noreferensi' => 'ALK_KERJA_AB',
-                    'autojurnal' => '1',
-                    'matauang' => 'IDR',
-                    'kurs' => '1',
-                    'revisi' => '0'
-                );
-                # Debet
-                $dataRes['detail'][] = array(
-                    'nojurnal' => $nojurnal,
-                    'tanggal' => $tanggal,
-                    'nourut' => $noUrut,
+                #sisi unit traksi: piutang intra/interco
+                $gabung['T']['unit'] = $param['kodeorg'];
+                $gabung['T']['pt'] = $orgpt;
+                $gabung['T']['akunkredit'] = $akunalok;
+                $gabung['T']['baris'][] = array(
                     'noakun' => $akunsendiri,
-                    'keterangan' => $param['periode'] . ':Biaya Kendaraan ' . $param['kodevhc'],
                     'jumlah' => $biaya[$key],
-                    'matauang' => 'IDR',
-                    'kurs' => '1',
-                    'kodeorg' => $param['kodeorg'],
                     'kodekegiatan' => $kegiatan[$key],
                     'kodeasset' => '',
-                    'kodebarang' => '',
-                    'nik' => '0',
-                    'kodecustomer' => '',
                     'kodesupplier' => '',
-                    'noreferensi' => 'ALK_KERJA_AB',
-                    'noaruskas' => '',
-                    'kodevhc' => $param['kodevhc'],
-                    'nodok' => '',
+                    'nodok' => $notrans[$key],
                     'kodeblok' => '',
-                    'revisi' => '0',
-                    'kodesegment' => $defSegment
-                );
-                $noUrut++;
-
-                # Kredit
-                $dataRes['detail'][] = array(
-                    'nojurnal' => $nojurnal,
-                    'tanggal' => $tanggal,
-                    'nourut' => $noUrut,
-                    'noakun' => $akunalok,
-                    'keterangan' => $param['periode'] . ':Alokasi biaya kend ' . $param['kodevhc'],
-                    'jumlah' => -1 * $biaya[$key],
-                    'matauang' => 'IDR',
-                    'kurs' => '1',
-                    'kodeorg' => $param['kodeorg'],
-                    'kodekegiatan' => $kegiatan[$key],
-                    'kodeasset' => '',
-                    'kodebarang' => '',
-                    'nik' => '0',
-                    'kodecustomer' => '',
-                    'kodesupplier' => '',
-                    'noreferensi' => 'ALK_KERJA_AB',
-                    'noaruskas' => '',
-                    'kodevhc' => $param['kodevhc'],
-                    'nodok' => '',
-                    'kodeblok' => '',
-                    'revisi' => '0',
                     'kodesegment' => $defSegment
                 );
 
-                $noUrut++;
-                $insHead = insertQuery($dbname, 'keu_jurnalht', $dataRes['header']);
-                $owlPDO->exec($insHead);
-
-                #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> Insert Detail
-                foreach ($dataRes['detail'] as $row) {
-                    $insDet = insertQuery($dbname, 'keu_jurnaldt', $row);
-                    $owlPDO->exec($insDet);
-                }
-                # Header and Detail inserted
-                #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> Update Kode Jurnal
-                $updJurnal = updateQuery(
-                    $dbname,
-                    'keu_5kelompokjurnal',
-                    array('nokounter' => $konter),
-                    "kodeorg='" . $orgpt . "' and kodekelompok='" . $kodeJurnal . "'  and kodeunit='" . trim($param['kodeorg']) . "' and periode='" . $param['periode'] . "'  "
-                );
-                $owlPDO->exec($updJurnal);
-
-                #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++    
-                #sisi Pengguna
-                $kodeJurnal = $group;
-                #ambil periodeaktif pengguna
-                $tgmulaid = $tanggal;
-
-
-                #======================== Nomor Jurnal =============================
-                # Get Journal Counter
-                $queryJ = selectQuery(
-                    $dbname,
-                    'keu_5kelompokjurnal',
-                    'nokounter',
-                    "kodeorg='" . $ptpengguna . "' and kodekelompok='" . $kodeJurnal . "'  and kodeunit='" . trim($pengguna) . "' and periode='" . $param['periode'] . "'  "
-                );
-                $tmpKonter = fetchData($queryJ);
-                $konter = addZero($tmpKonter[0]['nokounter'] + 1, 3);
-
-                #= cek konter dari jurnal
-                $str = "select max((substring_index(nojurnal,'/',-1)*1)) as konter from " . $dbname . ".keu_jurnaldt_vw where kodeorg='" . trim($pengguna) . "' and kodejurnal='" . $kodeJurnal . "' and periode='" . $param['periode'] . "'";
-                $res = fetchdata($str);
-                foreach ($res as $bar) {
-                    $konterjurnal = ($bar['konter'] + 1);
-                }
-
-                if ($konterjurnal > $konter) {
-                    $konter = $konterjurnal;
-                }
-
-
-
-                # Transform No Jurnal dari No Transaksi
-                $nojurnal = str_replace("-", "", $tgmulaid) . "/" . trim($pengguna) . "/" . $kodeJurnal . "/" . $konter;
-                #======================== /Nomor Jurnal ============================
-                # Prep Header
-                unset($dataRes['header']); //ganti header   
-                $dataRes['header'] = array(
-                    'nojurnal' => $nojurnal,
-                    'kodejurnal' => $kodeJurnal,
-                    'tanggal' => $tgmulaid,
-                    'tanggalentry' => date('Ymd'),
-                    'posting' => 1,
-                    'totaldebet' => $biaya[$key],
-                    'totalkredit' => -1 * $biaya[$key],
-                    'amountkoreksi' => '0',
-                    'noreferensi' => 'ALK_KERJA_AB',
-                    'autojurnal' => '1',
-                    'matauang' => 'IDR',
-                    'kurs' => '1',
-                    'revisi' => '0'
-                );
-
-                # Debet 1
-                $noUrut = 1;
-                unset($dataRes['detail']); //ganti header 
-                $dataRes['detail'][] = array(
-                    'nojurnal' => $nojurnal,
-                    'tanggal' => $tgmulaid,
-                    'nourut' => $noUrut,
+                #sisi pengguna
+                $gabung['P' . $pengguna]['unit'] = $pengguna;
+                $gabung['P' . $pengguna]['pt'] = $ptpengguna;
+                $gabung['P' . $pengguna]['akunkredit'] = $akunpengguna;
+                $gabung['P' . $pengguna]['baris'][] = array(
                     'noakun' => $akunpekerjaan,
-                    'keterangan' => $param['periode'] . ':Biaya Kendaraan ' . $param['kodevhc'],
                     'jumlah' => $biaya[$key],
-                    'matauang' => 'IDR',
-                    'kurs' => '1',
-                    'kodeorg' => $pengguna,
                     'kodekegiatan' => $kegiatan[$key],
                     'kodeasset' => $kodeasset[$key],
-                    'kodebarang' => '',
-                    'nik' => '0',
-                    'kodecustomer' => '',
                     'kodesupplier' => '',
-                    'noreferensi' => 'ALK_KERJA_AB',
-                    'noaruskas' => '',
-                    'kodevhc' => $param['kodevhc'],
-                    'nodok' => '',
+                    'nodok' => $notrans[$key],
                     'kodeblok' => $lokasi[$key],
-                    'revisi' => '0',
                     'kodesegment' => $segment[$key]
                 );
-                $noUrut++;
-
-                # Kredit 1
-                $dataRes['detail'][] = array(
-                    'nojurnal' => $nojurnal,
-                    'tanggal' => $tgmulaid,
-                    'nourut' => $noUrut,
-                    'noakun' => $akunpengguna,
-                    'keterangan' => $param['periode'] . ':Alokasi biaya kend ' . $param['kodevhc'],
-                    'jumlah' => -1 * $biaya[$key],
-                    'matauang' => 'IDR',
-                    'kurs' => '1',
-                    'kodeorg' => $pengguna,
-                    'kodekegiatan' => $kegiatan[$key],
-                    'kodeasset' => '',
-                    'kodebarang' => '',
-                    'nik' => '0',
-                    'kodecustomer' => '',
-                    'kodesupplier' => '',
-                    'noreferensi' => 'ALK_KERJA_AB',
-                    'noaruskas' => '',
-                    'kodevhc' => $param['kodevhc'],
-                    'nodok' => '',
-                    'kodeblok' => $lokasi[$key],
-                    'revisi' => '0',
-                    'kodesegment' => $segment[$key]
-                );
-                $noUrut++;
-
-                $insHead = insertQuery($dbname, 'keu_jurnalht', $dataRes['header']);
-                $owlPDO->exec($insHead);
-
-                #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> Insert Detail
-                foreach ($dataRes['detail'] as $row) {
-                    $insDet = insertQuery($dbname, 'keu_jurnaldt', $row);
-                    $owlPDO->exec($insDet);
-                }
-                # Header and Detail inserted
-                #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> Update Kode Jurnal
-                $updJurnal = updateQuery(
-                    $dbname,
-                    'keu_5kelompokjurnal',
-                    array('nokounter' => $konter),
-                    "kodeorg='" . $ptpengguna .
-                        "' and kodekelompok='" . $kodeJurnal . "'   and kodeunit='" . trim($pengguna) . "' and periode='" . $param['periode'] . "'  "
-                );
-                $owlPDO->exec($updJurnal);
-
-                //tutup 
             } else {
                 $arrUnit[$pengguna] = $pengguna;
             }
         }
+    }
+
+    foreach ($gabung as $g) {
+        simpanJurnalAlokasiGabungan($g, $group, $defSegment);
     }
     if (count($arrUnit) != 0) {
         $tttttt = "Ada Unit Tidak Menerima Biaya Karna Sudah Tutup Buku : ";
@@ -1471,4 +1172,120 @@ function prosesAlokasi()
         }
         throw new PDOException($tttttt);
     }
+}
+
+#satu jurnal ALK_KERJA_AB: banyak baris debet (per transaksi/kegiatan/blok) dan satu baris kredit
+function simpanJurnalAlokasiGabungan($g, $kodeJurnal, $defSegment)
+{
+    global $tanggal;
+    global $param;
+    global $dbname;
+    global $owlPDO;
+
+    $unit = trim($g['unit']);
+
+    #======================== Nomor Jurnal =============================
+    $queryJ = selectQuery(
+        $dbname,
+        'keu_5kelompokjurnal',
+        'nokounter',
+        "kodeorg='" . $g['pt'] . "' and kodekelompok='" . $kodeJurnal . "'  and kodeunit='" . $unit . "' and periode='" . $param['periode'] . "'  "
+    );
+    $tmpKonter = fetchData($queryJ);
+    $konter = addZero($tmpKonter[0]['nokounter'] + 1, 3);
+
+    $nojurnal = str_replace("-", "", $tanggal) . "/" . $unit . "/" . $kodeJurnal . "/" . $konter;
+    #= pastikan nomor belum dipakai (kunci primer keu_jurnalht)
+    while (count(fetchdata("select nojurnal from " . $dbname . ".keu_jurnalht where nojurnal='" . $nojurnal . "'")) > 0) {
+        $konter = addZero(intval($konter) + 1, 3);
+        $nojurnal = str_replace("-", "", $tanggal) . "/" . $unit . "/" . $kodeJurnal . "/" . $konter;
+    }
+    #======================== /Nomor Jurnal ============================
+
+    $total = 0;
+    foreach ($g['baris'] as $baris) {
+        $total += $baris['jumlah'];
+    }
+
+    $header = array(
+        'nojurnal' => $nojurnal,
+        'kodejurnal' => $kodeJurnal,
+        'tanggal' => $tanggal,
+        'tanggalentry' => date('Ymd'),
+        'posting' => 1,
+        'totaldebet' => $total,
+        'totalkredit' => -1 * $total,
+        'amountkoreksi' => '0',
+        'noreferensi' => 'ALK_KERJA_AB',
+        'autojurnal' => '1',
+        'matauang' => 'IDR',
+        'kurs' => '1',
+        'revisi' => '0'
+    );
+    $owlPDO->exec(insertQuery($dbname, 'keu_jurnalht', $header));
+
+    $noUrut = 1;
+    foreach ($g['baris'] as $baris) {
+        $row = array(
+            'nojurnal' => $nojurnal,
+            'tanggal' => $tanggal,
+            'nourut' => $noUrut,
+            'noakun' => $baris['noakun'],
+            'keterangan' => $param['periode'] . ':Biaya Kendaraan ' . $param['kodevhc'],
+            'jumlah' => $baris['jumlah'],
+            'matauang' => 'IDR',
+            'kurs' => '1',
+            'kodeorg' => $unit,
+            'kodekegiatan' => $baris['kodekegiatan'],
+            'kodeasset' => $baris['kodeasset'],
+            'kodebarang' => '',
+            'nik' => '0',
+            'kodecustomer' => '',
+            'kodesupplier' => $baris['kodesupplier'],
+            'noreferensi' => 'ALK_KERJA_AB',
+            'noaruskas' => '',
+            'kodevhc' => $param['kodevhc'],
+            'nodok' => $baris['nodok'],
+            'kodeblok' => $baris['kodeblok'],
+            'revisi' => '0',
+            'kodesegment' => $baris['kodesegment']
+        );
+        $owlPDO->exec(insertQuery($dbname, 'keu_jurnaldt', $row));
+        $noUrut++;
+    }
+
+    #Kredit: satu baris total
+    $row = array(
+        'nojurnal' => $nojurnal,
+        'tanggal' => $tanggal,
+        'nourut' => $noUrut,
+        'noakun' => $g['akunkredit'],
+        'keterangan' => $param['periode'] . ':Alokasi biaya kend ' . $param['kodevhc'],
+        'jumlah' => -1 * $total,
+        'matauang' => 'IDR',
+        'kurs' => '1',
+        'kodeorg' => $unit,
+        'kodekegiatan' => '',
+        'kodeasset' => '',
+        'kodebarang' => '',
+        'nik' => '0',
+        'kodecustomer' => '',
+        'kodesupplier' => '',
+        'noreferensi' => 'ALK_KERJA_AB',
+        'noaruskas' => '',
+        'kodevhc' => $param['kodevhc'],
+        'nodok' => '',
+        'kodeblok' => '',
+        'revisi' => '0',
+        'kodesegment' => $defSegment
+    );
+    $owlPDO->exec(insertQuery($dbname, 'keu_jurnaldt', $row));
+
+    $updJurnal = updateQuery(
+        $dbname,
+        'keu_5kelompokjurnal',
+        array('nokounter' => $konter),
+        "kodeorg='" . $g['pt'] . "' and kodekelompok='" . $kodeJurnal . "'  and kodeunit='" . $unit . "' and periode='" . $param['periode'] . "'  "
+    );
+    $owlPDO->exec($updJurnal);
 }
