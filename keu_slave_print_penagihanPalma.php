@@ -242,6 +242,11 @@ $pathnonpalma='images/logo/KOP INVOICE.png';
 					font-family: Tahoma, Verdana, Segoe, sans-serif;
 				}
 				
+				.tbinv { border-collapse: collapse; }
+				.tbinv td { font-size: 12px; }
+				/* garis tabel dipasang per sel (bukan atribut border tabel) supaya sel kosong di kiri DPP/PPN/PPH/Total tanpa kotak */
+				.tbinv #header > td, .tbinv #data > td, .tbinv #datajumkg > td, .tbinv #datapenambah > td { border: 1px solid #000; }
+
 				footer {
 					position: fixed; 
 					bottom: -20px; 
@@ -272,7 +277,8 @@ $pathnonpalma='images/logo/KOP INVOICE.png';
 			$kotattd = 'Jakarta';
 			$alamatunit = '';
 			$segkontrak = explode('/', $nokontrak);
-			if (isset($segkontrak[1]) && preg_match('/^[A-Za-z0-9]+$/', $segkontrak[1])) {
+			# DINONAKTIFKAN: kop invoice PPP kembali ke Jakarta (alamat PT) sesuai format PDF contoh; hapus "false &&" untuk mengaktifkan lagi
+			if (false && isset($segkontrak[1]) && preg_match('/^[A-Za-z0-9]+$/', $segkontrak[1])) {
 				$str = "select alamat,wilayahkota,kodepos from ".$dbname.".organisasi where kodeorganisasi='".$segkontrak[1]."' and tipe='KEBUN'";
 				$res = $owlPDO->query($str) or die(print " Gagal: " . PDOException::getMessage());
 				$res->setFetchMode(PDO::FETCH_ASSOC);
@@ -289,12 +295,14 @@ $pathnonpalma='images/logo/KOP INVOICE.png';
 			# Header simetris: logo di kiri, judul tepat di tengah halaman, kolom kanan kosong sebagai penyeimbang
 			$tab.="<table style='width:90%;margin:0 auto!important;' cellpadding=".$cellpadding." cellspacing=0 border='0'>";
 			$tab.="<tr>";
-			$tab.="<td align=left style='width:30%;'><img src='".$path."' style='width:180px;height:100px;' /></td>";
+			$tab.="<td align=left style='width:30%;'><img src='".$path."' style='width:150px;height:83px;' /></td>";
 			$tab.="<td align=center valign=middle style='width:40%;text-align:center;font-size:16px;'><b>I N V O I C E</b><p style='text-align:center;font-size:14px;'>No : $noinvoice</p></td>";
 			$tab.="<td style='width:30%;'></td>";
 			$tab.="</tr>";
 			$tab.="<tr>";
-			if($alamatunit!=''){
+			# alamat di bawah logo dihilangkan sesuai format PDF contoh (isi dikosongkan, bukan baris NPWP)
+				$alamatunit=''; $wilayahkotapt=''; $kodepospt='';
+				if($alamatunit!=''){
 				$tab.="<td colspan=2 style='text-align:left;font-size:12px'>".$alamatunit."</td>";
 				$tab.="<td></td>";
 			}else{
@@ -358,7 +366,7 @@ $pathnonpalma='images/logo/KOP INVOICE.png';
 			$tab.="</table>";
 			$tab.="<br/>";
 
-			$tab.="<table style='width:90%;margin:0 auto!important;' cellpadding=".$cellpadding." cellspacing=0 border='".$border."'>";
+			$tab.="<table style='width:90%;margin:0 auto!important;' cellpadding=".$cellpadding." cellspacing=0 border='0' class='tbinv'>";
             $tab.="<tr id=header style='background-color:#C3C3C3;'>";
                 $tab.="<td align=center>".$_SESSION['lang']['nourut']."</td>";
                 $tab.="<td align=center>".$_SESSION['lang']['tahuntanam']."</td>";
@@ -430,7 +438,7 @@ $pathnonpalma='images/logo/KOP INVOICE.png';
                     $tab.="<tr id=data>";
                         $tab.="<td align=center>".$no."</td>";
                         $tab.="<td align=center>TT. ".($kodebarang=='40000003' ? $val->tahuntanam : $val->tanggaltbs1)."</td>";
-                        $tab.="<td align=right>".number_format($val->jumlahkg,2)."</td>";
+                        $tab.="<td align=right>".number_format($val->jumlahkg)."</td>";
                         $tab.="<td>";
 						$tab.="<table width=100%;>";
 						$tab.="<tr>";
@@ -449,7 +457,7 @@ $pathnonpalma='images/logo/KOP INVOICE.png';
                         $tab.="</td>";
                     $tab.="</tr>";
 
-                    $totalkg+=$val->jumlahkg;
+                    $totalkg+=round($val->jumlahkg);
                     $total['dpp']+=$val->jumlahrp;
                     // $total['ppn']=$total['dpp']*11/100;
                     $total['ppn']=$nilaippn;
@@ -459,7 +467,7 @@ $pathnonpalma='images/logo/KOP INVOICE.png';
 
                 $tab.="<tr id=datajumkg>";
                     $tab.="<td colspan=2></td>";
-                    $tab.="<td align=right>".number_format($totalkg,2)."</td>";
+                    $tab.="<td align=right>".number_format($totalkg)."</td>";
                     $tab.="<td colspan=2></td>";
 					$tab.="</tr>";
 
@@ -503,7 +511,9 @@ $pathnonpalma='images/logo/KOP INVOICE.png';
 
             $databayar['norek']=$rekening;
             $databayar['bank']=$namabank;
-            // $databayar['unit']="HOLDING";
+            # Tambah baris Unit (cabang bank) di info pembayaran, urutan: Bank, Unit, Nomor Rekening, Atas Nama
+            $arrbayar  = array('bank' => 'Bank', 'unit' => 'Unit', 'norek' => 'Nomor Rekening', 'an' => 'Atas Nama');
+            $databayar['unit']=$cabang;
             $databayar['an']=$namapt;
             
             foreach($arrbayar as $key => $val) {   
@@ -519,7 +529,7 @@ $pathnonpalma='images/logo/KOP INVOICE.png';
 			# Tanda Tangan
 			$tab.="<table style='width:90%;margin:0 auto!important;' cellpadding=".$cellpadding." cellspacing=0 border='0'>";
 						$tab.="<tr>";
-								$tab.="<td><br></td>";
+								$tab.="<td><br><br></td>";
             $tab.="</tr>";
             $tab.="<tr id=tandatangan>";
                 $tab.="<td style='color:#fff;' align=center>Jakarta, ".$tanggalinvoice."</td>";
