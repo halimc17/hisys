@@ -1260,7 +1260,7 @@ switch($method){
 		$komentarRevisi    = '';
 		if ($perluRevisi) {
 				foreach ($resSudahAjukan as $bar) {
-						$keyPrev = $bar['tanggalspb'].'|'.$bar['nokendaraan'];
+						$keyPrev = $bar['tanggalspb'].'|'.$bar['nokendaraan'].'|'.$bar['tahuntanam'];
 						if (!isset($prevRevisi[$keyPrev])) {
 								$prevRevisi[$keyPrev] = [
 										'tahuntanam' => $bar['revtahuntanam'],
@@ -1299,8 +1299,6 @@ switch($method){
 				$groupsAjukan = [];
 				$orderAjukan  = [];
 				foreach ($resSudahAjukan as $bar) {
-						$key = $bar['tanggalspb'].'|'.$bar['nokendaraan'];
-
 						if ($statusRev == 1) {
 								$tahunLamaBar = $bar['oldtahuntanam'];
 								$totalLamaBar = (float)$bar['oldrpkg'] * (float)$bar['kgnetto'];
@@ -1312,6 +1310,10 @@ switch($method){
 								$tahunBaruBar = $bar['revtahuntanam'];
 								$totalBaruBar = (float)$bar['revtotalrp'];
 						}
+
+						// Satu truck di satu tanggal bisa punya beberapa baris beda tahun tanam - tiap
+						// tahun tanam lama jadi barisnya sendiri (sama seperti tabel edit koreksi).
+						$key = $bar['tanggalspb'].'|'.$bar['nokendaraan'].'|'.$tahunLamaBar;
 
 						if (!isset($groupsAjukan[$key])) {
 								$groupsAjukan[$key] = [
@@ -1461,28 +1463,31 @@ switch($method){
 		}
 		ksort($listTahunTanam);
 
-		// Kelompokkan baris per truck (nokendaraan) + tanggal SPB. Satu truck/tanggal biasanya
-		// cuma 1 tahun tanam, tapi kalau ternyata truck yang sama di tanggal yang sama mengangkut
-		// dari lebih dari 1 blok/tahun tanam berbeda, itu ditandai "Campur" (bukan langsung digabung diam-diam).
+		// Kelompokkan baris per truck (nokendaraan) + tanggal SPB + tahun tanam. Kalau truck yang sama
+		// di tanggal yang sama mengangkut beberapa tahun tanam, tiap tahun tanam jadi barisnya sendiri
+		// (sama seperti cara baris disimpan di kebun_tbsjual), jadi tidak ada lagi baris "Campur".
 		// Catatan: kalau ada baris manapun yang revstatus=9/1/2, kode di atas sudah `break` duluan
 		// (lihat blok cek pending), jadi titik ini cuma tercapai kalau memang belum ada pengajuan
 		// aktif (revstatus=0) ATAU statusnya Perlu Revisi (revstatus=3, $perluRevisi=true).
 		$groups = [];
 		$groupOrder = [];
 		foreach ($res as $bar) {
-				$key = $bar['tanggalspb'].'|'.$bar['nokendaraan'];
+				$key = $bar['tanggalspb'].'|'.$bar['nokendaraan'].'|'.$bar['tahuntanam'];
 				if (!isset($groups[$key])) {
 						$groups[$key] = [
 								'tanggalspb'  => $bar['tanggalspb'],
 								'nokendaraan' => $bar['nokendaraan'],
 								'tanggalpks'  => $bar['tanggalpks'],
-								'tahuntanam'  => [],
+								'tahuntanam'  => $bar['tahuntanam'],
+								'notiket'     => [],
 								'kgnetto'     => 0,
 								'totalrp'     => 0,
 						];
 						$groupOrder[] = $key;
 				}
-				$groups[$key]['tahuntanam'][$bar['tahuntanam']] = $bar['tahuntanam'];
+				if ($bar['notiket'] !== '' && $bar['notiket'] !== null) {
+						$groups[$key]['notiket'][$bar['notiket']] = $bar['notiket'];
+				}
 				$groups[$key]['kgnetto'] += (float)$bar['kgnetto'];
 				$groups[$key]['totalrp'] += (float)$bar['totalrp'];
 		}
@@ -1506,6 +1511,7 @@ switch($method){
 				<th rowspan=2>".$_SESSION['lang']['nourut']."</th>
 				<th rowspan=2>".$_SESSION['lang']['tanggal']."</th>
 				<th rowspan=2>".$_SESSION['lang']['kodevhc']."</th>
+				<th rowspan=2>No Tiket Timbang</th>
 				<th rowspan=2>".$_SESSION['lang']['netto']."</th>
 				<th colspan=3>Sebelum Koreksi</th>
 				<th colspan=3>Setelah Koreksi</th>
@@ -1531,7 +1537,7 @@ switch($method){
 				$tglSPB = $g['tanggalspb'];
 
 				if ($lastTgl !== null && $lastTgl != $tglSPB) {
-						$stream .= "<tr><td colspan=12 style='background-color:#E2F0D9;'>&nbsp;</td></tr>";
+						$stream .= "<tr><td colspan=13 style='background-color:#E2F0D9;'>&nbsp;</td></tr>";
 				}
 
 				$no++;
@@ -1540,9 +1546,8 @@ switch($method){
 				$totalLamaAll += $totalLama;
 				$hargaLamaRata = $kgNetto > 0 ? ($totalLama / $kgNetto) : 0;
 
-				$ttList  = array_values($g['tahuntanam']);
-				$isMixed = count($ttList) > 1;
-				$ttLamaLabel = $isMixed ? 'Campur ('.implode(', ', $ttList).')' : ($ttList[0] ?? '-');
+				$ttLama = $g['tahuntanam'];
+				$noTiketLabel = !empty($g['notiket']) ? implode(', ', $g['notiket']) : '-';
 
 				// Kalau statusnya Perlu Revisi, pre-select tahun tanam dari usulan sebelumnya
 				// (bukan dari tahun tanam lama), supaya pengaju tinggal koreksi yang perlu diperbaiki saja.
@@ -1566,7 +1571,7 @@ switch($method){
 								$hargaBaruPrefill = 0;
 						}
 				} else {
-						$defaultTT = !$isMixed ? $ttList[0] : null;
+						$defaultTT = $ttLama;
 				}
 
 				$optTahunTanam = "<option value=''>-- Pilih --</option>";
@@ -1575,12 +1580,13 @@ switch($method){
 						$optTahunTanam .= "<option value='".$tt."'".$sel.">".$tt."</option>";
 				}
 
-				$stream .= "<tr class=rowcontent id=rowkoreksi".$no." data-mixed='".($isMixed ? 1 : 0)."'>";
+				$stream .= "<tr class=rowcontent id=rowkoreksi".$no.">";
 				$stream .= "<td align=center>".$no."</td>";
 				$stream .= "<td align=center id=kortanggal".$no.">".tanggalnormal($tglSPB)."</td>";
 				$stream .= "<td align=center id=kornokendaraan".$no.">".$g['nokendaraan']."</td>";
+				$stream .= "<td align=center id=kornotiket".$no.">".htmlspecialchars($noTiketLabel)."</td>";
 				$stream .= "<td align=right id=kornetto".$no." data-netto='".$kgNetto."' data-tglpks='".$g['tanggalpks']."'>".number_format($kgNetto)."</td>";
-				$stream .= "<td align=center id=kortahuntanamlama".$no.($isMixed ? " style='color:red;font-weight:bold;'" : "").">".$ttLamaLabel."</td>";
+				$stream .= "<td align=center id=kortahuntanamlama".$no.">".$ttLama."</td>";
 				$stream .= "<td align=right id=korhargalama".$no.">".number_format($hargaLamaRata, 2)."</td>";
 				$stream .= "<td align=right id=kortotallama".$no.">".number_format($totalLama, 2)."</td>";
 				$stream .= "<td align=center>
@@ -1592,7 +1598,7 @@ switch($method){
 						$validCell     = $hargaBaruPrefill > 0 ? '1' : '0';
 						$colorCell     = $hargaBaruPrefill > 0 ? '' : 'red';
 				} else {
-						$hargaBaruCell = $isMixed ? '-' : number_format($hargaLamaRata, 2);
+						$hargaBaruCell = number_format($hargaLamaRata, 2);
 						$totalBaruCell = number_format($totalLama, 2);
 						$validCell     = '1';
 						$colorCell     = '';
@@ -1610,7 +1616,7 @@ switch($method){
 		}
 
 		$stream .= "<tr class=rowheader style='font-weight:bold;'>";
-		$stream .= "<td align=center colspan=6>".$_SESSION['lang']['total']."</td>";
+		$stream .= "<td align=center colspan=7>".$_SESSION['lang']['total']."</td>";
 		$stream .= "<td align=right>".number_format($totalLamaAll, 2)."</td>";
 		$stream .= "<td></td><td></td>";
 		$stream .= "<td align=right id=korgrandtotalbaru>".number_format($totalBaruAll, 2)."</td>";
@@ -1653,10 +1659,11 @@ switch($method){
 						$tglSPB      = tanggalsystemn($d['tanggal']);
 						$nokendaraan = $d['nokendaraan'];
 						$tahunBaru   = $d['tahuntanamBaru'];
+						$tahunLama   = $d['tahuntanamLama'];
 
 						// Ambil referensi unit/customer/tanggal PKS + status koreksi terkini dari grup truck+tanggal ini
 						$strRef = "select unit, kodecustomer, tanggalpks, revstatus from ".$dbname.".".$table."
-								where notransaksi='".$notransaksi."' and nokendaraan='".$nokendaraan."' and tanggalspb='".$tglSPB."' limit 1";
+								where notransaksi='".$notransaksi."' and nokendaraan='".$nokendaraan."' and tanggalspb='".$tglSPB."' and tahuntanam='".$tahunLama."' limit 1";
 						$resRef = fetchdata($strRef);
 						if (empty($resRef)) {
 								continue;
@@ -1691,7 +1698,7 @@ switch($method){
 								revstatus = '9',
 								revcreateby ='".$_SESSION['standard']['userid']."',
 								revcreatetime ='".date('Y-m-d H:i:s')."'
-								where notransaksi='".$notransaksi."' and nokendaraan='".$nokendaraan."' and tanggalspb='".$tglSPB."'";
+								where notransaksi='".$notransaksi."' and nokendaraan='".$nokendaraan."' and tanggalspb='".$tglSPB."' and tahuntanam='".$tahunLama."'";
 						$owlPDO->exec($str);
 
 						$adaPerubahan = true;

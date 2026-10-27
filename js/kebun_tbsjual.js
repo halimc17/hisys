@@ -62,7 +62,7 @@ function hitungKoreksi(no) {
 	var elTotalBaru = document.getElementById('kortotalbaru' + no);
 	var elKet = document.getElementById('korket' + no);
 
-	// Belum pilih tahun tanam koreksi (baris "Campur" defaultnya kosong) -> jangan hitung apa-apa dulu.
+	// Belum pilih tahun tanam koreksi (opsi "-- Pilih --") -> jangan hitung apa-apa dulu.
 	if (newTT === '') {
 		elHargaBaru.innerHTML = '-';
 		elTotalBaru.innerHTML = elTotalBaru.getAttribute('data-totallama') || elTotalBaru.innerHTML;
@@ -114,7 +114,7 @@ function hitungGrandTotalKoreksi() {
 // & memvalidasi baris yang mau diajukan.
 function ajukanPersetujuanKoreksi(notransaksi, maxRow) {
 	var perubahan = [];
-	var belumPilihCampur = 0;
+	var belumPilih = 0;
 	var hargaTidakValid = 0;
 	var belumAdaKeterangan = 0;
 
@@ -123,12 +123,10 @@ function ajukanPersetujuanKoreksi(notransaksi, maxRow) {
 		var elBaru = document.getElementById('kortahuntanam' + i);
 		if (!elLama || !elBaru) continue;
 
-		var row = document.getElementById('rowkoreksi' + i);
-		var isMixed = row && row.getAttribute('data-mixed') === '1';
 		var baru = elBaru.value.trim();
 
-		if (isMixed && baru === '') {
-			belumPilihCampur++;
+		if (baru === '') {
+			belumPilih++;
 			continue;
 		}
 
@@ -163,8 +161,8 @@ function ajukanPersetujuanKoreksi(notransaksi, maxRow) {
 		}
 	}
 
-	if (belumPilihCampur > 0) {
-		alertify.alert('Informasi', 'Ada ' + belumPilihCampur + ' truck/tanggal dengan tahun tanam Campur yang belum dipilih koreksinya. Tolong pilih dulu tahun tanam yang benar untuk baris tersebut.');
+	if (belumPilih > 0) {
+		alertify.alert('Informasi', 'Ada ' + belumPilih + ' baris yang tahun tanam koreksinya dikosongkan (-- Pilih --). Pilih tahun tanamnya dulu, atau kembalikan ke tahun tanam semula.');
 		return;
 	}
 
@@ -309,15 +307,18 @@ function excel(notransaksi) {
 	showDialog5(title, content, width, height, 'event');
 }
 
+// Tampilkan PDF di popup alertify yang bisa di-maximize & di-resize (showDialog5 ukurannya
+// tetap 820x500 dan tidak punya tombol maximize, jadi kurang nyaman buat baca PDF).
+function tampilkanPdfPopup(judul, tujuan) {
+	var content = "<iframe frameborder=0 style='width:100%;height:100%;border:0;' src='" + tujuan + "'></iframe>";
+	alertify.popup(judul, content).set({ 'resizable': true, 'maximizable': true }).resizeTo('85%', '90%');
+}
+
 function pdfdetail(notransaksi) {
 	param = 'method=excel' + '&tipe=pdf' + '&notransaksi=' + notransaksi;
 	tujuan='kebun_tbsjual_slave.php';
 	tujuan = tujuan+'?' + param;
-	content = "<iframe frameborder=0 style='width:100%;height:99%' src='" + tujuan + "'></iframe>";
-	width = '820';
-	height = '500';
-	title = "";
-	showDialog5(title, content, width, height, 'event');
+	tampilkanPdfPopup('PDF Penjualan TBS', tujuan);
 }
 
 function exportlist(tipe) {
@@ -332,6 +333,10 @@ function exportlist(tipe) {
 	param += '&kodecustomersch=' + kodecustomersch;
 	tujuan = 'kebun_tbsjual_slave.php';
 	tujuan = tujuan+'?' + param;
+	if (tipe == 'pdf') {
+		tampilkanPdfPopup('PDF Daftar BA Penjualan TBS', tujuan);
+		return;
+	}
 	content = "<iframe frameborder=0 style='width:100%;height:99%' src='" + tujuan + "'></iframe>";
 	width = '820';
 	height = '500';
