@@ -345,7 +345,7 @@ $pathnonpalma='images/logo/KOP INVOICE.png';
 			$tab.="</tr>";
             # End Line
             $tab.="<tr>";
-                $tab.="<td style='font-size: 14px;'>Dengan Hormat,</td>";
+                $tab.="<td style='font-size: 14px;'>Dengan hormat,</td>";
 			$tab.="</tr>";
 
 			$hariX = (int) date('d', strtotime($tanggalinvoice));
