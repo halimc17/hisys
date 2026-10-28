@@ -144,8 +144,8 @@ switch($method){
 			$opthari.="<option value=".$row.">".$val."</option>";
 		}
 
-		$optBanjir="<option value='0'>TIDAK</option>";
-		$optBanjir.="<option value='1'>YA</option>";
+		$optBanjir="<option value='0'>KEMARAU, TIDAK ADA KESULITAN</option>";
+		$optBanjir.="<option value='1'>BANJIR</option>";
 		
 		$opttt="<option value=''>".$_SESSION['lang']['pilihdata']."</option>";
 		$tab.="
@@ -191,7 +191,7 @@ switch($method){
 					<td><input class=myinputtextnumber onclick=delnol(this); style='text-align:right;width:378px;height:30px;font-size:14px;padding-right:10px;padding-left:10px' type=text id='premikehadiran' onkeypress=\"return isNumberKey(event);\" placeholder=0></td>
 				</tr>
 				<tr>
-					<td>Banjir</td>
+					<td>Kesulitan</td>
 					<td><select class='select2' style='width:400px;' id='banjir' >".$optBanjir."</select></td>
 				</tr>
                 <tr>
@@ -220,7 +220,7 @@ switch($method){
 				<th style='text-align:center;'>".$_SESSION['lang']['premi']." Brondol (Rp)</th>
 				<th style='text-align:center;'>Premi Kesulitan (Rp)</th>
 				<th style='text-align:center;'>Premi Kehadiran</th>
-				<th style='text-align:center;'>Banjir</th>
+				<th style='text-align:center;'>Kesulitan</th>
 				<th style='text-align:center;'>".$_SESSION['lang']['action']."</th>
 			</tr>
 		</thead>
@@ -246,9 +246,9 @@ switch($method){
 			$tab.="<td style='text-align:center;'>".number_format($bar['premikehadiran'],2)."</td>";
 
             if($bar['banjir'] == 1){
-				$banjir ="YA";
+				$banjir ="BANJIR";
 			}else{
-				$banjir ="TIDAK";
+				$banjir ="KEMARAU, TIDAK ADA KESULITAN";
 			}
 
 			$tab.="<td style='text-align:center;'>".$banjir."</td>";		
