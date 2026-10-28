@@ -77,17 +77,19 @@ switch ($method) {
         </tr>
 		</thead>";
 		$no = 0;
-		$str = "select * from " . $dbname . ".lgl_dokumenlegal where kodept='" . $pt . "' order by jenis asc, kodeijin asc, noijin asc";
+		$str = "select *, if(tgldaftarulang <> '0000-00-00' and tgldaftarulang <= curdate(), 1, 0) as overdue from " . $dbname . ".lgl_dokumenlegal where kodept='" . $pt . "' order by overdue desc, tgldaftarulang asc, jenis asc, kodeijin asc, noijin asc";
 		$res = $owlPDO->query($str) or die(print " Gagal: " . PDOException::getMessage());
 		$row = $res->rowCount();
 		$res->setFetchMode(PDO::FETCH_ASSOC);
 		$lf = $xx = '';
 		while ($bar = $res->fetch()) {
-			$lf = " onclick=\"viewlistfile('" . $bar['kodept'] . "','" . $bar['jenis'] . "','" . $bar['kodeijin'] . "','" . $bar['noijin'] . "')\" valign=top style=cursor:pointer";
+			$lf = " onclick=\"viewlistfile('" . $bar['kodept'] . "','" . $bar['jenis'] . "','" . $bar['kodeijin'] . "','" . $bar['noijin'] . "')\\\" valign=top style=cursor:pointer";
 			$no += 1;
 			$a = $no % 2;
 			$xx = '';
-			if ($a == 1) {
+			if ($bar['overdue'] == 1) {
+				$xx .= " style=background-color:#FFCCCC;color:#990000 ";
+			} elseif ($a == 1) {
 				$xx .= " style=background-color:#F5EEF8 ";
 			}
 			$tab .= "<tr " . $xx . " class=rowcontent style=cursor:pointer>";
@@ -235,17 +237,19 @@ switch ($method) {
 	case 'loaddatadetail':
 		$tab = "";
 		$no = 0;
-		$str = "select * from " . $dbname . ".lgl_dokumenlegal where kodept='" . $pt . "' order by jenis asc, kodeijin asc, noijin asc";
+		$str = "select *, if(tgldaftarulang <> '0000-00-00' and tgldaftarulang <= curdate(), 1, 0) as overdue from " . $dbname . ".lgl_dokumenlegal where kodept='" . $pt . "' order by overdue desc, tgldaftarulang asc, kodeijin asc, noijin asc";
 		$res = $owlPDO->query($str) or die(print " Gagal: " . PDOException::getMessage());
 		$row = $res->rowCount();
 		$res->setFetchMode(PDO::FETCH_ASSOC);
 		$lf = $xx = '';
 		while ($bar = $res->fetch()) {
-			$lf = " onclick=\"viewlistfile('" . $bar['kodept'] . "','" . $bar['jenis'] . "','" . $bar['kodeijin'] . "','" . $bar['noijin'] . "')\" valign=top style=cursor:pointer";
+			$lf = " onclick=\"viewlistfile('" . $bar['kodept'] . "','" . $bar['jenis'] . "','" . $bar['kodeijin'] . "','" . $bar['noijin'] . "')\\\" valign=top style=cursor:pointer";
 			$no += 1;
 			$a = $no % 2;
 			$xx = '';
-			if ($a == 1) {
+			if ($bar['overdue'] == 1) {
+				$xx .= " style=background-color:#FFCCCC;color:#990000 ";
+			} elseif ($a == 1) {
 				$xx .= " style=background-color:#F5EEF8 ";
 			}
 
@@ -418,9 +422,9 @@ switch ($method) {
 		$jlhbrs = owlBaris($res);
 		$no = 0;
 
-		$str = "SELECT *
-		FROM " . $dbname . ".lgl_dokumenlegal 
-		where 1=1 " . $where . " order by kodept asc limit " . $offset . "," . $limit . ""; //exit('error'.$str);
+		$str = "SELECT *, if(tgldaftarulang <> '0000-00-00' and tgldaftarulang <= curdate(), 1, 0) as overdue
+			FROM " . $dbname . ".lgl_dokumenlegal
+			where 1=1 " . $where . " order by overdue desc, tgldaftarulang asc, kodept asc limit " . $offset . "," . $limit . ""; //exit('error'.$str);
 		$tab = "";
 		$no = $maxdisplay;
 
@@ -433,7 +437,11 @@ switch ($method) {
 			while ($bar = $res->fetch()) {
 				$isi = '';
 				$no += 1;
-				$tab .= "<tr class=rowcontent  id=tr_$no>";
+				$tab .= "<tr class=rowcontent  id=tr_$no";
+				if ($bar['overdue'] == 1) {
+					$tab .= " style=background-color:#FFCCCC;color:#990000";
+				}
+				$tab .= ">";
 				$tab .= "<td align=center>" . $no . "</td>";
 				$tab .= "<td>" . $bar['kodept'] . " - " . $nmorg[$bar['kodept']] . "</td>";
 				$tab .= "<td align=left>" . $nmjenis[$bar['jenis']] . "</td>";

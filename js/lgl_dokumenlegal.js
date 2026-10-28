@@ -222,10 +222,23 @@ function savedetail() {
 	keterangan = document.getElementById('keterangan').value;
 	method = document.getElementById('method').value;
 
-	if ((pt == '' || jenis == '' || kodeijin == '' || noijin == '' || tanggal == '')) {
-		alert('Lengkapi Pengisian.');
-		return;
-	}
+	if ((pt == '' || jenis == '' || kodeijin == '' || noijin == '' || tanggal == '' || tgldaftarulang == '')) {
+			alert('Lengkapi Pengisian.');
+			return;
+		}
+
+		// peringatan: tanggal daftar ulang sudah mencapai/melewati hari ini
+		if (tgldaftarulang != '') {
+			var arrdu = tgldaftarulang.split('-');
+			var tgldu = new Date(parseInt(arrdu[2], 10), parseInt(arrdu[1], 10) - 1, parseInt(arrdu[0], 10));
+			var today = new Date();
+			today.setHours(0, 0, 0, 0);
+			if (tgldu <= today) {
+				if (!confirm('Tanggal daftar ulang sudah mencapai/melewati tanggal hari ini. Tetap simpan data?')) {
+					return;
+				}
+			}
+		}
 
 	param = 'pt=' + pt;
 	param += '&jenis=' + jenis;

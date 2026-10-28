@@ -147,6 +147,7 @@ function excel(ev, tujuan) {
 	tglterbitsertifikat,
 	noceksertifikat,
 	tglceksertifikat,
+	tgldaftarulang,
 	id
   ) {
 	document.getElementById("listData").style.display = "none";
@@ -174,6 +175,7 @@ function excel(ev, tujuan) {
 	document.getElementById("tglterbit").value = tglterbitsertifikat;
 	document.getElementById("nocek").value = noceksertifikat;
 	document.getElementById("tglcek").value = tglceksertifikat;
+	document.getElementById("tgldaftarulang").value = tgldaftarulang;
 	document.getElementById("id").value = id;
   
 	document.getElementById("method").value = "update";
@@ -287,6 +289,7 @@ function excel(ev, tujuan) {
 	lokasi = document.getElementById("lokasi").value;
 	luas = document.getElementById("luas").value;
 	masaberlaku = document.getElementById("masaberlaku").value;
+	tgldaftarulang = document.getElementById("tgldaftarulang").value;
 	id = pt + unit + jenis + nohak;
   
 	method = document.getElementById("method").value;
@@ -315,6 +318,22 @@ function excel(ev, tujuan) {
 		alertify.alert("No. Hak Wajib Diisi..");
 		return;
 	}
+
+	if(tgldaftarulang == ""){
+		alertify.alert("Tanggal Daftar Ulang Wajib Diisi..");
+		return;
+	}
+
+	// peringatan: tanggal daftar ulang sudah mencapai/melewati hari ini
+	var arrdu = tgldaftarulang.split("-");
+	var tgldu = new Date(parseInt(arrdu[2], 10), parseInt(arrdu[1], 10) - 1, parseInt(arrdu[0], 10));
+	var today = new Date();
+	today.setHours(0, 0, 0, 0);
+	if (tgldu <= today) {
+		if (!confirm("Tanggal daftar ulang sudah mencapai/melewati tanggal hari ini. Tetap simpan data?")) {
+			return;
+		}
+	}
   
 	param = "pt=" + pt;
 	param += "&unit=" + unit;
@@ -325,6 +344,7 @@ function excel(ev, tujuan) {
 	param += "&lokasi=" + lokasi;
 	param += "&luas=" + luas;
 	param += "&masaberlaku=" + masaberlaku;
+	param += "&tgldaftarulang=" + tgldaftarulang;
 	param += "&nib=" + nib;
 	param += "&nosuratukur=" + nosuratukur;
 	param += "&tglsrtukur=" + tglsrtukur;
@@ -551,6 +571,7 @@ function excel(ev, tujuan) {
 	document.getElementById("lokasi").value = "";
 	document.getElementById("luas").value = "";
 	document.getElementById("masaberlaku").value = "";
+	document.getElementById("tgldaftarulang").value = "";
 	document.getElementById("method").value = "insert";
 	document.getElementById("tomboldetail").disabled = false;
 	document.getElementById("nodetail").value = "";

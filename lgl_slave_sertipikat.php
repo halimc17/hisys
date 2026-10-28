@@ -36,6 +36,7 @@ $tglsrtukur              = tanggalsystem(checkPostGet('tglsrtukur', ''));
 $pemiliksert             = checkPostGet('pemiliksert', '');
 $ketstatushak            = checkPostGet('ketstatushak', '');
 $masaberlaku             = tanggalsystem(checkPostGet('masaberlaku', ''));
+$tgldaftarulang          = tanggalsystem(checkPostGet('tgldaftarulang', ''));
 $jatuhtempo              = tanggalsystem(checkPostGet('jatuhtempo', ''));
 $statusbayar             = checkPostGet('statusbayar', '');
 $kurangbayar             = checkPostGet('kurangbayar', '');
@@ -141,6 +142,7 @@ switch ($method) {
 		<td align=center>Lokasi</td>
 		<td align=center>Luas</td>
 		<td align=center>Masa Berlaku</td>
+		<td align=center>Tanggal<br>Daftar Ulang</td>
 		<td align=center>Nomor NIB</td>
 		<td align=center>Nomor<br>Surat Ukur</td>
 		<td align=center>Tanggal</td>
@@ -149,7 +151,7 @@ switch ($method) {
 		</tr>
 		</thead>";
 		$no = 0;
-		$str = "select * from " . $dbname . ".lgl_sertipikat where id='" . $id . "'";
+		$str = "select *, if(tgldaftarulang <> '0000-00-00' and tgldaftarulang <= curdate(), 1, 0) as overdue from " . $dbname . ".lgl_sertipikat where id='" . $id . "'";
 		$res = $owlPDO->query($str) or die(print " Gagal: " . PDOException::getMessage());
 		$row=$res->rowCount();
 		$res->setFetchMode(PDO::FETCH_ASSOC);
@@ -160,7 +162,9 @@ switch ($method) {
 			$no+=1;
 			$a=$no%2;
 			$xx='';
-			if($a==0){
+			if($bar['overdue']==1){
+				$xx.=" style=background-color:#FFCCCC;color:#990000 ";
+			}elseif($a==0){
 				$xx.=" style=background-color:#F5EEF8 ";
 			}
 			$tab.="<tr ".$xx." class=rowcontent style=cursor:pointer>";
@@ -172,6 +176,7 @@ switch ($method) {
 			$tab.="<td ".$lf." align=left>".$bar['lokasi']."</td>";
 			$tab.="<td ".$lf." align=right>".hidezerodecimal($bar['luas'],2)."</td>";
 			$tab.="<td ".$lf." align=center>".$bar['masaberlaku']."</td>";
+			$tab.="<td ".$lf." align=center>".($bar['tgldaftarulang']=='0000-00-00'?'':$bar['tgldaftarulang'])."</td>";
 			$tab.="<td ".$lf." align=left>".$bar['nib']."</td>";
 			$tab.="<td ".$lf." align=left>".$bar['nosuratukur']."</td>";
 			$tab.="<td ".$lf." align=left>".$bar['tglsrtukur']."</td>";
@@ -394,14 +399,14 @@ switch ($method) {
 			$id = $id."_".($expcntid[1]+1);
 		}
 		# Jika data sudah ada maka langsung Insert
-		$str = "insert into " . $dbname . ".lgl_sertipikat (`id`,`kodept`,`unit`,`jenis`,`nohak`,`nonop`,`lokasi`,`luas`,`masaberlaku`,`createby`,`createtime`,`updateby`,`nib`,`nosuratukur`,`tglsrtukur`,`pemiliksert`,`ketstatushak`,`nopeta`,`noceksertifikat`,`tglterbitsertifikat`,`tglceksertifikat`)
-		values ('".$id."','".$pt."','".$unit."','".$jenis."','".$nohak."','".$nonop."' ,'".$lokasi."','".$luas."','".$masaberlaku."','" . $_SESSION['standard']['userid'] . "','".$todayhis."','" . $_SESSION['standard']['userid'] . "','".$nib."','".$nosuratukur."','".$tglsrtukur."','".$pemiliksert."','".$ketstatushak."','".$nopeta."','".$nocek."','".$tglterbit."','".$tglcek."')";
+		$str = "insert into " . $dbname . ".lgl_sertipikat (`id`,`kodept`,`unit`,`jenis`,`nohak`,`nonop`,`lokasi`,`luas`,`masaberlaku`,`tgldaftarulang`,`createby`,`createtime`,`updateby`,`nib`,`nosuratukur`,`tglsrtukur`,`pemiliksert`,`ketstatushak`,`nopeta`,`noceksertifikat`,`tglterbitsertifikat`,`tglceksertifikat`)
+		values ('".$id."','".$pt."','".$unit."','".$jenis."','".$nohak."','".$nonop."' ,'".$lokasi."','".$luas."','".$masaberlaku."','".$tgldaftarulang."','" . $_SESSION['standard']['userid'] . "','".$todayhis."','" . $_SESSION['standard']['userid'] . "','".$nib."','".$nosuratukur."','".$tglsrtukur."','".$pemiliksert."','".$ketstatushak."','".$nopeta."','".$nocek."','".$tglterbit."','".$tglcek."')";
 
 		try {$owlPDO->exec($str);} catch (PDOException $e) {print " Gagal  !: " . $e->getMessage() . "\n";die();}
 		echo $id;
 		break;
 		case'update':
-		$str = "update " . $dbname . ".lgl_sertipikat set lokasi='".$lokasi."',luas='".$luas."',masaberlaku='".$masaberlaku."',updateby='" . $_SESSION['standard']['userid'] . "', nib='".$nib."',nosuratukur='".$nosuratukur."',tglsrtukur='".$tglsrtukur."',pemiliksert='".$pemiliksert."',ketstatushak='".$ketstatushak."',
+		$str = "update " . $dbname . ".lgl_sertipikat set lokasi='".$lokasi."',luas='".$luas."',masaberlaku='".$masaberlaku."',tgldaftarulang='".$tgldaftarulang."',updateby='" . $_SESSION['standard']['userid'] . "', nib='".$nib."',nosuratukur='".$nosuratukur."',tglsrtukur='".$tglsrtukur."',pemiliksert='".$pemiliksert."',ketstatushak='".$ketstatushak."',
 		nopeta='".$nopeta."',noceksertifikat='".$nocek."',tglterbitsertifikat='".$tglterbit."',tglceksertifikat='".$tglcek."',jenis='".$jenis."',nohak='".$nohak."',nonop='".$nonop."'  
 		where kodept='".$pt."' and unit='".$unit."' and nohak='".$_POST['nohakold']."' and id='".$id."'";
 		try {$owlPDO->exec($str);} catch (PDOException $e) {print " Gagal  !: " . $e->getMessage() . "\n";die();}
@@ -561,8 +566,8 @@ switch ($method) {
 		}
 
 		$no = 0;
-		$str = "SELECT * FROM " . $dbname . ".lgl_sertipikat
-		where 1=1 " . $where . " order by kodept asc,updatetime desc "; 
+		$str = "SELECT *, if(tgldaftarulang <> '0000-00-00' and tgldaftarulang <= curdate(), 1, 0) as overdue FROM " . $dbname . ".lgl_sertipikat
+		where 1=1 " . $where . " order by overdue desc, tgldaftarulang asc, kodept asc,updatetime desc "; 
 
 		$tab = "";
 		$tab.="<table cellpadding=5 cellspacing=1 border=1 class=sortable width=100%>
@@ -580,6 +585,7 @@ switch ($method) {
 				<td align=center>Pemilik Sertifikat</td>
 				<td align=center>Tanggal Terbit Sertifikat</td>
 				<td align=center>Masa Berlaku</td>
+				<td align=center>Tanggal Daftar Ulang</td>
 				<td align=center>" . $_SESSION['lang']['updateby'] . "</td>
 		</thead>";
 
@@ -588,10 +594,14 @@ switch ($method) {
 		$row=$res->rowCount();
 		$res->setFetchMode(PDO::FETCH_ASSOC);
 		if(empty($row)){
-			$tab.="<tr class=rowcontent><td colspan=17 style='text-align:center'>".$_SESSION['lang']['errdatanotexist']."</td></tr>";
+			$tab.="<tr class=rowcontent><td colspan=13 style='text-align:center'>".$_SESSION['lang']['errdatanotexist']."</td></tr>";
 		}else{
 			$no+=1;
 			while ($bar = $res->fetch()) {
+				$xx='';
+				if($bar['overdue']==1){
+					$xx.=" style=background-color:#FFCCCC;color:#990000 ";
+				}
 				$tab.= "<tbody> ";
 				$tab.="<tr class=rowcontent ".$xx." id=tr_$no>";
 				$tab.="<td align=center>" . $no . "</td>";
@@ -605,6 +615,8 @@ switch ($method) {
 				$tab.="<td>" . $bar['pemiliksert'] . "</td>";
 				$tab.="<td style='text-align:center'>" . tanggalnormal($bar['tglterbitsertifikat']) . "</td>";
 				$tab.="<td style='text-align:center'>" . tanggalnormal($bar['masaberlaku']) . "</td>";
+				$tab.="<td style='text-align:center'>" . ($bar['tgldaftarulang']=='0000-00-00'?'':tanggalnormal($bar['tgldaftarulang'])) . "</td>";
+				$tab.="<td align=left>" . $nmkar[$bar['updateby']] . "</td>";
 				$tab.="</tbody><tfoot></tfoot>";
 			}
 		}
@@ -690,15 +702,15 @@ switch ($method) {
 
 
 		$no = 0;
-		$str = "SELECT * FROM " . $dbname . ".lgl_sertipikat
-		where 1=1 " . $where . " order by kodept asc,updatetime desc limit " . $offset . "," . $limit . ""; 
+		$str = "SELECT *, if(tgldaftarulang <> '0000-00-00' and tgldaftarulang <= curdate(), 1, 0) as overdue FROM " . $dbname . ".lgl_sertipikat
+		where 1=1 " . $where . " order by overdue desc, tgldaftarulang asc, kodept asc,updatetime desc limit " . $offset . "," . $limit . ""; 
 		$tab = "";
 		$no = $maxdisplay;
 		$res = $owlPDO->query($str) or die(print " Gagal: " . PDOException::getMessage());
 		$row=$res->rowCount();
 		$res->setFetchMode(PDO::FETCH_ASSOC);
 		if(empty($row)){
-			$tab.="<tr class=rowcontent><td colspan=17 style='text-align:center'>".$_SESSION['lang']['errdatanotexist']."</td></tr>";
+			$tab.="<tr class=rowcontent><td colspan=19 style='text-align:center'>".$_SESSION['lang']['errdatanotexist']."</td></tr>";
 		}else{
 			while ($bar = $res->fetch()) {
 				$judul = makeOption($dbname,'approval','notransaksi,komentar',"notransaksi='".$bar['id']."'");
@@ -708,8 +720,9 @@ switch ($method) {
 				$xx='';
 				if($bar['statuspersetujuan']==3){
 					$xx.="style=background-color:red; title=\"".$judul[$bar['id']]."\"";
-				}
-				if($a==1){
+				}elseif($bar['overdue']==1){
+					$xx.=" style=background-color:#FFCCCC;color:#990000 ";
+				}elseif($a==1){
 					$xx.=" style=background-color:#F5EEF8 ";
 				}
 				$tab.="<tr class=rowcontent ".$xx." id=tr_$no>";
@@ -725,6 +738,7 @@ switch ($method) {
 				$tab.="<td>" . $bar['pemiliksert'] . "</td>";
 				$tab.="<td style='text-align:center'>" . tanggalnormal($bar['tglterbitsertifikat']) . "</td>";
 				$tab.="<td style='text-align:center'>" . tanggalnormal($bar['masaberlaku']) . "</td>";
+				$tab.="<td style='text-align:center'>" . ($bar['tgldaftarulang']=='0000-00-00'?'':tanggalnormal($bar['tgldaftarulang'])) . "</td>";
 				$tab.="<td align=left>" . $nmkar[$bar['updateby']] . "</td>";
 				
 				# approval		
@@ -748,7 +762,7 @@ switch ($method) {
 				if($bar['posting']==0 or ($bar['posting']==1 and $bar['statuspersetujuan']==3)){
 					
 					$isi.="<td align=center><img src=images/application/application_edit.png class=resicon  title='Edit'
-					onclick=\"edit('".$bar['kodept']."','".$bar['unit']."','".$bar['jenis']."','".$bar['nohak']."','".$bar['nonop']."','".$bar['lokasi']."','".$bar['luas']."','".tanggalnormal($bar['masaberlaku'])."','".$bar['nib']."','".$bar['nosuratukur']."','".tanggalnormal($bar['tglsrtukur'])."','".$bar['pemiliksert']."','".$bar['ketstatushak']."','".$bar['nopeta']."','".tanggalnormal($bar['tglterbitsertifikat'])."','".$bar['noceksertifikat']."','".tanggalnormal($bar['tglceksertifikat'])."','".$bar['id']."');\" ></td>";
+					onclick=\"edit('".$bar['kodept']."','".$bar['unit']."','".$bar['jenis']."','".$bar['nohak']."','".$bar['nonop']."','".$bar['lokasi']."','".$bar['luas']."','".tanggalnormal($bar['masaberlaku'])."','".$bar['nib']."','".$bar['nosuratukur']."','".tanggalnormal($bar['tglsrtukur'])."','".$bar['pemiliksert']."','".$bar['ketstatushak']."','".$bar['nopeta']."','".tanggalnormal($bar['tglterbitsertifikat'])."','".$bar['noceksertifikat']."','".tanggalnormal($bar['tglceksertifikat'])."','".($bar['tgldaftarulang']=='0000-00-00'?'':tanggalnormal($bar['tgldaftarulang']))."','".$bar['id']."');\" ></td>";
 
 					$isi.="<td align=center><img class=resicon src=images/application/application_delete.png onclick=\"del('".$bar['id']."');\" title='Delete'></td>";
 
@@ -780,7 +794,7 @@ switch ($method) {
 		}
 		$footd = "";
 		$footd.="</tr>
-		<tr><td colspan=18 align=center>";
+		<tr><td colspan=19 align=center>";
 		if ($page == '0') {
 			$footd.="<button class=mybutton >Prev</button>";
 		} else {

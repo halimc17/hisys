@@ -162,6 +162,7 @@ echo "<fieldset>
 				<td align=center>Pemilik Sertifikat</td>
 				<td align=center>Tanggal Terbit Sertifikat</td>
 				<td align=center>Masa Berlaku</td>
+				<td align=center>Tanggal Daftar Ulang</td>
 				<td align=center>" . $_SESSION['lang']['updateby'] . "</td>
 				<td align=center>" . $_SESSION['lang']['status'] . "</td>
 
@@ -216,6 +217,11 @@ echo "
 			<td>Masa Berlaku</td> 
 			<td>:</td>
 			<td><input id='masaberlaku' type='text' style='width:215px;' class='myinputtext' onmousemove='setCalendar(this.id)' onkeypress='return false';  /></td>
+		</tr>
+		<tr>
+			<td>Tanggal Daftar Ulang</td> 
+			<td>:</td>
+			<td><input id='tgldaftarulang' type='text' style='width:215px;' class='myinputtext' onmousemove='setCalendar(this.id)' onkeypress='return false';  /></td>
 		</tr>
 		<tr>
 			<td>Luas (M2)</td> 
