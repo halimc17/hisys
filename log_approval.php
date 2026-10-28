@@ -9,7 +9,7 @@ include('master_mainMenu.php');
 //<script type="text/javascript" src="js/log_approval.js?v=1.2"></script>
 OPEN_BOX('','<span class=judul>'.getMenu('log_approval').'</span>');
 ?>
-<script language="javascript" src="js/zMaster.js?v=1.5"></script>
+<script language="javascript" src="js/zMaster.js?v=1.6"></script>
 <script language="javascript" src='js/vhc_detailkmhm.js'></script>
 <script language=javascript src='js/log_approval_tbs.js?v=<?php echo time(); ?>'></script>
 <script type="text/javascript" src="js/log_approval_spk.js?v=1.3"></script>

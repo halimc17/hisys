@@ -631,10 +631,8 @@ function masterPDF5(table,column,cond,page,event) {
                 page = "slave_master_pdf";
         }
 
-        showDialog6('Print PDF',"<iframe frameborder=0 style='width:795px;height:395px' src='"+page+".php?"+param+"'></iframe>",'','',event);
-        var dialog = document.getElementById('dynamic1');
-        dialog.style.top = '50px';
-        dialog.style.left = '15%';
+        // Popup alertify supaya PDF bisa di-maximize & di-resize (showDialog6 ukurannya tetap 795x395 tanpa tombol maximize)
+        alertify.popup('Print PDF', "<iframe frameborder=0 style='width:100%;height:100%;border:0;' src='"+page+".php?"+param+"'></iframe>").set({'resizable':true, 'maximizable':true}).resizeTo('80%','85%');
 }
 
 /*
