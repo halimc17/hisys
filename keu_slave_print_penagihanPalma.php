@@ -316,7 +316,8 @@ $pathnonpalma='images/logo/KOP INVOICE.png';
 			}
 			$tab.="</tr>";
 			# NPWP penjual (npwpunit pada header invoice)
-			if(trim($npwppt)!=''){
+			# DINONAKTIFKAN: baris NPWP di bawah logo dihilangkan sesuai format PDF contoh; hapus "false &&" untuk menampilkan lagi
+			if(false && trim($npwppt)!=''){
 				$tab.="<tr>";
 				$tab.="<td colspan=2 style='text-align:left;font-size:12px'>NPWP : ".trim($npwppt)."</td>";
 				$tab.="<td></td>";
