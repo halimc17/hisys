@@ -2311,6 +2311,7 @@ switch ($method) {
 	case 'getrekeningsch':
 		$optrekening = "<option value=''>" . $_SESSION['lang']['pilihdata'] . "</option>";
 		$tipeorganisasi[$param['kodeorg']] = $tipeorganisasi[$param['pemilikhutang1']];
+		$arrtipeunit = [$param['kodeorg']];
 
 		$str = "SELECT a.noakun, a.namaakun, a.pemilik, b.noakun AS noakununit, b.kodeunit FROM keu_5akun a LEFT JOIN keu_5akununit b ON a.noakun = b.noakun WHERE a.kasbank = 1 AND a.detail = 1 AND a.aktif = 1 AND a.level = '5' AND ((b.kodeunit IS NOT NULL AND b.kodeunit IN ('{$param['kodeorg']}')) OR (b.kodeunit IS NULL AND (a.pemilik = 'GLOBAL' OR a.pemilik = '{$tipeorganisasi[$param['kodeorg']]}' OR a.pemilik IN ('" . implode("','", $arrtipeunit) . "')))) GROUP BY a.noakun";
 		$res = fetchdata($str);
@@ -2413,6 +2414,9 @@ switch ($method) {
 		}
 		if ($param['noakun'] == '') {
 			exit("Warning:Noakun tidak boleh kosong");
+		}
+		if ($param['rekening'] == 'false') {
+			exit("Warning:Rekening bank belum terisi, pilih ulang akun kas/bank lalu simpan lagi");
 		}
 
 		if ($param['autokb'] == '1') {

@@ -622,7 +622,15 @@ function saveht(parameter) {
   var param = "";
   for (i = 1; i < passP.length; i++) {
     var tmp = document.getElementById(passP[i]);
-    param += "&" + passP[i] + "=" + getValue(passP[i]);
+    var nilai = getValue(passP[i]);
+    if (passP[i] == "rekening" && nilai === false) {
+      alertify.alert(
+        "Informasi",
+        "Rekening bank belum terisi, pilih ulang akun kas/bank lalu simpan lagi.",
+      );
+      return;
+    }
+    param += "&" + passP[i] + "=" + nilai;
   }
 
   tipetransaksi = document.getElementById("tipetransaksi").value;
