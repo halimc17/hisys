@@ -6235,3 +6235,43 @@ function ptDariDetailAkses()
 	$pt = array_filter(array_keys(getOrgDetail(3)));
 	return count($pt) == 1 ? reset($pt) : '';
 }
+
+# Operator kendaraan menurut periode.
+# Salinan per periode ada di vhc_5operator_hist (diisi saat Tutup Buku Kendaraan, vhc_3tutupvhc).
+# Kendaraan yang belum punya salinan untuk periode itu memakai master vhc_5operator (perilaku lama).
+
+function vhcOperatorHistAda()
+{
+    global $dbname;
+    static $ada = null;
+    if ($ada === null) {
+        $res = fetchdata("select count(*) as n from information_schema.tables where table_schema='" . $dbname . "' and table_name='vhc_5operator_hist'");
+        $ada = ($res[0]['n'] > 0);
+    }
+    return $ada;
+}
+
+# Ekspresi tabel untuk dipakai setelah "from": kolom karyawanid (10 digit berawalan nol, agar sama dengan master), vhc, aktif
+function vhcOperatorTabel($periode)
+{
+    global $dbname;
+    if (!vhcOperatorHistAda()) {
+        return $dbname . ".vhc_5operator";
+    }
+    $p = preg_replace('/[^0-9\-]/', '', $periode);
+    return "(select lpad(karyawanid,10,'0') as karyawanid,vhc,aktif from " . $dbname . ".vhc_5operator_hist where periode='" . $p . "'
+        union all
+        select lpad(karyawanid,10,'0') as karyawanid,vhc,aktif from " . $dbname . ".vhc_5operator
+        where vhc not in (select vhc from " . $dbname . ".vhc_5operator_hist where periode='" . $p . "')) vhc_op";
+}
+
+# Rentang tanggal satu periode (YYYY-MM) yang bisa memakai index tanggal.
+# Pengganti "tanggal like 'YYYY-MM%'" dan filter "periode='YYYY-MM'" pada keu_jurnaldt_vw
+# (periode adalah kolom turunan sehingga tidak bisa memakai index dan memindai seluruh tabel).
+function sqlRentangPeriode($periode, $kolom = 'tanggal')
+{
+    $p = substr(preg_replace('/[^0-9\-]/', '', $periode), 0, 7);
+    $awal = $p . '-01';
+    $akhir = date('Y-m-d', strtotime($awal . ' +1 month'));
+    return $kolom . ">='" . $awal . "' and " . $kolom . "<'" . $akhir . "'";
+}

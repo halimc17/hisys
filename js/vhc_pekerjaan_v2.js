@@ -21,6 +21,72 @@ function checkPTHelper() {
   });
 }
 
+//pisah ribuan otomatis pada isian rupiah; .value tetap mengembalikan angka tanpa koma sehingga kode lain tidak berubah
+(function () {
+  var asli = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");
+  function format(teks) {
+    teks = String(teks).replace(/,/g, "");
+    var m = teks.match(/^(-?)(\d*)(\.\d*)?$/);
+    if (!m) return teks;
+    return m[1] + m[2].replace(/\B(?=(\d{3})+(?!\d))/g, ",") + (m[3] || "");
+  }
+  function pasang(el) {
+    if (!el || el._pisahRibuan) return;
+    el._pisahRibuan = true;
+    Object.defineProperty(el, "value", {
+      configurable: true,
+      get: function () {
+        return asli.get.call(this).replace(/,/g, "");
+      },
+      set: function (v) {
+        asli.set.call(this, format(v));
+      },
+    });
+    el.addEventListener("input", function () {
+      var teks = asli.get.call(this);
+      var f = format(teks);
+      if (f !== teks) {
+        var digitSebelum = teks.slice(0, this.selectionStart).replace(/,/g, "").length;
+        asli.set.call(this, f);
+        var n = 0,
+          pos = 0;
+        while (pos < f.length && n < digitSebelum) {
+          if (f.charAt(pos) !== ",") n++;
+          pos++;
+        }
+        this.setSelectionRange(pos, pos);
+      }
+    });
+    asli.set.call(el, format(asli.get.call(el)));
+  }
+  function mulai() {
+    [
+      "uphOprt",
+      "uphHelp",
+      "uphHelp2",
+      "uphHelp3",
+      "prmiOprt",
+      "prmiHelp",
+      "prmiHelp2",
+      "prmiHelp3",
+      "prmiOprtTambahan",
+      "pnltyOprt",
+      "jmlh_bbm",
+      "brt_muatan",
+      "kmhm_awal",
+      "kmhm_akhir",
+      "jlhhm",
+    ].forEach(function (id) {
+      pasang(document.getElementById(id));
+    });
+  }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", mulai);
+  } else {
+    mulai();
+  }
+})();
+
 function getsubunit() {
   checkPTHelper();
   kodeorg = document.getElementById("kodeorg").value;
@@ -267,6 +333,7 @@ function bersih_form_pekerjaan() {
     document.getElementById("uphHelp_libur4").value = 0;
   }
   document.getElementById("prmiOprtTambahan").value = 0;
+  document.getElementById("infoUpah").innerHTML = "";
   document.getElementById("kode_karyawan_old").value = "";
   document.getElementById("kode_helper_old").value = "";
   document.getElementById("kode_helper_old2").value = "";
@@ -348,6 +415,13 @@ function cancel_kepala_form() {
   setTimeout(function () {
     clear_form();
   }, 100);
+}
+
+//hitung ulang premi saat kegiatan/lokasi/blok/satuan berubah; hanya untuk input baru, saat edit nilai tersimpan dipertahankan
+function hitungUlangPremi() {
+  if (getValue("proses_pekerjaan") == "insert_pekerjaan") {
+    getPremi();
+  }
 }
 
 function getjumlah(sumber) {
@@ -564,6 +638,13 @@ function getUmr() {
         } else {
           data = con.responseText.split("####");
 
+          //catatan dari server (mis. upah sudah dibayar di transaksi lain) ditampilkan di bawah isian
+          var catatanUpah = trim(data[8]) != "0" ? trim(data[8]) : "";
+          if (trim(data[11]) == 1 && trim(data[9]) == "libur" && trim(data[4]) == 1) {
+            catatanUpah += (catatanUpah ? " " : "") + "Hari libur: upah operator dinolkan dan dihitung ke premi.";
+          }
+          document.getElementById("infoUpah").innerHTML = catatanUpah;
+
           document.getElementById("uphOprt").value = trim(data[0]);
           document.getElementById("uphHelp").value = trim(data[1]);
           document.getElementById("uphHelp2").value = trim(data[2]);
@@ -721,6 +802,7 @@ function getBlok(kdkbn, kdblok, jns_pekerjan, kodedept) {
           ) {
             setValue2("blok", kdblok);
           }
+          hitungUlangPremi();
           // $('#blok').select2();
           // getdept(jns_pekerjan,kodedept);
         }

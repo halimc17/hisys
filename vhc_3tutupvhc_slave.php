@@ -57,6 +57,13 @@ switch ($method) {
 					$owlPDO->exec($strins);
 				}
 			}
+			#= salinan operator kendaraan per periode (dipakai proses gaji traksi agar proses ulang tidak terpengaruh perubahan master)
+			if(vhcOperatorHistAda()){
+				$str = "delete from ".$dbname.".vhc_5operator_hist where periode='".$param['periode']."' and vhc in (select kodevhc from ".$dbname.".vhc_5master_hist where kodetraksi='".$param['kodetraksi']."' and periode='".$param['periode']."')";
+				$owlPDO->exec($str);
+				$str = "insert into ".$dbname.".vhc_5operator_hist (periode,karyawanid,vhc,nama,aktif,jabatan) select '".$param['periode']."',karyawanid,vhc,nama,aktif,jabatan from ".$dbname.".vhc_5operator where vhc in (select kodevhc from ".$dbname.".vhc_5master_hist where kodetraksi='".$param['kodetraksi']."' and periode='".$param['periode']."')";
+				$owlPDO->exec($str);
+			}
 			$owlPDO->commit();			
 		} catch(PDOException $e) {
 			$owlPDO->rollback();
