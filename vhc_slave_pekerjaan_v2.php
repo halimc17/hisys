@@ -793,7 +793,15 @@ switch ($proses) {
         break;
     case 'loaddata':
         $limit      = 15;
-        $colspan    = 22;
+        #- Kolom Helper 2-4 disembunyikan untuk PT di TRDH (1 helper), mengikuti header di vhc_pekerjaan_v2.php
+        $resTRDHl        = fetchdata("select nilai from " . $dbname . ".setup_parameterappl where kodeparameter='TRDH' ");
+        $arrTRDHl        = !empty($resTRDHl[0]['nilai']) ? array_filter(array_map('trim', explode(',', str_replace("'", "", $resTRDHl[0]['nilai'])))) : array();
+        $userOrgL        = $_SESSION['empl']['lokasitugas'];
+        $optPTL          = makeOption($dbname, 'organisasi', 'kodeorganisasi,induk', "kodeorganisasi in ('" . $userOrgL . "','" . $_SESSION['empl']['kodeorganisasi'] . "')");
+        $userPTL         = isset($optPTL[$userOrgL]) ? $optPTL[$userOrgL] : (isset($optPTL[$_SESSION['empl']['kodeorganisasi']]) ? $optPTL[$_SESSION['empl']['kodeorganisasi']] : '');
+        $hideHelperList  = in_array($userPTL, $arrTRDHl) || in_array($userOrgL, $arrTRDHl) || in_array($_SESSION['empl']['kodeorganisasi'], $arrTRDHl) || ($userPTL == 'PPP' && empty($arrTRDHl));
+        $styleHelperList = $hideHelperList ? " style='display:none'" : "";
+        $colspan         = $hideHelperList ? 19 : 22;
         $page       = 0;
         $tgl_carisd = tanggalsystemn(checkPostGet('tgl_carisd', ''));
         if (isset($_POST['page'])) {
@@ -911,7 +919,7 @@ switch ($proses) {
                 $tab .= "</td>";
                 $datasupirarr = explode(',', $rdtx['arhelper2']);
                 $datasupir = array();
-                $tab .= "<td align=center>";
+                $tab .= "<td align=center" . $styleHelperList . ">";
                 for ($i = 0; $i < count($datasupirarr); $i++) {
                     if ($datasupirarr[$i] != '0000000000') {
                         if (!isset($datasupir[$datasupirarr[$i]])) {
@@ -923,7 +931,7 @@ switch ($proses) {
                 $tab .= "</td>";
                 $datasupirarr = explode(',', $rdtx['arhelper3']);
                 $datasupir = array();
-                $tab .= "<td align=center>";
+                $tab .= "<td align=center" . $styleHelperList . ">";
                 for ($i = 0; $i < count($datasupirarr); $i++) {
                     if ($datasupirarr[$i] != '0000000000') {
                         if (!isset($datasupir[$datasupirarr[$i]])) {
@@ -935,7 +943,7 @@ switch ($proses) {
                 $tab .= "</td>";
                 $datasupirarr = explode(',', $rdtx['arhelper4']);
                 $datasupir = array();
-                $tab .= "<td align=center>";
+                $tab .= "<td align=center" . $styleHelperList . ">";
                 for ($i = 0; $i < count($datasupirarr); $i++) {
                     if ($datasupirarr[$i] != '0000000000') {
                         if (!isset($datasupir[$datasupirarr[$i]])) {
@@ -1039,7 +1047,14 @@ switch ($proses) {
 
         #kop/ditarik-oleh format standar, pakai org karyawan yang login (data lintas unit)
         $hdpt = setheadreport($_SESSION['empl']['kodeorganisasi'], $_SESSION['empl']['kodeorganisasi']);
-        $kolom = 21;
+        #- Kolom Helper 2-4 dihilangkan untuk PT di TRDH (1 helper), sama dengan List Data
+        $resTRDHl        = fetchdata("select nilai from " . $dbname . ".setup_parameterappl where kodeparameter='TRDH' ");
+        $arrTRDHl        = !empty($resTRDHl[0]['nilai']) ? array_filter(array_map('trim', explode(',', str_replace("'", "", $resTRDHl[0]['nilai'])))) : array();
+        $userOrgL        = $_SESSION['empl']['lokasitugas'];
+        $optPTL          = makeOption($dbname, 'organisasi', 'kodeorganisasi,induk', "kodeorganisasi in ('" . $userOrgL . "','" . $_SESSION['empl']['kodeorganisasi'] . "')");
+        $userPTL         = isset($optPTL[$userOrgL]) ? $optPTL[$userOrgL] : (isset($optPTL[$_SESSION['empl']['kodeorganisasi']]) ? $optPTL[$_SESSION['empl']['kodeorganisasi']] : '');
+        $hideHelperList  = in_array($userPTL, $arrTRDHl) || in_array($userOrgL, $arrTRDHl) || in_array($_SESSION['empl']['kodeorganisasi'], $arrTRDHl) || ($userPTL == 'PPP' && empty($arrTRDHl));
+        $kolom = $hideHelperList ? 18 : 21;
         $stream = "<table>
             <tr><td colspan=" . $kolom . "><b>" . htmlspecialchars($hdpt['nama']) . "</b></td></tr>
             <tr><td colspan=" . $kolom . "><b>PEKERJAAN</b></td></tr>
@@ -1058,9 +1073,9 @@ switch ($proses) {
                 <th align=center>" . $_SESSION['lang']['mandor'] . "</th>
                 <th align=center>" . $_SESSION['lang']['operator'] . "</th>
                 <th align=center>" . $_SESSION['lang']['helper'] . " 1</th>
-                <th align=center>" . $_SESSION['lang']['helper'] . " 2</th>
+                " . ($hideHelperList ? '' : "<th align=center>" . $_SESSION['lang']['helper'] . " 2</th>
                 <th align=center>" . $_SESSION['lang']['helper'] . " 3</th>
-                <th align=center>" . $_SESSION['lang']['helper'] . " 4</th>
+                <th align=center>" . $_SESSION['lang']['helper'] . " 4</th>") . "
                 <th align=center>" . $_SESSION['lang']['tanggal'] . "</th>
                 <th align=center>" . $_SESSION['lang']['vhc_jenis_bbm'] . "</th>
                 <th align=center>" . $_SESSION['lang']['vhc_jumlah_bbm'] . "</th>
@@ -1095,9 +1110,9 @@ switch ($proses) {
                 <td>" . @$nmKar[$r['mandor']] . "</td>
                 <td>" . implode(', ', $nm['operator']) . "</td>
                 <td>" . implode(', ', $nm['helper']) . "</td>
-                <td>" . implode(', ', $nm['helper2']) . "</td>
+                " . ($hideHelperList ? '' : "<td>" . implode(', ', $nm['helper2']) . "</td>
                 <td>" . implode(', ', $nm['helper3']) . "</td>
-                <td>" . implode(', ', $nm['helper4']) . "</td>
+                <td>" . implode(', ', $nm['helper4']) . "</td>") . "
                 <td align=center>" . tanggalnormal($r['tanggal']) . "</td>
                 <td>" . @$nmBbm[$r['jenisbbm']] . "</td>
                 <td align=right>" . $r['jlhbbm'] . "</td>
@@ -1254,14 +1269,14 @@ switch ($proses) {
                     <td align=center>" . strtoupper(getNamaKaryawan($res['operator'])) . "</td>
                     <td align=right>" . number_format($upahnya, 2) . "</td>
                     <td align=right>" . number_format($premi_operator, 2) . "</td>
-                    <td align=right " . $hiddenHelper . ">" . number_format($premi_operator_tambahan, 2) . "</td>
+                    <td align=right " . $hiddenHelperExtraClass . ">" . number_format($premi_operator_tambahan, 2) . "</td>
                     <td align=right>" . number_format($res['denda']) . "</td>
                     <td align=center >" . strtoupper(getNamaKaryawan($res['helper'])) . "</td>
                     <td align=right >" . number_format($upahnyahelp, 2) . "</td>
                     <td align=right >" . number_format($premi_premihelp, 2) . "</td>
-                    <td align=center " . $hiddenHelper . ">" . strtoupper(getNamaKaryawan($res['helper2'])) . "</td>
-                    <td align=right " . $hiddenHelper . ">" . number_format($upahnyahelp2, 2) . "</td>
-                    <td align=right " . $hiddenHelper . ">" . number_format($premi_premihelp2, 2) . "</td>
+                    <td align=center " . $hiddenHelperExtraClass . ">" . strtoupper(getNamaKaryawan($res['helper2'])) . "</td>
+                    <td align=right " . $hiddenHelperExtraClass . ">" . number_format($upahnyahelp2, 2) . "</td>
+                    <td align=right " . $hiddenHelperExtraClass . ">" . number_format($premi_premihelp2, 2) . "</td>
                     <td align=center " . $hiddenHelperExtraClass . ">" . strtoupper(getNamaKaryawan($res['helper3'])) . "</td>
                     <td align=right " . $hiddenHelperExtraClass . ">" . number_format($upahnyahelp3, 2) . "</td>
                     <td align=right " . $hiddenHelperExtraClass . ">" . number_format($premi_premihelp3, 2) . "</td>
@@ -1308,14 +1323,14 @@ switch ($proses) {
                         <td align=right></td>
                         <td align=right>" . number_format($ttluphoprt, 2) . "</td>
                         <td align=right>" . number_format($ttlprmioprt, 2) . "</td>
-                        <td align=right " . $hiddenHelper . ">" . number_format($ttlprmioprt_tambahan, 2) . "</td>
+                        <td align=right " . $hiddenHelperExtraClass . ">" . number_format($ttlprmioprt_tambahan, 2) . "</td>
                         <td align=right>" . number_format($ttldenda, 2) . "</td>
                         <td align=right ></td>
                         <td align=right >" . number_format($ttluphhelp, 2) . "</td>
                         <td align=right >" . number_format($ttlprmihelp, 2) . "</td>
-                        <td align=right " . $hiddenHelper . "></td>
-                        <td align=right " . $hiddenHelper . ">" . number_format($ttluphhelp2, 2) . "</td>
-                        <td align=right " . $hiddenHelper . ">" . number_format($ttlprmihelp2, 2) . "</td>
+                        <td align=right " . $hiddenHelperExtraClass . "></td>
+                        <td align=right " . $hiddenHelperExtraClass . ">" . number_format($ttluphhelp2, 2) . "</td>
+                        <td align=right " . $hiddenHelperExtraClass . ">" . number_format($ttlprmihelp2, 2) . "</td>
                         <td align=right " . $hiddenHelperExtraClass . "></td>
                         <td align=right " . $hiddenHelperExtraClass . ">" . number_format($ttluphhelp3, 2) . "</td>
                         <td align=right " . $hiddenHelperExtraClass . ">" . number_format($ttlprmihelp3, 2) . "</td>
@@ -1325,7 +1340,7 @@ switch ($proses) {
                         <td align=right colspan=3></td>
                     </tr>";
         } else {
-            echo "<tr class=rowcontent><td colspan=28 align=center>" . $_SESSION['lang']['errdatanotexist'] . "</td></tr>";
+            echo "<tr class=rowcontent><td colspan=" . ($isTRDH ? 20 : 30) . " align=center>" . $_SESSION['lang']['errdatanotexist'] . "</td></tr>";
         }
         break;
     case 'insert_header':

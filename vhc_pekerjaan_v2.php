@@ -255,9 +255,9 @@
                             <th align=center>".$_SESSION['lang']['mandor']."</th>
                             <th align=center>".$_SESSION['lang']['operator']."</th>
                             <th align=center>".$_SESSION['lang']['helper']." 1</th>
-                            <th align=center>".$_SESSION['lang']['helper']." 2</th>
-                            <th align=center>".$_SESSION['lang']['helper']." 3</th>
-                            <th align=center>".$_SESSION['lang']['helper']." 4</th>
+                            <th align=center style='".$hiddenHelperExtra."'>".$_SESSION['lang']['helper']." 2</th>
+                            <th align=center style='".$hiddenHelperExtra."'>".$_SESSION['lang']['helper']." 3</th>
+                            <th align=center style='".$hiddenHelperExtra."'>".$_SESSION['lang']['helper']." 4</th>
                             <th align=center>".$_SESSION['lang']['tanggal']."</th>
                             <th align=center>".$_SESSION['lang']['vhc_jenis_bbm']."</th>
                             <th align=center style='width:40px'>".$_SESSION['lang']['vhc_jumlah_bbm']."</th>
@@ -357,9 +357,9 @@
             <input hidden type=text id=kode_helper_old tabindex=11 name=kode_helper_old class=myinputtextnumber style=width:160px; onkeypress='return angka_doang(event)' value=0 />
         </td>
 
-        <td class=gl>".$_SESSION['lang']['helper']." 2 &nbsp;<font style='font-size:10px;color:blue;' tabindex=11>(11)</font></td>
-        <td>:</td>
-        <td>
+        <td class='gl helper-extra' style='".$hiddenHelperExtra."'>".$_SESSION['lang']['helper']." 2 &nbsp;<font style='font-size:10px;color:blue;' tabindex=11>(11)</font></td>
+        <td class='helper-extra' style='".$hiddenHelperExtra."'>:</td>
+        <td class='helper-extra' style='".$hiddenHelperExtra."'>
             <select id=kode_helper2 tabindex=12 class=select2 name=kode_helper2 style=width:160px; onchange=getUmr();><option value=''></select>
             <input hidden type=text id=kode_helper_old2 tabindex=11 name=kode_helper_old2 class=myinputtextnumber style=width:160px; onkeypress='return angka_doang(event)' value=0 />
         </td>
@@ -387,9 +387,9 @@
             <input type=text hidden id=uphHelp_old name=uphHelp_old  class=myinputtextnumber style=width:160px; onkeypress='return angka_doang(event)' />
         </td>
 
-        <td class=gl>".$_SESSION['lang']['upahkerja']." ".$_SESSION['lang']['helper']." 2</td>
-        <td>:</td>
-        <td>
+        <td class='gl helper-extra' style='".$hiddenHelperExtra."'>".$_SESSION['lang']['upahkerja']." ".$_SESSION['lang']['helper']." 2</td>
+        <td class='helper-extra' style='".$hiddenHelperExtra."'>:</td>
+        <td class='helper-extra' style='".$hiddenHelperExtra."'>
             <input type=text id=uphHelp2 name=uphHelp2  class=myinputtextnumber style=width:160px; onkeypress='return angka_doang(event)' />
             <input type=text hidden id=uphHelp_libur2 name=uphHelp_libur2  class=myinputtextnumber style=width:160px; onkeypress='return angka_doang(event)'  />
             <input type=text hidden id=uphHelp_old2 name=uphHelp_old2  class=myinputtextnumber style=width:160px; onkeypress='return angka_doang(event)' />
@@ -416,9 +416,9 @@
             <input hidden type=text id=prmiHelp_old tabindex=11 name=prmiHelp_old class=myinputtextnumber style=width:160px; onkeypress='return angka_doang(event)' onclick=\"this.select();\" value=0 />
         </td>
 
-        <td class=gl>".$_SESSION['lang']['premi']." (Rp) ".$_SESSION['lang']['helper']." 2</td>
-        <td>:</td>
-        <td>
+        <td class='gl helper-extra' style='".$hiddenHelperExtra."'>".$_SESSION['lang']['premi']." (Rp) ".$_SESSION['lang']['helper']." 2</td>
+        <td class='helper-extra' style='".$hiddenHelperExtra."'>:</td>
+        <td class='helper-extra' style='".$hiddenHelperExtra."'>
             <input  type=text id=prmiHelp2 tabindex=14 name=prmiHelp2 class=myinputtextnumber style=width:160px; onkeypress='return angka_doang(event)' onclick=\"this.select();\" />
             <input hidden type=text id=prmiHelp_old2 tabindex=11 name=prmiHelp_old2 class=myinputtextnumber style=width:160px; onkeypress='return angka_doang(event)' onclick=\"this.select();\" value=0 />
         </td>
@@ -452,9 +452,9 @@
         <input hidden type=text class=myinputtextnumber id=oldbrt_muatan name=oldbrt_muatan maxlength=6 onkeypress=\"return angka_doang(event);\" style=width:80px; />
         </td>
 
-        <td class=gl>".$_SESSION['lang']['premi']." Tambahan (Rp) ".$_SESSION['lang']['operator']."</td>
-        <td>:</td>
-        <td>
+        <td class='gl helper-extra' style='".$hiddenHelperExtra."'>".$_SESSION['lang']['premi']." Tambahan (Rp) ".$_SESSION['lang']['operator']."</td>
+        <td class='helper-extra' style='".$hiddenHelperExtra."'>:</td>
+        <td class='helper-extra' style='".$hiddenHelperExtra."'>
             <input type=text id=prmiOprtTambahan tabindex=11 name=prmiOprtTambahan class=myinputtextnumber style=width:160px; onkeypress='return angka_doang(event)' onclick=\"this.select();\" value=0 />
         </td>
 
@@ -587,14 +587,14 @@
             <th align=center>".$_SESSION['lang']['operator']."/<br>".$_SESSION['lang']['supir']."</th>
             <th align=center>".$_SESSION['lang']['upahkerja']."</th>
             <th align=center>".$_SESSION['lang']['upahpremi']."</th>
-            <th align=center>".$_SESSION['lang']['upahpremi']." Tambahan</th>
+            <th align=center class='helper-extra' style='".$hiddenHelperExtra."'>".$_SESSION['lang']['upahpremi']." Tambahan</th>
             <th align=center>".$_SESSION['lang']['rupiahpenalty']."</th>
             <th align=center >".$_SESSION['lang']['helper']." 1</th>
             <th align=center >".$_SESSION['lang']['upah']." ".$_SESSION['lang']['helper']." 1</th>
             <th align=center >".$_SESSION['lang']['premi']." ".$_SESSION['lang']['helper']." 1</th>
-            <th align=center >".$_SESSION['lang']['helper']." 2</th>
-            <th align=center >".$_SESSION['lang']['upah']." ".$_SESSION['lang']['helper']." 2</th>
-            <th align=center >".$_SESSION['lang']['premi']." ".$_SESSION['lang']['helper']." 2</th>
+            <th align=center class='helper-extra' style='".$hiddenHelperExtra."'>".$_SESSION['lang']['helper']." 2</th>
+            <th align=center class='helper-extra' style='".$hiddenHelperExtra."'>".$_SESSION['lang']['upah']." ".$_SESSION['lang']['helper']." 2</th>
+            <th align=center class='helper-extra' style='".$hiddenHelperExtra."'>".$_SESSION['lang']['premi']." ".$_SESSION['lang']['helper']." 2</th>
             <th align=center class='helper-extra' style='".$hiddenHelperExtra."'>".$_SESSION['lang']['helper']." 3</th>
             <th align=center class='helper-extra' style='".$hiddenHelperExtra."'>".$_SESSION['lang']['upah']." ".$_SESSION['lang']['helper']." 3</th>
             <th align=center class='helper-extra' style='".$hiddenHelperExtra."'>".$_SESSION['lang']['premi']." ".$_SESSION['lang']['helper']." 3</th>
