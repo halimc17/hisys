@@ -144,8 +144,9 @@ switch($method){
 			$opthari.="<option value=".$row.">".$val."</option>";
 		}
 
-		$optBanjir="<option value='0'>KEMARAU, TIDAK ADA KESULITAN</option>";
+		$optBanjir="<option value='0'>TIDAK ADA KESULITAN</option>";
 		$optBanjir.="<option value='1'>BANJIR</option>";
+		$optBanjir.="<option value='2'>KEMARAU</option>";
 		
 		$opttt="<option value=''>".$_SESSION['lang']['pilihdata']."</option>";
 		$tab.="
@@ -247,8 +248,10 @@ switch($method){
 
             if($bar['banjir'] == 1){
 				$banjir ="BANJIR";
+			}elseif($bar['banjir'] == 2){
+				$banjir ="KEMARAU";
 			}else{
-				$banjir ="KEMARAU, TIDAK ADA KESULITAN";
+				$banjir ="TIDAK ADA KESULITAN";
 			}
 
 			$tab.="<td style='text-align:center;'>".$banjir."</td>";		
@@ -266,8 +269,9 @@ switch($method){
 		echo $tab;
 	break;
 	case 'showEditDialog':
-		$optBanjir="<option value='0' ".($banjir==0?'selected':'').">TIDAK</option>";
-		$optBanjir.="<option value='1' ".($banjir==1?'selected':'').">YA</option>";
+		$optBanjir="<option value='0' ".($banjir==0?'selected':'').">TIDAK ADA KESULITAN</option>";
+		$optBanjir.="<option value='1' ".($banjir==1?'selected':'').">BANJIR</option>";
+		$optBanjir.="<option value='2' ".($banjir==2?'selected':'').">KEMARAU</option>";
 
 		$tab.="
 			 <table border=0 cellpadding=2 cellspacing=1>
@@ -341,7 +345,7 @@ switch($method){
 					<td><input class=myinputtextnumber onclick=delnol(this); style='text-align:right;width:378px;height:30px;font-size:14px;padding-right:10px;padding-left:10px' type=text id='premikehadiran' onkeypress=\"return isNumberKey(event);\" placeholder=0 value=" . $premikehadiran . "></td>
 				</tr>
 				<tr>
-					<td>Banjir</td>
+					<td>Kesulitan</td>
 					<td><select class='select2' style='width:400px;' id='banjir' >".$optBanjir."</select></td>
 				</tr>
                 <tr>
