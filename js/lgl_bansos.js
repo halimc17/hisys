@@ -14,10 +14,30 @@ function initSelectBNS(selector) {
 
 //set nilai select2 tanpa memicu onchange bawaan select
 //onchange inline dimatikan sebentar karena trigger jQuery ikut menjalankannya
+//kalau option-nya belum ada di list (mis. unit di luar daftar akses header), option ditambah
+//supaya nilai lama tidak hilang saat edit
 function setSel(id, v) {
 	var el = document.getElementById(id);
+	if (!el) {
+		return;
+	}
 	var handler = el.onchange;
 	el.onchange = null;
+	if (el.tagName == 'SELECT' && v !== null && v !== undefined && v !== '') {
+		var ada = false;
+		for (var i = 0; i < el.options.length; i++) {
+			if (el.options[i].value == v) {
+				ada = true;
+				break;
+			}
+		}
+		if (!ada) {
+			var opt = document.createElement('option');
+			opt.value = v;
+			opt.text = v;
+			el.appendChild(opt);
+		}
+	}
 	$('#' + id).val(v === null ? '' : v).trigger('change.select2');
 	el.onchange = handler;
 }
@@ -173,13 +193,15 @@ function displayList() {
 	document.getElementById('detail').style.display = 'none';
 	loaddata(0);
 }
-function edit(kodeorg, tanggal, notransaksi, kategori, namapemesan, lokasipemesan, tujuan, rekening, tipebayar, atasnama, npwp) {
+function edit(kodeorg, tanggal, notransaksi, kategori, namapemesan, lokasipemesan, tujuan, rekening, tipebayar, atasnama, npwp, tgldokumenstart, tgldokumenend) {
 	setSel('tipebayar', tipebayar);
 	document.getElementById('atasnama').value = atasnama;
 	document.getElementById('npwp').value = npwp;
 	document.getElementById('notransaksi').value = notransaksi;
 	setSel('kodeorg', kodeorg);
 	document.getElementById('tanggal').value = tanggal;
+	document.getElementById('tgldokumenstart').value = (tgldokumenstart && tgldokumenstart != '0000-00-00' && tgldokumenstart != '00-00-0000') ? tgldokumenstart : '';
+	document.getElementById('tgldokumenend').value = (tgldokumenend && tgldokumenend != '0000-00-00' && tgldokumenend != '00-00-0000') ? tgldokumenend : '';
 	setSel('kategori', kategori);
 	document.getElementById('namapemesan').value = namapemesan;
 	setSel('lokasipemesan', lokasipemesan);
@@ -188,7 +210,7 @@ function edit(kodeorg, tanggal, notransaksi, kategori, namapemesan, lokasipemesa
 	document.getElementById('listData').style.display = 'none';
 	document.getElementById('header').style.display = 'block';
 	//document.getElementById('detail').style.display='block';
-	detail(notransaksi, kodeorg, tanggal);
+	detail(true);
 }
 function deletedetail(notransaksi, deskripsi, satuan) {
 	param = 'method=deletedetail' + '&notransaksi=' + encodeURIComponent(notransaksi) + '&deskripsi=' + encodeURIComponent(deskripsi) + '&satuan=' + encodeURIComponent(satuan);
@@ -236,28 +258,48 @@ function del(kodeorg, tanggal, notransaksi) {
 		}
 	}
 }
-function detail() {
+function detail(isEditLoad) {
 	kodeorg = document.getElementById('kodeorg').value;
 	tanggal = document.getElementById('tanggal').value;
-	// notransaksi = document.getElementById('notransaksi').value;
+	tgldokumenstart = document.getElementById('tgldokumenstart').value.trim();
+	tgldokumenend = document.getElementById('tgldokumenend').value.trim();
+	notransaksi = document.getElementById('notransaksi').value;
 	kategori = document.getElementById('kategori').value;
 	namapemesan = document.getElementById('namapemesan').value;
 	lokasipemesan = document.getElementById('lokasipemesan').value;
 	tujuan = document.getElementById('tujuan').value;
 	rekening = document.getElementById('rekening').value;
+	tipebayar = document.getElementById('tipebayar').value;
+	atasnama = document.getElementById('atasnama').value;
+	npwp = document.getElementById('npwp').value;
 	if (tanggal == '' || kodeorg == '' || kategori == '' || namapemesan == '' || lokasipemesan == '' || tujuan == '') {
 		alert('Lengkapi Pengisian');
 		return;
+	}
+	if (!isEditLoad) {
+		if (tgldokumenstart == '' || tgldokumenstart == '0000-00-00' || tgldokumenstart == '00-00-0000') {
+			alert('Tanggal dokumen dikeluarkan wajib diisi.');
+			return;
+		}
+		if (tgldokumenend == '' || tgldokumenend == '0000-00-00' || tgldokumenend == '00-00-0000') {
+			alert('Tanggal dokumen berakhir wajib diisi.');
+			return;
+		}
 	}
 	document.getElementById('kodeorg').disabled = true;
 	document.getElementById('tanggal').disabled = true;
 	document.getElementById('kategori').disabled = true;
 	document.getElementById('lokasipemesan').disabled = true;
 	param = 'method=detail';
+	param += '&notransaksi=' + encodeURIComponent(notransaksi);
 	param += '&tanggal=' + tanggal + '&kodeorg=' + kodeorg;
+	param += '&tgldokumenstart=' + tgldokumenstart + '&tgldokumenend=' + tgldokumenend;
 	param += '&kategori=' + kategori + '&namapemesan=' + encodeURIComponent(namapemesan) + '&lokasipemesan=' + lokasipemesan;
 	param += '&tujuan=' + encodeURIComponent(tujuan);
 	param += '&rekening=' + rekening;
+	param += '&tipebayar=' + encodeURIComponent(tipebayar);
+	param += '&atasnama=' + encodeURIComponent(atasnama);
+	param += '&npwp=' + encodeURIComponent(npwp);
 	tujuan = 'lgl_slave_bansos.php';
 	post_response_text(tujuan, param, respog);
 	function respog() {
@@ -271,6 +313,9 @@ function detail() {
 					document.getElementById('detail').innerHTML = con.responseText;
 					initSelectBNS('#satuan');
 					loaddatadetail(notransaksi);
+					if (!isEditLoad && notransaksi != '') {
+						alert('Data header berhasil disimpan.');
+					}
 				}
 			} else {
 				busy_off();
@@ -345,6 +390,10 @@ function cancel() {
 	document.getElementById('tomboldetail').disabled = false;
 	document.getElementById('tanggal').disabled = false;
 	document.getElementById('tanggal').value = '';
+	document.getElementById('tgldokumenstart').disabled = false;
+	document.getElementById('tgldokumenstart').value = '';
+	document.getElementById('tgldokumenend').disabled = false;
+	document.getElementById('tgldokumenend').value = '';
 	document.getElementById('kodeorg').disabled = false;
 	setSel('kodeorg', '');
 	document.getElementById('notransaksi').value = '';
@@ -393,6 +442,8 @@ function numberFormat(number, digit) {
 function savedetail() {
 	kodeorg = document.getElementById('kodeorg').value;
 	tanggal = document.getElementById('tanggal').value;
+	tgldokumenstart = document.getElementById('tgldokumenstart').value.trim();
+	tgldokumenend = document.getElementById('tgldokumenend').value.trim();
 	notransaksi = document.getElementById('notransaksi').value;
 	kategori = document.getElementById('kategori').value;
 	namapemesan = document.getElementById('namapemesan').value;
@@ -406,12 +457,22 @@ function savedetail() {
 	atasnama = document.getElementById('atasnama').value;
 	npwp = document.getElementById('npwp').value;
 	method = document.getElementById('method').value;
+	if (tgldokumenstart == '' || tgldokumenstart == '0000-00-00' || tgldokumenstart == '00-00-0000') {
+		alert('Tanggal dokumen dikeluarkan wajib diisi.');
+		return;
+	}
+	if (tgldokumenend == '' || tgldokumenend == '0000-00-00' || tgldokumenend == '00-00-0000') {
+		alert('Tanggal dokumen berakhir wajib diisi.');
+		return;
+	}
 	if (deskripsi == '' || rupiah == '' || satuan == '') {
 		alert('Lengkapi Pengisian.');
 		return;
 	}
 	param = 'kodeorg=' + kodeorg;
 	param += '&tanggal=' + tanggal;
+	param += '&tgldokumenstart=' + tgldokumenstart;
+	param += '&tgldokumenend=' + tgldokumenend;
 	param += '&notransaksi=' + notransaksi;
 	param += '&kategori=' + kategori;
 	param += '&namapemesan=' + encodeURIComponent(namapemesan);

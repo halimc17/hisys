@@ -18,11 +18,15 @@ $jenisApp = "BANSOS";
 
 ##deklarasi untuk option##
 $optorg =$optorgx=$optkat= "<option value=''>" . $_SESSION['lang']['pilihdata'] . "</option>";
-$where = "";
-if($_SESSION['empl']['tipelokasitugas']!='HOLDING'){
-	$where = " and kodeorganisasi = '".$_SESSION['empl']['lokasitugas']."'";
+
+#opsi unit header: seluruh unit sesuai detail akses user (getOrgDetail(1)),
+#disamakan dengan cakupan daftar transaksi (getOrgDetail(2) di slave) supaya unit
+#yang muncul di list selalu bisa dipilih saat edit
+foreach (getOrgDetail(1) as $kodeunit => $namaunit) {
+	$optorg .= "<option value=" . $kodeunit . ">" . $kodeunit . " - " . $namaunit . "</option>";
 }
-$str="select namaorganisasi,kodeorganisasi from ".$dbname.".organisasi where length(kodeorganisasi)=4 ".$where." order by namaorganisasi asc ";
+
+$str="select namaorganisasi,kodeorganisasi from ".$dbname.".organisasi where length(kodeorganisasi)=4 order by namaorganisasi asc ";
 $res=$owlPDO->query($str) or die(print " Gagal: ".PDOException::getMessage());
 $res->setFetchMode(PDO::FETCH_ASSOC);
 while($bar=$res->fetch()){
@@ -238,6 +242,15 @@ echo "
 			<td>Lokasi Pemesan ".$mandatory."</td> 
 			<td>:</td>
 			<td><select class=select2 style=\"width:175px;\" onchange=getrekening() id=lokasipemesan>" . $optorgx . "</select></td>
+		</tr>
+		<tr>
+			<td>Tanggal Dokumen Dikeluarkan ".$mandatory."</td> 
+			<td>:</td>
+			<td><input type=text class=myinputtext style='width:170px;' id=tgldokumenstart onmousemove=setCalendar(this.id) onkeypress='return false;' maxlength=10 readonly/></td>
+			
+			<td>Tanggal Dokumen Berakhir ".$mandatory."</td> 
+			<td>:</td>
+			<td><input type=text class=myinputtext style='width:170px;' id=tgldokumenend onmousemove=setCalendar(this.id) onkeypress='return false;' maxlength=10 readonly/></td>
 		</tr>
 		<tr>
 			<td>Type Pembayaran</td> 

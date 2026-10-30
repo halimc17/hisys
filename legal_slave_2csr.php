@@ -77,8 +77,16 @@ function csrInfoFilter()
 function csrDataList()
 {
 	global $dbname;
-	return fetchdata("SELECT a.notransaksi, a.kodeorg, a.tanggal, a.kategori, a.deskripsi, a.rupiah, a.posting, a.statuspersetujuan, a.updateby
+	return fetchdata("SELECT a.notransaksi, a.kodeorg, a.tanggal, a.tgldokumenstart, a.tgldokumenend, a.kategori, a.deskripsi, a.rupiah, a.posting, a.statuspersetujuan, a.updateby
 		FROM " . $dbname . ".lgl_bansos a WHERE 1=1 " . csrWhereList() . " ORDER BY a.tanggal, a.notransaksi, a.deskripsi");
+}
+
+function csrFormatTglDok($tglDok, $tglFallback)
+{
+	if ($tglDok != '' && $tglDok != '0000-00-00' && $tglDok != '--') {
+		return tanggalnormal($tglDok);
+	}
+	return ($tglFallback != '' && $tglFallback != '0000-00-00' && $tglFallback != '--') ? tanggalnormal($tglFallback) : '-';
 }
 
 #teks yang kepanjangan dipotong dan diberi "..." supaya tidak tumpang tindih ke kolom sebelah
@@ -118,8 +126,8 @@ switch ($method) {
 			$total += $r['rupiah'];
 			$tab .= "<tr class=rowcontent " . $xx . ">";
 			$tab .= "<td align=center>" . $no . "</td>";
-			$tab .= "<td align=center>" . tanggalnormal($r['tanggal']) . "</td>";
-			$tab .= "<td align=center>" . tanggalnormal($r['tanggal']) . "</td>";
+			$tab .= "<td align=center>" . csrFormatTglDok($r['tgldokumenstart'], $r['tanggal']) . "</td>";
+			$tab .= "<td align=center>" . csrFormatTglDok($r['tgldokumenend'], $r['tanggal']) . "</td>";
 			$tab .= "<td align=left>" . htmlspecialchars($r['deskripsi']) . "</td>";
 			$tab .= "<td align=right>" . hidezerodecimal($r['rupiah'], 2) . "</td>";
 			$tab .= "<td align=center>" . tanggalnormal($r['tanggal']) . "</td>";
@@ -170,8 +178,8 @@ switch ($method) {
 			$total += $r['rupiah'];
 			$stream .= "<tr>
 				<td align=center>" . $no . "</td>
-				<td align=center>" . tanggalnormal($r['tanggal']) . "</td>
-				<td align=center>" . tanggalnormal($r['tanggal']) . "</td>
+				<td align=center>" . csrFormatTglDok($r['tgldokumenstart'], $r['tanggal']) . "</td>
+				<td align=center>" . csrFormatTglDok($r['tgldokumenend'], $r['tanggal']) . "</td>
 				<td>" . htmlspecialchars($r['deskripsi']) . "</td>
 				<td align=right>" . round($r['rupiah'], 2) . "</td>
 				<td align=center>" . tanggalnormal($r['tanggal']) . "</td>
@@ -254,8 +262,8 @@ switch ($method) {
 			$c = $pdf->colW;
 			$pdf->SetFont('Arial', '', 7);
 			$pdf->Cell($c[0], $h, $no, 1, 0, 'C');
-			$pdf->Cell($c[1], $h, tanggalnormal($r['tanggal']), 1, 0, 'C');
-			$pdf->Cell($c[2], $h, tanggalnormal($r['tanggal']), 1, 0, 'C');
+			$pdf->Cell($c[1], $h, csrFormatTglDok($r['tgldokumenstart'], $r['tanggal']), 1, 0, 'C');
+			$pdf->Cell($c[2], $h, csrFormatTglDok($r['tgldokumenend'], $r['tanggal']), 1, 0, 'C');
 			$pdf->Cell($c[3], $h, csrFit($pdf, $r['deskripsi'], $c[3]), 1, 0, 'L');
 			$pdf->Cell($c[4], $h, number_format($r['rupiah'], 2), 1, 0, 'R');
 			$pdf->Cell($c[5], $h, tanggalnormal($r['tanggal']), 1, 0, 'C');

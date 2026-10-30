@@ -33,6 +33,8 @@ $katsrc = checkPostGet('katsrc', '');
 $status = checkPostGet('status', '');
 $tanggalmulai = tanggalsystemn(checkPostGet('tanggalmulai', ''));
 $tanggalsampai = tanggalsystemn(checkPostGet('tanggalsampai', ''));
+$tgldokumenstart = tanggalsystemn(checkPostGet('tgldokumenstart', ''));
+$tgldokumenend = tanggalsystemn(checkPostGet('tgldokumenend', ''));
 
 $numrow = checkPostGet('numrow', '');
 $kepada = checkPostGet('kepada', '');
@@ -110,7 +112,7 @@ if ($rupiah !== '' && (!is_string($rupiah) || !preg_match('/^[0-9]+(\.[0-9]+)?$/
 }
 
 #tanggal (hasil konversi tanggalsystemn; kosong menjadi --) harus berformat YYYY-MM-DD
-foreach (array('tanggal', 'tanggalmulai', 'tanggalsampai') as $kunciBNS) {
+foreach (array('tanggal', 'tanggalmulai', 'tanggalsampai', 'tgldokumenstart', 'tgldokumenend') as $kunciBNS) {
 	if ($$kunciBNS !== '' && $$kunciBNS !== '--' && (!is_string($$kunciBNS) || !preg_match('/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/', $$kunciBNS))) {
 		exit("Warning : Format tanggal tidak valid.");
 	}
@@ -555,8 +557,15 @@ switch ($method) {
 		$str = "select * from " . $dbname . ".lgl_bansos where notransaksi='" . $notransaksi . "'";
 		$res=fetchData($str);
 		if(count($res)>0){
-			# update flag menjadi 1
-			$str = "update " . $dbname . ".lgl_bansos set namapemesan='".$namapemesan."', tujuan='".$tujuan."', updateby='".$_SESSION['standard']['userid']."', rekening='".$rekening."' where notransaksi = '" . $notransaksi . "'";
+			# update header
+			$str = "update " . $dbname . ".lgl_bansos set namapemesan='".$namapemesan."', tujuan='".$tujuan."', updateby='".$_SESSION['standard']['userid']."', rekening='".$rekening."', tipebayar='".$tipebayar."', atasnama='".$atasnama."', npwp='".$npwp."'";
+			if ($tgldokumenstart != '' && $tgldokumenstart != '--' && $tgldokumenstart != '0000-00-00') {
+				$str .= ", tgldokumenstart='".$tgldokumenstart."'";
+			}
+			if ($tgldokumenend != '' && $tgldokumenend != '--' && $tgldokumenend != '0000-00-00') {
+				$str .= ", tgldokumenend='".$tgldokumenend."'";
+			}
+			$str .= " where notransaksi = '" . $notransaksi . "'";
 			try {
 				$owlPDO->exec($str);			
 			} catch (PDOException $e) {print " Gagal  !: " . $e->getMessage() . "\n";die();}
@@ -643,6 +652,12 @@ switch ($method) {
 		if ($tanggal == '--') {
 			exit("Warning : Tanggal wajib diisi.");
 		}
+		if ($tgldokumenstart == '' || $tgldokumenstart == '--' || $tgldokumenstart == '0000-00-00') {
+			exit("Warning : Tanggal dokumen dikeluarkan wajib diisi.");
+		}
+		if ($tgldokumenend == '' || $tgldokumenend == '--' || $tgldokumenend == '0000-00-00') {
+			exit("Warning : Tanggal dokumen berakhir wajib diisi.");
+		}
 		$stmtV = $owlPDO->prepare("select count(*) from " . $dbname . ".organisasi where kodeorganisasi=?");
 		$stmtV->execute(array($lokasipemesan));
 		if ($lokasipemesan == '' || $stmtV->fetchColumn() == 0) {
@@ -710,8 +725,8 @@ switch ($method) {
 			exit("warning : Sudah diposting " . date('d-m-Y H:i:s',strtotime($qStr[0]['postingdate'])));
 		}
 		
-		$str = "insert into " . $dbname . ".lgl_bansos (`notransaksi`,`kodeorg`,`tanggal`,`kategori`,`namapemesan`,`lokasipemesan`,`tujuan`,`deskripsi`,`rupiah`,`statuspersetujuan`,`createby`,`createtime`,`updateby`,`updatetime`,`rekening`,`tipebayar`,`atasnama`,`npwp`,`satuan`)
-		values ('".$notransaksi."','".$kodeorg."','".$tanggal."','".$kategori."','".$namapemesan."','".$lokasipemesan."','".$tujuan."','".$deskripsi."','".$rupiah."','0','" . $_SESSION['standard']['userid'] . "','".$todayhis."','" . $_SESSION['standard']['userid'] . "','".$todayhis."','".$rekening."','".$tipebayar."','".$atasnama."','".$npwp."','".$satuan."')";
+		$str = "insert into " . $dbname . ".lgl_bansos (`notransaksi`,`kodeorg`,`tanggal`,`tgldokumenstart`,`tgldokumenend`,`kategori`,`namapemesan`,`lokasipemesan`,`tujuan`,`deskripsi`,`rupiah`,`statuspersetujuan`,`createby`,`createtime`,`updateby`,`updatetime`,`rekening`,`tipebayar`,`atasnama`,`npwp`,`satuan`)
+		values ('".$notransaksi."','".$kodeorg."','".$tanggal."','".$tgldokumenstart."','".$tgldokumenend."','".$kategori."','".$namapemesan."','".$lokasipemesan."','".$tujuan."','".$deskripsi."','".$rupiah."','0','" . $_SESSION['standard']['userid'] . "','".$todayhis."','" . $_SESSION['standard']['userid'] . "','".$todayhis."','".$rekening."','".$tipebayar."','".$atasnama."','".$npwp."','".$satuan."')";
         try {$owlPDO->exec($str);} catch (PDOException $e) {print " Gagal  !: " . $e->getMessage() . "\n";die();}
 		
 		unset($_SESSION['bnsbaru'][$notransaksi]);
@@ -971,7 +986,7 @@ switch ($method) {
 		
 		$countApp = getCountApproval($jenisApp,'');
 
-       $str = "SELECT sum(a.rupiah) as biaya,(select group_concat(distinct d.notransaksi) from " . $dbname . ".keu_kasbankdt d where d.nodok=a.notransaksi) as kas,a.notransaksi, a.kodeorg, a.tanggal, a.updateby, a.posting,a.kategori,a.namapemesan,a.lokasipemesan,a.tujuan,a.rekening,a.tipebayar,a.atasnama, a.npwp, a.statuspersetujuan,a.posting FROM " . $dbname . ".lgl_bansos  a  
+       $str = "SELECT sum(a.rupiah) as biaya,(select group_concat(distinct d.notransaksi) from " . $dbname . ".keu_kasbankdt d where d.nodok=a.notransaksi) as kas,a.notransaksi, a.kodeorg, a.tanggal, a.tgldokumenstart, a.tgldokumenend, a.updateby, a.posting,a.kategori,a.namapemesan,a.lokasipemesan,a.tujuan,a.rekening,a.tipebayar,a.atasnama, a.npwp, a.statuspersetujuan,a.posting FROM " . $dbname . ".lgl_bansos  a  
 		where 1=1 " . $where . " group by a.notransaksi, a.kodeorg order by a.notransaksi desc ";
 		if ($tipe == 'html') {
 			$str .= "limit " . $offset . "," . $limit . "";
@@ -1019,7 +1034,7 @@ switch ($method) {
 						if ($tipe == 'html') {
 							if($bar['posting'] == 0) {
 									$isi .= "<td align=center>
-								<img src=images/application/application_edit.png class=resicon  title='Edit' onclick=\"edit('" . $bar['kodeorg'] . "','" . tanggalnormal($bar['tanggal']) . "','" . $bar['notransaksi'] . "','" . $bar['kategori'] . "','" . bnsJs($bar['namapemesan']) . "','" . $bar['lokasipemesan'] . "','" . bnsJs(str_replace('####', "\n", $bar['tujuan'])) . "','".$bar['rekening']."','".$bar['tipebayar']."','" . bnsJs($bar['atasnama']) . "','" . bnsJs($bar['npwp']) . "');\" >
+								<img src=images/application/application_edit.png class=resicon  title='Edit' onclick=\"edit('" . $bar['kodeorg'] . "','" . tanggalnormal($bar['tanggal']) . "','" . $bar['notransaksi'] . "','" . $bar['kategori'] . "','" . bnsJs($bar['namapemesan']) . "','" . $bar['lokasipemesan'] . "','" . bnsJs(str_replace('####', "\n", $bar['tujuan'])) . "','".$bar['rekening']."','".$bar['tipebayar']."','" . bnsJs($bar['atasnama']) . "','" . bnsJs($bar['npwp']) . "','" . ($bar['tgldokumenstart'] != '0000-00-00' ? tanggalnormal($bar['tgldokumenstart']) : '') . "','" . ($bar['tgldokumenend'] != '0000-00-00' ? tanggalnormal($bar['tgldokumenend']) : '') . "');\" >
 							</td>";
 									$isi .= "<td align=center>
 								<img src=images/application/application_delete.png class=resicon  title='Delete' onclick=\"del('" . $bar['kodeorg'] . "','" . tanggalnormal($bar['tanggal']) . "','" . $bar['notransaksi'] . "');\" >
