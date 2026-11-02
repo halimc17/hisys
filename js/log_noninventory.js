@@ -560,7 +560,7 @@ function unpostinggr(notransaksi) {
   param = "method=unpostinggr&notransaksi=" + notransaksi;
   tujuan = "log_slave_noninventory.php";
 
-  if (confirm("Anda yakin ingin unposting no transaksi " + notransaksi + " ?")) {
+  if (confirm("Anda yakin ingin unposting no transaksi " + notransaksi + " ?\n\nPersetujuan akan direset menjadi belum diajukan dan harus diajukan serta disetujui ulang sebelum diposting lagi.")) {
     post_response_text(tujuan, param, respog);
   }
 

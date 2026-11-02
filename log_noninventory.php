@@ -168,6 +168,7 @@ echo"<div id=forminput style='display:none'>";
 		$str="select b.* from ".$dbname.".log_suratjalanht a left join ".$dbname.".log_suratjalandt b on a.nosj=b.nosj left join ".$dbname.".log_poht c on b.nopo=c.nopo where a.kodept='".$optpt[$unitkerja]."' 
 		and a.franco like '".$unitkerja."%' and a.posting='1' and c.tipepo != 'PO'  group by b.nosj,b.nopo,b.kodebarang";
 		$res=fetchdata($str);
+		$array_nopoSJ = array();
 		foreach($res as $valxx){
 	
 			$strx="select nopo,jumlahpesan, jmlhstlhclose, kodebarang, satuan from ".$dbname.".log_podt where nopo='".$valxx['nopo']."' and kodebarang='".$valxx['kodebarang']."'";   

@@ -1280,6 +1280,7 @@ switch($method){
 		$tanggal=$res[0]['tanggal'];
 		$nopo=$res[0]['nopo'];
 		$termin=$res[0]['termin'];
+		$tipeGr=$res[0]['tipe'];
 
 		if($res[0]['posting']!=1){
 			exit("warningsistem:Transaksi ini belum diposting.");
@@ -1332,11 +1333,23 @@ switch($method){
 			#= tabrakan nomor jurnal kalau sudah ada transaksi lain yang posting pakai counter yang sama
 			$str="update ".$dbname.".log_noninventory set posting='0', postedby='0000000000', postedtime='0000-00-00 00:00:00' where notransaksi='".$notransaksi."'";
 			$owlPDO->exec($str);
+			#= reset persetujuan: GR kembali "belum diajukan" supaya bisa diedit/dihapus/diajukan ulang, dan harus
+			#= disetujui lagi sebelum diposting ulang. Baris approval lama diarsipkan ke approval_return (riwayat)
+			#= lalu dihapus, supaya pengajuan ulang mulai dari awal.
+			$jenisApp="GRNI".$tipeGr;
+			$str="insert into ".$dbname.".approval_return (`notransaksi`, `jenispersetujuan`, `level`, `karyawanid`, `status`, `komentar`, `keterangan`, `tanggal`, `nourut`)
+				select `notransaksi`, `jenispersetujuan`, `level`, `karyawanid`, `status`, `komentar`, `keterangan`, `tanggal`, `nourut`
+				from ".$dbname.".approval where notransaksi='".$notransaksi."' and jenispersetujuan='".$jenisApp."'";
+			$owlPDO->exec($str);
+			$str="delete from ".$dbname.".approval where notransaksi='".$notransaksi."' and jenispersetujuan='".$jenisApp."'";
+			$owlPDO->exec($str);
+			$str="update ".$dbname.".log_noninventory set persetujuan='0' where notransaksi='".$notransaksi."'";
+			$owlPDO->exec($str);
 
 			$owlPDO->commit();
 
 			#= info balik ke user, jurnal apa aja yang baru dihapus
-			echo bbBannerSukses("Berhasil unposting <b>".$notransaksi."</b>. Jurnal yang dihapus:").$tabelJurnal;
+			echo bbBannerSukses("Berhasil unposting <b>".$notransaksi."</b>. Persetujuan direset menjadi belum diajukan (silahkan edit/hapus, atau ajukan ulang untuk persetujuan). Jurnal yang dihapus:").$tabelJurnal;
 		}catch(PDOException $e){
 			$owlPDO->rollback();
 			echo "Warning \n" . addslashes($e->getMessage());
