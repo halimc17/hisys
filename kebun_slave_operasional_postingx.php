@@ -228,8 +228,16 @@ try {
 				$statpen = 0;
 				$statPre = 0;
 
-				$sDr = "select a.nik, lokasitugas,sum(a.umr) as uphtot,sum(a.insentif) as premi, sum(a.penalty) as penalty,kodeorganisasi as kodept from " . $dbname . ".kebun_kehadiran a left join " . $dbname . "." . $tabel . " b on a.nik=b.karyawanid left join " . $dbname . ".kebun_prestasi c on a.notransaksi=c.notransaksi and a.nourut=c.nourut where a.notransaksi='" . $notranX . "' and c.kodekegiatan='" . $kegiatanX . "' and c.kodeorg='" . $blokX . "' " . $whhist . " group by lokasitugas, a.nik";
+				if ($jumlahkaryhist > 0) {
+					// Snapshot unit sudah diposting: unit/PT karyawan dari histori periode itu, kalau tidak ada dari histori terakhir sebelumnya
+					$sDr = "select a.nik, hk.lokasitugas as lokasitugas,sum(a.umr) as uphtot,sum(a.insentif) as premi, sum(a.penalty) as penalty,hk.kodeorganisasi as kodept from " . $dbname . ".kebun_kehadiran a " . sqlJoinHistKaryawan('a.nik', $prdgj, 'hk') . " left join " . $dbname . ".kebun_prestasi c on a.notransaksi=c.notransaksi and a.nourut=c.nourut where a.notransaksi='" . $notranX . "' and c.kodekegiatan='" . $kegiatanX . "' and c.kodeorg='" . $blokX . "' group by hk.lokasitugas, a.nik";
+				} else {
+					$sDr = "select a.nik, lokasitugas,sum(a.umr) as uphtot,sum(a.insentif) as premi, sum(a.penalty) as penalty,kodeorganisasi as kodept from " . $dbname . ".kebun_kehadiran a left join " . $dbname . "." . $tabel . " b on a.nik=b.karyawanid left join " . $dbname . ".kebun_prestasi c on a.notransaksi=c.notransaksi and a.nourut=c.nourut where a.notransaksi='" . $notranX . "' and c.kodekegiatan='" . $kegiatanX . "' and c.kodeorg='" . $blokX . "' " . $whhist . " group by lokasitugas, a.nik";
+				}
 				$rDr = fetchdata($sDr);
+
+				// Karyawan tanpa unit: hentikan dengan pesan yang jelas (bukan error Kelompok Jurnal dengan unit kosong)
+				cekKaryawanTanpaUnit($rDr, $prdgj);
 				$lstUph = $lstPre = $lstPent = $lstPt = array();
 				$lstUphNik = $lstPreNik = $lstPentNik = array();
 				if (count($rDr) != 0) {

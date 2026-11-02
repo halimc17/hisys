@@ -1166,6 +1166,48 @@ function getHistKary($karyawanid, $periode = '', $kolom = 'namakaryawan')
 	return $hasil;
 }
 
+# Fragmen SQL "left join" unit/PT/nama/NIK karyawan menurut periode, dari datakaryawan_hist:
+# histori B periode itu; kalau tidak ada, histori B terakhir sebelum periode itu.
+# Satu baris per karyawan (kalau ada lebih dari satu baris B di periode yang sama, diambil nourut terkecil).
+# Kolom tersedia: <alias>.karyawanid, lokasitugas, kodeorganisasi, namakaryawan, nik. Karyawan yang tidak punya
+# histori sama sekali -> kolomnya NULL; cek lewat cekKaryawanTanpaUnit().
+# Contoh: "from kebun_kehadiran a " . sqlJoinHistKaryawan('a.nik', $periode, 'hk') . " where ..."
+function sqlJoinHistKaryawan($kolomKaryawanId, $periode, $alias = 'hk')
+{
+	global $dbname;
+
+	$p = preg_replace('/[^0-9\-]/', '', $periode);
+	$k = preg_replace('/[^A-Za-z0-9_\.]/', '', $kolomKaryawanId);
+	$al = preg_replace('/[^A-Za-z0-9_]/', '', $alias);
+
+	return "left join " . $dbname . ".datakaryawan_hist " . $al . " on " . $al . ".karyawanid=" . $k
+		. " and " . $al . ".version_type='B' and " . $al . ".approval_status='8'"
+		. " and " . $al . ".periodegaji=(select max(x.periodegaji) from " . $dbname . ".datakaryawan_hist x where x.karyawanid=" . $k . " and x.version_type='B' and x.approval_status='8' and x.periodegaji<='" . $p . "')"
+		. " and " . $al . ".nourut=(select min(y.nourut) from " . $dbname . ".datakaryawan_hist y where y.karyawanid=" . $k . " and y.version_type='B' and y.approval_status='8' and y.periodegaji=" . $al . ".periodegaji)";
+}
+
+# Hentikan proses (PDOException) bila ada baris hasil query yang unit tugasnya kosong, dengan pesan yang menyebut
+# nama dan NIK karyawannya. $rows = hasil fetchdata() yang berisi kolom karyawan ($kolomNik) dan unit ($kolomUnit).
+function cekKaryawanTanpaUnit($rows, $periode, $kolomNik = 'nik', $kolomUnit = 'lokasitugas')
+{
+	global $dbname;
+
+	$tanpaUnit = array();
+	foreach ($rows as $row) {
+		if (trim((string)$row[$kolomUnit]) == '') {
+			$rKary = fetchdata("select nik, namakaryawan from " . $dbname . ".datakaryawan where karyawanid='" . $row[$kolomNik] . "'");
+			if (count($rKary) > 0) {
+				$tanpaUnit[$row[$kolomNik]] = $rKary[0]['namakaryawan'] . " (NIK " . $rKary[0]['nik'] . ")";
+			} else {
+				$tanpaUnit[$row[$kolomNik]] = "ID karyawan " . $row[$kolomNik] . " (tidak ditemukan di data karyawan)";
+			}
+		}
+	}
+	if (count($tanpaUnit) > 0) {
+		throw new PDOException("Unit tugas karyawan tidak diketahui karena belum ada data histori karyawan periode " . $periode . " maupun sebelumnya, atau data karyawan tidak lengkap : " . implode(", ", $tanpaUnit) . ". Silahkan posting data karyawan unitnya terlebih dahulu di menu SDM, lalu proses kembali.");
+	}
+}
+
 function getNopol($kodevhc, $detail = '')
 {
 	global $dbname;

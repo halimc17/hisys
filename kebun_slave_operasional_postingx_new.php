@@ -232,12 +232,7 @@ try {
 
 				// Jika Ada data karyawan histori di periode gaji dan berdasarkan karyawanid di prestasi pekerja, maka pakailah yang datakaryawan_hist 
 				if ($counthst > 0) {
-					$sDr = "select a.nik, lokasitugas,sum(a.umr) as uphtot,sum(a.insentif) as premi, sum(a.penalty) as penalty,kodeorganisasi as kodept 
-					from " . $dbname . ".kebun_kehadiran_detail a 
-					left join " . $dbname . ".datakaryawan_hist b on a.nik=b.karyawanid AND b.periodegaji='{$prdgj}' AND b.version_type = 'b' 
-					left join " . $dbname . ".kebun_prestasi_detail c on a.notransaksi=c.notransaksi and a.nourut=c.nourut 
-					where a.notransaksi='" . $notranX . "' and c.kodekegiatan='" . $kegiatanX . "' and c.kodeorg='" . $blokX . "' 
-					group by lokasitugas, a.nik";
+					$sDr = "select a.nik, hk.lokasitugas as lokasitugas,sum(a.umr) as uphtot,sum(a.insentif) as premi, sum(a.penalty) as penalty,hk.kodeorganisasi as kodept from " . $dbname . ".kebun_kehadiran_detail a " . sqlJoinHistKaryawan('a.nik', $prdgj, 'hk') . " left join " . $dbname . ".kebun_prestasi_detail c on a.notransaksi=c.notransaksi and a.nourut=c.nourut where a.notransaksi='" . $notranX . "' and c.kodekegiatan='" . $kegiatanX . "' and c.kodeorg='" . $blokX . "' group by hk.lokasitugas, a.nik";
 				} else {
 					$sDr = "select a.nik, lokasitugas,sum(a.umr) as uphtot,sum(a.insentif) as premi, sum(a.penalty) as penalty,kodeorganisasi as kodept 
 					from " . $dbname . ".kebun_kehadiran_detail a 
@@ -249,6 +244,9 @@ try {
 
 				// exit('warning:'.$sDr);
 				$rDr = fetchdata($sDr);
+
+				// Karyawan tanpa unit: hentikan dengan pesan yang jelas
+				cekKaryawanTanpaUnit($rDr, $prdgj);
 				$lstUph = $lstPre = $lstPent = $lstPt = array();
 				$lstUphNik = $lstPreNik = $lstPentNik = array();
 				if (count($rDr) != 0) {
@@ -1400,7 +1398,7 @@ try {
 						$owlPDO->exec($queryD);
 					}
 
-					foreach (@$dataResRk['detail'] as $key => $dataDet) {
+					foreach ((array)@$dataResRk['detail'] as $key => $dataDet) {
 						$queryD = insertQuery($dbname, 'keu_jurnaldt', $dataDet);
 						$owlPDO->exec($queryD);
 					}
@@ -1483,11 +1481,11 @@ try {
 							$queryKonter = updateQuery($dbname, 'keu_5kelompokjurnal', array('nokounter' => $counterDt[$rwUnit]), "kodeorg='" . $lstPt[$rwUnit] . "' and kodekelompok='M' and kodeunit='" . $rwUnit . "' and periode='" . $prdbln . "'");
 							$owlPDO->exec($queryKonter);
 
-							if (count($lstPent[$rwUnit]) != 0) {
+							if (!empty($lstPent[$rwUnit])) {
 								$queryKonter = updateQuery($dbname, 'keu_5kelompokjurnal', array('nokounter' => $counterDtpen[$rwUnit]), "kodeorg='" . $lstPt[$rwUnit] . "' and kodekelompok='M' and kodeunit='" . $rwUnit . "' and periode='" . $prdbln . "'");
 								$owlPDO->exec($queryKonter);
 							}
-							if (count($lstPre[$rwUnit]) != 0) {
+							if (!empty($lstPre[$rwUnit])) {
 								$queryKonter = updateQuery($dbname, 'keu_5kelompokjurnal', array('nokounter' => $counterDtpre[$rwUnit]), "kodeorg='" . $lstPt[$rwUnit] . "' and kodekelompok='M' and kodeunit='" . $rwUnit . "' and periode='" . $prdbln . "'");
 								$owlPDO->exec($queryKonter);
 							}
