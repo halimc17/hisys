@@ -1,32 +1,69 @@
-// JavaScript Document
-function refresh_data() {
-    param = 'method=list_new_data';
-    tujuan = 'log_slave_2daftarPo.php';
-    function respog() {
-        if (con.readyState == 4) {
-            if (con.status == 200) {
-                busy_off();
-                if (!isSaveResponse(con.responseText)) {
-                    alert(con.responseText);
-                } else {
-                    //alert(con.responseText);
-                    document.getElementById('contain').innerHTML = con.responseText;
-                    document.getElementById('txtsearch').value = '';
-                    document.getElementById('tgl_cari').value = '';
-                    document.getElementById('tgl_cari2').value = '';
-                    //alert('Berhasil');
-                }
-            } else {
-                busy_off();
-                error_catch(con.status);
-            }
-        }
+// JavaScript Document - Daftar Penerimaan Barang
+//isi pilihan (select2) lalu perbarui tampilannya
+function setSelDPB(id, v) {
+    var el = document.getElementById(id);
+    el.value = v;
+    if (window.jQuery) {
+        jQuery(el).trigger('change.select2');
     }
-    post_response_text(tujuan, param, respog);
 }
-function loadData() {
-    param = 'method=loadData';
-    tujuan = 'log_slave_2penerimaan.php';
+
+//kembali ke tampilan awal (tahun sekarang, tanpa filter lain)
+function displaylist() {
+    var teks = ['txtNoTransaksi', 'txtsearch', 'txtsearch2', 'nmBrg', 'tgl_cari'];
+    for (var i = 0; i < teks.length; i++) {
+        document.getElementById(teks[i]).value = '';
+    }
+    setSelDPB('kdGdng', '');
+    setSelDPB('kodesupplier', '');
+    setSelDPB('statusposting', '');
+    setSelDPB('filterTahun', String(new Date().getFullYear()));
+    cariData();
+}
+
+//parameter filter yang dipakai list, paging, dan tarikan Excel/PDF
+function getFilterParamDPB() {
+    var p = 'txtNoTransaksi=' + encodeURIComponent(trim(document.getElementById('txtNoTransaksi').value));
+    p += '&txtSearch=' + encodeURIComponent(trim(document.getElementById('txtsearch').value));
+    p += '&nopp=' + encodeURIComponent(trim(document.getElementById('txtsearch2').value));
+    p += '&nmBrg=' + encodeURIComponent(trim(document.getElementById('nmBrg').value));
+    p += '&tglCari=' + encodeURIComponent(trim(document.getElementById('tgl_cari').value));
+    p += '&filterTahun=' + encodeURIComponent(document.getElementById('filterTahun').value);
+    p += '&kdGudang=' + encodeURIComponent(document.getElementById('kdGdng').value);
+    p += '&kodesupplier=' + encodeURIComponent(document.getElementById('kodesupplier').value);
+    p += '&statusposting=' + encodeURIComponent(document.getElementById('statusposting').value);
+    return p;
+}
+
+//validasi di sisi browser (server memeriksa ulang)
+function validasiFilterDPB() {
+    var nopp = trim(document.getElementById('txtsearch2').value);
+    if (nopp != '' && nopp.length < 3) {
+        alert('Error: masukan nopp min 3 karakter');
+        return false;
+    }
+    return true;
+}
+
+function tampilTarikanDPB(judul, tujuan) {
+    alertify.popup(judul, "<iframe frameborder=0 style='width:100%;height:100%;overflow:none' src='" + tujuan + "'></iframe>").set({'resizable': true, 'maximizable': true, 'overflow': false}).resizeTo('80%', '70%');
+}
+function exportExcelDPB() {
+    if (!validasiFilterDPB()) return;
+    tampilTarikanDPB('Report Ms.Excel', 'log_slave_2penerimaan.php?method=excellist&' + getFilterParamDPB());
+}
+function exportPdfDPB() {
+    if (!validasiFilterDPB()) return;
+    tampilTarikanDPB('Report PDF', 'log_slave_2penerimaan.php?method=pdflist&' + getFilterParamDPB());
+}
+
+function kirimListDPB(page) {
+    if (!validasiFilterDPB()) return;
+    var param = 'method=list_new_data&' + getFilterParamDPB();
+    if (page !== undefined) {
+        param += '&page=' + page;
+    }
+    post_response_text('log_slave_2penerimaan.php', param, respog);
     function respog() {
         if (con.readyState == 4) {
             if (con.status == 200) {
@@ -34,13 +71,7 @@ function loadData() {
                 if (!isSaveResponse(con.responseText)) {
                     alert(con.responseText);
                 } else {
-                    //alert(con.responseText);
                     document.getElementById('contain').innerHTML = con.responseText;
-                    document.getElementById('txtsearch').value = '';
-                    document.getElementById('kdGdng').value = '';
-                    document.getElementById('nmBrg').value = '';
-                    document.getElementById('tgl_cari').value = '';
-                    //alert('Berhasil');
                 }
             } else {
                 busy_off();
@@ -48,77 +79,17 @@ function loadData() {
             }
         }
     }
-    post_response_text(tujuan, param, respog);
 }
 function cariData() {
-
-    kdGudang = document.getElementById('kdGdng').options[document.getElementById('kdGdng').selectedIndex].value;
-    txtsearch = document.getElementById('txtsearch').value;
-    nmBrg = document.getElementById('nmBrg').value;
-    mnop = document.getElementById('txtsearch2').value;
-    tgl_cari = document.getElementById('tgl_cari').value;
-    met = document.getElementById('method');
-    met = met.value = 'list_new_data';
-    //met=trim(met);
-    param = 'txtSearch=' + txtsearch + '&tglCari=' + tgl_cari + '&method=' + met;
-    param += '&kdGudang=' + kdGudang + '&nmBrg=' + nmBrg + '&nopp=' + mnop;
-    tujuan = 'log_slave_2penerimaan.php';
-    post_response_text(tujuan, param, respog);
-    function respog() {
-        if (con.readyState == 4) {
-            if (con.status == 200) {
-                busy_off();
-                if (!isSaveResponse(con.responseText)) {
-                    alert(con.responseText);
-                } else {
-                    //alert(con.responseText);
-                    document.getElementById('contain').innerHTML = con.responseText;
-
-                }
-            } else {
-                busy_off();
-                error_catch(con.status);
-            }
-        }
-    }
-
-}
-function cariBast(num) {
-    param = 'method=loadData';
-    param += '&page=' + num;
-    tujuan = 'log_slave_2penerimaan.php';
-    post_response_text(tujuan, param, respog);
-    function respog() {
-        if (con.readyState == 4) {
-            if (con.status == 200) {
-                busy_off();
-                if (!isSaveResponse(con.responseText)) {
-                    alert(con.responseText);
-                } else {
-                    document.getElementById('contain').innerHTML = con.responseText;
-                }
-            } else {
-                busy_off();
-                error_catch(con.status);
-            }
-        }
-    }
+    kirimListDPB(0);
 }
 function cariPage(num) {
-    kdGudang = document.getElementById('kdGdng').options[document.getElementById('kdGdng').selectedIndex].value;
-    txtsearch = document.getElementById('txtsearch').value;
-    nmBrg = document.getElementById('nmBrg').value;
-    tgl_cari = document.getElementById('tgl_cari').value;
-    met = document.getElementById('method');
-    mnop = document.getElementById('txtsearch2').value;
-    met = met.value = 'list_new_data';
-    //met=trim(met);
-    param = 'txtSearch=' + txtsearch + '&tglCari=' + tgl_cari + '&method=' + met;
-    param += '&kdGudang=' + kdGudang + '&nmBrg=' + nmBrg + '&nopp=' + mnop;
-    //param='txtSearch='+txtSearch+'&tglCari='+tglCari+'&method='+met;
-    param += '&page=' + num;
-    tujuan = 'log_slave_2penerimaan.php';
-    post_response_text(tujuan, param, respog);
+    kirimListDPB(num);
+}
+
+//rincian barang (kode, nama, satuan, qty) satu penerimaan dalam popup
+function detailBarangDPB(notransaksi, ev) {
+    post_response_text('log_slave_2penerimaan.php', 'method=detailbarang&notransaksi=' + encodeURIComponent(notransaksi), respog);
     function respog() {
         if (con.readyState == 4) {
             if (con.status == 200) {
@@ -126,7 +97,7 @@ function cariPage(num) {
                 if (!isSaveResponse(con.responseText)) {
                     alert(con.responseText);
                 } else {
-                    document.getElementById('contain').innerHTML = con.responseText;
+                    alertify.popup('Detail Barang ' + notransaksi, con.responseText).set({'resizable': true, 'maximizable': true, 'overflow': false}).resizeTo('70%', '60%');
                 }
             } else {
                 busy_off();
@@ -135,14 +106,9 @@ function cariPage(num) {
         }
     }
 }
-function previewBapb(notransaksi, ev) {
-    param = 'notransaksi=' + notransaksi;
-    tujuan = 'log_slave_print_bapb_pdf.php?' + param;
-    //display window
-    title = notransaksi;
-    width = '800';
-    height = '400';
-    content = "<iframe frameborder=0 width=100% height=100% src='" + tujuan + "'></iframe>"
-        showDialog1(title, content, width, height, ev);
 
+//cetak BAPB (PDF) dalam popup yang bisa diperbesar/dikecilkan
+function previewBapb(notransaksi, ev) {
+    var tujuan = 'log_slave_print_bapb_pdf.php?notransaksi=' + encodeURIComponent(notransaksi);
+    alertify.popuppdf("PDF", "<iframe frameborder=0 style='width:100%;height:90%;overflow:none' src='" + tujuan + "#zoom=page-width'></iframe>").set({'resizable': true, 'overflow': false}).resizeTo('90%', '90%');
 }
