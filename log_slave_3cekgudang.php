@@ -54,16 +54,153 @@ $whereClause_kodegudang =  "AND (\n    " . implode(" OR\n    ", $conditions_kode
 // AKHIR GUDANGX
 
 
+// Tampilan hasil Pra Tutup Buku Fisik: ringkasan pengecekan di atas, rincian temuan di bawahnya
+function renderPraTutupBuku($temuan, $akunBelumBalance, $param)
+{
+    $h = function ($s) {
+        return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8');
+    };
+    $namaUnit = getNamaOrg($param['unitId']);
+
+    // [kunci, judul pengecekan, jumlah temuan (null = belum dicek), tindakan]
+    $cek = array();
+    $cek[] = array('tutup', 'Gudang sudah tutup buku pada periode ini', ($temuan['tutup'] != '' ? 1 : 0), 'Hubungi IT');
+    if ($temuan['integrity']) {
+        $cek[] = array('integrity', 'Integrity Check BKM', 1, 'Jalankan Pengadaan - Proses - Integrity Check BKM, lalu cek ulang');
+    }
+    $cek[] = array('bkm', 'BKM pakai material belum diposting', count($temuan['bkm']), 'Posting BKM yang memakai material', 'baris');
+    $cek[] = array('belumposting', 'Transaksi gudang belum diposting', count(array_unique(array_column($temuan['belumposting'], 'notransaksi'))), 'Posting di menu Pengadaan - Proses - Posting, urut dari tanggal paling awal', 'transaksi');
+    $cek[] = array('mutasidalam', 'Mutasi dalam unit belum diterima', count($temuan['mutasidalam']), 'Selesaikan penerimaan mutasi pada periode yang sama', 'transaksi');
+    $cek[] = array('mutasiantar', 'Mutasi antar unit belum diterima', count($temuan['mutasiantar']), 'Selesaikan penerimaan mutasi pada periode yang sama', 'transaksi');
+    $cek[] = array('mutasibelumterima', 'Mutasi belum dibuatkan penerimaan / pengiriman belum diposting', count($temuan['mutasibelumterima']), 'Buat penerimaan mutasi atau posting pengirimannya', 'baris');
+    $cek[] = array('saldodivisi', 'Saldo barang di gudang divisi belum nol', count($temuan['saldodivisi']), 'Kembalikan stok ke gudang central sampai saldo divisi nol', 'baris');
+    $cek[] = array('akun', 'Nilai material vs jurnal (akun belum balance, ambang Rp 300)', ($temuan['integrity'] ? null : count($akunBelumBalance)), 'Klik ikon kunci pada baris akun untuk melihat rinciannya', 'akun');
+
+    $jumlahMasalah = 0;
+    foreach ($cek as $c) {
+        if ($c[2] !== null && $c[2] > 0) {
+            $jumlahMasalah++;
+        }
+    }
+
+    $out = "<div style='font-size:13px;'>";
+    // ringkasan
+    if ($jumlahMasalah == 0) {
+        $out .= "<div style='padding:10px 14px;background:green;color:white;font-weight:bold;font-size:15px;'>&#10003; SEMUA PENGECEKAN LOLOS - Silakan lanjutkan Tutup Buku.</div>";
+    } else {
+        $out .= "<div style='padding:10px 14px;background:#d9362a;color:white;font-weight:bold;font-size:15px;'>&#10007; BELUM BISA TUTUP BUKU - " . $jumlahMasalah . " pengecekan belum lolos</div>";
+    }
+    $out .= "<div style='margin:6px 0;font-size:12px;'><b>Unit</b> : " . $h($namaUnit) . " (" . $h($param['unitId']) . ") &nbsp;|&nbsp; <b>Periode</b> : " . $h($param['periodeId']) . "</div>";
+    $out .= "<table cellpadding=5 cellspacing=1 class=sortable style='width:100%;margin-bottom:12px;'>
+        <thead><tr class=rowheader><th style='width:30px'>No.</th><th>Pengecekan</th><th style='width:130px'>Hasil</th><th>Tindakan</th></tr></thead><tbody>";
+    $no = 0;
+    foreach ($cek as $c) {
+        $no++;
+        if ($c[2] === null) {
+            $hasil = "<td align='center' style='background:#999;color:white;font-weight:bold;'>Belum dicek</td>";
+            $tindak = "Selesaikan pengecekan di atasnya dulu";
+        } elseif ($c[2] > 0) {
+            $hasil = "<td align='center' style='background:#d9362a;color:white;font-weight:bold;'>&#10007; " . $c[2] . " " . (isset($c[4]) ? $c[4] : 'temuan') . "</td>";
+            $tindak = $h($c[3]);
+        } else {
+            $hasil = "<td align='center' style='background:green;color:white;font-weight:bold;'>&#10003; Lolos</td>";
+            $tindak = "-";
+        }
+        $out .= "<tr class=rowcontent><td align='center'>" . $no . "</td><td>" . $h($c[1]) . "</td>" . $hasil . "<td>" . $tindak . "</td></tr>";
+    }
+    $out .= "</tbody></table>";
+
+    // rincian temuan
+    $judul = function ($teks, $jumlah) use ($h) {
+        return "<div style='margin:14px 0 4px 0;padding:5px 10px;background:#3a5470;color:white;font-weight:bold;'>" . $h($teks) . " (" . $jumlah . ")</div>";
+    };
+    $tabel = function ($kolom, $baris) use ($h) {
+        $t = "<table cellpadding=4 cellspacing=1 class=sortable style='width:100%'><thead><tr class=rowheader><th style='width:30px'>No.</th>";
+        foreach ($kolom as $k) {
+            $t .= "<th>" . $h($k) . "</th>";
+        }
+        $t .= "</tr></thead><tbody>";
+        $n = 0;
+        foreach ($baris as $b) {
+            $n++;
+            $t .= "<tr class=rowcontent><td align='center'>" . $n . "</td>";
+            foreach ($b as $sel) {
+                $t .= $sel;
+            }
+            $t .= "</tr>";
+        }
+        return $t . "</tbody></table>";
+    };
+    $td = function ($teks, $rata = 'left') use ($h) {
+        return "<td align='" . $rata . "'>" . $h($teks) . "</td>";
+    };
+
+    if ($temuan['tutup'] != '') {
+        $out .= $judul('Gudang sudah tutup buku', 1) . "<div style='padding:8px 10px;background:#fdecea;border:1px solid #d9362a;'>" . $h($temuan['tutup']) . "</div>";
+    }
+    if ($temuan['integrity']) {
+        $out .= $judul('Integrity Check BKM belum dijalankan', 1) . "<div style='padding:8px 10px;background:#fff4e0;border:1px solid orange;'>Ada pemakaian material BKM yang belum tercatat di gudang. Silakan jalankan Proses pada menu Pengadaan &gt; Proses &gt; Integrity Check BKM, lalu cek ulang.</div>";
+    }
+    if (count($temuan['bkm']) > 0) {
+        $baris = array();
+        foreach ($temuan['bkm'] as $r) {
+            $baris[] = array($td($r['notransaksi']), $td($r['kodegudang'], 'center'), $td($r['kodebarang'] . ' - ' . $r['namabarang']), $td($r['jumlah'], 'right'));
+        }
+        $out .= $judul('BKM pakai material belum diposting', count($baris)) . $tabel(array('No. Transaksi', 'Gudang', 'Barang', 'Jumlah'), $baris);
+    }
+    if (count($temuan['belumposting']) > 0) {
+        $baris = array();
+        foreach ($temuan['belumposting'] as $r) {
+            $baris[] = array($td($r['notransaksi']), $td(tanggalnormal($r['tanggal']), 'center'), $td($r['kodegudang'], 'center'), $td($r['kodebarang'] . ' - ' . $r['namabarang']), $td($r['jumlah'], 'right'));
+        }
+        $out .= $judul('Transaksi gudang belum diposting - ' . count(array_unique(array_column($temuan['belumposting'], 'notransaksi'))) . ' transaksi, rincian per barang', count($baris)) .$tabel(array('No. Transaksi', 'Tanggal', 'Gudang', 'Barang', 'Jumlah'), $baris);
+    }
+    foreach (array('mutasidalam' => 'Mutasi dalam unit belum diterima', 'mutasiantar' => 'Mutasi antar unit belum diterima') as $kunci => $teks) {
+        if (count($temuan[$kunci]) > 0) {
+            $baris = array();
+            foreach ($temuan[$kunci] as $r) {
+                $baris[] = array($td($r));
+            }
+            $out .= $judul($teks, count($baris)) . $tabel(array('No. Transaksi'), $baris);
+        }
+    }
+    if (count($temuan['mutasibelumterima']) > 0) {
+        $baris = array();
+        foreach ($temuan['mutasibelumterima'] as $r) {
+            $baris[] = array($td($r['notransaksi']), $td($r['tanggal'], 'center'), $td($r['kodebarang'] . ' - ' . $r['namabarang']), $td($r['keterangan']));
+        }
+        $out .= $judul('Mutasi belum dibuatkan penerimaan / pengiriman belum diposting', count($baris)) . $tabel(array('No. Transaksi', 'Tanggal', 'Barang', 'Keterangan'), $baris);
+    }
+    if (count($temuan['saldodivisi']) > 0) {
+        $baris = array();
+        foreach ($temuan['saldodivisi'] as $r) {
+            $baris[] = array($td($r['kodegudang'] . ' - ' . $r['namagudang']), $td($r['kodebarang'] . ' - ' . $r['namabarang']), $td($r['jumlah'], 'right'));
+        }
+        $out .= $judul('Saldo barang di gudang divisi belum nol', count($baris)) . $tabel(array('Gudang', 'Barang', 'Saldo (qty)'), $baris);
+    }
+    if (count($akunBelumBalance) > 0) {
+        $baris = array();
+        foreach ($akunBelumBalance as $r) {
+            $aksi = "<td align='center'><img src=images/tool.png class=resicon height=26 title='Rincian " . $h($r['nama']) . "' onclick=updateData('" . $h($r['noakun']) . "','" . $h($param['periodeId']) . "','" . $h($param['unitId']) . "',event)></td>";
+            $baris[] = array($td($r['noakun'], 'center'), $td($r['nama']), $td(number_format($r['material']), 'right'), $td(number_format($r['jurnal']), 'right'),
+                "<td align='right' style='font-weight:bold;color:#d9362a;'>" . number_format($r['selisih']) . "</td>", $aksi);
+        }
+        $out .= $judul('Akun persediaan belum balance (material vs jurnal)', count($baris)) . $tabel(array('No. Akun', 'Nama Akun', 'Nilai Material', 'Nilai Jurnal', 'Selisih', 'Rincian'), $baris);
+    }
+    $out .= "</div>";
+    echo $out;
+}
 switch ($proses) {
   case 'cekAwal':
   $textwarn="";
+  $temuan=array('tutup'=>'','integrity'=>false,'bkm'=>array(),'belumposting'=>array(),'mutasidalam'=>array(),'mutasiantar'=>array(),'mutasibelumterima'=>array(),'saldodivisi'=>array());
   $x = str_replace("-", "", $param['periodeId']);
   $x = str_replace("/", "", $x);
   $x = mktime(0, 0, 0, intval(substr($x, 4, 2)) + 1, 15, substr($x, 0, 4));
   $prefper = date('Y-m', $x);;
   #periksa apakah sudah pernah tutup buku pada periode tersebut:
 
-  if(count($unitDetailAkses) > 0){
+  if(!empty($unitDetailAkses)){
         $str = "select distinct(periode)  from `" . $dbname . "`.`log_5saldobulanan` where periode='" . $prefper. "' and left(kodegudang,4) IN ".$gudang_detailAkses." ";
     }else{
         $str = "select distinct(periode)  from `" . $dbname . "`.`log_5saldobulanan` where periode='" . $prefper. "' and left(kodegudang,4)='" .$param['unitId'] . "'";
@@ -72,13 +209,11 @@ switch ($proses) {
   $res=$owlPDO->query($str) or die(print " Gagal: ".PDOException::getMessage());
   $numrows=owlBaris($res);
   if ($numrows>0){
-      $textwarn="Ada gudang  sudah tutup buku pada periode tersebut (" . $param['periodeId'] . "), mohon hubungi IT \n";
-    //  echo  "Ada gudang  sudah tutup buku pada periode tersebut (" . $param['periodeId'] . "), mohon hubungi IT";
-    //  exit();
+      $temuan['tutup']="Ada gudang sudah tutup buku pada periode tersebut (" . $param['periodeId'] . "), mohon hubungi IT";
   }
   $nobkm = 0;
   ##cek disini coi untuk transaksi BKM
-  if(count($unitDetailAkses) > 0){
+  if(!empty($unitDetailAkses)){
       $iBkm = "select * from " . $dbname . ".kebun_pakai_material_vw where jurnal=0 and tanggal like '" . $param['periodeId']. "%'  and left(kodegudang,4) IN ".$gudang_detailAkses."  ";
 }else{
       $iBkm = "select * from " . $dbname . ".kebun_pakai_material_vw where jurnal=0 and tanggal like '" . $param['periodeId']. "%' and"
@@ -89,36 +224,12 @@ switch ($proses) {
 //   $adabkm="\n";
   while ($dBkm = $nBkm->fetch()) {
       $nobkm++;
-      $adabkm.= $nobkm . " : Transaksi " . $dBkm['notransaksi'].", Barang " . $OptBarang[$dBkm['kodebarang']]." - ".$dBkm['kodebarang']." Sejumlah ".hidezerodecimal($dBkm['kwantitas'],10)." <br />";
+      $temuan['bkm'][]=array('notransaksi'=>$dBkm['notransaksi'],'kodegudang'=>$dBkm['kodegudang'],'kodebarang'=>$dBkm['kodebarang'],'namabarang'=>$OptBarang[$dBkm['kodebarang']],'jumlah'=>hidezerodecimal($dBkm['kwantitas'],10));
   }
- 
-  if ($nobkm > 0) {
-    //   echo "Ada transaksi bkm yang memakai material belum terposting \n".$adabkm;
-    //   exit();
-    $textwarn.="<br />";
-    $textwarn.="<br />Ada transaksi bkm yang memakai material belum terposting<br />";
-    $textwarn.=$adabkm;
-  }
-  //cek apakah ada transaksi yang belum disetujui periode tersebut;
-  if(count($unitDetailAkses) > 0){
-      $str = "select * from " . $dbname . ".log_transaksi_vw where  left(kodegudang,4) IN ".$gudang_detailAkses." and tanggal>='" . $awal . "' and tanggal<='" . $akhir . "'
-              and (post=0 or statussaldo=0)";
-  }else{
-      $str = "select * from " . $dbname . ".log_transaksi_vw where left(kodegudang,4)='".$param['unitId']."' and tanggal>='" . $awal . "' and tanggal<='" . $akhir . "'
-              and (post=0 or statussaldo=0)";
-  }
-  $rTrans2=fetchData($str);
-  if(count($rTrans2)>0){
-    $textwarn.="<br />Masih ada transaksi gudang yang masih dalam proses persetujuan <br/>";
-    foreach ($rTrans2 as $key=>$val) {
-       $node=$key+1;
-       $textwarn.=$node." : Transaksi ".$val['notransaksi'].", Barang ".$OptBarang[$val['kodebarang']]." - ".$val['kodebarang']." <br/>";
-     } 
-    // exit();
-  }
+  // transaksi belum diposting/disetujui dicek sekali saja di bawah (query-nya sama)
 
   #cek transaksi blm terposting
-  if(count($unitDetailAkses) > 0){
+  if(!empty($unitDetailAkses)){
       $sTrns="select * from ".$dbname.".log_transaksi_vw where left(kodegudang,4) IN ".$gudang_detailAkses." and tanggal>='" . $awal . "' and tanggal<='" . $akhir . "'
               and (post=0 or statussaldo=0) ";
   }else{
@@ -127,16 +238,11 @@ switch ($proses) {
   }
   $rTrans=fetchData($sTrns);
 
-  if(count($rTrans)>0){
-    echo $_SESSION['lang']['cekbelumposting']."<br/>";
-    foreach ($rTrans as $key=>$val) {
-       $node=$key+1;
-       echo $node." : Transaksi ".$val['notransaksi'].", Barang ".$OptBarang[$val['kodebarang']]." - ".$val['kodebarang']." <br/>";
-     } 
-    // exit();
+  foreach ($rTrans as $val) {
+      $temuan['belumposting'][]=array('notransaksi'=>$val['notransaksi'],'tanggal'=>$val['tanggal'],'kodegudang'=>$val['kodegudang'],'kodebarang'=>$val['kodebarang'],'namabarang'=>$OptBarang[$val['kodebarang']],'jumlah'=>$val['jumlah']);
   }
     #mutasi antar unit
-    if(count($unitDetailAkses) > 0){
+    if(!empty($unitDetailAkses)){
         $sCekMutasi="select notransaksi,sum(jumlah) as jumlah from ".$dbname.".log_transaksi_vw where left(gudangx,4) IN ".$gudang_detailAkses." and tanggal like '".$param['periodeId']."%' and tipetransaksi=7 and left(kodegudang,4)=left(gudangx,4) and statussaldo=1 group by notransaksi";
     }else{
         $sCekMutasi="select notransaksi,sum(jumlah) as jumlah from ".$dbname.".log_transaksi_vw where left(gudangx,4)='".$param['unitId']."' and tanggal like '".$param['periodeId']."%' and tipetransaksi=7 and left(kodegudang,4)=left(gudangx,4) and statussaldo=1 group by notransaksi";
@@ -145,7 +251,7 @@ switch ($proses) {
     $rCekMutasi=fetchData($sCekMutasi);
 
   #terima mutasi
-  if(count($unitDetailAkses) > 0){
+  if(!empty($unitDetailAkses)){
       $sCekTrmMutasi="select notransaksireferensi,sum(jumlah) as jumlah  from ".$dbname.".log_transaksi_vw where left(kodegudang,4) IN ".$gudang_detailAkses." and tanggal like '".$param['periodeId']."%' and tipetransaksi=3 and left(kodegudang,4)=left(gudangx,4) and statussaldo=1 group by notransaksireferensi";
     }else{
       $sCekTrmMutasi="select notransaksireferensi,sum(jumlah) as jumlah  from ".$dbname.".log_transaksi_vw where left(kodegudang,4)='".$param['unitId']."' and tanggal like '".$param['periodeId']."%' and tipetransaksi=3 and left(kodegudang,4)=left(gudangx,4) and statussaldo=1 group by notransaksireferensi";
@@ -170,19 +276,16 @@ switch ($proses) {
     }
      
     if(count($arrListTrans)!=0){
-        $textwarn.= "<br />Ada Transaksi Mutasi belum diterima kan, list transaksi di bawah ini<br />";
         foreach ($arrListTrans as $key) {
-            $nod+=1;
-            $textwarn.="<br />".$nod." : ".$key."<br />";
+            $temuan['mutasidalam'][]=$key;
         }
-       //exit();
     }
   }
   
   
   $lstGudangTrm=$lstGudangKrm=array();
   #mutasi antar unit
-  if(count($unitDetailAkses) > 0){
+  if(!empty($unitDetailAkses)){
       $sCekMutasi="select notransaksi,sum(jumlah) as jumlah from ".$dbname.".log_transaksi_vw where left(gudangx,4) IN ".$gudang_detailAkses." and tanggal like '".$param['periodeId']."%' and tipetransaksi=7 and left(kodegudang,4)<>left(gudangx,4) and statussaldo=1 group by notransaksi";
     }else{
       $sCekMutasi="select notransaksi,sum(jumlah) as jumlah from ".$dbname.".log_transaksi_vw where left(gudangx,4)='".$param['unitId']."' and tanggal like '".$param['periodeId']."%' and tipetransaksi=7 and left(kodegudang,4)<>left(gudangx,4) and statussaldo=1 group by notransaksi";
@@ -190,7 +293,7 @@ switch ($proses) {
  $rCekMutasi=fetchData($sCekMutasi);
   
   #terima mutasi
-  if(count($unitDetailAkses) > 0){
+  if(!empty($unitDetailAkses)){
       $sCekTrmMutasi="select notransaksireferensi,sum(jumlah) as jumlah  from ".$dbname.".log_transaksi_vw where left(kodegudang,4) IN ".$gudang_detailAkses." and tanggal like '".$param['periodeId']."%' and tipetransaksi=3 and left(kodegudang,4)<>left(gudangx,4) and statussaldo=1 group by notransaksireferensi";
     }else{
       $sCekTrmMutasi="select notransaksireferensi,sum(jumlah) as jumlah  from ".$dbname.".log_transaksi_vw where left(kodegudang,4)='".$param['unitId']."' and tanggal like '".$param['periodeId']."%' and tipetransaksi=3 and left(kodegudang,4)<>left(gudangx,4) and statussaldo=1 group by notransaksireferensi";
@@ -214,19 +317,16 @@ switch ($proses) {
     }
      
     if(count($arrListTrans)!=0){
-        $textwarn.= "<br />Ada Transaksi Mutasi belum diterima kan, list transaksi di bawah ini<br />";
         foreach ($arrListTrans as $key) {
-            $nod+=1;
-            $textwarn.="<br />".$nod." : ".$key."<br />";
+            $temuan['mutasiantar'][]=$key;
         }
-       //exit();
     }
   }
   
   
 	#==============================================================================================================================================
 	#= ubah dulu kalau ada saldo <0 langsung ubah menjad 0 termasuk nilai saldoakhirqty
-    if(count($unitDetailAkses) > 0){
+    if(!empty($unitDetailAkses)){
         $str = "select *  from `" . $dbname . "`.`log_5saldobulanan` where periode='" . $param['periodeId']. "' and left(kodegudang,4) IN ".$gudang_detailAkses." and saldoakhirqty<0";
     }else{
         $str = "select *  from `" . $dbname . "`.`log_5saldobulanan` where periode='" . $param['periodeId']. "' and left(kodegudang,4)='" .$param['unitId'] . "' and saldoakhirqty<0";
@@ -245,7 +345,7 @@ switch ($proses) {
 	#=cek gudang divisi harus 0
 	$noerrortransaksi=$nod=0;
 	$texterrorsaldodivisi='';
-    if(count($unitDetailAkses) > 0){
+    if(!empty($unitDetailAkses)){
         $str = "select *  from `" . $dbname . "`.`log_5saldobulanan` where periode='" . $param['periodeId']. "' and   saldoakhirqty>0 and kodegudang in (select kodeorganisasi from ".$dbname.".organisasi where tipe='GUDANGTEMP' and induk IN ".$gudang_detailAkses.")";
     }else{
         $str = "select *  from `" . $dbname . "`.`log_5saldobulanan` where periode='" . $param['periodeId']. "' and   saldoakhirqty>0 and kodegudang in (select kodeorganisasi from ".$dbname.".organisasi where tipe='GUDANGTEMP' and induk='" .$param['unitId'] . "')";
@@ -253,13 +353,7 @@ switch ($proses) {
 	$res=fetchdata($str);
 	foreach($res as $bar){
 		$noerrortransaksi++;
-		$texterrorsaldodivisi.=" ".$noerrortransaksi." :  Barang ".$OptBarang[$bar['kodebarang']]." - ".$bar['kodebarang'].", DI ".$OptOrganisasi[$bar['kodegudang']]." Sejumlah ".hidezerodecimal($bar['saldoakhirqty'],10)."<br>";
-	}
-	
-	if($noerrortransaksi>0){
-		$nod++;
-		$textwarn.= "<br />Masih Ada saldo barang digudang divisi<br />";
-		 $textwarn.=$texterrorsaldodivisi;
+		$temuan['saldodivisi'][]=array('kodegudang'=>$bar['kodegudang'],'namagudang'=>$OptOrganisasi[$bar['kodegudang']],'kodebarang'=>$bar['kodebarang'],'namabarang'=>$OptBarang[$bar['kodebarang']],'jumlah'=>hidezerodecimal($bar['saldoakhirqty'],10));
 	}
 	#==============================================================================================================================================
 	
@@ -267,7 +361,7 @@ switch ($proses) {
 	#==============================================================================================================================================
 	#= cek belum ada penerimaan mutasi yang belum dibuat
 	$noerrortransaksi=$nod=0;
-    if(count($unitDetailAkses) > 0){
+    if(!empty($unitDetailAkses)){
         // likeee
         $str="select * from ".$dbname.".log_transaksi_vw where tipetransaksi=7 ".$whereClause_gudangx." and tanggal <='".tglakhir($param['periodeId'])."' and (notransaksireferensi='' or notransaksireferensi is null)";
     }else{
@@ -276,21 +370,8 @@ switch ($proses) {
 	$res=fetchdata($str);
 	foreach($res as $bar){
 		$noerrortransaksi++;
-		if($bar['statussaldo']==1){
-			$texterrormutasi.=" ".$noerrortransaksi." : ".$bar['notransaksi']." (".tanggalnormal($bar['tanggal'])."), Barang ".$OptBarang[$bar['kodebarang']]." - ".$bar['kodebarang'].", Belum dibuatkan penerimaan mutasi <br /> ";
-		}else{
-			$texterrormutasi.=" ".$noerrortransaksi." : ".$bar['notransaksi']." (".tanggalnormal($bar['tanggal'])."), Barang ".$OptBarang[$bar['kodebarang']]." - ".$bar['kodebarang'].", Transaksi Pengiriman dari ".$OptOrganisasi[substr($bar['kodegudang'],0,4)]." belum diposting <br /> ";
-		}
-	}
-
-	if($noerrortransaksi>0){
-		$nod++;
-        if(count($unitDetailAkses) > 0){
-            $textwarn.= "<br />Ada Transaksi Mutasi belum diterima kan / Ada Transaksi pengiriman mutasi yang akan dikirim ke gudang ".$gudang_detailAkses." yang belum diposting pengirimannya , list transaksi di bawah ini<br />";
-        }else{
-            $textwarn.= "<br />Ada Transaksi Mutasi belum diterima kan / Ada Transaksi pengiriman mutasi yang akan dikirim ke gudang ".$param['unitId']." yang belum diposting pengirimannya , list transaksi di bawah ini<br />";
-        }
-		 $textwarn.=$texterrormutasi;
+		$temuan['mutasibelumterima'][]=array('notransaksi'=>$bar['notransaksi'],'tanggal'=>tanggalnormal($bar['tanggal']),'kodebarang'=>$bar['kodebarang'],'namabarang'=>$OptBarang[$bar['kodebarang']],
+			'keterangan'=>($bar['statussaldo']==1 ? "Belum dibuatkan penerimaan mutasi" : "Pengiriman dari ".$OptOrganisasi[substr($bar['kodegudang'],0,4)]." belum diposting"));
 	}
   
   #==============================================================================================================================================
@@ -301,7 +382,7 @@ switch ($proses) {
     $tipeorg=makeOption($dbname,'organisasi','kodeorganisasi,tipe');
     if($tipeorg[$param['unitId']] == 'KEBUN') {
         $bkmMat=$log = Array();
-        if(count($unitDetailAkses) > 0){
+        if(!empty($unitDetailAkses)){
             $str = "select a.*,b.jurnal,b.tanggal,c.kodekegiatan from " . $dbname . ".kebun_pakaimaterial a left join " . $dbname . ".kebun_aktifitas b on a.notransaksi=b.notransaksi
                      left join " . $dbname . ".kebun_prestasi c on a.notransaksi=c.notransaksi
                       where b.tanggal>='" . $awal . "' and b.tanggal<='" . $akhir . "' and b.jurnal=1 and b.kodeorg IN ".$gudang_detailAkses." ";
@@ -319,7 +400,7 @@ switch ($proses) {
         $namabrg=makeOption($dbname,'log_5masterbarang','kodebarang,namabarang',$bar['kodebarang']);
         
          #ambil transaksi gudang
-         if(count($unitDetailAkses) > 0){
+         if(!empty($unitDetailAkses)){
             // likeee
              $str = "select notransaksireferensi,kodebarang from " . $dbname . ".log_transaksi_vw where 1+1 ".$whereClause_kodegudang." and tanggal>='" . $awal . "' and tanggal<='" . $akhir . "'
                        and tipetransaksi=5 and notransaksireferensi is not null and notransaksireferensi!='' order by kodegudang";
@@ -345,7 +426,8 @@ switch ($proses) {
         if ((isset($bkmLast) ? count($bkmLast) : 0) == 0) {
              
         } else {
-            echo"Silakan jalankan Proses pada menu Pengadaan>Proses>Intergrity Check BKM";
+            $temuan['integrity']=true;
+            renderPraTutupBuku($temuan, array(), $param);
             exit();
         }
     }
@@ -418,7 +500,7 @@ switch ($proses) {
 			}
 
 			// Get Nilai Material, log_5saldobulanan
-            if(count($unitDetailAkses) > 0){
+            if(!empty($unitDetailAkses)){
                 // likeee
                 $qSaldoMat = "SELECT SUM(nilaisaldoakhir) as saldo, left(kodebarang,3) as klbarang
                   FROM " . $dbname . ".log_5saldobulanan 
@@ -444,7 +526,7 @@ switch ($proses) {
 			$dtAdd=explode("-",$param['periodeId']);
 			$periodeKuangan = $dtAdd[0] . $dtAdd[1];
 			// Get Nilai Jurnal, keu_saldobulanan
-            if(count($unitDetailAkses) > 0){
+            if(!empty($unitDetailAkses)){
                 $qSaldoJ = "SELECT awal" . $dtAdd[1] . " as saldoawal,noakun
                   FROM " . $dbname . ".keu_saldobulanan
                   WHERE kodeorg IN ".$gudang_detailAkses." and periode='" . $periodeKuangan. "'
@@ -467,7 +549,7 @@ switch ($proses) {
 			}
 			$lstAkun2=array();
 			// Get Transaksi Jurnal
-            if(count($unitDetailAkses) > 0){
+            if(!empty($unitDetailAkses)){
                 $qTrans = "SELECT sum(debet - kredit) as saldotrans, noakun
                   FROM " . $dbname . ".keu_jurnaldt_vw
                   WHERE kodeorg IN ".$gudang_detailAkses." and tanggal>='" . $awal . "' and tanggal <='" . $akhir . "'
@@ -512,59 +594,12 @@ switch ($proses) {
             $notBal .= $akun . " = " . number_format($selisih) . "___" . abs($optSaldoMat[$akun]) . "____" . abs($optSaldoJ[$akun]) . "\n";
         }
     }
-     if($textwarn!=""){
-        echo $textwarn;
-        if (!empty($notBal)) {
-			$tab="<br>Ada Akun Belum Balance";
-            $tab.="<table cellpadding=5 cellspacing=1 class=sortable>";
-            $tab.="<thead><tr class=rowheader>";
-            $tab.="<th>".$_SESSION['lang']['noakun']."</th>";
-            $tab.="<th>".$_SESSION['lang']['namaakun']."</th>";
-            $tab.="<th>".$_SESSION['lang']['nilai']."</th>";
-            $tab.="<th>".$_SESSION['lang']['action']."</th>";
-            $tab.="</tr></thead><tbody>";
-            foreach ($lstAkun2 as $key) {
-                $optNmAkun=makeOption($dbname,"keu_5akun","noakun,namaakun","noakun='".$key."'");
-                $tab.="<tr class=rowcontent>";
-                $tab.="<td>".$key."</td>";
-                $tab.="<td>".$optNmAkun[$key]."</td>";
-                $tab.="<td>".$lstNilai[$key]."</td>";
-                $tab.="<td align=center><img src=images/tool.png class=resicon height=30 title='Update ".$optNmAkun[$key]."' onclick=updateData('".$key."','".$param['periodeId']."','".$param['unitId']."',event)></td>
-                </tr>";
-            }
-        }
-     }else{
-        //  echo"<pre>";
-        //  print_r($lstAkun2);
-        //  echo"</pre>";
-         // Alert Jika ada yang belum balance
-       
-        $tab.="<table cellpadding=5 cellspacing=1 class=sortable>";
-        $tab.="<thead><tr class=rowheader>";
-        $tab.="<th>".$_SESSION['lang']['noakun']."</th>";
-        $tab.="<th>".$_SESSION['lang']['namaakun']."</th>";
-        $tab.="<th>".$_SESSION['lang']['nilai']."</th>";
-        $tab.="<th>".$_SESSION['lang']['action']."</th>";
-        $tab.="</tr></thead><tbody>";
-        if (!empty($notBal)) {
-            foreach ($lstAkun2 as $key){
-                $optNmAkun=makeOption($dbname,"keu_5akun","noakun,namaakun","noakun='".$key."'");
-                $tab.="<tr class=rowcontent>";
-                $tab.="<td>".$key."</td>";
-                $tab.="<td>".$optNmAkun[$key]."</td>";
-                $tab.="<td>".$lstNilai[$key]."</td>";
-                $tab.="<td align=center><img src=images/tool.png class=resicon height=30 title='Update ".$optNmAkun[$key]."' onclick=updateData('".$key."','".$param['periodeId']."','".$param['unitId']."',event)></td>
-                </tr>";
-            }
-        }else{
-            $tab.="<tr class=rowcontent>";
-            $tab.="<td colspan=4>Silakan lanjutkan Tutup Buku</td>
-            </tr>";
-        }
-        $tab.="</tbody></table>";
-     }
-   
-    echo $tab;
+    $akunBelumBalance=array();
+    foreach ($lstAkun2 as $key) {
+        $optNmAkun=makeOption($dbname,"keu_5akun","noakun,namaakun","noakun='".$key."'");
+        $akunBelumBalance[]=array('noakun'=>$key,'nama'=>$optNmAkun[$key],'material'=>abs($optSaldoMat[$key]),'jurnal'=>abs($optSaldoJ[$key]),'selisih'=>abs(abs($optSaldoMat[$key])-abs($optSaldoJ[$key])));
+    }
+    renderPraTutupBuku($temuan, $akunBelumBalance, $param);
     /* * ************************************************************
      * [END] Cek Nilai Material VS Jurnal *************************
      * ************************************************************ */
@@ -575,7 +610,7 @@ switch ($proses) {
     $key=$param['noakun'];
         #ambil data transaksi
         //pemakaian diluar bkm
-        if(count($unitDetailAkses) > 0){
+        if(!empty($unitDetailAkses)){
             $scek="select notransaksi,count(notransaksi) as itung from ".$dbname.".log_transaksi_vw where left(kodebarang,3) in (select kode from ".$dbname.".log_5klbarang where noakun='".$key."') and left(kodegudang,4) IN ".$gudang_detailAkses."
                     and tanggal between  '".$awal."' and '".$akhir."' and tipetransaksi=5 and notransaksireferensi is null group by notransaksi";
         }else{
@@ -591,7 +626,7 @@ switch ($proses) {
             }
         }
         //pemakaian bkm
-        if(count($unitDetailAkses) > 0){
+        if(!empty($unitDetailAkses)){
             $scek="select  notransaksireferensi as notransaksi,count(notransaksi) as itung from ".$dbname.".log_transaksi_vw where left(kodebarang,3) in (select kode from ".$dbname.".log_5klbarang where noakun='".$key."') and left(kodegudang,4) IN ".$gudang_detailAkses."
                     and tanggal between  '".$awal."' and '".$akhir."' and tipetransaksi=5 and notransaksireferensi is not null group by notransaksireferensi";
         }else{
@@ -606,7 +641,7 @@ switch ($proses) {
             }
         }
         //terima mutasi beda unit
-        if(count($unitDetailAkses) > 0){
+        if(!empty($unitDetailAkses)){
             $scek="select notransaksi,count(notransaksi) as itung from ".$dbname.".log_transaksi_vw where left(kodebarang,3) in (select kode from ".$dbname.".log_5klbarang where noakun='".$key."') and left(kodegudang,4) IN ".$gudang_detailAkses."
                     and tanggal between  '".$awal."' and '".$akhir."' and tipetransaksi=3 and left(kodegudang,4)<>left(gudangx,4) group by notransaksi";
         }else{
@@ -621,7 +656,7 @@ switch ($proses) {
             }
         }
         //mutasi beda unit
-        if(count($unitDetailAkses) > 0){
+        if(!empty($unitDetailAkses)){
             $scek="select notransaksi,count(notransaksi) as itung from ".$dbname.".log_transaksi_vw where left(kodebarang,3) in (select kode from ".$dbname.".log_5klbarang where noakun='".$key."') and left(kodegudang,4) IN ".$gudang_detailAkses."
                     and tanggal between  '".$awal."' and '".$akhir."' and tipetransaksi=7 and left(kodegudang,4)<>left(gudangx,4) group by notransaksi";
         }else{
@@ -636,7 +671,7 @@ switch ($proses) {
             }
         }
         //penerimaan supplier
-        if(count($unitDetailAkses) > 0){
+        if(!empty($unitDetailAkses)){
             $scek="select notransaksi,count(notransaksi) as itung from ".$dbname.".log_transaksi_vw where left(kodebarang,3) in (select kode from ".$dbname.".log_5klbarang where noakun='".$key."') and left(kodegudang,4) IN ".$gudang_detailAkses."
                     and tanggal between  '".$awal."' and '".$akhir."' and tipetransaksi=1  group by notransaksi";
         }else{
@@ -652,7 +687,7 @@ switch ($proses) {
             }
         }
         #jurnal data
-        if(count($unitDetailAkses) > 0){
+        if(!empty($unitDetailAkses)){
             $sGrJr="select noreferensi,count(noreferensi) as itung from ".$dbname.".keu_jurnaldt_vw where noakun='".$key."' and tanggal between  '".$awal."' and '".$akhir."'  and kodejurnal like 'INVM%' and kodeorg IN ".$gudang_detailAkses." group by noreferensi";
         }else{
             $sGrJr="select noreferensi,count(noreferensi) as itung from ".$dbname.".keu_jurnaldt_vw where noakun='".$key."' and tanggal between  '".$awal."' and '".$akhir."'  and kodejurnal like 'INVM%' and kodeorg='".$param['unitId']."' group by noreferensi";
@@ -665,7 +700,7 @@ switch ($proses) {
                 $lstTrans[$val['notransaksi']]=$val['notransaksi'];
             }
         }
-        if(count($unitDetailAkses) > 0){
+        if(!empty($unitDetailAkses)){
             $sGrJr="select noreferensi,count(noreferensi) as itung from ".$dbname.".keu_jurnaldt_vw where noakun='".$key."' and tanggal between  '".$awal."' and '".$akhir."'  and kodejurnal like 'INVK%' and kodeorg IN ".$gudang_detailAkses." group by noreferensi";
         }else{
             $sGrJr="select noreferensi,count(noreferensi) as itung from ".$dbname.".keu_jurnaldt_vw where noakun='".$key."' and tanggal between  '".$awal."' and '".$akhir."'  and kodejurnal like 'INVK%' and kodeorg='".$param['unitId']."' group by noreferensi";
@@ -678,7 +713,7 @@ switch ($proses) {
             }
         }
         $arrNonGdng=array();
-        if(count($unitDetailAkses) > 0){
+        if(!empty($unitDetailAkses)){
             $sGrJr="select nojurnal,count(nojurnal) as itung from ".$dbname.".keu_jurnaldt_vw where noakun='".$key."' and tanggal between  '".$awal."' and '".$akhir."'  and (kodejurnal not like 'INVK%' and kodejurnal not like 'INVM%') and kodeorg IN ".$gudang_detailAkses." group by nojurnal";
         }else{
             $sGrJr="select nojurnal,count(nojurnal) as itung from ".$dbname.".keu_jurnaldt_vw where noakun='".$key."' and tanggal between  '".$awal."' and '".$akhir."'  and (kodejurnal not like 'INVK%' and kodejurnal not like 'INVM%') and kodeorg='".$param['unitId']."' group by nojurnal";
