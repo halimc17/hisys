@@ -30,7 +30,7 @@ $whereClause_gudangx =  "AND (\n    " . implode(" OR\n    ", $conditions_kodeorg
 // AKHIR GUDANGX
 
 
-if(count($unitDetailAkses) > 0){
+if($unitDetailAkses != ''){
     $optUnit2="<option value=''>Pilih Data</option>";
     $sPeriode="select distinct kodeorg,periode from ".$dbname.".setup_periodeakuntansi where 
     kodeorg in (select kodeorganisasi from ".$dbname.".organisasi where tipe like 'GUDANG%' ".$whereClause_gudangx.") and tutupbuku=0 order by periode";
@@ -106,7 +106,7 @@ OPEN_BOX('','<span class=judul>'.(getMenu('log_3cekgudang')).'</span><br>');
 CLOSE_BOX();
 OPEN_BOX();
 ?>
-<div id='printContainer' style='overflow:auto;height:400px;'></div>
+<div id='printContainer' style='overflow:auto;min-height:calc(100vh - 290px);'></div>
 
 <?php
 

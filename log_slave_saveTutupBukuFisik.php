@@ -181,6 +181,7 @@ if($tipeorg=='KEBUN'){
 */ 
 
 #================ cek mutasi
+		$arrnotran=$jumlahkirim=$jumlahterima=array();
 	$str="select sum(jumlah) as jumlah,notransaksi from ".$dbname.".log_transaksi_vw 
 	where left(kodegudang,4)='".substr($gudang, 0, 4)."' and tanggal>='" . $awal . "' 
 	and tanggal<='" . $akhir . "' and tipetransaksi=7 and left(kodegudang,4)=left(gudangx,4) group by notransaksi";

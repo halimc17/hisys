@@ -5,7 +5,7 @@ include('lib/nangkoelib.php');
 include('lib/zLib.php');
 echo open_body();
 ?>
-<script language=javascript1.2 src='js/log_pindahPeriodeGudang.js'></script>
+<script language=javascript1.2 src='js/log_pindahPeriodeGudang.js?v=<?php echo time(); ?>'></script>
 <script language=javascript src='js/log_rekalgudang.js'></script>
 <?php
 
@@ -58,7 +58,7 @@ if (isTransactionPeriod()) {//check if transaction period is normal
 	 </fieldset>";
 
     $frm[0].="
-          <div id=infoDisplay style=height:450px>
+          <div id=infoDisplay style='min-height:calc(100vh - 300px)'>
 
 		  </div>
          ";
