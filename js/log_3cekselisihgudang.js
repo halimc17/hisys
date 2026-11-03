@@ -110,6 +110,40 @@ function preview() {
     }
   }
 }
+function prosesProporsiBlok() {
+  // preview() hanya menampilkan rencana; data baru disimpan lewat tombol ini
+  var unit = document.getElementById("unitId").value;
+  var periode = document.getElementById("periodeId").value;
+  var akun = document.getElementById("akunpersediaan").value;
+  if (!confirm("Simpan koreksi proporsi blok? Pastikan sudah backup.")) {
+    return false;
+  }
+  var param =
+    "proses=proporsiBlok&unitId=" +
+    unit +
+    "&periodeId=" +
+    periode +
+    "&akunpersediaan=" +
+    akun +
+    "&mode=proses&konfirmasi=YA";
+  post_response_text("log_slave_3cekselisihgudang.php", param, respon);
+  function respon() {
+    if (con.readyState == 4) {
+      if (con.status == 200) {
+        busy_off();
+        if (!isSaveResponse(con.responseText)) {
+          alert(con.responseText);
+        } else {
+          document.getElementById("printContainer").innerHTML =
+            con.responseText;
+        }
+      } else {
+        busy_off();
+        error_catch(con.status);
+      }
+    }
+  }
+}
 function exportExcel() {
   unit = document.getElementById("unitId").value;
   periode = document.getElementById("periodeId").value;
@@ -730,7 +764,11 @@ function getperiodegudang() {
         if (!isSaveResponse(con.responseText)) {
           alert(con.responseText);
         } else {
+          // periode terbaru ada di urutan paling atas dan langsung terpilih
           document.getElementById("periodeId").innerHTML = con.responseText;
+          if (window.jQuery) {
+            $("#periodeId").trigger("change");
+          }
         }
       } else {
         busy_off();
@@ -849,6 +887,9 @@ function ProsesSemuaGudangDivisi(periode) {
 
 
 function prosesSaldoAwal(noakun,saldogudang,periode,unit) {
+    if (!confirm('Ubah saldo awal akuntansi akun ' + noakun + ' unit ' + unit + ' periode ' + periode + ' menjadi ' + saldogudang + ' (saldo awal gudang)?')) {
+        return false;
+    }
     param='unitId='+unit+'&proses=prosesSaldoAwal'+'&periodeId='+periode+'&noakun='+noakun+'&saldogudang='+saldogudang  ;
     post_response_text('log_slave_3cekselisihgudang.php', param, respon);
     function respon() {

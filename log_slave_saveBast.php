@@ -486,7 +486,7 @@ if(isTransactionPeriod())//check if transaction period is normal
 							$res2 = fetchData($str2);
 							$no_p = 1;
 							foreach($res2 as $key=>$val){
-								if($no_p == $jumlah_blok){
+								if($no_p == count($res2)){
 									$round_nilaiproporsi = $qty - $round_nilaiproporsi_beforelast;
 								}else{
 									$nilai_proporsi = ($val['luasareaproduktif'] / $jumlah_area ) * $qty;
@@ -687,7 +687,7 @@ if(isTransactionPeriod())//check if transaction period is normal
 							$res2 = fetchData($str2);
 							$no_p = 1;
 							foreach($res2 as $key=>$val){
-								if($no_p == $jumlah_blok){
+								if($no_p == count($res2)){
 									$round_nilaiproporsi = $qty - $round_nilaiproporsi_beforelast;
 								}else{
 									$nilai_proporsi = ($val['luasareaproduktif'] / $jumlah_area ) * $qty;
@@ -858,7 +858,7 @@ if(isTransactionPeriod())//check if transaction period is normal
 							$res2 = fetchData($str2);
 							$no_p = 1;
 							foreach($res2 as $key=>$val){
-								if($no_p == $jumlah_blok){
+								if($no_p == count($res2)){
 									$round_nilaiproporsi = $qty - $round_nilaiproporsi_beforelast;
 								}else{
 									$nilai_proporsi = ($val['luasareaproduktif'] / $jumlah_area ) * $qty;

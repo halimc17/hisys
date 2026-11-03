@@ -16,6 +16,12 @@ if ($perbaiki == '1') {
 	$mulai = '';
 	$sampai = '';
 	$periode = substr($tanggal, 0, 7);
+	# saldo bulanan periode yang sudah tutup buku tidak boleh diubah
+	$stTutup = $owlPDO->prepare("select count(*) from " . $dbname . ".setup_periodeakuntansi where kodeorg in (?,?) and periode=? and tutupbuku=1");
+	$stTutup->execute(array($gudang, substr($gudang, 0, 4), $periode));
+	if ($stTutup->fetchColumn() > 0) {
+		exit("warning: Periode " . $periode . " gudang " . $gudang . " sudah tutup buku, saldo bulanan tidak boleh diubah.");
+	}
 	$str = "select tanggalmulai,tanggalsampai from " . $dbname . ".setup_periodeakuntansi where kodeorg='" . $gudang . "' and periode='" . $periode . "'";
 	$res = $owlPDO->query($str) or die(print " Gagal: " . PDOException::getMessage());
 	$res->setFetchMode(PDO::FETCH_OBJ);

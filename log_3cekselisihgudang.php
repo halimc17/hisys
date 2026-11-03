@@ -31,15 +31,10 @@ if (!in_array($id_user, $allowed_users)) {
     exit("warning: No access");
 }
 
-if($_SESSION['org']['tipeinduk'] != 'HOLDING' || !in_array($id_user, $allowed_users)){
-  $lstData[substr($val['kodeorg'], 0, 4)] = $_SESSION['empl']['lokasitugas'];
-}else{
-  $sPeriode = "select distinct kodeorg,periode from " . $dbname . ".setup_periodeakuntansi group by kodeorg";
-  $rPeriode = fetchData($sPeriode);
-  foreach ($rPeriode as $key => $val) {
-      $lstData[substr($val['kodeorg'], 0, 4)] = substr($val['kodeorg'], 0, 4);
-      // $lstPeriode[$val['periode']] = $val['periode'];
-  }
+// unit sesuai detail akses user (lokasi tugas + unit di detail akses)
+$lstData = array();
+foreach (getOrgDetail(1) as $kodeUnit => $namaUnit) {
+  $lstData[$kodeUnit] = $kodeUnit;
 }
 
 $optUnit = "<select id=unitId class='select2' style=width:200px onchange='getperiodegudang()'>";
@@ -49,6 +44,7 @@ foreach ($lstData as $key2) {
 }
 $optUnit .= "</select>";
 $optPeriode = "<select id=periodeId class='select2' style=width:200px>";
+$lstPeriode = array(); // pilihan periode diisi lewat getperiodegudang() setelah unit dipilih
 foreach ($lstPeriode as $key2) {
     $optPeriode .= "<option value='" . $key2 . "'>" . $key2 . "</option>";
 }
@@ -92,6 +88,7 @@ OPEN_BOX('', '<span class=judul>' . (getMenu('log_3cekselisihgudang')) . '</span
         '8.1' => 'Rekalkulasi hargarata',
         '6' => 'Transaksi Masuk Gudang VS Jurnal',
         '7' => 'Transaksi Keluar Gudang VS Jurnal',
+        'proporsiBlok' => 'Perbaiki Proporsi Blok (Pembulatan Qty Blok)',
         // '9' => 'Bentuk / Perbaiki Jurnal'
     );
     $opttipe="<option value=''>".$_SESSION['lang']['pilihdata']."</option>";
@@ -143,8 +140,7 @@ OPEN_BOX('', '<span class=judul>' . (getMenu('log_3cekselisihgudang')) . '</span
                 <td>
                 <td>
                     <button onclick="preview('html',event)" class="mybutton" name="preview" id="preview"><? echo $_SESSION['lang']['preview'] ?></button>
-                    <button onclick="exportExcel()" class="mybutton" name="exportExcel" id="exportExcel">Export Excel</button>
-                </td>
+                    <button onclick="exportExcel()" class="mybutton" name="exportExcel" id="exportExcel">Export Excel</button>                </td>
             </tr>
 
         </table>
@@ -211,6 +207,11 @@ OPEN_BOX('', '<span class=judul>' . (getMenu('log_3cekselisihgudang')) . '</span
             <span class="icon" style="font-size:11px;color:red;">&#10007;</span> :
           </td>
           <td style="background-color:#d1e3fa; color:black;">Bermasalah</td>
+        </tr>
+        <tr>
+          <td style="width:20px;background:orange">&nbsp;</td>
+          <td style="background-color:#d1e3fa; color:black;">Atau Belum posting :</td>
+          <td style="background-color:#d1e3fa; color:black;">Transaksi gudang belum diposting (posting di menu Pengadaan - Proses - Posting)</td>
         </tr>
         <tr>
           <td>1.</td>

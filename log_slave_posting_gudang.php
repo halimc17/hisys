@@ -241,6 +241,8 @@ if(isTransactionPeriod()) {//check if transaction period is normal
 		
 		//== Pemakaian Barang ==================================================
         case 5:
+            // kolom Perbaiki Saldo memanggil perbaikisaldobulanan() milik halaman Posting Gudang; tidak dimuat di halaman Cek Selisih Gudang (statussaldo=ya)
+            $kolomPerbaikiSaldo = ($statussaldo == 'ya' ? "" : "<th align=center style='background-color:aqua;color:black;font-weight:bold'>Perbaiki Saldo <br><span style='color:red'>(Dilakukan Jika Posting Bermasalah)</span> </th>");
             // $str="select a.kodebarang,a.satuan,a.jumlah,b.untukpt,a.kodeblok,a.kodesegment,b.untukunit,a.kodekegiatan,c.namakegiatan,a.kodemesin,
 			// 	b.tanggal,b.kodept,b.tipetransaksi
 			// 	from ".$dbname.".setup_kegiatan c,".$dbname.".log_transaksidt a left join  ".$dbname.".log_transaksiht b 
@@ -267,7 +269,7 @@ if(isTransactionPeriod()) {//check if transaction period is normal
 				<th align=center style='display:none'>".$_SESSION['lang']['segment']."</th>
 				<th align=center>".$_SESSION['lang']['kodekegiatan']."</th> 
 				<th align=center>".$_SESSION['lang']['kodevhc']."</th>     
-				<th align=center style='background-color:aqua;color:black;font-weight:bold'>Perbaiki Saldo <br><span style='color:red'>(Dilakukan Jika Posting Bermasalah)</span> </th>     
+				".$kolomPerbaikiSaldo."
 				</tr>
 				</thead>
 				<tbody>";
@@ -320,7 +322,7 @@ if(isTransactionPeriod()) {//check if transaction period is normal
 					<td id=kodekegiatan".$no." style='display:none'>".$bar->kodekegiatan."</td>                                
 					<td>".$bar->kodekegiatan."-".$bar->namakegiatan."</td>                                
 					<td id=kodemesin".$no.">".$bar->kodemesin."</td>
-                    <td align=center><button onclick=\"perbaikisaldobulanan('perbaiki','".$bar->kodebarang."','".$bar->tanggal."', '".$gudang."'); this.disabled=true;\" class=mybutton>".$_SESSION['lang']['proses']."</button></td>    
+                    ".($statussaldo == 'ya' ? '' : "<td align=center><button onclick=\"perbaikisaldobulanan('perbaiki','".$bar->kodebarang."','".$bar->tanggal."', '".$gudang."'); this.disabled=true;\" class=mybutton>".$_SESSION['lang']['proses']."</button></td>")."
 					</tr>";										
 			}
             break;

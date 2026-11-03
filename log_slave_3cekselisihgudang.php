@@ -8,6 +8,26 @@ include_once('lib/rTable.php');
 $proses = ($_GET['proses'] == '' ? $_POST['proses'] : $_GET['proses']);
 $param = $_POST;
 
+// unit (dan gudang/divisi yang dikirim) hanya boleh yang sesuai detail akses user (sama dengan pilihan unit di halaman)
+if (isset($param['unitId']) && $param['unitId'] != '' && !array_key_exists($param['unitId'], getOrgDetail(1))) {
+    exit("warning: Unit " . $param['unitId'] . " tidak sesuai hak akses.");
+}
+foreach (array('gudang', 'divisiId') as $kunciGudang) {
+    if (isset($param[$kunciGudang]) && $param[$kunciGudang] != '' && !array_key_exists(substr($param[$kunciGudang], 0, 4), getOrgDetail(1))) {
+        exit("warning: Gudang " . $param[$kunciGudang] . " tidak sesuai hak akses.");
+    }
+}
+
+// periode yang sudah tutup buku (unit dan/atau gudangnya) tidak boleh diubah datanya
+function periodeSudahTutup($kodeorg, $periode)
+{
+    global $owlPDO, $dbname;
+    $daftar = array_unique(array($kodeorg, substr($kodeorg, 0, 4)));
+    $stmt = $owlPDO->prepare("select count(*) from " . $dbname . ".setup_periodeakuntansi where kodeorg in (" . implode(',', array_fill(0, count($daftar), '?')) . ") and periode=? and tutupbuku=1");
+    $stmt->execute(array_merge($daftar, array($periode)));
+    return $stmt->fetchColumn() > 0;
+}
+
 $sPeriode = "select distinct * from " . $dbname . ".setup_periodeakuntansi where kodeorg in (select kodeorganisasi from " . $dbname . ".organisasi where induk='" . $param['unitId'] . "' and tipe like 'GUDANG%') and periode='" . $param['periodeId'] . "' order by periode asc limit 1";
 $rPeriode = fetchData($sPeriode);
 $awal = $rPeriode[0]['tanggalmulai'];
@@ -90,6 +110,21 @@ function exportTabToExcel($tab, $proses)
     fwrite($handle, $tab);
     fclose($handle);
     echo $filename;
+}
+
+// transaksi gudang unit/periode yang masih belum diposting (post=0 atau statussaldo=0); hasil disimpan per pemanggilan
+function isBelumPosting($notransaksi)
+{
+    global $dbname, $param;
+    static $daftar = null;
+    if ($daftar === null) {
+        $daftar = array();
+        $res = fetchData("select distinct notransaksi from " . $dbname . ".log_transaksi_vw where kodegudang like '" . $param['unitId'] . "%' and tanggal like '" . $param['periodeId'] . "%' and (post=0 or statussaldo=0)");
+        foreach ($res as $row) {
+            $daftar[$row['notransaksi']] = 1;
+        }
+    }
+    return isset($daftar[$notransaksi]);
 }
 
 switch ($proses) {
@@ -635,13 +670,20 @@ switch ($proses) {
 
                 $total_no6_selisih = $val4['nilaitransaksi'] - $val4['nilaijurnal'];
 
-                if (number_format($total_no6_selisih, 2) != 0 || number_format($total_no6_selisih, 2) != '0') {
+                $isBelumPosting = isBelumPosting($val4['notransaksigudang']);
+                if ($isBelumPosting || abs(round($total_no6_selisih, 2)) > 10) { // toleransi selisih Rp 10, sama dengan cek saldo bulanan
                     // Button untuk perbaikan (refresh)
                     $Perbaikan = "<td align='center'>
                         <button class='btn-icon btn-refresh' onclick=\"previewPosting(" . $tipetransaksiNTRX[$val4['notransaksigudang']] . ",'" . $val4['notransaksigudang'] . "','" . $kodegudangNTRX[$val4['notransaksigudang']] . "','" . $_SESSION['gudang'][$kodegudangNTRX[$val4['notransaksigudang']]]['start'] . "','" . $_SESSION['gudang'][$kodegudangNTRX[$val4['notransaksigudang']]]['end'] . "',event);\">&#128260;</button>
                     </td>";
 
-                    $icon = "<td align='center' style='background-color:red'><span class='icon' style='font-size:20px;color:white;'>&#10007;</span></td>";
+                    if ($isBelumPosting) {
+                        $icon = "<td align='center' style='background-color:orange'><span style='font-size:11px;font-weight:bold;color:white;'>Belum posting</span></td>";
+                        // tombol perbaikan hanya membentuk ulang jurnal transaksi yang sudah diposting gudang, bukan memposting
+                        $Perbaikan = "<td align='center' style='font-size:10px'>Posting di menu Pengadaan - Proses - Posting</td>";
+                    } else {
+                        $icon = "<td align='center' style='background-color:red'><span class='icon' style='font-size:20px;color:white;'>&#10007;</span></td>";
+                    }
                 } else {
                     $icon = "<td align='center' style='background-color:green'><span class='icon' style='font-size:20px;color:white;'>&#10003;</span></td>";
                     $Perbaikan = "<td align='center'></td>";
@@ -672,7 +714,17 @@ switch ($proses) {
     case '7':
         $tab = '';
         $tab = $style;
-        $tab .= "<table class=sortable cellspacing=1 " . $brd . " cellpadding=5 style='width:100%'>
+        // keterangan singkat di atas tabel (tidak ikut ke Excel)
+        if (!(isset($param['export']) && $param['export'] == '1')) {
+            $tab .= "<div style='font-size:11px;margin:5px 0;padding:6px 10px;background:#fffbe6;border:1px solid #e0c97f;'>
+                <b>Info - Transaksi Keluar Gudang VS Jurnal</b><br>
+                Membandingkan nilai pengeluaran gudang (qty x harga rata) dengan jurnal pemakaian barang (INVK) per transaksi, untuk unit dan periode terpilih.<br>
+                <span style='background:green;color:white;padding:0 4px;'>&#10003;</span> Cocok (selisih sampai Rp 10 masih dianggap cocok).<br>
+                <span style='background:red;color:white;padding:0 4px;'>&#10007;</span> Selisih lebih dari Rp 10. Transaksi yang sudah diposting dapat dibentuk ulang jurnalnya dengan tombol &#128260;.
+                Selisih kecil akibat pembulatan pembagian blok: jalankan dulu tipe <i>Perbaiki Proporsi Blok</i>. Selisih besar: cek penyebabnya, jangan langsung dikoreksi.<br>
+                <span style='background:orange;color:white;padding:0 4px;'>Belum posting</span> Transaksi gudang belum diposting; lakukan posting di menu Pengadaan - Proses - Posting.
+            </div>";
+        }        $tab .= "<table class=sortable cellspacing=1 " . $brd . " cellpadding=5 style='width:100%'>
     <thead class=sticky-header>
 
         <tr class=rowcontent>
@@ -717,7 +769,7 @@ switch ($proses) {
             // AMBIL PEMAKAIN DARI GUDANG
             if (getNamaOrg($param['unitId'], 'tipe') == 'KEBUN') {
                 // $notlikeM = " and notransaksi not like '%M%' ";
-                $notlikeM = " and keterangan not like '%Material %' ";
+                $notlikeM = " and keterangan not like '%Material BKM%' ";
             } else {
                 $notlikeM = "";
             }
@@ -747,6 +799,15 @@ switch ($proses) {
                 $arrTransaksiMasuk[$bar['noakun']][$val['notransaksi']]['notransaksigudang'] = $val['notransaksi'];
             }
 
+            // PENGEMBALIAN PENERIMAAN (RETUR SUPPLIER)
+            $sTrns_6 = "select notransaksi,sum(jumlah*hargarata) as itung from log_transaksi_vw where tipetransaksi=6 and
+        left(kodebarang,3) in (select kode from log_5klbarang where noakun='" . $bar['noakun'] . "') and tanggal like '" . $param['periodeId'] . "%' and kodegudang like '" . $param['unitId'] . "%' group by notransaksi";
+            $res_returgudang = fetchData($sTrns_6);
+            foreach ($res_returgudang as $val) {
+                $arrTransaksiMasuk[$bar['noakun']][$val['notransaksi']]['nilaitransaksi'] = $val['itung'];
+                $arrTransaksiMasuk[$bar['noakun']][$val['notransaksi']]['notransaksigudang'] = $val['notransaksi'];
+            }
+
         endforeach;
 
 
@@ -767,13 +828,20 @@ switch ($proses) {
 
                 $total_no7_selisih = $val4['nilaitransaksi'] - $val4['nilaijurnal'];
 
-                if (number_format($total_no7_selisih, 2) != 0 || number_format($total_no7_selisih, 2) != '0') {
+                $isBelumPosting = isBelumPosting($val4['notransaksigudang']);
+                if ($isBelumPosting || abs(round($total_no7_selisih, 2)) > 10) { // toleransi selisih Rp 10, sama dengan cek saldo bulanan
                     // Button untuk perbaikan (refresh)
                     $Perbaikan = "<td align='center'>
                         <button class='btn-icon btn-refresh' onclick=\"previewPosting(" . $tipetransaksiNTRX[$val4['notransaksigudang']] . ",'" . $val4['notransaksigudang'] . "','" . $kodegudangNTRX[$val4['notransaksigudang']] . "','" . $_SESSION['gudang'][$kodegudangNTRX[$val4['notransaksigudang']]]['start'] . "','" . $_SESSION['gudang'][$kodegudangNTRX[$val4['notransaksigudang']]]['end'] . "',event);\">&#128260;</button>
                     </td>";
 
-                    $icon = "<td align='center' style='background-color:red'><span class='icon' style='font-size:20px;color:white;'>&#10007;</span></td>";
+                    if ($isBelumPosting) {
+                        $icon = "<td align='center' style='background-color:orange'><span style='font-size:11px;font-weight:bold;color:white;'>Belum posting</span></td>";
+                        // tombol perbaikan hanya membentuk ulang jurnal transaksi yang sudah diposting gudang, bukan memposting
+                        $Perbaikan = "<td align='center' style='font-size:10px'>Posting di menu Pengadaan - Proses - Posting</td>";
+                    } else {
+                        $icon = "<td align='center' style='background-color:red'><span class='icon' style='font-size:20px;color:white;'>&#10007;</span></td>";
+                    }
                 } else {
                     $icon = "<td align='center' style='background-color:green'><span class='icon' style='font-size:20px;color:white;'>&#10003;</span></td>";
                     $Perbaikan = "<td align='center'></td>";
@@ -1315,7 +1383,7 @@ switch ($proses) {
                 $kodeorganisasi_0 = $res_0[0]['kodeorganisasi'];
             }
 
-            $str = "select distinct periode from " . $dbname . ".setup_periodeakuntansi where kodeorg='" . $kodeorganisasi_0 . "' group by periode";
+            $str = "select distinct periode from " . $dbname . ".setup_periodeakuntansi where kodeorg='" . $kodeorganisasi_0 . "' group by periode order by periode desc";
             $res = fetchdata($str);
             foreach ($res as $val) {
                 $optGudang .= "<option value='" . $val['periode'] . "'>" . $val['periode'] . "</option>";
@@ -1328,6 +1396,9 @@ switch ($proses) {
     case 'savedataHarga':
         if ($param['barangId'] == '') {
             exit("warning: Data notransaksi atau kodebarang masih kosong.");
+        }
+        if (periodeSudahTutup($param['divisiId'], $param['periode'])) {
+            exit("warning: Periode " . $param['periode'] . " gudang " . $param['divisiId'] . " sudah tutup buku, harga tidak boleh diubah.");
         }
 
         // if ($param['baris'] == '1') {
@@ -1515,6 +1586,19 @@ switch ($proses) {
         break;
 
 
+    case 'proporsiBlok':
+        // logika ada di perbaikan_proporsi_blok.php; tanpa mode=proses hanya menampilkan rencana koreksi
+        $_GET = array(
+            'unit' => $param['unitId'],
+            'periode' => $param['periodeId'],
+            'noakun' => $param['akunpersediaan'],
+            'mode' => (isset($param['mode']) ? $param['mode'] : ''),
+            'konfirmasi' => (isset($param['konfirmasi']) ? $param['konfirmasi'] : '')
+        );
+        $dariCekSelisih = true;
+        include('perbaikan_proporsi_blok.php');
+        break;
+
     case 'prosesSaldoAwal':
 
         try {
@@ -1527,6 +1611,14 @@ switch ($proses) {
 
             if ($periodeInput == '' || $unit == '' || $noakun == '') {
                 throw new Exception("Data tidak lengkap");
+            }
+
+            if (!preg_match('/^[0-9]{4}-[0-9]{2}$/', $periodeInput) || !preg_match('/^[0-9]+$/', $noakun) || !is_numeric($nilai)) {
+                throw new Exception("Data tidak valid");
+            }
+            // saldo awal periode yang sudah tutup buku tidak boleh diubah
+            if (periodeSudahTutup($unit, $periodeInput)) {
+                throw new Exception("Periode " . $periodeInput . " unit " . $unit . " sudah tutup buku, saldo awal tidak boleh diubah");
             }
 
             // Ubah 2025-08 jadi 202508
@@ -1570,6 +1662,9 @@ switch ($proses) {
         echo infotutupgudang($param['gudang'], $param['periodeId']);
         break;
     case 'PerbaikiSaldoBulanan':
+        if (periodeSudahTutup($_POST['gudang'], $_POST['periode'])) {
+            exit("warning: Periode " . $_POST['periode'] . " gudang " . $_POST['gudang'] . " sudah tutup buku, saldo bulanan tidak boleh diubah.");
+        }
         //=============================
         /* * ************************************************************
             //  * [START] Rekalkulasi stock fisik dan harga ******************
