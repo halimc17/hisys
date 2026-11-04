@@ -1936,8 +1936,10 @@ switch ($proses) {
 					and kodeorg='" . $param['kodeorg'] . "'
 					and sumber!='UPLOAD'
 					and karyawanid in (
-						select distinct karyawanid from " . $dbname . ".datakaryawan
+						select distinct karyawanid from " . $dbname . ".datakaryawan_hist
 						where " . $tpkar2 . " lokasitugas='" . $param['kodeorg'] . "'
+						and periodegaji='" . $param['periodegaji'] . "'
+						and version_type='B'
 					)
 					and karyawanid not in (" . implode(',', $karyawanProsesSql) . ")";
 				$owlPDO->exec($sdelStale);
