@@ -806,19 +806,20 @@ function prosesAlokasi()
     }
 
     #3 ambil semua lokasi kegiatan
-    $str = "select sum(a.jumlah) as jlh,a.alokasibiaya,b.noakun,b.setupkegiatan,a.notransaksi from " . $dbname . ".vhc_rundt_detail a
+    $str = "select sum(a.jumlah) as jlh,a.alokasibiaya,b.noakun,b.setupkegiatan,a.notransaksi,c.tanggal as tgltrans from " . $dbname . ".vhc_rundt_detail a
             left join " . $dbname . ".vhc_kegiatan b on a.jenispekerjaan=b.kodekegiatan
             left join " . $dbname . ".vhc_runht c on a.notransaksi=c.notransaksi     
             where c.kodevhc='" . $param['kodevhc'] . "'
             and c.tanggal>='" . $tgmulai . "' and c.tanggal <='" . $tgsampai . "' and alokasibiaya!='' 
             and jenispekerjaan!=''    
             and a.jumlah>0
-            group by a.notransaksi,jenispekerjaan,noakun,alokasibiaya,kodesegment order by c.tanggal asc,a.notransaksi asc";
+            group by a.notransaksi,jenispekerjaan,noakun,alokasibiaya,kodesegment,c.tanggal order by c.tanggal asc,a.notransaksi asc";
 
     // exit("Error:".$str);
 
     $lokasi = array();
     $notrans = array();
+    $tgltrans = array();
     $gabung = array();
     $cacheLokasi = array();
     $biaya = array();
@@ -891,6 +892,7 @@ function prosesAlokasi()
                 }
                 $lokasi[] = $bar->alokasibiaya;
                 $notrans[] = $bar->notransaksi;
+                $tgltrans[] = $bar->tgltrans;
                 $jam[] = $bar->jlh;
                 if ($no == $counttemp or ($tempjumlah - floor(($bar->jlh / $tempjamx) * $param['jumlahbiayakendaraan'])) <= 0) {
                     $biaya[] = $tempjumlah;
@@ -910,6 +912,7 @@ function prosesAlokasi()
             } else {
                 $lokasi[] = $bar->alokasibiaya;
                 $notrans[] = $bar->notransaksi;
+                $tgltrans[] = $bar->tgltrans;
                 $akun[]  = $bar->noakun;
                 $jam[] = $bar->jlh;
                 if ($no == $counttemp or ($tempjumlah - floor(($bar->jlh / $tempjamx) * $param['jumlahbiayakendaraan'])) <= 0) {
@@ -1119,6 +1122,7 @@ function prosesAlokasi()
                 'kodeasset' => $kodeasset[$key],
                 'kodesupplier' => $supplierrxx,
                 'nodok' => $notrans[$key],
+                    'tanggal' => $tgltrans[$key],
                 'kodeblok' => $lokasi[$key],
                 'kodesegment' => $segment[$key]
             );
@@ -1138,6 +1142,7 @@ function prosesAlokasi()
                     'kodeasset' => '',
                     'kodesupplier' => '',
                     'nodok' => $notrans[$key],
+                    'tanggal' => $tgltrans[$key],
                     'kodeblok' => '',
                     'kodesegment' => $defSegment
                 );
@@ -1153,6 +1158,7 @@ function prosesAlokasi()
                     'kodeasset' => $kodeasset[$key],
                     'kodesupplier' => '',
                     'nodok' => $notrans[$key],
+                    'tanggal' => $tgltrans[$key],
                     'kodeblok' => $lokasi[$key],
                     'kodesegment' => $segment[$key]
                 );
@@ -1175,6 +1181,8 @@ function prosesAlokasi()
 }
 
 #satu jurnal ALK_KERJA_AB: banyak baris debet (per transaksi/kegiatan/blok) dan satu baris kredit
+#baris debet bertanggal transaksi pekerjaan kendaraan; header dan baris kredit tetap tanggal proses (periode-28)
+#supaya jurnal lama bisa ditemukan dan dihapus saat proses diulang (pencarian lewat baris kredit)
 function simpanJurnalAlokasiGabungan($g, $kodeJurnal, $defSegment)
 {
     global $tanggal;
@@ -1228,7 +1236,7 @@ function simpanJurnalAlokasiGabungan($g, $kodeJurnal, $defSegment)
     foreach ($g['baris'] as $baris) {
         $row = array(
             'nojurnal' => $nojurnal,
-            'tanggal' => $tanggal,
+            'tanggal' => (isset($baris['tanggal']) && $baris['tanggal'] != '' ? $baris['tanggal'] : $tanggal),
             'nourut' => $noUrut,
             'noakun' => $baris['noakun'],
             'keterangan' => $param['periode'] . ':Biaya Kendaraan ' . $param['kodevhc'],

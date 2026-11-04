@@ -385,7 +385,7 @@ switch ($method) {
 					foreach ($totalsdm as $noakun => $val1) {
 						foreach ($val1 as $tglsdm => $value) {
 
-							$valuesisa = (int) floor(fixnan($value / $gtsdm * $porsisdm));
+							$valuesisa = ($gtsdm > 0) ? (int) floor(fixnan($value / $gtsdm * $porsisdm)) : 0;
 
 							# Debet
 
