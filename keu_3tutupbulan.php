@@ -5,11 +5,13 @@ include_once('lib/zLib.php');
 
 #=== Start ===
 echo open_body();
+require_once('lib/zSelect2.php');
 ?>
 <!-- Includes -->
 <script language=javascript1.2 src=js/zTools.js></script>
-<script language=javascript1.2 src=js/keu_3tutupbulan.js?ver=1.5></script>
+<script language=javascript1.2 src=js/keu_3tutupbulan.js?ver=2.1></script>
 <link rel=stylesheet type=text/css href='style/zTable.css'>
+<script language=javascript src=js/zSelect2.js?ver=1></script>
 <?php
 #====== Controller ======
 # Options
@@ -28,30 +30,35 @@ foreach ($optOrg as $key => $val) {
 		}
 	}
 }
-# Fields
-$els = array();
-$els[] = array(
-  makeElement('kodeorg','label',$_SESSION['lang']['kodeorg']),
-  makeElement('kodeorg','selectsearch','',array('style'=>'width:200px','onchange'=>'changeperiode(this)'),$optOrg2)
-);
-$els[] = array(
-  makeElement('periode','label',$_SESSION['lang']['periode']),
-  makeElement('periode','select','',array('style'=>'width:200px'),$optPeriod)
-);
-
-# Button
-$els['btn'] = array(
-  makeElement('btnList','button',$_SESSION['lang']['tutupbuku'],
-    array('onclick'=>'tutupBuku()'))
-);
-
 #====== View ======
 # Menu
 include('master_mainMenu.php');
 
-# Form
+# Form (kode organisasi dan periode memakai select2)
+$optSelOrg = "<option value=''>".$_SESSION['lang']['pilihdata']."</option>";
+foreach ($optOrg2 as $kodeOpt => $namaOpt) {
+	if ($kodeOpt == '') { continue; }
+	$optSelOrg .= "<option value='".$kodeOpt."'>".$namaOpt."</option>";
+}
 OPEN_BOX('','<span class=judul>'.getMenu('keu_3tutupbulan').'</span><br>');
-echo genElTitle($_SESSION['lang']['form'],$els);
+echo "<fieldset style=float:left>
+		<legend>".$_SESSION['lang']['form']."</legend>
+		<table cellspacing='1' border='0'>
+			<tr>
+				<td>".$_SESSION['lang']['kodeorg']."</td>
+				<td>:</td>
+				<td><select id='kodeorg' class=select2 onchange='changeperiode(this)' style='width:250px'>".$optSelOrg."</select></td>
+			</tr>
+			<tr>
+				<td>".$_SESSION['lang']['periode']."</td>
+				<td>:</td>
+				<td><select id='periode' class=select2 style='width:250px'><option value=''>".$_SESSION['lang']['pilihdata']."</option></select></td>
+			</tr>
+			<tr>
+				<td colspan=2></td>
+				<td><button class=mybutton onclick='tutupBuku()'>".$_SESSION['lang']['tutupbuku']."</button></td>
+			</tr>
+		</table></fieldset>";
 CLOSE_BOX();
 #=== End ===
 close_body();

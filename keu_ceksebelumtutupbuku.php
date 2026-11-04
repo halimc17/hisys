@@ -6,11 +6,9 @@ echo open_body();
 require_once('lib/zSelect2.php');
 include('master_mainMenu.php');
 
-#= unit di bawah PT PPP pakai slave+js versi PPP (ada fitur auto-jurnal
-#= pembulatan Workshop/Traksi), unit lain tetap pakai versi original -
-#= supaya perubahan khusus PPP tidak menyentuh proses tutup buku unit lain
-$indukLokasitugas = makeOption($dbname,'organisasi','kodeorganisasi,induk',"kodeorganisasi='".$_SESSION['empl']['lokasitugas']."'");
-$jsCekTutupBuku = ($indukLokasitugas[$_SESSION['empl']['lokasitugas']]=='PPP') ? 'js/keu_ceksebelumtutupbuku_ppp.js' : 'js/keu_ceksebelumtutupbuku.js';
+#= semua unit memakai slave+js yang sama (tampilan daftar pengecekan). Tombol jurnal otomatis
+#= pembulatan Workshop/Traksi tetap khusus unit di bawah PT PPP (dicek di slave).
+$jsCekTutupBuku = 'js/keu_ceksebelumtutupbuku_ppp.js';
 ?>
 <script language=javascript src='<?php echo $jsCekTutupBuku; ?>?v=<?php echo time(); ?>'></script>
 <script language="javascript" src="js/zSelect2.js?ver=1"></script>

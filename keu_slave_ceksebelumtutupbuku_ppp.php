@@ -128,6 +128,184 @@ function pesanBreakdownSaja($dbname,$kodeorg,$periode,$pola,$rBreakdown,$totalSe
 #= saling menutup per karyawan) - kalau digroup per noreferensi saja,
 #= proses normal itu ikut nongol sebagai "penyumbang" padahal bukan.
 #=========================================================================
+#= rincian selisih akun transit TRAKSI (41102%) yang wajib dicek manual.
+#= Dikelompokkan per KENDARAAN (bukan per karyawan) karena alokasi Traksi
+#= dihitung per kendaraan: biaya dibagi jam kerja kendaraan itu. Dua penyebab:
+#= 1. kendaraan punya biaya tapi tidak punya jam kerja di periode ini
+#= 2. jurnal biaya yang tidak diisi kode kendaraan
+function pesanDiagnostikTraksi($dbname,$kodeorg,$periode,$totalSelisih){
+    $kodeorg = addslashes($kodeorg);
+    $periode = addslashes($periode);
+    $awal = $periode.'-01';
+    $akhir = date('Y-m-t', strtotime($awal));
+    $tdLabel = "style='padding:2px 8px 2px 0;'";
+    $tdAngka = "style='padding:2px 0;text-align:right;white-space:nowrap;'";
+
+    #= kendaraan yang punya jam kerja di periode (dasar yang sama dengan proses Alokasi Traksi)
+    $adaJam = array();
+    $sJam = "SELECT DISTINCT c.kodevhc FROM ".$dbname.".vhc_rundt a
+        LEFT JOIN ".$dbname.".vhc_kegiatan b ON a.jenispekerjaan=b.kodekegiatan
+        LEFT JOIN ".$dbname.".vhc_runht c ON a.notransaksi=c.notransaksi
+        WHERE c.tanggal>='".$awal."' AND c.tanggal<='".$akhir."' AND a.alokasibiaya!='' AND a.jenispekerjaan!=''";
+    foreach(fetchdata($sJam) as $bar){ $adaJam[$bar['kodevhc']] = true; }
+
+    #= kendaraan yang sudah pernah dialokasikan (jurnal ALK_KERJA_AB) di periode ini
+    $sudahAlk = array();
+    $sAlk = "SELECT DISTINCT kodevhc FROM ".$dbname.".keu_jurnaldt_vw
+        WHERE kodeorg='".$kodeorg."' AND periode='".$periode."' AND noreferensi='ALK_KERJA_AB' AND COALESCE(kodevhc,'')<>''";
+    foreach(fetchdata($sAlk) as $bar){ $sudahAlk[$bar['kodevhc']] = true; }
+
+    #= 1. saldo per kendaraan
+    $sVhc = "SELECT kodevhc, SUM(debet)-SUM(kredit) as saldo
+        FROM ".$dbname.".keu_jurnaldt_vw
+        WHERE kodeorg='".$kodeorg."' AND periode='".$periode."' AND noakun LIKE '41102%' AND COALESCE(kodevhc,'')<>''
+        GROUP BY kodevhc
+        HAVING ABS(SUM(debet)-SUM(kredit)) >= 1
+        ORDER BY ABS(SUM(debet)-SUM(kredit)) DESC";
+    $rVhc = fetchdata($sVhc);
+    $totalVhc = 0;
+    $barisVhc = '';
+    $adaBelumAlk = false;
+    $adaTanpaJam = false;
+    foreach($rVhc as $bar){
+        $totalVhc += $bar['saldo'];
+        if(!isset($adaJam[$bar['kodevhc']])){
+            $ket = 'Tidak ada jam kerja di periode ini';
+            $adaTanpaJam = true;
+        }else if(!isset($sudahAlk[$bar['kodevhc']])){
+            $ket = 'Ada jam kerja, belum dialokasikan';
+            $adaBelumAlk = true;
+        }else if($bar['saldo']>0){
+            $ket = 'Sudah dialokasikan, nilainya belum sesuai';
+            $adaBelumAlk = true;
+        }else{
+            $ket = 'Alokasi melebihi biaya';
+            $adaBelumAlk = true;
+        }
+        $barisVhc .= "<tr><td ".$tdLabel.">".$bar['kodevhc']." - ".getNopol($bar['kodevhc'])."</td><td ".$tdLabel.">".$ket."</td><td ".$tdAngka.">Rp".number_format($bar['saldo'])."</td></tr>";
+    }
+
+    #= 2. jurnal biaya tanpa kode kendaraan
+    $sTanpa = "SELECT nojurnal, noakun, SUM(debet)-SUM(kredit) as saldo, MIN(keterangan) as keterangan
+        FROM ".$dbname.".keu_jurnaldt_vw
+        WHERE kodeorg='".$kodeorg."' AND periode='".$periode."' AND noakun LIKE '41102%' AND COALESCE(kodevhc,'')=''
+        GROUP BY nojurnal, noakun
+        HAVING ABS(SUM(debet)-SUM(kredit)) >= 1
+        ORDER BY ABS(SUM(debet)-SUM(kredit)) DESC";
+    $rTanpa = fetchdata($sTanpa);
+    $totalTanpa = 0;
+    $barisTanpa = '';
+    foreach($rTanpa as $bar){
+        $totalTanpa += $bar['saldo'];
+        $barisTanpa .= "<tr><td ".$tdLabel.">".$bar['nojurnal']." (".$bar['noakun'].")</td><td ".$tdLabel.">".htmlspecialchars(mb_substr($bar['keterangan'],0,60))."</td><td ".$tdAngka.">Rp".number_format($bar['saldo'])."</td></tr>";
+    }
+
+    $isi = '';
+    if($barisVhc!=''){
+        $isi .= "<br><b>Kendaraan yang biayanya belum teralokasi</b> (Rp".number_format($totalVhc).")"
+            ."<table style='border-collapse:collapse;margin:2px 0 6px 0;'>".$barisVhc."</table>";
+    }
+    if($barisTanpa!=''){
+        $isi .= "<b>Jurnal biaya tanpa kode kendaraan</b> (Rp".number_format($totalTanpa).")"
+            ."<table style='border-collapse:collapse;margin:2px 0 6px 0;'>".$barisTanpa."</table>";
+    }
+    #= sisa yang tidak masuk dua kelompok di atas (misal nilai < Rp1 per baris)
+    $sisa = $totalSelisih - abs($totalVhc + $totalTanpa);
+    if($isi=='' || abs($sisa)>=1){
+        $isi .= "<i>Sisa yang tidak terperinci : Rp".number_format($sisa)."</i><br>";
+    }
+
+    $cara = '';
+    if($adaBelumAlk){
+        $cara .= "<br>- Kendaraan yang ada jam kerja : jalankan (ulang) Proses Alokasi Traksi.";
+    }
+    if($adaTanpaJam){
+        $cara .= "<br>- Kendaraan tanpa jam kerja : isi Pekerjaan Kendaraan periode ini lalu jalankan ulang Proses Alokasi Traksi, atau buat jurnal memorial untuk memindahkan biayanya.";
+    }
+    if($barisTanpa!=''){
+        $cara .= "<br>- Jurnal tanpa kendaraan : koreksi jurnalnya dengan mengisi kode kendaraan, lalu jalankan ulang Proses Alokasi Traksi.";
+    }
+    return $isi."<b>Cara menyelesaikan :</b>".$cara;
+}
+
+#= rincian selisih akun transit WORKSHOP (41101%) yang wajib dicek manual.
+#= Biaya bengkel (debet) dibagi ke kendaraan/station lewat proses Alokasi
+#= Traksi (jurnal ALK_BY_WS, kredit 4110199). Selisih muncul kalau alokasi
+#= belum dijalankan, tidak ada jam servis untuk membagi, atau ada biaya yang
+#= dijurnal SETELAH alokasi dijalankan.
+function pesanDiagnostikWorkshop($dbname,$kodeorg,$periode,$totalSelisih){
+    $kodeorg = addslashes($kodeorg);
+    $periode = addslashes($periode);
+    $awal = $periode.'-01';
+    $akhir = date('Y-m-t', strtotime($awal));
+    $tdLabel = "style='padding:2px 8px 2px 0;'";
+    $tdAngka = "style='padding:2px 0;text-align:right;white-space:nowrap;'";
+
+    #= biaya (debet) per akun dan total yang sudah dikreditkan
+    $sAkun = "SELECT noakun, SUM(debet) as d, SUM(kredit) as k
+        FROM ".$dbname.".keu_jurnaldt_vw
+        WHERE kodeorg='".$kodeorg."' AND periode='".$periode."' AND noakun LIKE '41101%'
+        GROUP BY noakun ORDER BY noakun";
+    $totalBiaya = 0;
+    $totalAlokasi = 0;
+    $barisAkun = '';
+    foreach(fetchdata($sAkun) as $bar){
+        $totalBiaya += $bar['d'];
+        $totalAlokasi += $bar['k'];
+        if($bar['d']>=1 && $bar['noakun']!='4110199'){
+            $barisAkun .= "<tr><td ".$tdLabel.">".$bar['noakun']." - ".getNamaAkun($bar['noakun'])."</td><td ".$tdAngka.">Rp".number_format($bar['d'])."</td></tr>";
+        }
+    }
+
+    #= jam servis kendaraan + station pabrik di periode (pembagi biaya bengkel)
+    $jamServis = 0;
+    $rJam = fetchdata("SELECT SUM(downtime) as jam FROM ".$dbname.".msvhc_by_operator
+        WHERE notransaksi LIKE '".$kodeorg."%' AND tanggal>='".$awal."' AND tanggal<='".$akhir."' AND posting=1");
+    foreach($rJam as $bar){ $jamServis += $bar['jam']; }
+    $rJam = fetchdata("SELECT SUM(jumlahjamperbaikan) as jam FROM ".$dbname.".pabrik_rawatmesinht
+        WHERE pabrik='".$kodeorg."' AND tanggal>='".$awal."' AND tanggal<='".$akhir."'");
+    foreach($rJam as $bar){ $jamServis += $bar['jam']; }
+
+    #= biaya yang dijurnal setelah alokasi bengkel terakhir dijalankan
+    $barisSesudah = '';
+    $totalSesudah = 0;
+    $rAlk = fetchdata("SELECT MAX(tanggalentry) as tgl FROM ".$dbname.".keu_jurnaldt_vw
+        WHERE kodeorg='".$kodeorg."' AND periode='".$periode."' AND noreferensi='ALK_BY_WS'");
+    $tglAlk = $rAlk[0]['tgl'];
+    if($tglAlk!=''){
+        $sSesudah = "SELECT nojurnal, MIN(tanggalentry) as tgl, SUM(debet)-SUM(kredit) as saldo, MIN(keterangan) as keterangan
+            FROM ".$dbname.".keu_jurnaldt_vw
+            WHERE kodeorg='".$kodeorg."' AND periode='".$periode."' AND noakun LIKE '41101%'
+            AND COALESCE(noreferensi,'') NOT LIKE 'ALK\\_%' AND tanggalentry>'".addslashes($tglAlk)."'
+            GROUP BY nojurnal
+            HAVING ABS(SUM(debet)-SUM(kredit)) >= 1
+            ORDER BY ABS(SUM(debet)-SUM(kredit)) DESC";
+        foreach(fetchdata($sSesudah) as $bar){
+            $totalSesudah += $bar['saldo'];
+            $barisSesudah .= "<tr><td ".$tdLabel.">".$bar['nojurnal']."</td><td ".$tdLabel.">".htmlspecialchars(mb_substr($bar['keterangan'],0,60))."</td><td ".$tdAngka.">Rp".number_format($bar['saldo'])."</td></tr>";
+        }
+    }
+
+    $isi = "<br>Biaya bengkel Rp".number_format($totalBiaya).", sudah dialokasikan ke kendaraan/station Rp".number_format($totalAlokasi).".";
+    if($barisAkun!=''){
+        $isi .= "<table style='border-collapse:collapse;margin:2px 0 6px 0;'>".$barisAkun."</table>";
+    }
+
+    if($totalAlokasi<1){
+        $isi .= "<b>Penyebab :</b> alokasi bengkel belum dijalankan di periode ini"
+            .($jamServis<=0 ? " dan tidak ada jam servis kendaraan/station, sehingga biaya belum bisa dibagi." : ".")."<br>";
+        $cara = "<br>- ".($jamServis<=0 ? "Pastikan service kendaraan/station periode ini sudah diinput dan diposting, lalu " : "")."jalankan Proses Alokasi Traksi.";
+    }else if($barisSesudah!=''){
+        $isi .= "<b>Jurnal biaya yang dibuat setelah alokasi bengkel dijalankan</b> (Rp".number_format($totalSesudah).")"
+            ."<table style='border-collapse:collapse;margin:2px 0 6px 0;'>".$barisSesudah."</table>";
+        $cara = "<br>- Jalankan ulang Proses Alokasi Traksi supaya biaya di atas ikut dialokasikan.";
+    }else{
+        $isi .= "<b>Penyebab :</b> alokasi bengkel sudah dijalankan, tetapi biaya bengkel berubah setelahnya.<br>";
+        $cara = "<br>- Jalankan ulang Proses Alokasi Traksi.";
+    }
+    return $isi."<b>Cara menyelesaikan :</b>".$cara;
+}
+
 function pesanDiagnostikTransit($dbname,$kodeorg,$periode,$pola,$label,$totalSelisih,$rSumber,$batasKecil){
     #= kalau ada SATU karyawan yang sendirian sudah = total selisihnya, berarti
     #= dia satu-satunya penyebab asli - karyawan lain di list cuma saling
@@ -440,7 +618,7 @@ if($tipeorg[$param['kodeorg']]=='PABRIK'){
 	// exit("Error:$str");
 	$res=fetchData($str);
 	$notbskud=0;
-	$datasalah['4'][]="Ada Transaksi TBS Petani yang harus diposting<br>";
+	if(count($res)>0){ $datasalah['4'][]="Ada Transaksi TBS Petani yang harus diposting<br>"; }
 	foreach($res as $bar){
 		$notbskud++;
 		$datasalah['4'][]="Notransaksi : ".$bar['notransaksi']." ; ".$bar['tanggal']." ; ".$bar['divisi']."<br>";
@@ -644,8 +822,8 @@ if($numrows>0){
 	}
 }
 if($transit>10 && $transit!=''){
-    $datasalah['17'][]=$_SESSION['lang']['notifakuntransit']." (total gabungan seluruh kelompok akun transit kepala 4) :".number_format($transit)
-        ."<br><i>Ini jumlah keseluruhan dari sub-kelompok akun transit (Workshop, Traksi, dll) - rincian dan cara penyelesaian tiap kelompok ada di baris di bawah.</i>";
+    $datasalah['17'][]=$_SESSION['lang']['notifakuntransit']." (gabungan semua kelompok, kepala 4) : Rp".number_format($transit)
+        ."<br><i>Rincian per kelompok ada di pengecekan Workshop dan Traksi.</i>";
 }
 
 $str="select sum(debet)-sum(kredit) as saldo FROM ".$dbname.".keu_jurnalsum_vw where  periode ='".$param['periode']."' 
@@ -660,7 +838,7 @@ if($numrows>0){
 	}
 }
 if($transit>10 && $transit!=''){
-   $pesanWs = $_SESSION['lang']['notifakuntransit']." (Workshop) :".number_format($transit);
+   $pesanWs = $_SESSION['lang']['notifakuntransit']." (Workshop) : Rp".number_format($transit);
 
    #= tombol auto-jurnal khusus PT PPP: total < Rp200 DAN tiap karyawan < Rp20
    $sIndukWs = "select induk from ".$dbname.".organisasi where kodeorganisasi='".$param['kodeorg']."'";
@@ -676,12 +854,11 @@ if($transit>10 && $transit!=''){
 
    if($eligibleWs){
        $pesanWs .= "<br>Selisih ini layak jurnal otomatis (total < Rp200 dan tiap karyawan < Rp20) : "
-           ."<button type=button class=mybutton onclick=\"buatJurnalAutoTransit('".$param['kodeorg']."','".$param['periode']."','workshop')\">Buat Jurnal Otomatis</button>"
+           .(isset($param['dariTutup']) ? "<i>(buat jurnal otomatis lewat menu Cek Validasi Tutup Buku)</i>" : "<button type=button class=mybutton onclick=\"buatJurnalAutoTransit('".$param['kodeorg']."','".$param['periode']."','workshop')\">Buat Jurnal Otomatis</button>")
            ."<br>Rincian sumbernya (Workshop) :"
            .pesanBreakdownSaja($dbname,$param['kodeorg'],$param['periode'],'41101%',$rBreakdownWs,$transit,20);
    }else{
-       $pesanWs .= "<br><i>Selisih ini di luar rentang otomatis (total harus < Rp200 dan tiap karyawan < Rp20), wajib jurnal manual :</i>";
-       $pesanWs .= pesanDiagnostikTransit($dbname,$param['kodeorg'],$param['periode'],'41101%','Workshop',$transit,$rBreakdownWs,20);
+       $pesanWs .= pesanDiagnostikWorkshop($dbname,$param['kodeorg'],$param['periode'],$transit);
    }
 
    $datasalah['18'][]=$pesanWs;
@@ -700,7 +877,7 @@ if($numrows>0){
 	}
 }
 if($transit>10 && $transit!=''){
-   $pesanTraksi = $_SESSION['lang']['notifakuntransit']." (Traksi) :".number_format($transit);
+   $pesanTraksi = $_SESSION['lang']['notifakuntransit']." (Traksi) : Rp".number_format($transit);
 
    #= tombol auto-jurnal khusus PT PPP: total < Rp200 DAN tiap karyawan < Rp20.
    #= Khusus Traksi, realokasi normal antar kendaraan bisa puluhan/ratusan
@@ -723,12 +900,11 @@ if($transit>10 && $transit!=''){
 
    if($eligibleTr){
        $pesanTraksi .= "<br>Selisih ini layak jurnal otomatis (total < Rp200 dan tiap karyawan < Rp20) : "
-           ."<button type=button class=mybutton onclick=\"buatJurnalAutoTransit('".$param['kodeorg']."','".$param['periode']."','traksi')\">Buat Jurnal Otomatis</button>"
+           .(isset($param['dariTutup']) ? "<i>(buat jurnal otomatis lewat menu Cek Validasi Tutup Buku)</i>" : "<button type=button class=mybutton onclick=\"buatJurnalAutoTransit('".$param['kodeorg']."','".$param['periode']."','traksi')\">Buat Jurnal Otomatis</button>")
            ."<br>Rincian sumbernya (Traksi) :"
            .pesanBreakdownSaja($dbname,$param['kodeorg'],$param['periode'],'41102%',$rBreakdownTr,$transit,20);
    }else{
-       $pesanTraksi .= "<br><i>Selisih ini di luar rentang otomatis (total harus < Rp200 dan tiap karyawan < Rp20), wajib jurnal manual :</i>";
-       $pesanTraksi .= pesanDiagnostikTransit($dbname,$param['kodeorg'],$param['periode'],'41102%','Traksi',$transit,$rBreakdownTr,20);
+       $pesanTraksi .= pesanDiagnostikTraksi($dbname,$param['kodeorg'],$param['periode'],$transit);
    }
 
    $datasalah['19'][]=$pesanTraksi;
@@ -1224,44 +1400,131 @@ $selisihminus = $arrjmlhminus-$arralokplus;
 $selisihtotal = $selisihplus-$selisihminus;
 
 if(abs($selisihtotal)>200){//arahan bang ari samakan nilai toleransi dengan yang ada ditutup buku
-	$datasalah['25'][]="Gaji belum terlalokasi seluruhnya terdapat selisih ".$selisihtotal.", silahkan cek laporan Keuangan - Laporan - Transaksi Lainnya - Daftar Alokasi Gaji.<br>Untuk mengalokasikan gaji silahkan lakukan proses pada menu Keuangan - Proses - Proses Akhir Bulan";
+	$datasalah['25'][]="Gaji belum teralokasi seluruhnya, selisih Rp".number_format(abs($selisihtotal))."<br>Cek di Keuangan - Laporan - Transaksi Lainnya - Daftar Alokasi Gaji (kolom Selisih), lalu jalankan Keuangan - Proses - Proses Akhir Bulan.";
 }
 }else{
 	$datasalah['25'][]="Kami tidak menemukan data penggajian, apakah Proses penggajian sudah dilakukan ?<br>Jika belum silahkan lakukan proses : SDM - Proses - Penggajian Bulanan dan Harian.";
 }
 
 
-echo"
-	<table cellspacing=1 cellpadding=5 border=0 class=sortable>
-		<thead>
-			<tr class=rowheader>
-				<th align=center>No</th>
-				<th align=center>Keterangan</th>
-			</tr>
-		</thead>
-	<tbody>
-	";
-	
-if(!empty($datasalah)){	
-	$no=0;
-	foreach($datasalah as $urut => $val1){
-		$no++;
-		foreach($val1 as $key => $keterangan){
-			$d=$no;
-			echo"<tr class=rowcontent style=vertical-align:top;>";
-			if($d!=$n){			
-				echo"<td align=center >".$no."</td>";
-			}else{
-				echo"<td align=center></td>";
-			}
-			echo"<td align=left >".$keterangan."</td>";
-			echo"</tr>";
-			$n=$d;
-		}
-	}
-}else{
-	echo"<tr class=rowcontent>
-		<td align=center colspan=2>Data sudah benar, silahkan lanjut untuk tutup buku.</td>
-	";
+#=========================================================================
+#= TAMPILAN HASIL CEK TUTUP BUKU
+#= Daftar pengecekan yang berlaku untuk unit ini, tiap baris Lolos / belum
+#= lolos beserta tindakannya. Rincian temuan ada di daftar di bawah tabel.
+#= Hanya mengubah tampilan: hasil pengecekan tetap dari $datasalah di atas.
+#=========================================================================
+function renderCekTutupBuku($datasalah,$param,$tipe,$periodeNormal){
+    $h = function($s){ return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); };
+    $bukanHO = (substr($param['kodeorg'],2,2)!='HO');
+    $HO      = (substr($param['kodeorg'],2,2)=='HO');
+
+    #= [kunci temuan, judul, berlaku, perlu periode normal, tindakan, ada baris judul di temuan]
+    $cek = array();
+    $cek[] = array(array('1'), 'Saldo awal bank periode berikutnya tidak minus', true, false, 'Periksa transaksi kas/bank pada periode ini', false);
+    $cek[] = array(array('2'), 'Semua unit di bawahnya sudah tutup buku', ($tipe=='KANWIL'), false, 'Tutup buku unit yang tercantum terlebih dulu', true);
+    $cek[] = array(array('3','16'), 'Tutup Aresta (blok tahunan) sudah dilakukan', ($tipe=='KEBUN'), false, 'Kebun - Proses - Tutup Aresta', false);
+    $cek[] = array(array('4'), 'Transaksi TBS Petani sudah diposting', ($tipe=='PABRIK'), false, 'Posting transaksi TBS Petani', true);
+    $cek[] = array(array('5'), 'Parameter akun laba tahunan, laba ditahan, dan batas laba/rugi sudah diisi', true, false, 'Lengkapi parameter jurnal (CLM, CLY, RAT)', false);
+    $cek[] = array(array('6'), 'Periode akuntansi terdaftar dan normal', true, false, 'Periksa setup periode akuntansi', false);
+    $cek[] = array(array('7'), 'Tagihan berjenis jurnal sudah diposting', true, true, 'Posting tagihan yang tercantum', true);
+    $cek[] = array(array('8'), 'Kas kecil periode ini sudah ditutup', true, true, 'Tutup kas kecil unit', false);
+    $cek[] = array(array('28'), 'Tutup Buku Bank sudah dijalankan', true, false, 'Jalankan Tutup Buku Bank untuk periode ini', true);
+    $cek[] = array(array('9'), 'Berita Acara SPK sudah diposting', true, true, 'Posting Berita Acara SPK yang tercantum', true);
+    $cek[] = array(array('10'), 'Semua jurnal seimbang (debet = kredit)', true, true, 'Perbaiki jurnal yang tidak seimbang', true);
+    $cek[] = array(array('11'), 'Transaksi gudang sudah diposting', true, true, 'Posting transaksi gudang yang tercantum', true);
+    $cek[] = array(array('12'), 'Semua gudang sudah tutup buku', true, true, 'Tutup buku gudang yang tercantum', true);
+    $cek[] = array(array('13'), 'Transaksi BKM sudah diposting', true, true, 'Posting BKM yang tercantum', true);
+    $cek[] = array(array('14'), 'Pekerjaan Traksi sudah diposting', true, true, 'Posting transaksi Traksi yang tercantum', true);
+    $cek[] = array(array('15'), 'Rekap panen sudah diposting', true, true, 'Posting rekap panen yang tercantum', true);
+    $cek[] = array(array('17'), 'Akun transit (kepala 4) sudah nol', true, false, 'Lihat rincian Workshop dan Traksi di bawah', false);
+    $cek[] = array(array('18'), 'Akun transit Workshop sudah nol', true, false, 'Lihat rincian di bawah', false);
+    $cek[] = array(array('19'), 'Akun transit Traksi sudah nol', true, false, 'Lihat rincian di bawah', false);
+    $cek[] = array(array('20'), 'Nilai material sama dengan jurnal persediaan', ($tipe=='KANWIL'), false, 'Lihat akun yang belum balance di bawah', false);
+    $cek[] = array(array('21'), 'Proses gaji karyawan tidak langsung sudah dijalankan', $bukanHO, false, 'Jalankan proses gaji karyawan tidak langsung', false);
+    $cek[] = array(array('22'), 'Pengakuan penjualan sudah diproses', $HO, false, 'Proses pengakuan penjualan pada tiket yang tercantum', false);
+    $cek[] = array(array('23'), 'Rekap premi panen sudah dilakukan', ($tipe=='KEBUN'), false, 'Jalankan proses rekap premi panen lalu posting', false);
+    $cek[] = array(array('24'), 'Premi pemanen sudah diproses', ($tipe=='KEBUN'), false, 'Jalankan proses premi pemanen pada divisi/tanggal yang tercantum', true);
+    $cek[] = array(array('25'), 'Gaji karyawan sudah teralokasi seluruhnya', true, false, 'Jalankan Proses Akhir Bulan, lalu cek Daftar Alokasi Gaji', false);
+
+    #= hitung hasil tiap pengecekan
+    $baris = array();
+    $jumlahMasalah = 0;
+    foreach($cek as $c){
+        if(!$c[2]){ continue; }
+        $isi = array();
+        foreach($c[0] as $k){
+            if(!empty($datasalah[$k])){
+                foreach($datasalah[$k] as $ket){ $isi[] = $ket; }
+            }
+        }
+        $r = array('judul'=>$c[1], 'tindakan'=>$c[4], 'isi'=>$isi, 'jumlah'=>0, 'status'=>'lolos');
+        if(count($isi)>0){
+            $r['status'] = 'gagal';
+            $r['jumlah'] = $c[5] ? max(1, count($isi)-1) : 0;
+            $jumlahMasalah++;
+        }else if($c[3] && !$periodeNormal){
+            $r['status'] = 'belum';
+        }
+        $baris[] = $r;
+    }
+
+    $out = "<div style='font-size:13px;'>".($jumlahMasalah==0 ? '<!--CEK_LOLOS-->' : '<!--CEK_BELUM_LOLOS-->');
+    if($jumlahMasalah==0){
+        $out .= "<div style='padding:10px 14px;background:green;color:white;font-weight:bold;font-size:15px;'>&#10003; SEMUA PENGECEKAN LOLOS - Silakan lanjutkan Tutup Buku.</div>";
+    }else{
+        $out .= "<div style='padding:10px 14px;background:#d9362a;color:white;font-weight:bold;font-size:15px;'>&#10007; BELUM BISA TUTUP BUKU - ".$jumlahMasalah." pengecekan belum lolos</div>";
+    }
+    $out .= "<div style='margin:6px 0;font-size:12px;'><b>Unit</b> : ".$h(getNamaOrg($param['kodeorg']))." (".$h($param['kodeorg']).") &nbsp;|&nbsp; <b>Periode</b> : ".$h($param['periode'])."</div>";
+
+    $out .= "<table cellpadding=5 cellspacing=1 class=sortable style='width:100%;margin-bottom:12px;'>
+        <thead><tr class=rowheader><th style='width:30px'>No.</th><th>Pengecekan</th><th style='width:130px'>Hasil</th><th>Tindakan</th></tr></thead><tbody>";
+    $no = 0;
+    $no_gagal = array();
+    foreach($baris as $r){
+        $no++;
+        if($r['status']=='belum'){
+            $hasil = "<td align='center' style='background:#999;color:white;font-weight:bold;'>Belum dicek</td>";
+            $tindak = "Selesaikan periode akuntansi dulu";
+        }else if($r['status']=='gagal'){
+            $hasil = "<td align='center' style='background:#d9362a;color:white;font-weight:bold;'>&#10007; ".($r['jumlah']>0 ? $r['jumlah']." temuan" : "Belum lolos")."</td>";
+            $tindak = $h($r['tindakan']);
+        }else{
+            $hasil = "<td align='center' style='background:green;color:white;font-weight:bold;'>&#10003; Lolos</td>";
+            $tindak = "-";
+        }
+        $out .= "<tr class=rowcontent><td align='center'>".$no."</td><td>".$h($r['judul'])."</td>".$hasil."<td>".$tindak."</td></tr>";
+        if($r['status']=='gagal'){ $no_gagal[$no] = $r; }
+    }
+    $out .= "</tbody></table>";
+
+    #= rincian temuan: daftar di bawah tabel, urut sesuai nomor di tabel
+    if(count($no_gagal)>0){
+        $out .= "<div style='font-weight:bold;font-size:14px;margin:4px 0;'>Rincian Temuan</div>";
+        foreach($no_gagal as $n=>$r){
+            $out .= "<div style='margin-bottom:10px;border:1px solid #d9362a;background:#fff;'><div style='padding:5px 10px;background:#f6dcd9;font-weight:bold;'>".$n.". ".$h($r['judul'])."</div><div style='padding:6px 12px;'>".implode('',$r['isi'])."</div></div>";
+        }
+    }
+
+    $out .= "</div>";
+    return $out;
 }
+
+#================ cek Tutup Buku Bank
+#= Tutup Buku Bank menulis saldo awal bulan berikutnya untuk tiap rekening bank aktif unit
+$resBank = fetchdata("select noakun from ".$dbname.".keu_5akunbank where pemilik='".addslashes($param['kodeorg'])."' and status='1' order by noakun");
+if(count($resBank)>0){
+    $sudahTutupBank = array();
+    $resSaldo = fetchdata("select norek from ".$dbname.".keu_saldobank where kodeorg='".addslashes($param['kodeorg'])."' and periode='".str_replace("-","",$periodeberikut)."' and ".$awalberikut." is not null");
+    foreach($resSaldo as $bar){ $sudahTutupBank[$bar['norek']] = true; }
+    $no=0;
+    foreach($resBank as $bar){
+        if(!isset($sudahTutupBank[$bar['noakun']])){
+            $no++;
+            if($no==1){ $datasalah['28'][]="Tutup Buku Bank periode ".$param['periode']." belum dijalankan untuk rekening :<br>"; }
+            $datasalah['28'][]=$no.". ".$bar['noakun']." - ".$namabank[$daftarbank[$bar['noakun']]]."<br>";
+        }
+    }
+}
+
+echo renderCekTutupBuku($datasalah,$param,$tipeorg[$param['kodeorg']],($currstart!='' and $currend!=''));
 ?>
