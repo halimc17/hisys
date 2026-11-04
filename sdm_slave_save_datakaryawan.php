@@ -222,7 +222,8 @@ switch ($method) {
 				}
 			} else {
 				$caption_tambahan = "";
-				if ($value != "Aktif" and $value != "Keluar") {
+				// status Keluar juga tersedia untuk tipe selain KHL (khusus Aktif tetap hanya KHL)
+				if ($value != "Aktif") {
 					$optstatkaryawan .= "<option value='" . $value . "'>" . $value . " " . $caption_tambahan . "</option>";
 				}
 			}
