@@ -1215,6 +1215,7 @@ foreach ($reskaryawan as $key => $val) {
 	$num++;
 }
 
+$adaKaryawanUnit = true;
 if($wherekarid!=''){
 	## GET JUMLAH GAJI PLUS
 	$getjumlahplus = "SELECT sum(jumlah) as jmlh
@@ -1403,7 +1404,16 @@ if(abs($selisihtotal)>200){//arahan bang ari samakan nilai toleransi dengan yang
 	$datasalah['25'][]="Gaji belum teralokasi seluruhnya, selisih Rp".number_format(abs($selisihtotal))."<br>Cek di Keuangan - Laporan - Transaksi Lainnya - Daftar Alokasi Gaji (kolom Selisih), lalu jalankan Keuangan - Proses - Proses Akhir Bulan.";
 }
 }else{
-	$datasalah['25'][]="Kami tidak menemukan data penggajian, apakah Proses penggajian sudah dilakukan ?<br>Jika belum silahkan lakukan proses : SDM - Proses - Penggajian Bulanan dan Harian.";
+	#= unit tanpa karyawan (aktif di periode ini) tidak punya gaji untuk dialokasikan, jadi tidak perlu dicek
+	$awalPeriodeGaji = $param['periode']."-01";
+	$akhirPeriodeGaji = date('Y-m-t', strtotime($awalPeriodeGaji));
+	$resAdaKary = fetchdata("select count(*) as jml from ".$dbname.".datakaryawan
+					where lokasitugas = '".addslashes($param['kodeorg'])."' and tanggalmasuk <= '".$akhirPeriodeGaji."'
+					and (tanggalkeluar is null or tanggalkeluar = '0000-00-00' or tanggalkeluar >= '".$awalPeriodeGaji."')");
+	$adaKaryawanUnit = ($resAdaKary[0]['jml'] > 0);
+	if($adaKaryawanUnit){
+		$datasalah['25'][]="Kami tidak menemukan data penggajian, apakah Proses penggajian sudah dilakukan ?<br>Jika belum silahkan lakukan proses : SDM - Proses - Penggajian Bulanan dan Harian.";
+	}
 }
 
 
@@ -1413,7 +1423,7 @@ if(abs($selisihtotal)>200){//arahan bang ari samakan nilai toleransi dengan yang
 #= lolos beserta tindakannya. Rincian temuan ada di daftar di bawah tabel.
 #= Hanya mengubah tampilan: hasil pengecekan tetap dari $datasalah di atas.
 #=========================================================================
-function renderCekTutupBuku($datasalah,$param,$tipe,$periodeNormal){
+function renderCekTutupBuku($datasalah,$param,$tipe,$periodeNormal,$adaKaryawanUnit=true){
     $h = function($s){ return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); };
     $bukanHO = (substr($param['kodeorg'],2,2)!='HO');
     $HO      = (substr($param['kodeorg'],2,2)=='HO');
@@ -1444,7 +1454,7 @@ function renderCekTutupBuku($datasalah,$param,$tipe,$periodeNormal){
     $cek[] = array(array('22'), 'Pengakuan penjualan sudah diproses', $HO, false, 'Proses pengakuan penjualan pada tiket yang tercantum', false);
     $cek[] = array(array('23'), 'Rekap premi panen sudah dilakukan', ($tipe=='KEBUN'), false, 'Jalankan proses rekap premi panen lalu posting', false);
     $cek[] = array(array('24'), 'Premi pemanen sudah diproses', ($tipe=='KEBUN'), false, 'Jalankan proses premi pemanen pada divisi/tanggal yang tercantum', true);
-    $cek[] = array(array('25'), 'Gaji karyawan sudah teralokasi seluruhnya', true, false, 'Jalankan Proses Akhir Bulan, lalu cek Daftar Alokasi Gaji', false);
+    $cek[] = array(array('25'), 'Gaji karyawan sudah teralokasi seluruhnya', $adaKaryawanUnit, false, 'Jalankan Proses Akhir Bulan, lalu cek Daftar Alokasi Gaji', false);
 
     #= hitung hasil tiap pengecekan
     $baris = array();
@@ -1526,5 +1536,5 @@ if(count($resBank)>0){
     }
 }
 
-echo renderCekTutupBuku($datasalah,$param,$tipeorg[$param['kodeorg']],($currstart!='' and $currend!=''));
+echo renderCekTutupBuku($datasalah,$param,$tipeorg[$param['kodeorg']],($currstart!='' and $currend!=''),$adaKaryawanUnit);
 ?>
