@@ -3739,7 +3739,7 @@ switch ($method) {
 				@$nilaippn[$bar['noinvoice']] += $bar['nilai'];
 				@$keterangan3[$bar['noinvoice']][$bar['noaruskas']][$bar['noakun']] = 'PAJAKPPN';
 				// } else if(substr($bar['noakun'],0,5)=='21301'){
-			} else if (substr($bar['noakun'], 0, 5) == '21202') {
+			} else if (substr($bar['noakun'], 0, 5) == '21202' || substr($bar['noakun'], 0, 5) == '21210') { # PPh Pasal 23 dan PPh Pasal 4 ayat 2 (final)
 				if ($tipeinv[$bar['noinvoice']] == 'p' || $tipeinv[$bar['noinvoice']] == 'pon' || $tipeinv[$bar['noinvoice']] == 'ot') {
 					# Plus kan
 					# Di akuin Hutang PPh di Tagihan
