@@ -11678,7 +11678,7 @@ switch ($method) {
                                 $tipepo = 'PO';
                             }
 
-                            $str = "select a.deliverytime,a.ppn,a.pph,a.pph22,a.matauang, a.kurs, a.ongkir as totalongkir, a.pbbkb, a.pphfinal, b.harga, b.jumlah,a.id_franco,a.sisbayar2,a.diskonpersen,b.ongkir, b.merk, b.spec, a.nilaidiskon, a.ppnjasamaterial, a.penambahpph22 from " . $dbname . ".log_perintaanhargaht a
+                            $str = "select a.deliverytime,a.ppn,a.pph,a.pph22,a.pph21,a.matauang, a.kurs, a.ongkir as totalongkir, a.pbbkb, a.pphfinal, b.harga, b.jumlah,a.id_franco,a.sisbayar2,a.diskonpersen,b.ongkir, b.merk, b.spec, a.nilaidiskon, a.ppnjasamaterial, a.penambahpph22 from " . $dbname . ".log_perintaanhargaht a
 							left join " . $dbname . ".log_permintaanhargadt b on a.nomor=b.nomor and a.nourut=b.nourut
 							where a.nomor='" . $nodph . "' and a.purchaser='" . $purchaser . "' and a.supplierid='" . $supplierid . "' and a.nourut='" . $nourut . "' and b.kodebarang='" . $kdbrg . "'";
                             $res = fetchdata($str);
@@ -11689,6 +11689,7 @@ switch ($method) {
                             $persenppn = $res[0]['ppn'];
                             $persenpph = $res[0]['pph'];
                             $persenpph22 = $res[0]['pph22'];
+                            $persenpph21 = $res[0]['pph21'];
                             $harga = $res[0]['harga'];
                             $jumlah = $res[0]['jumlah'];
                             $ongkir = $res[0]['ongkir'];
@@ -11820,11 +11821,12 @@ switch ($method) {
                                 }
                                 $arrNilaiPPH[$myCek] = ($persenpph / 100) * ($rpsubtotal - $rppersen);
                                 $arrNilaiPPH22[$myCek] = ($persenpph22 / 100) * ($rpsubtotal - $rppersen);
+                                $arrNilaiPPH21[$myCek] = ($persenpph21 / 100) * ($rpsubtotal - $rppersen);
 
                                 if ($penambahpph22 == '1') {
-                                    $arrNilaiPO[$myCek] = $rpsubtotal - $rppersen + $pbbkb -  $pphfinal + $arrNilaiPPN[$myCek] + $arrNilaiPPH22[$myCek] - $arrNilaiPPH[$myCek];
+                                    $arrNilaiPO[$myCek] = $rpsubtotal - $rppersen + $pbbkb -  $pphfinal + $arrNilaiPPN[$myCek] + $arrNilaiPPH22[$myCek] - $arrNilaiPPH[$myCek] - $arrNilaiPPH21[$myCek];
                                 } else {
-                                    $arrNilaiPO[$myCek] = $rpsubtotal - $rppersen + $pbbkb - $pphfinal + $arrNilaiPPN[$myCek] - $arrNilaiPPH22[$myCek] - $arrNilaiPPH[$myCek];
+                                    $arrNilaiPO[$myCek] = $rpsubtotal - $rppersen + $pbbkb - $pphfinal + $arrNilaiPPN[$myCek] - $arrNilaiPPH22[$myCek] - $arrNilaiPPH[$myCek] - $arrNilaiPPH21[$myCek];
                                 }
 
                                 $str = "delete from " . $dbname . ".approval where notransaksi='" . $nopo . "' and jenispersetujuan='PO'";
@@ -11836,7 +11838,7 @@ switch ($method) {
                                     $insert_persenpph = $persenpph22;
                                 }
 
-                                $str = "insert into " . $dbname . ".log_poht (nopo, tanggal, tgledit, kodesupplier, subtotal, ongkosangkutan, pbbkb, pphfinal, kodeorg, kodeunit, purchaser, lokalpusat, statuspo, kurs, matauang,idFranco,syaratbayar,diskonpersen,nilaidiskon,nilaipo,nodph,ppn,persenppn,pph,persenpph,deliverytime,tipepo,pph22,penambahpph22,ppnjasamaterial) values ('" . $nopo . "','" . date('Y-m-d') . "','" . date('Y-m-d') . "','" . $supplierid . "','" . $arrSubTotal[$myCek] . "','" . $totalongkir . "','" . $pbbkb . "','" . $pphfinal . "','" . $optPT[$orgpp] . "','" . $orgpp . "','" . $purchaser . "','" . $localpusat . "','0','" . $kurs . "','" . $matauang . "','" . $id_franco . "','" . $sisbayar2 . "','" . $diskonpersen . "','" . $arrNilaiDiskon[$myCek] . "','" . $arrNilaiPO[$myCek] . "','" . $no_permintaan . "','" . $arrNilaiPPN[$myCek] . "','" . $persenppn . "','" . $arrNilaiPPH[$myCek] . "','" . $insert_persenpph . "','" . $deliverytime . "','" . $tipepo . "','" . $arrNilaiPPH22[$myCek] . "','" . $penambahpph22 . "','" . $ppnjasamaterial . "')";
+                                $str = "insert into " . $dbname . ".log_poht (nopo, tanggal, tgledit, kodesupplier, subtotal, ongkosangkutan, pbbkb, pphfinal, kodeorg, kodeunit, purchaser, lokalpusat, statuspo, kurs, matauang,idFranco,syaratbayar,diskonpersen,nilaidiskon,nilaipo,nodph,ppn,persenppn,pph,persenpph,deliverytime,tipepo,pph22,penambahpph22,ppnjasamaterial,pph21,persenpph21) values ('" . $nopo . "','" . date('Y-m-d') . "','" . date('Y-m-d') . "','" . $supplierid . "','" . $arrSubTotal[$myCek] . "','" . $totalongkir . "','" . $pbbkb . "','" . $pphfinal . "','" . $optPT[$orgpp] . "','" . $orgpp . "','" . $purchaser . "','" . $localpusat . "','0','" . $kurs . "','" . $matauang . "','" . $id_franco . "','" . $sisbayar2 . "','" . $diskonpersen . "','" . $arrNilaiDiskon[$myCek] . "','" . $arrNilaiPO[$myCek] . "','" . $no_permintaan . "','" . $arrNilaiPPN[$myCek] . "','" . $persenppn . "','" . $arrNilaiPPH[$myCek] . "','" . $insert_persenpph . "','" . $deliverytime . "','" . $tipepo . "','" . $arrNilaiPPH22[$myCek] . "','" . $penambahpph22 . "','" . $ppnjasamaterial . "','" . $arrNilaiPPH21[$myCek] . "','" . $persenpph21 . "')";
                                 $owlPDO->exec($str);
 
                                 $optSup = makeOption($dbname, "log_5supplier", "supplierid,namasupplier", "supplierid='" . $supplierid . "'");

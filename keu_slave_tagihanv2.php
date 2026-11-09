@@ -3541,10 +3541,10 @@ switch ($proses) {
 				$stream .= "<th align=center rowspan=2>" . $_SESSION['lang']['matauang'] . "</th>";
 				$stream .= "<th align=center rowspan=2>" . $_SESSION['lang']['gudang'] . "</th>";
 				$stream .= "<th align=center rowspan=2>" . $_SESSION['lang']['retur'] . "</th>";
-				$stream .= "<th align=center colspan=7>" . $_SESSION['lang']['nilai'] . " PO</th>";
+				$stream .= "<th align=center colspan=8>" . $_SESSION['lang']['nilai'] . " PO</th>";
 				$stream .= "<th align=center colspan=2>" . $_SESSION['lang']['uangmuka'] . " PO</th>";
-				$stream .= "<th align=center colspan=6>" . $_SESSION['lang']['nilaiinvoice'] . "</th>";
-				$stream .= "<th align=center colspan=6>" . $_SESSION['lang']['sisa'] . "<br>(PO-Invoice)</th>";
+				$stream .= "<th align=center colspan=7>" . $_SESSION['lang']['nilaiinvoice'] . "</th>";
+				$stream .= "<th align=center colspan=7>" . $_SESSION['lang']['sisa'] . "<br>(PO-Invoice)</th>";
 				$stream .= "</tr>";
 				$stream .= "<tr>";
 				$stream .= "<th align=center>" . $_SESSION['lang']['nilai'] . " DPP</th>";
@@ -3552,6 +3552,7 @@ switch ($proses) {
 				$stream .= "<th align=center>" . $_SESSION['lang']['nilai'] . " <br/> Pengurang (PPH 22)</th>";
 				$stream .= "<th align=center>" . $_SESSION['lang']['nilai'] . " <br/> Penambah (PPH 22)</th>";
 				$stream .= "<th align=center>" . $_SESSION['lang']['nilai'] . " <br/> (PPH 23)</th>";
+				$stream .= "<th align=center>" . $_SESSION['lang']['nilai'] . " <br/> (PPH 21)</th>";
 				$stream .= "<th align=center>" . $_SESSION['lang']['nilai'] . " <br/> (PBBKB)</th>";
 				$stream .= "<th align=center>" . $_SESSION['lang']['total'] . "</th>";
 				$stream .= "<th align=center>" . $_SESSION['lang']['nilai'] . " DPP</th>";
@@ -3561,12 +3562,14 @@ switch ($proses) {
 				$stream .= "<th align=center>" . $_SESSION['lang']['nilai'] . " <br/> Pengurang (PPH 22)</th>";
 				$stream .= "<th align=center>" . $_SESSION['lang']['nilai'] . " <br/> Penambah (PPH 22)</th>";
 				$stream .= "<th align=center>" . $_SESSION['lang']['nilai'] . " <br/> (PPH 23)</th>";
+				$stream .= "<th align=center>" . $_SESSION['lang']['nilai'] . " <br/> (PPH 21)</th>";
 				$stream .= "<th align=center>" . $_SESSION['lang']['total'] . "</th>";
 				$stream .= "<th align=center>" . $_SESSION['lang']['nilai'] . " DPP</th>";
 				$stream .= "<th align=center>" . $_SESSION['lang']['nilai'] . " PPN</th>";
 				$stream .= "<th align=center>" . $_SESSION['lang']['nilai'] . " <br/> Pengurang (PPH 22)</th>";
 				$stream .= "<th align=center>" . $_SESSION['lang']['nilai'] . " <br/> Penambah (PPH 22)</th>";
 				$stream .= "<th align=center>" . $_SESSION['lang']['nilai'] . " <br/> (PPH 23)</th>";
+				$stream .= "<th align=center>" . $_SESSION['lang']['nilai'] . " <br/> (PPH 21)</th>";
 				$stream .= "<th align=center>" . $_SESSION['lang']['total'] . "</th>";
 				$stream .= "</tr>";
 				$stream .= "</thead>";
@@ -3618,6 +3621,9 @@ switch ($proses) {
 					# Array Penambah PPh 22
 					$arrpph22penambah[$bar['nopo']] = $bar['penambahpph22'];
 
+					# PPh 21 (pengurang): nilai rupiah langsung dari PO
+					$nilaipphfn21[$bar['nopo']] = $bar['pph21'];
+
 					if ($bar['pph22'] > 0) {
 						$nilaipphfn[$bar['nopo']] = ($bar['subtotal'] - ($bar['subtotal'] * $bar['diskonpersen']) / 100) * $bar['persenpph'] / 100;
 					}
@@ -3646,6 +3652,10 @@ switch ($proses) {
 
 					if ($bar['noakun'] == '1160103') { # PPh 22
 						@$dtnilaipphx[$bar['nopo']] += $bar['nilai'];
+					}
+
+					if ($bar['noakun'] == '2120101') { # PPh 21 (pengurang, tersimpan negatif)
+						@$dtnilaipphx21[$bar['nopo']] += $bar['nilai'] * -1;
 					}
 
 					if ($bar['noakun'] == '1160104') { # PPh 23
@@ -3748,6 +3758,7 @@ switch ($proses) {
 					}
 
 					$stream .= "<td style=cursor:pointer align=right>" . @number_format($nilaipphfn23[$dtnopo], 2) . "</td>";
+					$stream .= "<td style=cursor:pointer align=right>" . @number_format($nilaipphfn21[$dtnopo], 2) . "</td>";
 					$stream .= "<td style=cursor:pointer align=right>" . @number_format($pbbkb[$dtnopo], 2) . "</td>";
 					$stream .= "<td style=cursor:pointer align=right>" . @number_format($dtnilaipo[$dtnopo], 2) . "</td>";
 
@@ -3765,6 +3776,7 @@ switch ($proses) {
 					}
 
 					$stream .= "<td style=cursor:pointer align=right>" . @number_format($dtnilaipphx23[$dtnopo], 2) . "</td>";
+					$stream .= "<td style=cursor:pointer align=right>" . @number_format($dtnilaipphx21[$dtnopo], 2) . "</td>";
 					$stream .= "<td style=cursor:pointer align=right>" . @number_format($dtnilaiinvoice[$dtnopo], 2) . "</td>";
 
 					// @$dtsisadpp[$dtnopo] = ($dtsubtotal[$dtnopo] + $pbbkb[$dtnopo]) - $dtnilaidppinvoice[$dtnopo] - $dtuangmukadpp[$dtnopo];
@@ -3774,6 +3786,7 @@ switch ($proses) {
 					@$dtsisappn[$dtnopo] = $nilaippnfn[$dtnopo] - $dtnilaippnx[$dtnopo];
 					@$dtsisapph[$dtnopo] = $nilaipphfn[$dtnopo] - $dtnilaipphx[$dtnopo];
 					@$dtsisapph23[$dtnopo] = $nilaipphfn23[$dtnopo] - $dtnilaipphx23[$dtnopo];
+					@$dtsisapph21[$dtnopo] = $nilaipphfn21[$dtnopo] - $dtnilaipphx21[$dtnopo];
 
 					$stream .= "<td style=cursor:pointer align=right>" . @number_format($dtsisadpp[$dtnopo], 2) . "</td>";
 					$stream .= "<td style=cursor:pointer align=right>" . @number_format($dtsisappn[$dtnopo], 2) . "</td>";
@@ -3787,6 +3800,7 @@ switch ($proses) {
 					}
 
 					$stream .= "<td style=cursor:pointer align=right>" . @number_format($dtsisapph23[$dtnopo], 2) . "</td>";
+					$stream .= "<td style=cursor:pointer align=right>" . @number_format($dtsisapph21[$dtnopo], 2) . "</td>";
 					$stream .= "<td style=cursor:pointer align=right>" . @number_format($dtsisa[$dtnopo], 2) . "</td>";
 					$stream .= "</tr>";
 				}
@@ -6797,6 +6811,7 @@ switch ($proses) {
 
 			#= buat default nilai
 			$nilaiinvoice = $nilaipph = $nilaidpp = $nilaippn = 0;
+			$nilaipph21 = 0; # PPh 21 (pengurang), hanya terisi untuk tagihan PO/SO
 
 			#= case disini langsung insert ke table keu_tagihandt
 			#= pengecualian untuk retur yang sudah lunas
@@ -6900,6 +6915,7 @@ switch ($proses) {
 								$nopo = $res[0]['nopo'];
 								$subtotal = $res[0]['subtotal'] - $res[0]['nilaidiskon'];
 								$pph23 = $res[0]['persenpph'];
+								$persenpph21po = $res[0]['persenpph21'];
 								$tipepo = $res[0]['tipepo'];
 
 								@$nilaidpp += $param['nilaidt'][$i] + $param['nilailaindt'][$i];
@@ -6912,6 +6928,8 @@ switch ($proses) {
 									// $nilaidppuntukpajakpphsomaterialtermin += ($resTermin[0]['rupiah'] * ($resTermin[0]['persen'] / 100)) * ($pph23 / 100);
 									$nilaidppuntukpajakpphsomaterialtermin += ($resTermin[0]['rupiah'] - ($rpmaterial * ($resTermin[0]['persen'] / 100))) * ($pph23 / 100);
 									$xxx .= "({$resTermin[0]['rupiah']} - ({$rpmaterial} * ({$resTermin[0]['persen']} / 100))) * ({$pph23} / 100) = {$nilaidppuntukpajakpphsomaterialtermin}\n";
+									# PPh 21 (pengurang): dasar hitung sama dengan PPh 23, persennya dari persenpph21
+									$nilaidppuntukpajakpph21somaterialtermin += ($resTermin[0]['rupiah'] - ($rpmaterial * ($resTermin[0]['persen'] / 100))) * ($persenpph21po / 100);
 								}
 							} else {
 								@$nilaiclaim += $param['nilaidt'][$i] + $param['nilailaindt'][$i];
@@ -7058,6 +7076,7 @@ switch ($proses) {
 					$flagpph = $res[0]['penambahpph22']; // Palma
 					$pph = $res[0]['pph22']; // Palma
 					$pph23 = $res[0]['pph']; // Palma
+					$pph21po = $res[0]['pph21']; // PPh 21 (pengurang, seperti PPh 23)
 					$tipepo = $res[0]['tipepo'];
 
 					# Jika ada PBBKB nilai dpp dikurangin dulu agar dapet nilai real ppn dan pph
@@ -7179,6 +7198,18 @@ switch ($proses) {
 						// exit("Warning: (" . $nilaidppuntukpajak . " - " . $rpmaterial . ") + " . $nilaiuangmuka . ") / " . $subtotal . ") * " . $pph23);
 					}
 
+					# Perhitungan PPh 21 (pengurang, seperti PPh 23). Disimpan di variabel terpisah supaya tidak menimpa PPh 22/23
+					$nilaipph21 = 0;
+					if ($pph21po > 0) {
+						$cekSOMaterial21 = getCountRows($dbname, "log_somaterial", "nopo='{$nopo}'");
+						$resTermin21 = fetchData(selectQuery($dbname, "log_potermin", "*", "nopo='{$nopo}'"));
+						if ($cekSOMaterial21 > 0 && !empty($resTermin21)) {
+							$nilaipph21 = $nilaidppuntukpajakpph21somaterialtermin * -1;
+						} else {
+							@$nilaipph21 = round(((($nilaidppuntukpajak - $rpmaterial) + $nilaiuangmuka) / $subtotal) * $pph21po * -1, 2);
+						}
+					}
+
 					# Info Mas Ari posisi nya sama" di debet
 					// @$nilaipph=round((($nilaidpp+$nilaiuangmuka)/$subtotal)*$pph*1);
 
@@ -7272,6 +7303,21 @@ switch ($proses) {
 							$owlPDO->exec($str);
 						}
 					endif;
+
+					if ($pph21po != 0) { #pph 21 (pengurang): akun hutang PPh 21
+						if ($nilaipph21 != 0) {
+							$no++;
+							$noakunpph21 = '2120101'; #akun hutang pph 21
+							$noaruskaspph21 = '10601'; #arus kas hutang pph 21
+
+							$str = "insert into " . $dbname . ".keu_tagihandt
+									(noinvoice,noakun,kodeasset,nilai,noaruskas,
+									nourut, notransaksi,kelompokbarang,nopo,pajak)
+								values('','" . $noakunpph21 . "','','" . ($nilaipph21) . "','" . $noaruskaspph21 . "',
+								'" . $no . "','','','" . $param['nodokdt'] . "','')";
+							$owlPDO->exec($str);
+						}
+					}
 
 					if ($pph23 != 0) { #pph 23
 						if ($nilaipph != 0) {
@@ -7759,7 +7805,7 @@ switch ($proses) {
 
 		#= nilai penjumlahan untuk nilaidpp dan nilai invoice (nilai dpp +- pajak)
 		#= nilai claim menjadi penambah nilai invoice, dibedakan dengan dpp karna yang masuk ppn/pph diluar claim, concoh case batr
-		@$nilaiinvoice = $nilaidpp + $nilaippn + $nilaipph + $nilaiclaim;
+		@$nilaiinvoice = $nilaidpp + $nilaippn + $nilaipph + $nilaipph21 + $nilaiclaim;
 		// exit("Error:".$nilaiinvoice._.$nilaidpp._.$nilaippn._.$nilaipph);
 
 		#= data rekening supplier

@@ -47,14 +47,19 @@ class zPdfMaster extends FPDF {
 						
 						// $this->Image($path,65,5,30);
 		                $this->Image($path,$this->lMargin,$this->tMargin-5,0,45);	
+                        // teks kop mulai sesudah logo (lebar logo mengikuti rasio gambar pada tinggi 45), minimal di x=90 seperti semula
+                        $ukuranLogo = @getimagesize($path);
+                        $lebarLogo = ($ukuranLogo && $ukuranLogo[1] > 0) ? 45 * $ukuranLogo[0] / $ukuranLogo[1] : 45;
+                        $xTeks = max(90, $this->lMargin + $lebarLogo + 8);
+                        $wTeks = $width - 100 - ($xTeks - 90);
                         $this->SetFont('Arial','B',9);
                         $this->SetFillColor(255,255,255);	
-                        $this->SetX(90);   
-                        $this->Cell($width-100,$height,$_SESSION['org']['namaorganisasi'],0,1,'L');	 
-                        $this->SetX(90); 		
-                        $this->Cell($width-100,$height,$orgData[0]['alamat'],0,1,'L');	
-                        $this->SetX(90); 			
-                        $this->Cell($width-100,$height,"Tel: ".$orgData[0]['telepon'],0,1,'L');	
+                        $this->SetX($xTeks);   
+                        $this->Cell($wTeks,$height,$_SESSION['org']['namaorganisasi'],0,1,'L');	 
+                        $this->SetX($xTeks); 		
+                        $this->Cell($wTeks,$height,$orgData[0]['alamat'],0,1,'L');	
+                        $this->SetX($xTeks); 			
+                        if (trim($orgData[0]['telepon']) != '') { $this->Cell($wTeks,$height,"Tel: ".$orgData[0]['telepon'],0,1,'L'); } else { $this->Ln($height); }	
                         $this->Line($this->lMargin,$this->tMargin+($height*4),
                                 $this->lMargin+$width,$this->tMargin+($height*4));
                         $this->Ln($height*1.5);

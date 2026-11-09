@@ -70,7 +70,7 @@ $rekening = makeOption($dbname, 'log_5rekbank', 'supplierid,rekening');
 $rekeningbank_an = makeOption($dbname, 'log_5rekbank', 'supplierid,an');
 
 ## GET PO HT
-$str = "select penambahpph22,pph22,pph,nilaipo,purchaser,tanggal,syaratbayar,kodesupplier,alamatsup,npwpsup,kodeorg,matauang,idFranco,deliverytime,nodph,uraian,subtotal,diskonpersen,nilaidiskon,pbbkb, pphfinal, pphfinal,persenppn,ppn,addcost,waktucetak,idFrancoinvc,persenpph,tgledit,ongkosangkutan,tglrelease from " . $dbname . ".log_poht where nopo='" . $nopo . "'";
+$str = "select penambahpph22,pph22,pph21,persenpph21,pph,nilaipo,purchaser,tanggal,syaratbayar,kodesupplier,alamatsup,npwpsup,kodeorg,matauang,idFranco,deliverytime,nodph,uraian,subtotal,diskonpersen,nilaidiskon,pbbkb, pphfinal, pphfinal,persenppn,ppn,addcost,waktucetak,idFrancoinvc,persenpph,tgledit,ongkosangkutan,tglrelease from " . $dbname . ".log_poht where nopo='" . $nopo . "'";
 $res = fetchdata($str);
 $purchaser = $res[0]['purchaser'];
 $tgledit = $res[0]['tgledit'];
@@ -99,6 +99,8 @@ $ppn = $res[0]['ppn'];
 $pph = $res[0]['pph'];
 $pph22 = $res[0]['pph22'];
 $penambahpph22 = $res[0]['penambahpph22'];
+$pph21 = $res[0]['pph21'];
+$persenpph21 = $res[0]['persenpph21'];
 $addcost = $res[0]['addcost'];
 // $grandtotal=$res[0]['nilaipo'];
 $ongkir = $res[0]['ongkosangkutan'];
@@ -106,12 +108,12 @@ if ($pph22 != 0) {
 	$pph = $pph22;
 
 	if ($penambahpph22 == '1') {
-		$grandtotal = (($subtotal - $nilaidiskon) + $pbbkb) - $pphfinal + $ppn + $pph + $addcost;
+		$grandtotal = (($subtotal - $nilaidiskon) + $pbbkb) - $pphfinal + $ppn + $pph + $addcost - $pph21;
 	} else {
-		$grandtotal = (($subtotal - $nilaidiskon) + $pbbkb) - $pphfinal + $ppn - $pph + $addcost;
+		$grandtotal = (($subtotal - $nilaidiskon) + $pbbkb) - $pphfinal + $ppn - $pph + $addcost - $pph21;
 	}
 } else {
-	$grandtotal = (($subtotal - $nilaidiskon) + $pbbkb) - $pphfinal + $ppn - $pph + $addcost;
+	$grandtotal = (($subtotal - $nilaidiskon) + $pbbkb) - $pphfinal + $ppn - $pph + $addcost - $pph21;
 }
 // $grandtotal=(($subtotal-$nilaidiskon))+$ppn-$pph;
 $waktucetak = ($res[0]['waktucetak'] == '0000-00-00 00:00:00' ? '' : tglnmblnsec($res[0]['waktucetak'], 'E', ''));
@@ -591,6 +593,12 @@ if ($kodept == 'PPP') {
 				<td style='border:1px solid black;text-align:right' colspan=1>" . number_format($pph, 2) . " <span style='color:white'>_</span></td>
 			</tr>";
 	}
+		if ($pph21 > 0) {
+			$tab .= "<tr>
+					<td style='border-left:1px solid black;text-align:right' colspan=4>PPH21" . ($persenpph21 > 0 ? " " . $persenpph21 . "%" : "") . " <span style='color:white'>_</span></td>
+					<td style='border:1px solid black;text-align:right' colspan=1>" . number_format($pph21, 2) . " <span style='color:white'>_</span></td>
+				</tr>";
+		}
 	if ($grandtotal > 0) {
 		$tab .= "<tr>
 				<td style='border:1px solid black;text-align:right;font-weight:bold' colspan=4>Total <span style='color:white'>_</span></td>
@@ -854,6 +862,12 @@ if ($kodept == 'PPP') {
 					<td style='border:1px solid black;text-align:right' colspan=1>" . number_format($pph, 2) . " <span style='color:white'>_</span></td>
 				</tr>";
 	}
+		if ($pph21 > 0) {
+			$tab .= "<tr>
+					<td style='border-left:1px solid black;text-align:right' colspan=5>PPH21" . ($persenpph21 > 0 ? " " . $persenpph21 . "%" : "") . " <span style='color:white'>_</span></td>
+					<td style='border:1px solid black;text-align:right' colspan=1>" . number_format($pph21, 2) . " <span style='color:white'>_</span></td>
+				</tr>";
+		}
 	if ($grandtotal > 0) {
 		$tab .= "<tr>
 					<td style='border:1px solid black;text-align:right;font-weight:bold' colspan=5>Total <span style='color:white'>_</span></td>

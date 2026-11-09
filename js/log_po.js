@@ -175,7 +175,8 @@ function fillField(
   noref,
   persenppn,
   persenpph,
-  nil_pph22
+  nil_pph22,
+  nil_pph21
 ) {
   document.getElementById("btncancel").value = "batal";
 
@@ -235,6 +236,7 @@ function fillField(
             document.getElementById("ppn").value = numberFormat(nil_ppn, 2);
             document.getElementById("pph").value = numberFormat(nil_pph, 2);
             document.getElementById("pph22").value = numberFormat(nil_pph22, 2);
+            document.getElementById("pph21").value = numberFormat(nil_pph21 || 0, 2);
             document.getElementById("total_harga_po").value = sub_tot;
             if (chkppn == 0) {
               document.getElementById("chkPpn").checked = false;
@@ -495,6 +497,7 @@ function save_headher() {
   nil_ppn = document.getElementById("ppN").value;
   nil_pph = document.getElementById("pph").value;
   nil_pph22 = document.getElementById("pph22").value;
+  nil_pph21 = (document.getElementById("pph21") || { value: "0" }).value;
   chkPpn = document.getElementById("chkPpn").checked;
   if (chkPpn == true) {
     valChkPpn = 1;
@@ -572,6 +575,8 @@ function save_headher() {
     nil_pph +
     "&pph22=" +
     nil_pph22 +
+    "&pph21=" +
+    nil_pph21 +
     "&addcost=" +
     addcost +
     "&grand_total=" +
@@ -1580,6 +1585,17 @@ function calculatepph() {
   grandTotal();
 }
 
+// PPh 21 (pengurang, seperti PPh 23): kolom boleh belum ada di form lain yang memakai file ini
+function nilaiPph21() {
+  var el = document.getElementById("pph21");
+  if (!el) {
+    return 0;
+  }
+  el.value = remove_comma(el);
+  var n = parseFloat(el.value);
+  return isNaN(n) ? 0 : n;
+}
+
 nilPph = 0;
 function grandTotal() {
   sb_tot = document.getElementById("total_harga_po");
@@ -1607,7 +1623,8 @@ function grandTotal() {
     parseFloat(nilPbbkb.value) -
     parseFloat(nilPphfinal.value) -
     parseFloat(pph.value) -
-    parseFloat(pph22.value);
+    parseFloat(pph22.value) -
+    nilaiPph21();
 
   addcost = document.getElementById("addcost").value; //tambahan
   if (addcost == "" || addcost == "-") {
@@ -1634,6 +1651,9 @@ function grandTotal() {
     change_number(nilPphfinal);
     change_number(pph);
     change_number(pph22);
+    if (document.getElementById("pph21")) {
+      change_number(document.getElementById("pph21"));
+    }
     change_number(ppn);
     change_number(total);
   }
@@ -1697,7 +1717,8 @@ function grandTotalpph() {
     parseFloat(nilPbbkb.value) -
     parseFloat(nilPphfinal.value) -
     parseFloat(nilPph.value) -
-    parseFloat(nilPph22.value);
+    parseFloat(nilPph22.value) -
+    nilaiPph21();
 
   addcost = document.getElementById("addcost").value; //tambahan
   if (addcost == "" || addcost == "-") {
@@ -1725,6 +1746,9 @@ function grandTotalpph() {
   change_number(nilPpn);
   change_number(nilPph);
   change_number(nilPph22);
+  if (document.getElementById("pph21")) {
+    change_number(document.getElementById("pph21"));
+  }
 }
 
 function grandTotalppn() {
@@ -1751,7 +1775,8 @@ function grandTotalppn() {
     parseFloat(nilPbbkb.value) -
     parseFloat(nilPphfinal.value) -
     parseFloat(pph.value) -
-    parseFloat(pph22.value);
+    parseFloat(pph22.value) -
+    nilaiPph21();
 
   total = document.getElementById("grand_total");
   total.value = grnd_tot;

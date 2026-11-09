@@ -49,6 +49,7 @@ $diskonPersen = checkPostGet('diskonPersen', '');
 $nilPPn = checkPostGet('nilPPn', '');
 $nilPPh = checkPostGet('nilPPh', '');
 $nilPPh22 = checkPostGet('nilPPh22', '');
+$nilPPh21 = checkPostGet('nilPPh21', '');
 $pbbkb = checkPostGet('pbbkb', '');
 $pphfinal = checkPostGet('pphfinal', '');
 $nilaiPermintaan = checkPostGet('nilaiPermintaan', '');
@@ -1620,6 +1621,7 @@ if ($xmethod != '') {
 				$dtPpn[$bar['nourut']] = $bar['ppn'];
 				$dtPph[$bar['nourut']] = $bar['pph'];
 				$dtPph22[$bar['nourut']] = $bar['pph22'];
+				$dtPph21[$bar['nourut']] = $bar['pph21'];
 				//pphfinal
 				$dtPphFinal[$bar['nourut']] = $bar['pphfinal'];
 				
@@ -1903,7 +1905,7 @@ if ($xmethod != '') {
 			$tab .= "<tr class='rowcontent'>
 				<!--<td rowspan=7 colspan=3 valign=top align=left>&nbsp</td>-->
 				
-				<td rowspan=9 colspan=3 valign=top align=left>&nbsp
+				<td rowspan=10 colspan=3 valign=top align=left>&nbsp
 					<!--Tanggal Berlaku Surat <br> Perbandingan Harga : 
 					<input type=text class=myinputtext style='width:60px' id=tgl_batas_pnwharga onmousemove=setCalendar(this.id) onkeypress=return false;  size=10 maxlength=10 value='" . tanggalnormal($tgl_batas_pnwharga) . "' readonly />-->
 				</td>
@@ -2006,6 +2008,34 @@ if ($xmethod != '') {
 			}
 
 			$tab .= "</tr>";
+			// ####PPH 21#### (pengurang, aturan sama dengan PPh 23)
+			$tab .= "<tr class='rowcontent'><td colspan=4>" . $_SESSION['lang']['pph'] . " Ps 21</td>";
+
+			foreach ($dtNomor as $brs) {
+				if ($formPil != '1') {
+					$tab .= "<td align=right colspan=4>" . number_format($dtPph21[$brs], 2) . "</td>";
+				} else {
+					@$persen[$brs] = (($dtSbtotal[$brs] - $dtNildis[$brs]) * ($dtPph21[$brs] / 100));
+					if ($countso > 0) {
+						$tab .= "<td align=right colspan=3>
+							<input type=text  id=ppH_21_" . $brs . " name=ppH_21_" . $brs . " class=myinputtextnumber  onblur=calculate_all_j(" . $brs . ")  maxlength=4 onkeypress=return angka_doang(event) value='" . hidezerodecimal($dtPph21[$brs], 2) . "' style='width:75px' />
+						</td>";
+					} else {
+						$tab .= "<td align=right colspan=3>
+							<input type=text  id=ppH_21_" . $brs . " name=ppH_21_" . $brs . " class=myinputtextnumber	 onblur=calculate_all_j(" . $brs . ") disabled  maxlength=4  value='" . hidezerodecimal($dtPph21[$brs], 2) . "' style='width:75px' />
+						</td>";
+					}
+					$tab .= "<td></td>
+					<td align=right>
+						<input type=text  id=pph_21_" . $brs . " name=pph_21_" . $brs . " class=myinputtextnumber  disabled value='" . hidezerodecimal($persen[$brs], 2) . "' style='width:75px' />
+					</td>
+					<td></td>
+					";
+				}
+			}
+
+			$tab .= "</tr>";
+
 			// ####PPH 22####
 			$tab .= "<tr class='rowcontent'><td colspan=4>" . $_SESSION['lang']['pph'] . " Ps 22";
 			if ($countso <= 0) {
@@ -2105,12 +2135,14 @@ if ($xmethod != '') {
 			$tab .= "</tr>";
 
 			####GRANDTOTAL####
+			#Grand Total dibuat menonjol (warna, tebal, lebih besar)
+			$stGT = "background:#FFE9A0;border-top:2px solid #E0A800;border-bottom:2px solid #E0A800;color:#000;";
 			$tab .= "<tr class='rowcontent'>
-				<td colspan=4>" . $_SESSION['lang']['grnd_total'] . "</td>";
+				<td colspan=4 style='" . $stGT . "font-weight:bold;font-size:15px'>" . $_SESSION['lang']['grnd_total'] . "</td>";
 
 			foreach ($dtNomor as $brs) {
-				$tab .= "<td align=right colspan=5 id=grand_total_" . $brs . " style='font-weight:bold'>" . hidezerodecimal($dtNilPer[$brs], 2) . "</td>
-				<td></td>";
+				$tab .= "<td align=right colspan=5 id=grand_total_" . $brs . " style='" . $stGT . "font-weight:bold;font-size:16px'>" . hidezerodecimal($dtNilPer[$brs], 2) . "</td>
+				<td style='" . $stGT . "'></td>";
 			}
 
 			$tab .= "</tr>";
@@ -2761,7 +2793,7 @@ if ($xmethod != '') {
 				$str = "update " . $dbname . ".log_perintaanhargaht set tender='" . $tender_yn_h . "',ppnjasamaterial='" . $masterial_jasa_h . "',penambahpph22='" . $penambahpph22 . "', nilai1f='" . $nilai1f . "', nilai2f='" . $nilai2f . "', nilai3f='" . $nilai3f . "', nilai4f='" . $nilai4f . "', nilai5f='" . $nilai5f . "' where nomor='" . $no_prmntan . "'";
 				$owlPDO->exec($str);
 
-				$str = "update " . $dbname . ".log_perintaanhargaht set tglbatasrfq='" . tanggalsystem($tgl_batas_pnwharga) . "',tgltempopembayaran='" . tanggalsystem($tempo_pembayaran) . "', deliverytime='" . $waktu_penyerahan . "', id_franco='" . intval($idFranco) . "', stock='" . intval($stockId) . "',catatan='" . $ketUraian . "',sisbayar2='" . $termPay . "',ongkir='" . $totalongkir . "', ppn='" . $nilPPn . "', pph='" . $nilPPh . "', pph22='" . $nilPPh22 . "',pbbkb='" . $pbbkb . "', pphfinal='" . $pphfinal . "',  subtotal='" . $subTotal . "',diskonpersen='" . $diskonPersen . "', nilaidiskon='" . $nilDiskon . "', nilaipermintaan='" . $nilaiPermintaan . "', tgldari='" . tanggalsystem($tglDari) . "', tglsmp='" . tanggalsystem($tglSmp) . "', kurs='" . $kurs . "',matauang='" . $mtUang . "',supplierid='" . $supplierid . "', durasipengiriman='" . $durasipengiriman . "', durasipekerjaan='" . $durasipekerjaan . "', garansiproduk='" . $garansiprodukjasa . "', posisistok='" . $posisistokbarang . "', asuransi='" . $asuransi . "', nilai1s='" . $nilai1s . "', nilai2s='" . $nilai2s . "', nilai3s='" . $nilai3s . "', nilai4s='" . $nilai4s . "', nilai5s='" . $nilai5s . "' where nomor='" . $no_prmntan . "' and nourut='" . $nourut . "'";
+				$str = "update " . $dbname . ".log_perintaanhargaht set tglbatasrfq='" . tanggalsystem($tgl_batas_pnwharga) . "',tgltempopembayaran='" . tanggalsystem($tempo_pembayaran) . "', deliverytime='" . $waktu_penyerahan . "', id_franco='" . intval($idFranco) . "', stock='" . intval($stockId) . "',catatan='" . $ketUraian . "',sisbayar2='" . $termPay . "',ongkir='" . $totalongkir . "', ppn='" . $nilPPn . "', pph='" . $nilPPh . "', pph22='" . $nilPPh22 . "', pph21='" . ($nilPPh21 === '' ? '0' : $nilPPh21) . "',pbbkb='" . $pbbkb . "', pphfinal='" . $pphfinal . "',  subtotal='" . $subTotal . "',diskonpersen='" . $diskonPersen . "', nilaidiskon='" . $nilDiskon . "', nilaipermintaan='" . $nilaiPermintaan . "', tgldari='" . tanggalsystem($tglDari) . "', tglsmp='" . tanggalsystem($tglSmp) . "', kurs='" . $kurs . "',matauang='" . $mtUang . "',supplierid='" . $supplierid . "', durasipengiriman='" . $durasipengiriman . "', durasipekerjaan='" . $durasipekerjaan . "', garansiproduk='" . $garansiprodukjasa . "', posisistok='" . $posisistokbarang . "', asuransi='" . $asuransi . "', nilai1s='" . $nilai1s . "', nilai2s='" . $nilai2s . "', nilai3s='" . $nilai3s . "', nilai4s='" . $nilai4s . "', nilai5s='" . $nilai5s . "' where nomor='" . $no_prmntan . "' and nourut='" . $nourut . "'";
 
 				$expnotransaksi = explode('/', $no_prmntan);
 				$cekErrorDt = "";

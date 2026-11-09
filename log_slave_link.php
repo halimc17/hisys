@@ -60,6 +60,10 @@ switch ($method)
 				$arrNilaiPPH[$bar['nourut']] = ($pph_/100) * ($bar['subtotal'] - $bar['nilaidiskon']);
 			}
 
+			//PPH 21 (pengurang)
+			$dtPph21[$bar['nourut']] = $bar['pph21'];
+			$arrNilaiPPH21[$bar['nourut']] = ($bar['pph21']/100) * ($bar['subtotal'] - $bar['nilaidiskon']);
+
             $dtPbbkb[$bar['nourut']]=$bar['pbbkb'];
             $dtSbtotal[$bar['nourut']]=$bar['subtotal'];
             $dtDisknPrsn[$bar['nourut']]=$bar['diskonpersen'];
@@ -262,7 +266,7 @@ switch ($method)
 			
 			####ONGKIR####
 			$tab.="<tr class='rowcontent'>
-				<td rowspan=7 colspan=4 valign=top align=left >&nbsp</td><td colspan=3>".$_SESSION['lang']['ongkoskirim']."</td>";
+				<td rowspan=8 colspan=4 valign=top align=left >&nbsp</td><td colspan=3>".$_SESSION['lang']['ongkoskirim']."</td>";
 				
 				foreach ($dtNomor as $brs){
 					$tab.="<td align=right colspan=3 style='".$style[$brs]."'>".number_format($dtongkir[$brs],0)."</td>
@@ -318,10 +322,20 @@ switch ($method)
 
 			$tab.="</tr>";
 
-			
+			####PPH 21####
+			$tab.="<tr class='rowcontent'><td colspan=3>PPh Ps 21</td>";
+
+			foreach ($dtNomor as $brs){
+				$tab.="<td align=right colspan=3 style='".$style[$brs]."'>".number_format($dtPph21[$brs],2)."%</td>";
+				$tab.="<td align=right colspan=1 style='".$style[$brs]."'>".number_format($arrNilaiPPH21[$brs],2)."</td>";
+			}
+
+			$tab.="</tr>";
+
+
 			####PBBKB####
 			$tab.="<tr class='rowcontent'><td colspan=3>PBBKB</td>";
-			
+
 			foreach ($dtNomor as $brs){
 				$tab.="<td align=right colspan=4 style='".$style[$brs]."'>".number_format($dtPbbkb[$brs],0)."</td>";
 			}
@@ -519,11 +533,11 @@ switch ($method)
 		##Get Nomor RPH
 		$arrKdBrg = array();
 		if(count($ada_d) > 0){
-			$str="select b.nilaipermintaan,b.pph22,b.ppn,b.nilaipermintaan,b.pph,a.kodebarang,a.nopp,a.jumlah,a.harga,a.nourut,a.ongkir,b.ongkir as totalongkir,b.purchaser,b.diskonpersen,b.nilaidiskon,b.nomor,b.supplierid,a.merk,a.spec,b.matauang,b.kurs,b.tgldari,b.tglsmp,b.pbbkb,b.sisbayar2,b.id_franco,b.catatan, b.tanggal, b.durasipengiriman, b.durasipekerjaan, b.garansiproduk, b.posisistok, b.asuransi, b.pphfinal from ".$dbname.".log_permintaanhargadt a
+			$str="select b.nilaipermintaan,b.pph22,b.pph21,b.ppn,b.nilaipermintaan,b.pph,a.kodebarang,a.nopp,a.jumlah,a.harga,a.nourut,a.ongkir,b.ongkir as totalongkir,b.purchaser,b.diskonpersen,b.nilaidiskon,b.nomor,b.supplierid,a.merk,a.spec,b.matauang,b.kurs,b.tgldari,b.tglsmp,b.pbbkb,b.sisbayar2,b.id_franco,b.catatan, b.tanggal, b.durasipengiriman, b.durasipekerjaan, b.garansiproduk, b.posisistok, b.asuransi, b.pphfinal from ".$dbname.".log_permintaanhargadt a
 			left join ".$dbname.".log_perintaanhargaht b on a.nomor=b.nomor and a.nourut=b.nourut and b.nomor in (select nomor from ".$dbname.".log_permintaanhargadt where nopp='".$notransaksi."' and kodebarang='".$kd_brg."' and norph='".$norph."')
 			where a.nopp='".$notransaksi."' and a.kodebarang='".$kd_brg."' and b.tolakrph='0' order by b.nourut asc, a.kodebarang";
 		}else{
-			$str="select b.nilaipermintaan,b.pph22,b.ppn,b.nilaipermintaan,b.pph,a.kodebarang,a.nopp,a.jumlah,a.harga,a.nourut,a.ongkir,b.ongkir as totalongkir,b.purchaser,b.diskonpersen,b.nilaidiskon,b.nomor,b.supplierid,a.merk,a.spec,b.matauang,b.kurs,b.tgldari,b.tglsmp,b.pbbkb,b.sisbayar2,b.id_franco,b.catatan, b.tanggal, b.durasipengiriman, b.durasipekerjaan, b.garansiproduk, b.posisistok, b.asuransi, b.pphfinal from ".$dbname.".log_permintaanhargadt a
+			$str="select b.nilaipermintaan,b.pph22,b.pph21,b.ppn,b.nilaipermintaan,b.pph,a.kodebarang,a.nopp,a.jumlah,a.harga,a.nourut,a.ongkir,b.ongkir as totalongkir,b.purchaser,b.diskonpersen,b.nilaidiskon,b.nomor,b.supplierid,a.merk,a.spec,b.matauang,b.kurs,b.tgldari,b.tglsmp,b.pbbkb,b.sisbayar2,b.id_franco,b.catatan, b.tanggal, b.durasipengiriman, b.durasipekerjaan, b.garansiproduk, b.posisistok, b.asuransi, b.pphfinal from ".$dbname.".log_permintaanhargadt a
 			left join ".$dbname.".log_perintaanhargaht b on a.nomor=b.nomor and a.nourut=b.nourut and b.nomor in (select nomor from ".$dbname.".log_permintaanhargadt where nopp='".$notransaksi."' and kodebarang='".$kd_brg."' and nomor='".$norph."')
 			where a.nopp='".$notransaksi."' and a.kodebarang='".$kd_brg."' and b.tolakrph='0' order by b.nourut asc, a.kodebarang";
 		}
@@ -575,6 +589,9 @@ switch ($method)
 			}else{
 				$arrStatus[$val['purchaser']][$val['nopp']][$val['kodebarang']][$val['supplierid']]['pph'] = ($pph_/100) * ( ($val['jumlah'] * $val['harga']) - $val['nilaidiskon']);
 			}
+
+			//pph 21 (pengurang)
+			$arrStatus[$val['purchaser']][$val['nopp']][$val['kodebarang']][$val['supplierid']]['pph21'] = ($val['pph21']/100) * ( ($val['jumlah'] * $val['harga']) - $val['nilaidiskon']);
 
 			$arrStatus[$val['purchaser']][$val['nopp']][$val['kodebarang']][$val['supplierid']]['matauang'] = $val['matauang'];
 			$arrStatus[$val['purchaser']][$val['nopp']][$val['kodebarang']][$val['supplierid']]['kurs'] = $val['kurs'];
@@ -693,7 +710,7 @@ switch ($method)
 		
 		####ONGKIR####
 		$tab.="<tr class='rowcontent'>
-			<td rowspan=7 colspan=4 valign=top align=left >&nbsp</td><td colspan=3>".$_SESSION['lang']['ongkoskirim']."</td>";
+			<td rowspan=8 colspan=4 valign=top align=left >&nbsp</td><td colspan=3>".$_SESSION['lang']['ongkoskirim']."</td>";
 			
 		foreach($arrPur as $val2){
 			foreach($arrSupplier as $val3){
@@ -775,6 +792,18 @@ switch ($method)
 			foreach($arrSupplier as $val3){
 				if($val3==$arrSupplier2[$val2][$val3]){
 					$tab.="<td align=right colspan=4 style='".$style[$val2][$notransaksi][$kd_brg][$val3]."'>".number_format($arrStatus[$val2][$notransaksi][$kd_brg][$val3]['pph'],0)."</td>";
+				}
+			}
+		}
+		$tab.="</tr>";
+
+		####PPH 21####
+		$tab.="<tr class='rowcontent'>
+			<td colspan=3>PPh Ps 21</td>";
+		foreach($arrPur as $val2){
+			foreach($arrSupplier as $val3){
+				if($val3==$arrSupplier2[$val2][$val3]){
+					$tab.="<td align=right colspan=4 style='".$style[$val2][$notransaksi][$kd_brg][$val3]."'>".number_format($arrStatus[$val2][$notransaksi][$kd_brg][$val3]['pph21'],0)."</td>";
 				}
 			}
 		}
@@ -1073,7 +1102,7 @@ switch ($method)
 		
 		##Get Nomor RPH
 		$arrKdBrg = array();
-		$str="select a.kodebarang,a.nopp,a.jumlah,a.harga,a.nourut,b.purchaser,b.diskonpersen,b.nilaidiskon,b.nomor,b.supplierid,a.merk,a.spec,b.matauang,b.kurs,b.tgldari,b.tglsmp,b.pbbkb,b.sisbayar2,b.id_franco,b.catatan, b.tanggal, b.durasipengiriman, b.durasipekerjaan, b.garansiproduk, b.posisistok, b.asuransi, b.subtotal, b.pphfinal, b.pph, b.pph22 from ".$dbname.".log_permintaanhargadt a
+		$str="select a.kodebarang,a.nopp,a.jumlah,a.harga,a.nourut,b.purchaser,b.diskonpersen,b.nilaidiskon,b.nomor,b.supplierid,a.merk,a.spec,b.matauang,b.kurs,b.tgldari,b.tglsmp,b.pbbkb,b.sisbayar2,b.id_franco,b.catatan, b.tanggal, b.durasipengiriman, b.durasipekerjaan, b.garansiproduk, b.posisistok, b.asuransi, b.subtotal, b.pphfinal, b.pph, b.pph22, b.pph21 from ".$dbname.".log_permintaanhargadt a
 		left join ".$dbname.".log_perintaanhargaht b on a.nomor=b.nomor and a.nourut=b.nourut
 		where a.nopp='".$notransaksi."' and a.kodebarang='".$kd_brg."' and b.tolakrph='0' 
 		and b.nomor not in (select nomor from ".$dbname.".log_permintaanhargadt where flag='1' and kodebarang='".$kd_brg."' and nopp='".$notransaksi."') order by b.nourut asc";
@@ -1117,6 +1146,7 @@ switch ($method)
 			$arrStatus[$val['purchaser']][$val['nopp']][$val['kodebarang']][$val['supplierid']]['diskonpersen'] = $val['diskonpersen'];
 			$arrStatus[$val['purchaser']][$val['nopp']][$val['kodebarang']][$val['supplierid']]['nilaidiskon'] = ($val['diskonpersen']==0?'0':($val['nilaidiskon']));
 			$arrStatus[$val['purchaser']][$val['nopp']][$val['kodebarang']][$val['supplierid']]['pbbkb'] = $val['pbbkb'];
+				$arrStatus[$val['purchaser']][$val['nopp']][$val['kodebarang']][$val['supplierid']]['pph21'] = ($val['pph21']/100) * ($val['subtotal'] - $val['nilaidiskon']); //pph 21 (pengurang)
 
 			//pph final 
 
@@ -1239,7 +1269,7 @@ switch ($method)
 		
 		####SUBTOTAL####
 		$tab.="<tr class='rowcontent'>
-			<td rowspan=5 colspan=4 valign=top align=left >&nbsp</td><td colspan=3>".$_SESSION['lang']['subtotal']."</td>";
+			<td rowspan=6 colspan=4 valign=top align=left >&nbsp</td><td colspan=3>".$_SESSION['lang']['subtotal']."</td>";
 		foreach($arrPur as $val2){
 			foreach($arrSupplier as $val3){
 				if($val3==$arrSupplier2[$val2][$val3]){
@@ -1286,13 +1316,25 @@ switch ($method)
 		}
 		$tab.="</tr>";
 
+			####PPH 21####
+			$tab.="<tr class='rowcontent'>
+				<td colspan=3>PPh Ps 21</td>";
+			foreach($arrPur as $val2){
+				foreach($arrSupplier as $val3){
+					if($val3==$arrSupplier2[$val2][$val3]){
+						$tab.="<td align=right colspan=4 style='".$style[$val2][$notransaksi][$kd_brg][$val3]."'>".number_format($arrStatus[$val2][$notransaksi][$kd_brg][$val3]['pph21'],0)."</td>";
+					}
+				}
+			}
+			$tab.="</tr>";
+
 		####GRANDTOTAL####
 		$tab.="<tr class='rowcontent'>
 			<td colspan=3>".$_SESSION['lang']['grnd_total']."</td>";
 		foreach($arrPur as $val2){
 			foreach($arrSupplier as $val3){
 				if($val3==$arrSupplier2[$val2][$val3]){
-					$grandtotal = $arrSubtotal[$val2][$notransaksi][$kd_brg][$val3]['subtotal'] - $arrStatus[$val2][$notransaksi][$kd_brg][$val3]['nilaidiskon'] + $arrStatus[$val2][$notransaksi][$kd_brg][$val3]['pbbkb'] - $arrStatus[$val2][$notransaksi][$kd_brg][$val3]['pph'];
+					$grandtotal = $arrSubtotal[$val2][$notransaksi][$kd_brg][$val3]['subtotal'] - $arrStatus[$val2][$notransaksi][$kd_brg][$val3]['nilaidiskon'] + $arrStatus[$val2][$notransaksi][$kd_brg][$val3]['pbbkb'] - $arrStatus[$val2][$notransaksi][$kd_brg][$val3]['pph'] - $arrStatus[$val2][$notransaksi][$kd_brg][$val3]['pph21'];
 					$tab.="<td align=right colspan=4 style='".$style[$val2][$notransaksi][$kd_brg][$val3]."'>".number_format($grandtotal,0)."</td>";
 				}
 			}

@@ -904,7 +904,7 @@ switch ($method)
 				$arrdtbarang[$_POST['kdbrg'][$i]]['satuan']=$resx[0]['satuankonversi'];				
 			}
 			
-			$str="select a.ongkir,a.kodebarang,a.nopp,a.jumlah,a.harga,a.score,a.factor,a.nourut,b.ongkir as totalongkir,b.purchaser,b.diskonpersen,b.nilaidiskon,b.nomor,b.supplierid,a.merk,b.flag,b.nilai1s,b.nilai2s,b.nilai3s,b.nilai4s,b.nilai5s,b.nilai1f,b.nilai2f,b.nilai3f,b.nilai4f,b.nilai5f, b.pph, b.pph22, b.subtotal, b.diskonpersen, b.pphfinal from ".$dbname.".log_permintaanhargadt a 
+			$str="select a.ongkir,a.kodebarang,a.nopp,a.jumlah,a.harga,a.score,a.factor,a.nourut,b.ongkir as totalongkir,b.purchaser,b.diskonpersen,b.nilaidiskon,b.nomor,b.supplierid,a.merk,b.flag,b.nilai1s,b.nilai2s,b.nilai3s,b.nilai4s,b.nilai5s,b.nilai1f,b.nilai2f,b.nilai3f,b.nilai4f,b.nilai5f, b.pph, b.pph22, b.pph21, b.subtotal, b.diskonpersen, b.pphfinal from ".$dbname.".log_permintaanhargadt a 
 			left join ".$dbname.".log_perintaanhargaht b on a.nomor=b.nomor and a.nourut=b.nourut
 			where a.kodebarang='".$_POST['kdbrg'][$i]."' and a.nopp='".$_POST['lstnopp'][$i]."' and b.nomor not in (select nomor from ".$dbname.".log_permintaanhargadt where flag='1' and kodebarang='".$_POST['kdbrg'][$i]."' and nopp='".$_POST['lstnopp'][$i]."')";
 			// exit("warning:" .$str);
@@ -930,7 +930,7 @@ switch ($method)
 				if($bar['pphfinal'] > 0){
 					$arrStatus[$bar['purchaser']][$bar['nopp']][$bar['supplierid']]['pph'] = $bar['pphfinal'];
 				}else{
-					$arrStatus[$bar['purchaser']][$bar['nopp']][$bar['supplierid']]['pph'] = ($pph_/100) * ($bar['subtotal'] - $bar['nilaidiskon']);
+					$arrStatus[$bar['purchaser']][$bar['nopp']][$bar['supplierid']]['pph'] = (($pph_ + $bar['pph21'])/100) * ($bar['subtotal'] - $bar['nilaidiskon']); // PPh 21 (pengurang) ikut dijumlahkan
 				}
 				
 				$arrStatus[$bar['purchaser']][$bar['nopp']][$bar['kodebarang']][$bar['supplierid']]['merk'] = $optMrk[$bar['merk']];

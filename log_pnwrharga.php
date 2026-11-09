@@ -425,6 +425,10 @@ while($rKelompok=$qKelompok->fetch())
     echo"<div id='formEditData2'  style=display:none>";
     OPEN_BOX();
     // echo"<fieldset style='clear:both'><legend><b>Edit Area</b></legend>";
+    // sorot satu baris penuh saat kursor di atasnya (sel yang menggabung beberapa baris tidak ikut disorot)
+    echo"<style>
+        #printContainer2 tbody tr:hover > td:not([rowspan]){background:#FFF7CC}
+    </style>";
     echo"<div id='printContainer2' class='table-scrollx' style='overflow:none;height:450px'>";
     echo"</div>";
     // echo"</fieldset>";

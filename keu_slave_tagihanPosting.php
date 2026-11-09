@@ -157,6 +157,12 @@ try {
 				$rppPPh[$row['noakun']] += ($row['nilai'] * $dataH[0]['kurs']);
 				$totPPh += ($row['nilai'] * $dataH[0]['kurs']);
 			}
+
+			if ($row['noakun'] == '2120101') { # PPh 21 (pengurang, seperti PPh 23)
+				$countdtpph += 1;
+				$rppPPh[$row['noakun']] += ($row['nilai'] * $dataH[0]['kurs']);
+				$totPPh += ($row['nilai'] * $dataH[0]['kurs']);
+			}
 		} else {
 			if (substr($row['noakun'], 0, 3) == '212') {
 				$countdtpph += 1;

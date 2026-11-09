@@ -740,7 +740,7 @@ switch ($method) {
 						// 	$bar['pph'] = $bar['pph22'];
 						// }
 
-						$tab .= "<img src=images/application/application_edit.png class=zImgBtn  title='Edit' onclick=\"fillField('" . $bar['nopo'] . "','" . tanggalnormal($bar['tanggal']) . "','" . $bar['kodesupplier'] . "','" . $bar['subtotal'] . "','" . $bar['diskonpersen'] . "','" . $bar['pbbkb'] . "','" . $bar['pphfinal'] . "','" . $bar['pph'] . "','" . $bar['chkppn'] . "','" . $bar['ppn'] . "','" . $bar['nilaipo'] . "','" . $bar['nilaidiskon'] . "','" . $stat . "','" . tanggalnormal($bar['tanggalkirim']) . "','" . $bar['matauang'] . "','" . $bar['kurs'] . "','" . $bar['idFranco'] . "','" . $bar['addcost'] . "','" . $bar['deliverytime'] . "','" . $bar['norefrensi'] . "','" . $bar['persenppn'] . "','" . $bar['persenpph'] . "','".$bar['pph22']."');\">
+						$tab .= "<img src=images/application/application_edit.png class=zImgBtn  title='Edit' onclick=\"fillField('" . $bar['nopo'] . "','" . tanggalnormal($bar['tanggal']) . "','" . $bar['kodesupplier'] . "','" . $bar['subtotal'] . "','" . $bar['diskonpersen'] . "','" . $bar['pbbkb'] . "','" . $bar['pphfinal'] . "','" . $bar['pph'] . "','" . $bar['chkppn'] . "','" . $bar['ppn'] . "','" . $bar['nilaipo'] . "','" . $bar['nilaidiskon'] . "','" . $stat . "','" . tanggalnormal($bar['tanggalkirim']) . "','" . $bar['matauang'] . "','" . $bar['kurs'] . "','" . $bar['idFranco'] . "','" . $bar['addcost'] . "','" . $bar['deliverytime'] . "','" . $bar['norefrensi'] . "','" . $bar['persenppn'] . "','" . $bar['persenpph'] . "','".$bar['pph22']."','".$bar['pph21']."');\">
 							<img src=images/icons/04/16/01.png class=zImgBtn  title='ajukan' onclick=\"ajukan('" . $bar['nopo'] . "');\" >";
 					}
 				}
@@ -1164,6 +1164,7 @@ switch ($method) {
 		$ppn = checkPostGet('ppn', '');
 		$pph = checkPostGet('pph', '');
 		$pph22 = checkPostGet('pph22', '');
+		$pph21 = checkPostGet('pph21', '');
 		$chkppn = checkPostGet('chkppn', '');
 		$addcost = checkPostGet('addcost', '');
 		$grand_total = checkPostGet('grand_total', '');
@@ -1368,6 +1369,7 @@ switch ($method) {
 				ppn='" . str_replace(',', '', $hslPPn) . "',
 				pph='" . str_replace(',', '', $pph) . "',
 				pph22='" . str_replace(',', '', $pph22) . "',
+				" . ($pph21 === '' ? '' : "pph21='" . str_replace(',', '', $pph21) . "',") . "
 				persenppn='" . $ppn . "',
 				persenpph='" . $hslPPh . "',
 				nilaipo='" . $grand_total . "',
@@ -2164,7 +2166,7 @@ function createTabEditDetail($id, $data)
 		</tr>";
 	}
 
-	$str = "select diskonpersen,nilaidiskon,pbbkb,addcost,ppn,notecost,pph,pph22,penambahpph22, pphfinal from " . $dbname . ".log_poht where nopo='" . $id . "' ";
+	$str = "select diskonpersen,nilaidiskon,pbbkb,addcost,ppn,notecost,pph,pph22,pph21,penambahpph22, pphfinal from " . $dbname . ".log_poht where nopo='" . $id . "' ";
 	$res = $owlPDO->query($str) or die(print " Gagal: " . PDOException::getMessage());
 	$res->setFetchMode(PDO::FETCH_ASSOC);
 	$bar = $res->fetch();
@@ -2183,6 +2185,7 @@ function createTabEditDetail($id, $data)
 	$notecost = $bar['notecost'];
 	$pph = $bar['pph'];
 	$pph22 = $bar['pph22'];
+	$pph21 = $bar['pph21'];
 	$penambahpph22 = $bar['penambahpph22'];
 
 	//PPH Final
@@ -2190,14 +2193,14 @@ function createTabEditDetail($id, $data)
 
 	if ($pph > 0) {
 		$pph = $bar['pph'];
-		$grandTotalAll = $subTotHrgSblmDis - $diskonrupiah + $pbbkb + $ppn + $addcost - $pph - $pphfinal;
+		$grandTotalAll = $subTotHrgSblmDis - $diskonrupiah + $pbbkb + $ppn + $addcost - $pph - $pphfinal - $pph21;
 	} else {
 		// $pph = $bar['pph22'];
 		// $grandTotalAll = $subTotHrgSblmDis - $diskonrupiah + $pbbkb + $ppn + $addcost + $pph;
 		if ($penambahpph22 == '1') {
-			$grandTotalAll = $subTotHrgSblmDis - $diskonrupiah + $pbbkb + $ppn + $addcost + $bar['pph22'] - $pphfinal;
+			$grandTotalAll = $subTotHrgSblmDis - $diskonrupiah + $pbbkb + $ppn + $addcost + $bar['pph22'] - $pphfinal - $pph21;
 		} else {
-			$grandTotalAll = $subTotHrgSblmDis - $diskonrupiah + $pbbkb + $ppn + $addcost - $bar['pph22'] - $pphfinal;
+			$grandTotalAll = $subTotHrgSblmDis - $diskonrupiah + $pbbkb + $ppn + $addcost - $bar['pph22'] - $pphfinal - $pph21;
 		}
 	}
 
@@ -2267,6 +2270,10 @@ function createTabEditDetail($id, $data)
 		$table .= "<td>&nbsp;</td>
             <td style='vertical-align:top;' colspan=" . $clspn . " align=right>PPh22 (Rp)</td>
             <td><input type='text' id='pph22' name='pph22' class='myinputtextnumber' onkeypress='return angka_doang(event)' disabled style='width:100px' onblur='calculatepph()' /></td>
+        </tr>";
+		$table .= "<tr><td>&nbsp;</td>
+            <td style='vertical-align:top;' colspan=" . $clspn . " align=right>PPh21 (Rp)</td>
+            <td><input type='text' id='pph21' name='pph21' class='myinputtextnumber' disabled style='width:100px' value='" . number_format($pph21, 2) . "' /></td>
         </tr>";
 		$table .="<tr style='display:none'>
             <td>&nbsp;</td>

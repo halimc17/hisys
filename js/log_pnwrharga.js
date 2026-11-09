@@ -789,7 +789,7 @@ function zPreview2(fileTarget, notrans, idCont) {
           if (tipepo == "SO") {
             loadmaterialso();
           }
-          leftFixedTable(6);
+          bekukanKolomKiri();
         }
       } else {
         busy_off();
@@ -799,6 +799,58 @@ function zPreview2(fileTarget, notrans, idCont) {
   }
   post_response_text(fileTarget + ".php", param, respon);
 }
+
+// Kolom kiri (kode barang sampai harga estimasi) dibekukan supaya tetap terlihat saat tabel digeser.
+// Saat browser di-zoom / layar sempit, kolom beku itu bisa memakan lebih dari separuh lebar area tabel
+// dan menutupi kolom supplier. Kalau begitu pembekuan dilepas, lalu dipasang lagi otomatis
+// begitu ukuran layar kembali cukup (lihat listener resize di bawah).
+function bekukanKolomKiri() {
+  var areas = document.getElementsByClassName("table-scrollx");
+  var i, c, fixed;
+
+  // lepas dulu supaya posisi kolom dihitung dari tata letak aslinya
+  for (i = 0; i < areas.length; i++) {
+    fixed = areas[i].getElementsByClassName("left-fixed");
+    while (fixed.length > 0) {
+      fixed[0].style.left = "";
+      fixed[0].classList.remove("left-fixed");
+    }
+  }
+
+  leftFixedTable(6);
+
+  for (i = 0; i < areas.length; i++) {
+    fixed = areas[i].getElementsByClassName("left-fixed");
+    var lebarBeku = 0;
+    for (c = 0; c < fixed.length; c++) {
+      lebarBeku = Math.max(
+        lebarBeku,
+        (parseFloat(fixed[c].style.left) || 0) + fixed[c].offsetWidth
+      );
+    }
+    if (lebarBeku > areas[i].clientWidth * 0.55) {
+      while (fixed.length > 0) {
+        fixed[0].style.left = "";
+        fixed[0].classList.remove("left-fixed");
+      }
+    }
+  }
+}
+
+var timerBekukanKolomKiri = null;
+window.addEventListener("resize", function () {
+  clearTimeout(timerBekukanKolomKiri);
+  timerBekukanKolomKiri = setTimeout(function () {
+    var formEdit = document.getElementById("formEditData2");
+    if (
+      formEdit &&
+      formEdit.style.display != "none" &&
+      document.getElementsByClassName("table-scrollx").length > 0
+    ) {
+      bekukanKolomKiri();
+    }
+  }, 250);
+});
 
 function simpanSemua2(brs, totRow) {
   no_prmntan = document.getElementById("no_prmntan_" + brs).value;
@@ -810,6 +862,7 @@ function simpanSemua2(brs, totRow) {
   nilPPn = document.getElementById("ppN_" + brs).value;
   nilPPh = document.getElementById("ppH_" + brs).value;
   nilPPh22 = document.getElementById("ppH_22_" + brs).value;
+  nilPPh21 = document.getElementById("ppH_21_" + brs).value;
   pbbkb = document.getElementById("pbbkb_" + brs).value;
   //pphfinal
    pphfinal = document.getElementById("ppH_final_" + brs).value;
@@ -891,7 +944,7 @@ function simpanSemua2(brs, totRow) {
   posisistokbarang = document.getElementById("posisistokbarang_" + brs).value;
   asuransi = document.getElementById("asuransi_" + brs).value;
   if (subTotal == "0" || subTotal == "") {
-    subTotal = nilDiskon = diskonPersen = nilPPn = nilPPh = nilPPh22 = pphfinal = 0;
+    subTotal = nilDiskon = diskonPersen = nilPPn = nilPPh = nilPPh22 = nilPPh21 = pphfinal = 0;
   }
 
   var row = totRow + 1;
@@ -952,6 +1005,8 @@ function simpanSemua2(brs, totRow) {
     nilPPh +
     "&nilPPh22=" +
     nilPPh22 +
+    "&nilPPh21=" +
+    nilPPh21 +
     "&pphfinal=" +
     pphfinal +
     "&nilPPn=" +
@@ -1317,6 +1372,24 @@ function calculate_all_j(brs) {
     document.getElementById("ppH_22_" + brs).value = "0";
   }
 
+  // PPH 21 (pengurang, sama seperti PPH 23)
+  pn_21 = 0;
+  nilP = document.getElementById("ppH_21_" + brs).value;
+  var reg = /^[0-9]{1,3}(,[0-9]{3})*(\.[0-9]{1,2})?$/;
+
+  if (reg.test(nilP)) {
+    pn_21 = (parseFloat(subTot_dikurangMaterial - nilaiDis.value) * nilP) / 100;
+    if (isNaN(pn_21)) {
+      pn_21 = 0;
+    }
+    as = document.getElementById("pph_21_" + brs);
+    as.value = pn_21;
+    change_number(as);
+  } else {
+    document.getElementById("pph_21_" + brs).value = "0";
+    document.getElementById("ppH_21_" + brs).value = "0";
+  }
+
   // PPH
   pph = document.getElementById("pph_" + brs).value;
   pph = pph.replace(/,/g, "");
@@ -1361,7 +1434,8 @@ function calculate_all_j(brs) {
       parseFloat(pbbkb) +
       parseFloat(pphfinal) -
       parseFloat(pn_22) -
-      parseFloat(pn);
+      parseFloat(pn) -
+      parseFloat(pn_21);
   } else {
     total =
       parseFloat(sb_tot) -
@@ -1370,7 +1444,8 @@ function calculate_all_j(brs) {
       parseFloat(pbbkb) -
       parseFloat(pn_22) -
       parseFloat(pphfinal) -
-      parseFloat(pn);
+      parseFloat(pn) -
+      parseFloat(pn_21);
   }
 
   document.getElementById("grand_total_" + brs).innerHTML =
@@ -4052,7 +4127,7 @@ function loadmaterialso() {
               con.responseText;
           }
           calculate(1, 1, 1);
-          leftFixedTable(6);
+          bekukanKolomKiri();
         }
       } else {
         busy_off();
