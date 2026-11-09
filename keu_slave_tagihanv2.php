@@ -3859,7 +3859,7 @@ switch ($proses) {
 					@$dtnilaibaspk[$bar['notransaksi']] += $bar['jumlahrealisasi'];
 
 					# Hitung ada berapa termin
-					$datatermin[$bar['notransaksi']] += count($bar['keterangan']);
+					@$datatermin[$bar['notransaksi']] += ($bar['keterangan'] === null ? 0 : 1);
 				}
 
 				#= invoice
