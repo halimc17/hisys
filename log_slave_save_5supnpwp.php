@@ -34,6 +34,11 @@ $jnsapp = "DS";
 switch ($method) {
 
   case 'insert':
+    #= isian wajib (bertanda * merah di form): diulang di server, sebutkan satu per satu yang belum diisi
+    $kurangWajib = array();
+    if(trim($npwp)===''){ $kurangWajib[] = $_SESSION['lang']['npwp']; }
+    if(trim($jalan)===''){ $kurangWajib[] = $_SESSION['lang']['jalan']; }
+    if(!empty($kurangWajib)){ exit("WARNING: Data wajib belum diisi: ".implode(', ',$kurangWajib)."."); }
     // exit ('error:a');
     $input = "insert into " . $dbname . ".log_5supnpwp (supplierid,npwp,nama_npwp,jalan,blok,nomor,rt,rw,keluarahan,kecamatan,kabupaten,propinsi,kodepos,telp_no,updateby,active,statusyangdiinginkan,statuspersetujuan)
             values ('" . $supplierid . "','" . $npwp . "','" . $namanpwp . "','" . $jalan . "','" . $blok . "','" . $nomor . "','" . $rt . "','" . $rw . "','" . $kelurahan . "','" . $kecamatan . "','" . $kabupaten . "','" . $propinsi . "','" . $kodepos . "','" . $telp_no . "','" . $_SESSION['standard']['userid'] . "','0','" . $aktif . "','0')";
@@ -61,6 +66,11 @@ switch ($method) {
     break;
 
   case 'update':
+    #= isian wajib (bertanda * merah di form): diulang di server, sebutkan satu per satu yang belum diisi
+    $kurangWajib = array();
+    if(trim($npwp)===''){ $kurangWajib[] = $_SESSION['lang']['npwp']; }
+    if(trim($jalan)===''){ $kurangWajib[] = $_SESSION['lang']['jalan']; }
+    if(!empty($kurangWajib)){ exit("WARNING: Data wajib belum diisi: ".implode(', ',$kurangWajib)."."); }
 
     $strx = selectQuery($dbname, "log_5supnpwp", "*", "supplierid='" . $supplierid . "'  and npwp='" . $npwp . "'");
     $resx = fetchData($strx);

@@ -476,16 +476,16 @@ function loadData1(num, xxx) {
   caristatusup = trim(document.getElementById("caristatusup").value);
   caribadan = trim(document.getElementById("caribadan").value);
   if (txtsearch != "") {
-    param += "&txtsearch=" + txtsearch;
+    param += "&txtsearch=" + encodeURIComponent(txtsearch);
   }
   if (txtNoakun != "") {
-    param += "&txtNoakun=" + txtNoakun;
+    param += "&txtNoakun=" + encodeURIComponent(txtNoakun);
   }
   if (caristatusup != "") {
-    param += "&caristatusup=" + caristatusup;
+    param += "&caristatusup=" + encodeURIComponent(caristatusup);
   }
   if (caribadan != "") {
-    param += "&caribadan=" + caribadan;
+    param += "&caribadan=" + encodeURIComponent(caribadan);
   }
   tujuan = "log_slave_save_supplier.php";
   post_response_text(tujuan, param, respog);
@@ -514,10 +514,18 @@ function loadDatacalon(num) {
   txtsearchcalon = trim(document.getElementById("txtsearchcalon").value);
   txtNoakuncalon = trim(document.getElementById("txtNoakuncalon").value);
   if (txtsearchcalon != "") {
-    param += "&txtsearchcalon=" + txtsearchcalon;
+    param += "&txtsearchcalon=" + encodeURIComponent(txtsearchcalon);
   }
   if (txtNoakuncalon != "") {
-    param += "&txtNoakuncalon=" + txtNoakuncalon;
+    param += "&txtNoakuncalon=" + encodeURIComponent(txtNoakuncalon);
+  }
+  var caristatuscalon = trim(document.getElementById("caristatuscalon").value);
+  var caribadancalon = trim(document.getElementById("caribadancalon").value);
+  if (caristatuscalon != "") {
+    param += "&caristatuscalon=" + encodeURIComponent(caristatuscalon);
+  }
+  if (caribadancalon != "") {
+    param += "&caribadancalon=" + encodeURIComponent(caribadancalon);
   }
   tujuan = "log_slave_save_supplier.php";
   post_response_text(tujuan, param, respog);
@@ -549,6 +557,68 @@ function getPage(pg) {
   // cariBast(pg-1);
 }
 //=========SIMPAN SUPPLIER===============//
+// ===== validasi isian wajib form Supplier =====
+// nama kolom diambil dari label di form (supaya ikut bahasa yang dipakai), tanda * dibuang
+function labelWajibSupplier(id) {
+  var el = document.getElementById(id);
+  var teks = id;
+  if (el) {
+    if (el.tagName == "TR") {
+      teks = el.cells[0].innerText;
+    } else {
+      // isian ada di sel sesudah sel ":"; label ada di sel sebelum ":" (satu baris bisa berisi dua pasang label-isian)
+      var td = el.closest("td");
+      var lab = td ? td.previousElementSibling : null;
+      if (lab && lab.innerText.trim() == ":") {
+        lab = lab.previousElementSibling;
+      }
+      if (lab) {
+        teks = lab.innerText;
+      }
+    }
+  }
+  return teks.replace(/\*/g, "").replace(/\s+/g, " ").trim();
+}
+// periksa daftar [id, kosong?]; kolom kosong diberi garis merah dan disebutkan dalam satu pesan. true = semua terisi
+function periksaWajibSupplier(daftar) {
+  var kurang = [];
+  for (var w = 0; w < daftar.length; w++) {
+    tandaiWajibSupplier(daftar[w][0], daftar[w][1]);
+    if (daftar[w][1]) {
+      kurang.push(labelWajibSupplier(daftar[w][0]));
+    }
+  }
+  if (kurang.length > 0) {
+    pesanWajibSupplier(kurang);
+    return false;
+  }
+  return true;
+}
+// kolom yang belum diisi diberi garis merah; dihapus lagi saat sudah terisi
+function tandaiWajibSupplier(id, kosong) {
+  var el = document.getElementById(id);
+  if (!el) {
+    return;
+  }
+  var target = el;
+  if (el.tagName == "SELECT" && window.jQuery && window.jQuery(el).hasClass("select2-hidden-accessible")) {
+    target = window.jQuery(el).next(".select2-container").find(".select2-selection")[0] || el;
+  } else if (el.tagName == "TR") {
+    target = el.cells[el.cells.length - 1];
+  }
+  target.style.outline = kosong ? "1px solid #d9362a" : "";
+  if (el.tagName != "SELECT" && el.tagName != "TR") {
+    target.style.borderColor = kosong ? "#d9362a" : "";
+  }
+}
+function pesanWajibSupplier(daftar) {
+  var judul = "Data wajib belum lengkap. Mohon isi:";
+  if (typeof alertify !== "undefined" && alertify.alert) {
+    alertify.alert("Informasi", judul + "<br><br>- " + daftar.join("<br>- "));
+  } else {
+    alert(judul + "\n\n- " + daftar.join("\n- "));
+  }
+}
 function saveSupplier() {
   // telp=document.getElementById('telp').value;
   // kelompok=document.getElementById('kdkelompok').options[document.getElementById('kdkelompok').selectedIndex].value;
@@ -577,8 +647,35 @@ function saveSupplier() {
   // cperson=document.getElementById('cperson').value;
   // kota=document.getElementById('kota').value;
   // plafon=remove_comma(document.getElementById('plafon'));
-  if (namasupplier == "" || statusup == "" || jenisusaha == "") {
-    alert("Field Was Empty");
+  // validasi isian wajib (yang bertanda * merah): sebutkan satu per satu yang belum diisi
+  var kurang = [];
+  var daftarWajib = [
+    ["namasupplier", trim(namasupplier) == ""],
+    ["badan", badan == ""],
+    ["pemilik", trim(pemilik) == ""],
+    ["statusup", statusup == ""],
+    ["jenisusaharow", jenisusaha == ""],
+  ];
+  for (var w = 0; w < daftarWajib.length; w++) {
+    tandaiWajibSupplier(daftarWajib[w][0], daftarWajib[w][1]);
+    if (daftarWajib[w][1]) {
+      kurang.push(labelWajibSupplier(daftarWajib[w][0]));
+    }
+  }
+  var barisApproval = document.getElementById("trapproval");
+  if (barisApproval) {
+    for (var ap = 1; ap <= barisApproval.rows.length; ap++) {
+      var selAp = document.getElementById("persetujuan" + ap);
+      if (selAp && selAp.options.length > 0 && selAp.options[selAp.selectedIndex].value == "") {
+        tandaiWajibSupplier("persetujuan" + ap, true);
+        kurang.push(labelWajibSupplier("persetujuan" + ap));
+      } else {
+        tandaiWajibSupplier("persetujuan" + ap, false);
+      }
+    }
+  }
+  if (kurang.length > 0) {
+    pesanWajibSupplier(kurang);
     return;
   }
   // if(statusup=='3' && email=='')
@@ -589,25 +686,25 @@ function saveSupplier() {
 
   param =
     "idsupplier=" +
-    idsupplier +
+    encodeURIComponent(idsupplier) +
     "&useremail=" +
-    email +
+    encodeURIComponent(email) +
     "&namasupplier=" +
-    namasupplier +
+    encodeURIComponent(namasupplier) +
     "&badan=" +
-    badan +
+    encodeURIComponent(badan) +
     "&pemilik=" +
-    pemilik +
+    encodeURIComponent(pemilik) +
     "&direktur=" +
-    direktur +
+    encodeURIComponent(direktur) +
     "&pj=" +
-    pj +
+    encodeURIComponent(pj) +
     "&jabatan=" +
-    jabatan +
+    encodeURIComponent(jabatan) +
     "&statusup=" +
-    statusup +
+    encodeURIComponent(statusup) +
     "&jenisusaha=" +
-    jenisusaha +
+    encodeURIComponent(jenisusaha) +
     "&method=" +
     method;
   // param+='&npwp='+npwp+'&cperson='+cperson+'&kota='+kota;
@@ -633,7 +730,7 @@ function saveSupplier() {
       document.getElementById("persetujuan" + i).selectedIndex
     ].value;
     if (persetujuan == "") {
-      alert("Please compelete Approval");
+      pesanWajibSupplier([labelWajibSupplier("persetujuan" + i)]);
       return;
     }
     strUrl += "&persetujuan[" + i + "]=" + persetujuan;
@@ -677,8 +774,17 @@ function saveAkun(idsupplier_detail) {
   if (statusbank.checked == true) statusbank = 1;
   else statusbank = 0;
   method = document.getElementById("methodAkun").value;
-  if (id_supplier == "" || rekening == "" || bank == "" || atasnama == "") {
-    alert("Field Was Empty");
+  if (
+    !periksaWajibSupplier([
+      ["bank", bank == ""],
+      ["rekening", trim(rekening) == ""],
+      ["atasnama", trim(atasnama) == ""],
+    ])
+  ) {
+    return;
+  }
+  if (id_supplier == "") {
+    alert("ID supplier tidak terbaca. Tutup jendela rincian lalu buka kembali.");
     return;
   }
   param =
@@ -721,7 +827,7 @@ function saveAkun(idsupplier_detail) {
       document.getElementById("persetujuan" + i).selectedIndex
     ].value;
     if (persetujuan == "") {
-      alert("Please compelete Approval");
+      pesanWajibSupplier([labelWajibSupplier("persetujuan" + i)]);
       return;
     }
     strUrl += "&persetujuan[" + i + "]=" + persetujuan;
@@ -869,8 +975,16 @@ function simpan(idsupplier_detail) {
   if (aktif.checked == true) aktif = 1;
   else aktif = 0;
   method = document.getElementById("methoddt").value;
-  if (supplierid == "" || npwp == "" || jalan == "") {
-    alert("Field Was Empty");
+  if (
+    !periksaWajibSupplier([
+      ["npwp", trim(npwp) == ""],
+      ["jalan", trim(jalan) == ""],
+    ])
+  ) {
+    return;
+  }
+  if (supplierid == "") {
+    alert("ID supplier tidak terbaca. Tutup jendela rincian lalu buka kembali.");
     return;
   }
   param =
@@ -925,7 +1039,7 @@ function simpan(idsupplier_detail) {
       document.getElementById("persetujuan" + i).selectedIndex
     ].value;
     if (persetujuan == "") {
-      alert("Please compelete Approval");
+      pesanWajibSupplier([labelWajibSupplier("persetujuan" + i)]);
       return;
     }
     strUrl += "&persetujuan[" + i + "]=" + persetujuan;
@@ -1071,17 +1185,19 @@ function simpanAlamat(idsupplier_detail) {
   else statusalamat = 0;
   method = document.getElementById("methodAlamat").value;
   if (
-    supplierid2 == "" ||
-    alamatsup == "" ||
-    kota1 == "" ||
-    telp == "" ||
-    cperson == "" ||
-    provinsi1 == "" ||
-    negara1 == ""
+    !periksaWajibSupplier([
+      ["alamatsup", trim(alamatsup) == ""],
+      ["kota1", trim(kota1) == ""],
+      ["cperson", trim(cperson) == ""],
+      ["telp", trim(telp) == ""],
+      ["provinsi1", trim(provinsi1) == ""],
+      ["negara1", trim(negara1) == ""],
+    ])
   ) {
-    alert(
-      "Lengkapi form alamat, kota, telp, kontak person, provinsi dan negara"
-    );
+    return;
+  }
+  if (supplierid2 == "") {
+    alert("ID supplier tidak terbaca. Tutup jendela rincian lalu buka kembali.");
     return;
   }
   param =
@@ -1138,7 +1254,7 @@ function simpanAlamat(idsupplier_detail) {
       document.getElementById("persetujuan" + i).selectedIndex
     ].value;
     if (persetujuan == "") {
-      alert("Please compelete Approval");
+      pesanWajibSupplier([labelWajibSupplier("persetujuan" + i)]);
       return;
     }
     strUrl += "&persetujuan[" + i + "]=" + persetujuan;
@@ -1179,8 +1295,21 @@ function simpanpph(idsupplier_detail) {
   else statuspph = 0;
 
   method = document.getElementById("methodpph").value;
-  if (supp_id == "" || pph == "" || tarif == "") {
-    alert("Field Was Empty");
+  if (
+    !periksaWajibSupplier([
+      ["pph", pph == ""],
+      ["tarif", trim(tarif) == ""],
+    ])
+  ) {
+    return;
+  }
+  if (isNaN(parseFloat(tarif)) || parseFloat(tarif) < 0 || parseFloat(tarif) > 100) {
+    tandaiWajibSupplier("tarif", true);
+    alert("Tarif pajak harus berupa angka 0 sampai 100 (persen).");
+    return;
+  }
+  if (supp_id == "") {
+    alert("ID supplier tidak terbaca. Tutup jendela rincian lalu buka kembali.");
     return;
   }
   param =
@@ -1213,7 +1342,7 @@ function simpanpph(idsupplier_detail) {
       document.getElementById("persetujuan" + i).selectedIndex
     ].value;
     if (persetujuan == "") {
-      alert("Please compelete Approval");
+      pesanWajibSupplier([labelWajibSupplier("persetujuan" + i)]);
       return;
     }
     strUrl += "&persetujuan[" + i + "]=" + persetujuan;
@@ -1276,12 +1405,13 @@ function cancel() {
   document.getElementById("namasupplier").value = "";
   document.getElementById("statusup").checked = false;
   // document.getElementById('email').value='';
-  document.getElementById("badan").value = "";
+  setSelect2("badan", "");
   document.getElementById("pemilik").value = "";
   document.getElementById("direktur").value = "";
   document.getElementById("pj").value = "";
   document.getElementById("jabatan").value = "";
-  document.getElementById("statusup").value = "";
+  hapusOpsiStatusSementara();
+  setSelect2("statusup", "1"); // input baru: default AKTIF
   document.getElementById("useremail").value = "";
   document.getElementById("trpemilik").value = "";
   document.getElementById("jenisusaha").disabled = false;
@@ -1294,10 +1424,30 @@ function cancel() {
   // document.getElementById('method').value='insert';
   // document.getElementById('supplierid').disabled=false;
 }
+//==========TARIKAN EXCEL / PDF (mengikuti filter di tab yang sedang dibuka)==================//
+function getFilterParamSupplier(tipe) {
+  var akhir = tipe == "calon" ? "calon" : "";
+  var p = "tipe=" + tipe;
+  p += "&cNoakun=" + encodeURIComponent(trim(document.getElementById("txtNoakun" + (akhir ? "calon" : "")).value));
+  p += "&cNama=" + encodeURIComponent(trim(document.getElementById(akhir ? "txtsearchcalon" : "txtsearch").value));
+  p += "&cStatus=" + encodeURIComponent(document.getElementById(akhir ? "caristatuscalon" : "caristatusup").value);
+  p += "&cBadan=" + encodeURIComponent(document.getElementById(akhir ? "caribadancalon" : "caribadan").value);
+  return p;
+}
+function tarikSupplier(tipe, format) {
+  var judul = format == "pdf" ? "Report PDF" : "Report Ms.Excel";
+  var tujuan = "log_slave_save_supplier.php?method=" + (format == "pdf" ? "pdflist" : "excellist") + "&" + getFilterParamSupplier(tipe);
+  alertify
+    .popup(judul, "<iframe frameborder=0 style='width:100%;height:100%;overflow:none' src='" + tujuan + "'></iframe>")
+    .set({ resizable: true, maximizable: true, overflow: false })
+    .resizeTo("80%", "70%");
+}
 //==========CANCEL / RESET FORM cari awal ==================//
 function cancelsearch() {
   document.getElementById("txtNoakun").value = "";
   document.getElementById("txtsearch").value = "";
+  setSelect2("caristatusup", "");
+  setSelect2("caribadan", "");
   // document.getElementById('statusup').checked=false;
   // document.getElementById('alamat').value='';
   // document.getElementById('aktif').checked=false;
@@ -1308,6 +1458,8 @@ function cancelsearch() {
 function cancelsearchcalon() {
   document.getElementById("txtNoakuncalon").value = "";
   document.getElementById("txtsearchcalon").value = "";
+  setSelect2("caristatuscalon", "");
+  setSelect2("caribadancalon", "");
   loadDatacalon(0);
 }
 //==========CANCEL / RESET FORM REKENING BANK ==================//
@@ -1316,13 +1468,16 @@ function cancelAkun() {
   // document.getElementById('id_supplier').value='';
   document.getElementById("rekening").value = "";
   document.getElementById("rekening").disabled = false;
-  document.getElementById("bank").value = "";
+  setSelect2("bank", "");
   document.getElementById("bank").disabled = false;
+  tandaiWajibSupplier("bank", false);
+  tandaiWajibSupplier("rekening", false);
+  tandaiWajibSupplier("atasnama", false);
   document.getElementById("atasnama").value = "";
   document.getElementById("cabang").value = "";
   document.getElementById("kota").value = "";
   document.getElementById("negara").value = "";
-  document.getElementById("matauang").value = "";
+  setSelect2("matauang", "");
   if (document.getElementById("def").checked == true) {
     document.getElementById("def").checked = false;
   }
@@ -1340,6 +1495,8 @@ function cancelTab() {
   document.getElementById("npwp").value = "";
   document.getElementById("namanpwp").value = "";
   document.getElementById("jalan").value = "";
+  tandaiWajibSupplier("npwp", false);
+  tandaiWajibSupplier("jalan", false);
   document.getElementById("blok").value = "";
   document.getElementById("nomor").value = "";
   document.getElementById("rt").value = "";
@@ -1396,13 +1553,18 @@ function cancelAlamat() {
   document.getElementById("statusalamat").checked = false;
   document.getElementById("methodAlamat").value = "insert";
   document.getElementById("supplierid2").disabled = false;
+  ["alamatsup", "kota1", "cperson", "telp", "provinsi1", "negara1"].forEach(function (id) {
+    tandaiWajibSupplier(id, false);
+  });
   detaildt($frm[4]);
 }
 //==========CANCEL / RESET FORM PPH ==================//
 function cancelpph() {
   document.getElementById("supp_id").value = "";
-  document.getElementById("pph").value = "";
+  setSelect2("pph", "");
   document.getElementById("tarif").value = "";
+  tandaiWajibSupplier("pph", false);
+  tandaiWajibSupplier("tarif", false);
   document.getElementById("pph").disabled = false;
   document.getElementById("methodpph").value = "insert";
   document.getElementById("supp_id").disabled = false;
@@ -1425,12 +1587,13 @@ function editSupplier2(
   document.getElementById("idsupplier").value = idsupplier;
   document.getElementById("idsupplier").disabled = true;
   document.getElementById("namasupplier").value = namasupplier;
-  document.getElementById("badan").value = badan;
+  setSelect2("badan", badan);
   document.getElementById("pemilik").value = pemilik;
   document.getElementById("direktur").value = direktur;
   document.getElementById("pj").value = pj;
   document.getElementById("jabatan").value = jabatan;
-  document.getElementById("statusup").value = statusup;
+  siapkanOpsiStatus(statusup);
+  setSelect2("statusup", statusup);
   document.getElementById("useremail").value = email;
   // if(statusup=='1')
   //    document.getElementById('statusup').checked=true;
@@ -1461,7 +1624,7 @@ function editAkun(
 ) {
   document.getElementById("id_supplier").value = id_supplier;
   document.getElementById("id_supplier").disabled = true;
-  document.getElementById("bank").value = bank;
+  setSelect2("bank", bank);
   document.getElementById("bank").disabled = true;
   document.getElementById("rekening").value = rekening;
   document.getElementById("rekening").disabled = true;
@@ -1470,7 +1633,7 @@ function editAkun(
   document.getElementById("cabang").value = cabang;
   document.getElementById("kota").value = kota;
   document.getElementById("negara").value = negara;
-  document.getElementById("matauang").value = matauang;
+  setSelect2("matauang", matauang);
   if (def == "1") document.getElementById("def").checked = true;
   else document.getElementById("def").checked = false;
   if (statusbank == "1") document.getElementById("statusbank").checked = true;
@@ -1584,7 +1747,7 @@ function editAlamat(
 function editpph(supp_id, pph, tarif) {
   document.getElementById("supp_id").value = supp_id;
   document.getElementById("supp_id").disabled = true;
-  document.getElementById("pph").value = pph;
+  setSelect2("pph", pph);
   document.getElementById("pph").disabled = true;
   document.getElementById("tarif").value = tarif;
   // document.getElementById('kode').disabled=true;
@@ -1713,6 +1876,10 @@ function detaildt(title, idsupplier_detail, namasupplier) {
           alert(con.responseText);
         } else {
           document.getElementById("containerData").innerHTML = con.responseText;
+          // dropdown di jendela rincian memakai select2 (jendela dibuat dinamis, jadi dipasang di sini; pakai #dynamic4 karena sebagian isi tab bisa berada di luar #containerData)
+          if (window.jQuery && window.jQuery.fn.select2) {
+            window.jQuery("#dynamic4 select.select2").select2({ dropdownAutoWidth: true });
+          }
           loadDataAkun(idsupplier_detail); //panggil fungsi load data rek bank
         }
       } else {
@@ -1887,22 +2054,37 @@ function saveAkunSupplier(e) {
     }
   }
 }
-function sendUrl(idname) {
-  var supplierid = idname;
-  var tujuan = "log_slave_save_supplier.php";
-  var param = "method=kirimemail&idsupplier=" + supplierid;
-  post_response_text(tujuan, param, respog);
-  function respog() {
-    if (con.readyState == 4) {
-      if (con.status == 200) {
-        busy_off();
-        //var data = JSON.parse(con.responseText);
-        console.log(con.responseText);
-      } else {
-        busy_off();
-        error_catch(con.status);
-      }
+// mengisi nilai dropdown select2 (nilai di select diubah, lalu tampilan select2 disegarkan)
+// Edit data yang statusnya tidak ada di pilihan form (mis. BELUM DISETUJUI): tampilkan sementara agar tidak kosong
+function siapkanOpsiStatus(nilai) {
+  var el = document.getElementById("statusup");
+  if (!el || nilai === "" || nilai === null) return;
+  for (var i = 0; i < el.options.length; i++) {
+    if (el.options[i].value == nilai) return;
+  }
+  var teks = nilai;
+  var cari = document.getElementById("caristatusup");
+  if (cari) {
+    for (var k = 0; k < cari.options.length; k++) {
+      if (cari.options[k].value == nilai) teks = cari.options[k].text;
     }
+  }
+  var opt = new Option(teks, nilai);
+  opt.setAttribute("data-sementara", "1");
+  el.appendChild(opt);
+}
+function hapusOpsiStatusSementara() {
+  var el = document.getElementById("statusup");
+  if (!el) return;
+  for (var i = el.options.length - 1; i >= 0; i--) {
+    if (el.options[i].getAttribute("data-sementara")) el.remove(i);
+  }
+}
+function setSelect2(id, nilai) {
+  var el = document.getElementById(id);
+  el.value = nilai;
+  if (window.jQuery) {
+    window.jQuery(el).trigger("change");
   }
 }
 //-- multiple select package

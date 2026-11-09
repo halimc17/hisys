@@ -24,6 +24,12 @@ $jnsapp = "DS";
 switch ($method) {
 
     case 'insert':
+    #= isian wajib (bertanda * merah di form): diulang di server, sebutkan satu per satu yang belum diisi
+    $kurangWajib = array();
+    if(trim($pph)===''){ $kurangWajib[] = $_SESSION['lang']['pajak']; }
+    if(trim($tarif)===''){ $kurangWajib[] = $_SESSION['lang']['tarif']; }
+    if(!empty($kurangWajib)){ exit("WARNING: Data wajib belum diisi: ".implode(', ',$kurangWajib)."."); }
+    if(!is_numeric($tarif) || $tarif < 0 || $tarif > 100){ exit("WARNING: ".$_SESSION['lang']['tarif']." pajak harus berupa angka 0 sampai 100 (persen)."); }
     // exit ('error:a');
         $input = "insert into " . $dbname . ".log_5pphsup (supplierid,noakun,tarif,createdby,status,statusyangdiinginkan,statuspersetujuan)
             values ('" . $supp_id . "','" . $pph . "','" . $tarif . "','" . $_SESSION['standard']['userid'] . "','0','".$status."','0')";
@@ -58,6 +64,12 @@ switch ($method) {
         break;
 
     case 'update':
+    #= isian wajib (bertanda * merah di form): diulang di server, sebutkan satu per satu yang belum diisi
+    $kurangWajib = array();
+    if(trim($pph)===''){ $kurangWajib[] = $_SESSION['lang']['pajak']; }
+    if(trim($tarif)===''){ $kurangWajib[] = $_SESSION['lang']['tarif']; }
+    if(!empty($kurangWajib)){ exit("WARNING: Data wajib belum diisi: ".implode(', ',$kurangWajib)."."); }
+    if(!is_numeric($tarif) || $tarif < 0 || $tarif > 100){ exit("WARNING: ".$_SESSION['lang']['tarif']." pajak harus berupa angka 0 sampai 100 (persen)."); }
           $strx = selectQuery($dbname,"log_5pphsup","*","noakun='" . $pph . "' and supplierid='".$supp_id."'");
           $resx = fetchData($strx);
           $oldx['supplierid'] = $resx[0]['supplierid'];

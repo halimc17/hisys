@@ -34,6 +34,15 @@ $jnsapp = "DS";
 switch ($method) {
 
     case 'insert':
+    #= isian wajib (bertanda * merah di form): diulang di server, sebutkan satu per satu yang belum diisi
+    $kurangWajib = array();
+    if(trim($alamatsup)===''){ $kurangWajib[] = $_SESSION['lang']['alamat']; }
+    if(trim($kota1)===''){ $kurangWajib[] = $_SESSION['lang']['kota']; }
+    if(trim($cperson)===''){ $kurangWajib[] = $_SESSION['lang']['cperson']; }
+    if(trim($telp)===''){ $kurangWajib[] = $_SESSION['lang']['telp']; }
+    if(trim($provinsi1)===''){ $kurangWajib[] = $_SESSION['lang']['provinsi']; }
+    if(trim($negara1)===''){ $kurangWajib[] = $_SESSION['lang']['negara']; }
+    if(!empty($kurangWajib)){ exit("WARNING: Data wajib belum diisi: ".implode(', ',$kurangWajib)."."); }
     // exit ('warning:gagal');
         $input = "insert into " . $dbname . ".log_5supalamat (supplierid,alamat,kota,telepon,extm,teleponlain,kontakperson,jabatan,fax,email_koresponden,email_konfirmasi,provinsi,negara,kodepos,updateby,status,statusyangdiinginkan,statuspersetujuan)
             values ('" . $supplierid2 . "','" . $alamatsup . "','" . $kota1 . "','" . $telp . "','" . $extensi . "','" . $nohp . "','" . $cperson . "','" . $jabatan1 . "','" . $fax . "','" . $emailkor . "','" . $emailkon . "','" . $provinsi1 . "','" . $negara1 . "','" . $kodepos1 . "','" . $_SESSION['standard']['userid'] . "','0','" . $statusalamat . "','0')";
@@ -66,6 +75,15 @@ switch ($method) {
         break;
 
     case 'update':
+    #= isian wajib (bertanda * merah di form): diulang di server, sebutkan satu per satu yang belum diisi
+    $kurangWajib = array();
+    if(trim($alamatsup)===''){ $kurangWajib[] = $_SESSION['lang']['alamat']; }
+    if(trim($kota1)===''){ $kurangWajib[] = $_SESSION['lang']['kota']; }
+    if(trim($cperson)===''){ $kurangWajib[] = $_SESSION['lang']['cperson']; }
+    if(trim($telp)===''){ $kurangWajib[] = $_SESSION['lang']['telp']; }
+    if(trim($provinsi1)===''){ $kurangWajib[] = $_SESSION['lang']['provinsi']; }
+    if(trim($negara1)===''){ $kurangWajib[] = $_SESSION['lang']['negara']; }
+    if(!empty($kurangWajib)){ exit("WARNING: Data wajib belum diisi: ".implode(', ',$kurangWajib)."."); }
           $strx = selectQuery($dbname,"log_5supalamat","*","id_alamat='" . $idalamat . "' and supplierid='".$supplierid2."'");
           $resx = fetchData($strx);
           $oldx['supplierid'] = $resx[0]['supplierid'];

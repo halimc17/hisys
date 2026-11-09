@@ -5,6 +5,8 @@ require_once('lib/nangkoelib.php');
 require_once('lib/zLib.php');
 include_once('lib/rTable.php');
 include_once('lib/paging.php');
+include_once('lib/HtmlExcel.php');
+require_once('lib/fpdf.php');
 
 $kelompok = checkPostGet('kelompok','');
 $idsupplier = checkPostGet('idsupplier','');
@@ -24,6 +26,8 @@ $caristatusup = checkPostGet('caristatusup', '');
 $caribadan = checkPostGet('caribadan', '');
 $txtNoakun = checkPostGet('txtNoakun', '');
 $txtNoakuncalon = checkPostGet('txtNoakuncalon', '');
+$caristatuscalon = checkPostGet('caristatuscalon', '');
+$caribadancalon = checkPostGet('caribadancalon', '');
 $useremail = checkPostGet('useremail', '');
 $password = checkPostGet('password', '');
 $jenisview = checkPostGet('jenisview', '');
@@ -31,6 +35,15 @@ $strnama = array('0'=>'TIDAK AKTIF','1'=>'AKTIF','2'=>'BELUM SETUJU','3'=>'REGIS
 $strnamaper = array ("0"=>"Proses persetujuan","1"=>"Disetujui","2"=>"Ditolak");
 $strnamaperx = array ("0"=>"Proses persetujuan","1"=>"Disetujui","3"=>"Ditolak");
 $jnsapp = "DS";
+#= versi aman (di-escape) untuk dirangkai ke query simpan/ubah; nilai asli tetap dipakai untuk perbandingan nama
+$idsupplierSql = addslashes($idsupplier);
+$namasupplierSql = addslashes($namasupplier);
+$statusupSql = addslashes($statusup);
+$badanSql = addslashes($badan);
+$pemilikSql = addslashes($pemilik);
+$direkturSql = addslashes($direktur);
+$pjSql = addslashes($pj);
+$jabatanSql = addslashes($jabatan);
 function site_url(){
   return sprintf(
     "%s://%s%s",isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] != 'off' ? 'https' : 'http',$_SERVER['SERVER_NAME'],''
@@ -124,6 +137,70 @@ function getformat_companyname($namasupplier,$badan){
   return $result;
 }
 
+#=== Data tarikan Excel/PDF Supplier (tab Assignment = AKTIF, tab Calon Supplier = selain AKTIF) ===
+#filter dibersihkan: teks di-escape, status hanya 0-4, badan usaha di-escape; tarikan dibatasi 3000 baris
+if (!function_exists('supTarikFilter')) {
+	function supTarikFilter()
+	{
+		$tipe = (checkPostGet('tipe', '') == 'calon') ? 'calon' : 'aktif';
+		$f = array('tipe' => $tipe);
+		$f['id'] = substr(trim(checkPostGet('cNoakun', '')), 0, 30);
+		$f['nama'] = substr(trim(checkPostGet('cNama', '')), 0, 60);
+		$st = trim(checkPostGet('cStatus', ''));
+		$f['status'] = (preg_match('/^[0-4]$/', $st) && !($tipe == 'calon' && $st == '1') && !($tipe == 'aktif' && $st != '1')) ? $st : '';
+		$f['badan'] = substr(trim(checkPostGet('cBadan', '')), 0, 30);
+		return $f;
+	}
+	function supTarikData(&$total)
+	{
+		global $dbname, $owlPDO;
+		$f = supTarikFilter();
+		$where = ($f['tipe'] == 'calon') ? "a.status in ('0','2','3','4')" : "a.status = '1'";
+		if ($f['id'] != '') { $where .= " and a.supplierid LIKE '%" . addslashes($f['id']) . "%'"; }
+		if ($f['nama'] != '') { $where .= " and a.namasupplier LIKE '%" . addslashes($f['nama']) . "%'"; }
+		if ($f['status'] != '') { $where .= " and a.status = '" . $f['status'] . "'"; }
+		if ($f['badan'] != '') { $where .= " and a.badanusaha = '" . addslashes($f['badan']) . "'"; }
+		$rt = $owlPDO->query("select count(*) from " . $dbname . ".log_5supplier a where " . $where);
+		$total = (int)$rt->fetchColumn();
+		$q = $owlPDO->query("select a.supplierid,a.namasupplier,a.badanusaha,a.namapemilik,a.namadirektur,a.namapenanggungjawab,a.jabatan,a.status,a.statuspersetujuan from " . $dbname . ".log_5supplier a where " . $where . " order by a.namasupplier asc limit 3000");
+		return $q->fetchAll(PDO::FETCH_ASSOC);
+	}
+	function supTarikJudul()
+	{
+		$f = supTarikFilter();
+		return ($f['tipe'] == 'calon') ? 'CALON SUPPLIER / KONTRAKTOR' : 'DATA SUPPLIER / KONTRAKTOR (AKTIF)';
+	}
+	function supTarikInfoFilter($total, $jumlah)
+	{
+		global $strnama;
+		$f = supTarikFilter();
+		$info = array();
+		$info[] = 'Cari ID: ' . ($f['id'] != '' ? $f['id'] : '-');
+		$info[] = 'Cari Nama: ' . ($f['nama'] != '' ? $f['nama'] : '-');
+		$info[] = 'Status: ' . ($f['status'] != '' ? $strnama[$f['status']] : 'Seluruhnya');
+		$info[] = 'Badan Usaha: ' . ($f['badan'] != '' ? $f['badan'] : 'Seluruhnya');
+		$txt = implode(' | ', $info) . ' | Jumlah data: ' . $total;
+		if ($total > $jumlah) { $txt .= ' (ditampilkan ' . $jumlah . ' data pertama, persempit filter untuk melihat sisanya)'; }
+		return $txt;
+	}
+	function supTarikTampil($v)
+	{
+		$v = trim((string)$v);
+		return ($v === '') ? '-' : $v;
+	}
+	function supTarikFit($pdf, $txt, $w, $f = 7)
+	{
+		$txt = utf8_decode($txt);
+		$pdf->SetFont('Arial', '', $f);
+		if ($pdf->GetStringWidth($txt) <= $w - 2) {
+			return $txt;
+		}
+		while (strlen($txt) > 1 && $pdf->GetStringWidth($txt . '...') > $w - 2) {
+			$txt = substr($txt, 0, -1);
+		}
+		return $txt . '...';
+	}
+}
 switch ($method) {
     case 'detailsupp':
     if($jenisview!='')
@@ -1018,7 +1095,17 @@ $frm[0].="
         case 'insert':
 		$textubah='';
 		$email = strtolower(trim($useremail));
-		$strSup =$owlPDO->query("select email from ".$dbname.".log_5supuser where email ='".$email."' and full_name='".$namasupplier."' ");
+		#= isian wajib (bertanda * merah di form): diulang di server, sebutkan satu per satu yang belum diisi
+		$kurangWajib = array();
+		if(trim($namasupplier)===''){ $kurangWajib[] = $_SESSION['lang']['namasupplier']; }
+		if(trim($badan)===''){ $kurangWajib[] = $_SESSION['lang']['badanusaha']; }
+		if(trim($pemilik)===''){ $kurangWajib[] = $_SESSION['lang']['nama']." ".$_SESSION['lang']['pemilik']; }
+		if(trim($statusup)===''){ $kurangWajib[] = $_SESSION['lang']['status']." ".$_SESSION['lang']['supplier']; }
+		if(trim($jenisusaha,", ")===''){ $kurangWajib[] = $_SESSION['lang']['jenisusaha']; }
+		if(!empty($kurangWajib)){
+			exit("WARNING: Data wajib belum diisi: ".implode(', ',$kurangWajib).".");
+		}
+		$strSup =$owlPDO->query("select email from ".$dbname.".log_5supuser where email ='".addslashes($email)."' and full_name='".$namasupplierSql."' ");
 		$results = $strSup->fetchAll(PDO::FETCH_ASSOC );
 		if(count($results) > 0){
 			exit("ERROR: NAMA DAN EMAIL SUDAH DIPAKAI");
@@ -1067,8 +1154,8 @@ $frm[0].="
         
         $input = "insert into " . $dbname . ".log_5supplier (supplierid,namasupplier,badanusaha,namapemilik,
 		namadirektur,namapenanggungjawab,jabatan,status,statuspersetujuan,statusyangdiinginkan,perubahan,createby)
-            values ('" . $idsupplier . "','" . $namasupplier . "','" . $badan . "','" . $pemilik . "',
-			'" . $direktur . "','" . $pj . "','" . $jabatan . "','0','0','".$statusup."',
+            values ('" . $idsupplier . "','" . $namasupplierSql . "','" . $badanSql . "','" . $pemilikSql . "',
+			'" . $direkturSql . "','" . $pjSql . "','" . $jabatanSql . "','0','0','".$statusupSql."',
 			'".$textubah."','".$_SESSION['standard']['userid']."')";
         // $input2 = "insert into " . $dbname . ".log_5supuser (supplierid,namasupplier,email,status)
         // values ('" . $idsupplier . "','" . $namasupplier . "','" . $email . "','" . $statusup . "')";
@@ -1076,10 +1163,17 @@ $frm[0].="
         try{
           $owlPDO->exec($input);
           
+          #= simpan jenis usaha (log_5supkelompok), sama seperti saat Edit; dulu pilihan ini terbuang saat Tambah
+          foreach(explode(',',$jenisusaha) as $tipeUsaha){
+            $tipeUsaha=trim($tipeUsaha);
+            if($tipeUsaha==''){ continue; }
+            $rKls=fetchData(selectQuery($dbname,"log_5klsupplier","noakun","tipe='".addslashes($tipeUsaha)."'"));
+            $owlPDO->exec("insert into ".$dbname.".log_5supkelompok (supplierid,tipe,updateby,noakun) values ('".$idsupplier."','".addslashes($tipeUsaha)."','".$_SESSION['standard']['userid']."','".addslashes($rKls[0]['noakun'])."')");
+          }
           $listpersetujuan=$_POST['persetujuan'];
           foreach($listpersetujuan as $key=>$val)
           {
-            $str="insert into ".$dbname.".approval (notransaksi,jenispersetujuan,level,karyawanid,status) values ('".$idsupplier."','".$jnsapp."','".$key."','".$listpersetujuan[$key]."','0')";
+            $str="insert into ".$dbname.".approval (notransaksi,jenispersetujuan,level,karyawanid,status) values ('".$idsupplier."','".$jnsapp."','".intval($key)."','".addslashes($listpersetujuan[$key])."','0')";
             try
             {
               $owlPDO->exec($str);
@@ -1092,7 +1186,7 @@ $frm[0].="
         
 
 			$log_5supuser = "insert into " . $dbname . ".log_5supuser (id_supplier,full_name,email,password,date_reg,isactive)
-            values ('" . $idsupplier . "','" . $namasupplier . "','" . $email . "',PASSWORD('" . $newpas . "'),'" . date("Y-m-d") . "','1')";
+            values ('" . $idsupplier . "','" . $namasupplierSql . "','" . addslashes($email) . "',PASSWORD('" . $newpas . "'),'" . date("Y-m-d") . "','1')";
 			try{
 				$owlPDO->exec($log_5supuser); 
 			}catch(PDOException $e){
@@ -1111,9 +1205,19 @@ $frm[0].="
 
         case 'update':
         $email = strtolower(trim($useremail));
+		#= isian wajib (bertanda * merah di form): diulang di server, sebutkan satu per satu yang belum diisi
+		$kurangWajib = array();
+		if(trim($namasupplier)===''){ $kurangWajib[] = $_SESSION['lang']['namasupplier']; }
+		if(trim($badan)===''){ $kurangWajib[] = $_SESSION['lang']['badanusaha']; }
+		if(trim($pemilik)===''){ $kurangWajib[] = $_SESSION['lang']['nama']." ".$_SESSION['lang']['pemilik']; }
+		if(trim($statusup)===''){ $kurangWajib[] = $_SESSION['lang']['status']." ".$_SESSION['lang']['supplier']; }
+		if(trim($jenisusaha,", ")===''){ $kurangWajib[] = $_SESSION['lang']['jenisusaha']; }
+		if(!empty($kurangWajib)){
+			exit("WARNING: Data wajib belum diisi: ".implode(', ',$kurangWajib).".");
+		}
 
 
-          $strx = selectQuery($dbname,"log_5supplier","*","supplierid='".$idsupplier."'");
+          $strx = selectQuery($dbname,"log_5supplier","*","supplierid='".$idsupplierSql."'");
           $resx = fetchData($strx);
           $oldx['supplierid'] = $resx[0]['supplierid'];
           $oldx['namasupplier'] = $resx[0]['namasupplier'];
@@ -1126,12 +1230,12 @@ $frm[0].="
           $perubahanx = $resx[0]['perubahan'];
 
 
-          $strx = selectQuery($dbname,"log_5supuser","*","id_supplier='".$idsupplier."'");
+          $strx = selectQuery($dbname,"log_5supuser","*","id_supplier='".$idsupplierSql."'");
           $resx = fetchData($strx);
           $oldx['full_name'] = $resx[0]['full_name'];
           $oldx['email'] = $resx[0]['email'];
 
-          $strx = selectQuery($dbname,"log_5supkelompok","*","supplierid='".$idsupplier."'");
+          $strx = selectQuery($dbname,"log_5supkelompok","*","supplierid='".$idsupplierSql."'");
           $resx = fetchData($strx);
           $oldx['jenisusaha1'] = $resx[0]['tipe'];
           $oldx['jenisusaha2'] = $resx[1]['tipe'];
@@ -1144,34 +1248,31 @@ $frm[0].="
         // $textubah=$idsupplier. "##" .$namasupplier . "##" . $badan . "##" . $pemilik . "##" . $direktur . "##" . $pj . "##" . $jabatan . "##" . $statusup . "##" . $email."##".$jenisusaha;
 
 
-            $input = "update " . $dbname . ".log_5supplier set namasupplier='".$namasupplier."',badanusaha='".$badan."',namapemilik='".$pemilik."',namadirektur='".$direktur."',namapenanggungjawab='".$pj."',jabatan='".$jabatan."',statusyangdiinginkan='".$statusup."',statuspersetujuan='0',status='0',perubahan='".$textubah."' where supplierid='" . $idsupplier . "'";
+            $input = "update " . $dbname . ".log_5supplier set namasupplier='".$namasupplierSql."',badanusaha='".$badanSql."',namapemilik='".$pemilikSql."',namadirektur='".$direkturSql."',namapenanggungjawab='".$pjSql."',jabatan='".$jabatanSql."',statusyangdiinginkan='".$statusupSql."',statuspersetujuan='0',status='0',perubahan='".addslashes($textubah)."' where supplierid='" . $idsupplierSql . "'";
             if($perubahanx!='')
             {
               $arrperub=explode('##', $perubahanx);
               if($arrperub[0]!='')
               {
-                 $input = "update " . $dbname . ".log_5supplier set namasupplier='".$namasupplier."',badanusaha='".$badan."',namapemilik='".$pemilik."',namadirektur='".$direktur."',namapenanggungjawab='".$pj."',jabatan='".$jabatan."',statusyangdiinginkan='".$statusup."',statuspersetujuan='0',status='0'  where supplierid='" . $idsupplier . "'";
+                 $input = "update " . $dbname . ".log_5supplier set namasupplier='".$namasupplierSql."',badanusaha='".$badanSql."',namapemilik='".$pemilikSql."',namadirektur='".$direkturSql."',namapenanggungjawab='".$pjSql."',jabatan='".$jabatanSql."',statusyangdiinginkan='".$statusupSql."',statuspersetujuan='0',status='0'  where supplierid='" . $idsupplierSql . "'";
               }
             }
             try{
 				  $owlPDO->exec($input); 
-          $strx="delete from ".$dbname.".approval where notransaksi='".$idsupplier."' and jenispersetujuan='".$jnsapp."'";
+          $strx="delete from ".$dbname.".approval where notransaksi='".$idsupplierSql."' and jenispersetujuan='".$jnsapp."'";
         try
         {
 
-          $strdelsup="delete from ".$dbname.".log_5supuser where id_supplier='".$idsupplier."'";
-          //$owlPDO->exec($strdelsup);
+          $emailSql = addslashes($email);
+          $adaAkun = fetchData("select id_supplier from ".$dbname.".log_5supuser where id_supplier='".$idsupplierSql."' limit 1");
           try{
-            $owlPDO->exec($strdelsup); 
-          }catch(PDOException $e){
-            echo " Gagal," . addslashes($e->getMessage());
-          }
-          $log_5supuser = "insert into " . $dbname . ".log_5supuser (id_supplier,full_name,email,password,date_reg,isactive)
-            values ('" . $idsupplier . "','" . $namasupplier . "','" . $email . "',PASSWORD('" . $newpas . "'),'" . date("Y-m-d") . "','1')";
-            //echo 'error : '.$log_5supuser;
-            //exit();
-          try{
-            $owlPDO->exec($log_5supuser); 
+            if(count($adaAkun)>0){
+              #= akun sudah ada: cukup ubah nama dan email, jangan dihapus lalu dibuat ulang (password dulu ikut tereset)
+              $owlPDO->exec("update ".$dbname.".log_5supuser set full_name='".$namasupplierSql."',email='".$emailSql."' where id_supplier='".$idsupplierSql."'");
+            }else{
+              $owlPDO->exec("insert into ".$dbname.".log_5supuser (id_supplier,full_name,email,password,date_reg,isactive)
+                values ('".$idsupplierSql."','".$namasupplierSql."','".$emailSql."',PASSWORD('".rand_passwd(4)."'),'".date("Y-m-d")."','1')");
+            }
           }catch(PDOException $e){
             echo " Gagal," . addslashes($e->getMessage());
           }
@@ -1179,7 +1280,7 @@ $frm[0].="
           $listpersetujuan=$_POST['persetujuan'];
           foreach($listpersetujuan as $key=>$val)
           {
-            $str="insert into ".$dbname.".approval (notransaksi,jenispersetujuan,level,karyawanid,status) values ('".$idsupplier."','".$jnsapp."','".$key."','".$listpersetujuan[$key]."','0')";
+            $str="insert into ".$dbname.".approval (notransaksi,jenispersetujuan,level,karyawanid,status) values ('".$idsupplierSql."','".$jnsapp."','".intval($key)."','".addslashes($listpersetujuan[$key])."','0')";
             try
             {
               $owlPDO->exec($str);
@@ -1198,18 +1299,18 @@ $frm[0].="
 				$datajenisusaha = array();
 				$val_jenisusaha = explode(',',$jenisusaha);
 				for($i=0; $i<count($val_jenisusaha); $i++){
-					$d['supplierid']	= $idsupplier;
-					$d['tipe'] 			= $val_jenisusaha[$i];
+					$d['supplierid']	= $idsupplierSql;
+					$d['tipe'] 			= addslashes(trim($val_jenisusaha[$i]));
 					$d['updateby']	    = $_SESSION['standard']['userid'];
-          $log_5klsupplier = selectQuery($dbname,"log_5klsupplier","noakun","tipe='".$val_jenisusaha[$i]."'");
+          $log_5klsupplier = selectQuery($dbname,"log_5klsupplier","noakun","tipe='".addslashes(trim($val_jenisusaha[$i]))."'");
           $resultlog_5klsupplier = fetchData($log_5klsupplier);
           $d['noakun'] = $resultlog_5klsupplier[0]['noakun'];
 					$datajenisusaha[]	= $d;
 				}
-				$log_5supkelompok = selectQuery($dbname,"log_5supkelompok","supplierid","supplierid='".$idsupplier."'");
+				$log_5supkelompok = selectQuery($dbname,"log_5supkelompok","supplierid","supplierid='".$idsupplierSql."'");
 				$result = fetchData($log_5supkelompok);
 				if(count($result) > 0){
-					$exec[] = deleteQuery($dbname,'log_5supkelompok',"supplierid = '".$idsupplier."'");
+					$exec[] = deleteQuery($dbname,'log_5supkelompok',"supplierid = '".$idsupplierSql."'");
 				}
 				for($i=0; $i<count($datajenisusaha); $i++){
 					$col = array();
@@ -1326,37 +1427,38 @@ case'loadData':
 	<thead>
 		<tr class=header>
 			<!--<th align=center>".$_SESSION['lang']['kodekelompok']."</th>-->
-			<th align=center><?php echo $_SESSION['lang']['nourut']; ?></th>
-			<th align=center><?php echo $_SESSION['lang']['kodesupplier']; ?></th>
+			<th align=center style='width:40px'><?php echo $_SESSION['lang']['nourut']; ?></th>
+			<th align=center style='width:105px'><?php echo $_SESSION['lang']['kodesupplier']; ?></th>
 			<th align=center><?php echo $_SESSION['lang']['namasupplier']; ?></th>
-			<th align=center><?php echo $_SESSION['lang']['badanusaha']; ?></th>
+			<th align=center style='width:95px'><?php echo $_SESSION['lang']['badanusaha']; ?></th>
 			<th align=center><?php echo $_SESSION['lang']['nama']." ".$_SESSION['lang']['pemilik']; ?></th>
 			<th align=center><?php echo $_SESSION['lang']['nama']." ".$_SESSION['lang']['direktur']; ?></th>
 			<th align=center><?php echo $_SESSION['lang']['namapj']; ?></th>
 			<th align=center><?php echo $_SESSION['lang']['jabatan']; ?></th>
-			<th align=center><?php echo $_SESSION['lang']['status'] . " " . $_SESSION['lang']['supplier']; ?></th>
-      <th align=center><?php echo $_SESSION['lang']['status'] . " " . $_SESSION['lang']['persetujuan']; ?></th>
-			<th  align='center' colspan='6'><?php echo $_SESSION['lang']['action']; ?></th>
+			<th align=center style='width:105px'><?php echo $_SESSION['lang']['status'] . " " . $_SESSION['lang']['supplier']; ?></th>
+      <th align=center style='width:125px'><?php echo $_SESSION['lang']['status'] . " " . $_SESSION['lang']['persetujuan']; ?></th>
+			<th align=center style='width:130px'><?php echo $_SESSION['lang']['action']; ?></th>
 		</tr>
 	</thead> 
 	<tbody> 
 	<?php 
 	//paging untuk membatyasi data perhalaman
+	$where='';
 	if($txt_search!='')
     {
-       $where=" and namasupplier LIKE  '%".$txt_search."%'";
+       $where.=" and namasupplier LIKE  '%".addslashes($txt_search)."%'";
     }
     if($txtNoakun!='')
     {
-       $where=" and supplierid LIKE  '%".$txtNoakun."%'";
+       $where.=" and supplierid LIKE  '%".addslashes($txtNoakun)."%'";
     }
 	if($caristatusup!='')
     {
-       $where=" and status LIKE  '%".$caristatusup."%'";
+       $where.=" and status = '".addslashes($caristatusup)."'";
     }
 	if($caribadan!='')
     {
-       $where=" and badanusaha LIKE  '%".$caribadan."%'";
+       $where.=" and badanusaha = '".addslashes($caribadan)."'";
     }
         $limit = 20;
         $page = 1;
@@ -1393,33 +1495,30 @@ case'loadData':
 			}
 			$sup = substr($sup, 0, -1);
             //$no+=1;
+            $tampil = function($v){ $v = trim((string)$v); return ($v === '') ? '-' : htmlspecialchars($v); };
+            $warnaStatus = array('0'=>'#6b7280','1'=>'#1a7f37','2'=>'#a15c00','3'=>'#a15c00','4'=>'#b42318');
+            $warnaPersetujuan = array('0'=>'#a15c00','1'=>'#1a7f37','2'=>'#b42318');
+            $gayaIkon = "style='margin:0 4px;vertical-align:middle'";
             echo"<tr class=rowcontent>";
             echo"<td align=center>" . $no . "</td>";
-			echo"<td align=left>" . $d['supplierid'] . "</td>";
-			echo"<td align=left>" . $d['namasupplier'] . "</td>";
-			echo"<td align=left>" . $d['badanusaha'] . "</td>";
-			echo"<td align=left>" . $d['namapemilik'] . "</td>";
-			echo"<td align=left>" . $d['namadirektur'] . "</td>";
-			echo"<td align=left>" . $d['namapenanggungjawab'] . "</td>";
-			echo"<td align=left>" . $d['jabatan'] . "</td>";
-			echo "<td align=center>" . $strnama[$d['status']]."</td>";
-      echo "<td align=center>" . $strnamaper[$d['statuspersetujuan']]."</td>";
-			echo"<td align=center>
-				<img src=images/application/application_edit.png class=zImgBtn  caption='Edit' onclick=\"editSupplier2('" . $d['supplierid'] . "','" . $d['namasupplier'] . "','" . $d['badanusaha'] . "','" . $d['namapemilik'] . "','" . $d['namadirektur'] . "','" . $d['namapenanggungjawab'] . "','" . $d['jabatan'] . "','" . $d['status'] . "','" . $d['email'] . "','" . $sup . "');\">
-			</td><td align=center>
-				<img src=images/addplus.png class=zImgBtn  title='Add Detail Supplier' onclick=\"detaildt('".$_SESSION['lang']['detail']."','" . $d['supplierid'] . "','" .$d['namasupplier']."','" .$d['status']."');\"></td>
-        <td align=center><img src=images/application/application_edit_lama.png class=zImgBtn  title='Detail Perubahan Supplier' onclick=\"detailsupp('".$_SESSION['lang']['detail']."','" . $d['supplierid'] . "');\">
-			</td><td align=center>
-        <img src=images/zoom.png class=zImgBtn  title='Add Detail Supplier' onclick=\"detailupload('List Upload','" . $d['supplierid'] . "','" .$d['namasupplier']."','" .$d['badanusaha']."');\">
-      </td>";
-
-    if ($d['status']==1) {
-      echo"<td align=center>
-        <img src=images/chat1.png class=zImgBtn  title='Portal Supplier' onclick=\"portaltender('".$d['supplierid']."','" .$d['namasupplier']."',event);\">
-      </td>";
-    }
-
-      echo"</tr>"; 
+            echo"<td align=left style='white-space:nowrap'>" . htmlspecialchars($d['supplierid']) . "</td>";
+            echo"<td align=left>" . $tampil($d['namasupplier']) . "</td>";
+            echo"<td align=left style='white-space:nowrap'>" . $tampil($d['badanusaha']) . "</td>";
+            echo"<td align=left>" . $tampil($d['namapemilik']) . "</td>";
+            echo"<td align=left>" . $tampil($d['namadirektur']) . "</td>";
+            echo"<td align=left>" . $tampil($d['namapenanggungjawab']) . "</td>";
+            echo"<td align=left>" . $tampil($d['jabatan']) . "</td>";
+            echo"<td align=center style='white-space:nowrap;font-weight:bold;color:" . (isset($warnaStatus[$d['status']]) ? $warnaStatus[$d['status']] : '#000') . "'>" . $strnama[$d['status']] . "</td>";
+            echo"<td align=center style='white-space:nowrap;color:" . (isset($warnaPersetujuan[$d['statuspersetujuan']]) ? $warnaPersetujuan[$d['statuspersetujuan']] : '#000') . "'>" . $strnamaper[$d['statuspersetujuan']] . "</td>";
+            #= ikon aksi dalam satu kolom: ubah, rincian, lihat perubahan (kaca pembesar), dokumen upload (panah unggah)
+            echo"<td align=center style='white-space:nowrap'>
+              <img src=images/application/application_edit.png class=zImgBtn $gayaIkon title='Edit' onclick=\"editSupplier2('" . $d['supplierid'] . "','" . $d['namasupplier'] . "','" . $d['badanusaha'] . "','" . $d['namapemilik'] . "','" . $d['namadirektur'] . "','" . $d['namapenanggungjawab'] . "','" . $d['jabatan'] . "','" . $d['status'] . "','" . $d['email'] . "','" . $sup . "');\">
+              <img src=images/addplus.png class=zImgBtn $gayaIkon title='Rincian: Rek. Bank, NPWP, Alamat, Pajak' onclick=\"detaildt('".$_SESSION['lang']['detail']."','" . $d['supplierid'] . "','" .$d['namasupplier']."','" .$d['status']."');\">
+              <img src=images/zoom.png class=zImgBtn $gayaIkon title='Detail Perubahan Supplier' onclick=\"detailsupp('".$_SESSION['lang']['detail']."','" . $d['supplierid'] . "');\">
+              <img src=images/upload-2-xxl.png class=zImgBtn $gayaIkon title='Dokumen / List Upload' onclick=\"detailupload('List Upload','" . $d['supplierid'] . "','" .$d['namasupplier']."','" .$d['badanusaha']."');\">";
+            // Ikon Portal Supplier (portaltender) disembunyikan: portal tender belum digunakan
+            // if ($d['status']==1) { echo "<img src=images/chat1.png ... onclick=portaltender(...)>"; }
+            echo"</td></tr>"; 
 		$no++;
         }
       echo"</tbody>";?>
@@ -1444,22 +1543,152 @@ case'loadData':
 	<?php
 break;
 
+    case 'excellist':
+        $rows = supTarikData($totalTarik);
+        $hdpt = setheadreport($_SESSION['empl']['kodeorganisasi'], $_SESSION['empl']['kodeorganisasi']);
+        $kolom = 10;
+        $stream = "<table>
+            <tr><td colspan=" . $kolom . "><b>" . htmlspecialchars($hdpt['nama']) . "</b></td></tr>
+            <tr><td colspan=" . $kolom . "><b>" . supTarikJudul() . "</b></td></tr>
+            <tr><td colspan=" . $kolom . ">" . htmlspecialchars(supTarikInfoFilter($totalTarik, count($rows))) . "</td></tr>
+            <tr><td colspan=" . $kolom . ">Ditarik oleh " . htmlspecialchars($_SESSION['empl']['name']) . " (" . htmlspecialchars($_SESSION['standard']['username']) . ") pada " . date('d-m-Y H:i:s') . "</td></tr>
+            <tr><td colspan=" . $kolom . ">&nbsp;</td></tr>
+            </table>";
+        $stream .= "<table class=sortable cellspacing=1 cellpadding=3 border=1>
+            <thead><tr>
+                <th align=center bgcolor=#CCCCCC>No</th>
+                <th align=center bgcolor=#CCCCCC>Kode Assignment</th>
+                <th align=center bgcolor=#CCCCCC>Nama Assignment</th>
+                <th align=center bgcolor=#CCCCCC>Badan Usaha</th>
+                <th align=center bgcolor=#CCCCCC>Nama Pemilik</th>
+                <th align=center bgcolor=#CCCCCC>Nama Direktur</th>
+                <th align=center bgcolor=#CCCCCC>Nama Penanggung Jawab</th>
+                <th align=center bgcolor=#CCCCCC>Jabatan</th>
+                <th align=center bgcolor=#CCCCCC>Status Assignment</th>
+                <th align=center bgcolor=#CCCCCC>Status Persetujuan</th>
+            </tr></thead><tbody>";
+        $no = 0;
+        foreach ($rows as $bar) {
+            $no++;
+            $warnaSt = ($bar['status'] == '1') ? " bgcolor=#D9F2D9" : (($bar['status'] == '0') ? " bgcolor=#E5E7EB" : " bgcolor=#FFF2CC");
+            $stream .= "<tr>
+                <td align=center>" . $no . "</td>
+                <td style='mso-number-format:\"\\@\"'>" . htmlspecialchars($bar['supplierid']) . "</td>
+                <td>" . htmlspecialchars(supTarikTampil($bar['namasupplier'])) . "</td>
+                <td>" . htmlspecialchars(supTarikTampil($bar['badanusaha'])) . "</td>
+                <td>" . htmlspecialchars(supTarikTampil($bar['namapemilik'])) . "</td>
+                <td>" . htmlspecialchars(supTarikTampil($bar['namadirektur'])) . "</td>
+                <td>" . htmlspecialchars(supTarikTampil($bar['namapenanggungjawab'])) . "</td>
+                <td>" . htmlspecialchars(supTarikTampil($bar['jabatan'])) . "</td>
+                <td align=center" . $warnaSt . ">" . htmlspecialchars(isset($strnama[$bar['status']]) ? $strnama[$bar['status']] : $bar['status']) . "</td>
+                <td align=center>" . htmlspecialchars(isset($strnamaper[$bar['statuspersetujuan']]) ? $strnamaper[$bar['statuspersetujuan']] : '-') . "</td>
+            </tr>";
+        }
+        if ($no == 0) {
+            $stream .= "<tr><td colspan=" . $kolom . " align=center>Data tidak ditemukan</td></tr>";
+        }
+        $stream .= "</tbody></table>";
+        $xls = new HtmlExcel();
+        $xls->addSheet("Supplier", $stream);
+        $xls->headers((supTarikFilter()['tipe'] == 'calon' ? "CalonSupplier_" : "Supplier_") . date('YmdHis') . ".xls");
+        echo $xls->buildFile();
+        exit;
+
+    case 'pdflist':
+        $rows = supTarikData($totalTarik);
+        $hdpt = setheadreport($_SESSION['empl']['kodeorganisasi'], $_SESSION['empl']['kodeorganisasi']);
+        $judulTarik = supTarikJudul();
+        $infoFilter = supTarikInfoFilter($totalTarik, count($rows));
+        if (!class_exists('PDFListSupplier')) {
+            class PDFListSupplier extends FPDF
+            {
+                public $colW = array();
+
+                function Header()
+                {
+                    global $hdpt, $infoFilter, $judulTarik;
+                    $width = $this->w - $this->lMargin - $this->rMargin;
+                    if (file_exists($hdpt['logo'])) {
+                        $this->Image($hdpt['logo'], $this->lMargin, $this->tMargin, 18);
+                    }
+                    $this->SetFont('Arial', 'B', 11);
+                    $this->SetXY($this->lMargin + 22, $this->tMargin + 2);
+                    $this->Cell(160, 6, utf8_decode($hdpt['nama']), 0, 1, 'L');
+                    $this->SetY($this->tMargin + 15);
+                    $this->SetFont('Arial', 'B', 13);
+                    $this->Cell($width, 7, $judulTarik, 0, 1, 'C');
+                    $this->SetFont('Arial', '', 8);
+                    $this->Cell($width, 5, utf8_decode($infoFilter), 0, 1, 'C');
+                    $this->Cell($width, 5, utf8_decode('Ditarik oleh ' . $_SESSION['empl']['name'] . ' (' . $_SESSION['standard']['username'] . ') pada ' . date('d-m-Y H:i:s')), 0, 1, 'C');
+                    $this->Ln(1);
+                    $this->SetFillColor(220, 220, 220);
+                    $this->SetFont('Arial', 'B', 8);
+                    $judul = array('No', 'Kode', 'Nama Assignment', 'Badan Usaha', 'Nama Pemilik', 'Nama Direktur', 'Penanggung Jawab', 'Jabatan', 'Status', 'Persetujuan');
+                    foreach ($judul as $i => $j) {
+                        $this->Cell($this->colW[$i], 6, $j, 1, 0, 'C', true);
+                    }
+                    $this->Ln();
+                }
+
+                function Footer()
+                {
+                    $this->SetY(-12);
+                    $this->SetFont('Arial', 'I', 7);
+                    $this->Cell(0, 8, 'Halaman ' . $this->PageNo() . ' / {nb}', 0, 0, 'R');
+                }
+            }
+        }
+        $pdf = new PDFListSupplier('L', 'mm', 'A4');
+        $pdf->AliasNbPages();
+        $pdf->SetAutoPageBreak(false, 16);
+        $width = $pdf->w - $pdf->lMargin - $pdf->rMargin;
+        $colFixed = array(8, 22, 56, 20, 32, 30, 30, 28, 22); #semua kolom kecuali Persetujuan
+        $pdf->colW = array_merge($colFixed, array($width - array_sum($colFixed)));
+        $pdf->AddPage();
+        $h = 6;
+        $no = 0;
+        foreach ($rows as $bar) {
+            $no++;
+            if ($pdf->GetY() + $h > $pdf->h - $pdf->bMargin) {
+                $pdf->AddPage();
+            }
+            $c = $pdf->colW;
+            $pdf->SetFont('Arial', '', 7);
+            $pdf->Cell($c[0], $h, $no, 1, 0, 'C');
+            $pdf->Cell($c[1], $h, supTarikFit($pdf, $bar['supplierid'], $c[1]), 1, 0, 'L');
+            $pdf->Cell($c[2], $h, supTarikFit($pdf, supTarikTampil($bar['namasupplier']), $c[2]), 1, 0, 'L');
+            $pdf->Cell($c[3], $h, supTarikFit($pdf, supTarikTampil($bar['badanusaha']), $c[3]), 1, 0, 'L');
+            $pdf->Cell($c[4], $h, supTarikFit($pdf, supTarikTampil($bar['namapemilik']), $c[4]), 1, 0, 'L');
+            $pdf->Cell($c[5], $h, supTarikFit($pdf, supTarikTampil($bar['namadirektur']), $c[5]), 1, 0, 'L');
+            $pdf->Cell($c[6], $h, supTarikFit($pdf, supTarikTampil($bar['namapenanggungjawab']), $c[6]), 1, 0, 'L');
+            $pdf->Cell($c[7], $h, supTarikFit($pdf, supTarikTampil($bar['jabatan']), $c[7]), 1, 0, 'L');
+            if ($bar['status'] == '1') { $pdf->SetFillColor(217, 242, 217); }
+            elseif ($bar['status'] == '0') { $pdf->SetFillColor(229, 231, 235); }
+            else { $pdf->SetFillColor(255, 242, 204); }
+            $pdf->Cell($c[8], $h, supTarikFit($pdf, isset($strnama[$bar['status']]) ? $strnama[$bar['status']] : $bar['status'], $c[8]), 1, 0, 'C', true);
+            $pdf->Cell($c[9], $h, supTarikFit($pdf, isset($strnamaper[$bar['statuspersetujuan']]) ? $strnamaper[$bar['statuspersetujuan']] : '-', $c[9]), 1, 1, 'C');
+        }
+        if ($no == 0) {
+            $pdf->Cell(array_sum($pdf->colW), $h, 'Data tidak ditemukan', 1, 1, 'C');
+        }
+        $pdf->Output();
+        exit;
 case'loadDatacalon':
     ?>
 	<thead>
 		<tr class=header>
 			<!--<th align=center>".$_SESSION['lang']['kodekelompok']."</th>-->
-			<th align=center><?php echo $_SESSION['lang']['nourut']; ?></th>
-			<th align=center><?php echo $_SESSION['lang']['kodesupplier']; ?></th>
+			<th align=center style='width:40px'><?php echo $_SESSION['lang']['nourut']; ?></th>
+			<th align=center style='width:105px'><?php echo $_SESSION['lang']['kodesupplier']; ?></th>
 			<th align=center><?php echo $_SESSION['lang']['namasupplier']; ?></th>
-			<th align=center><?php echo $_SESSION['lang']['badanusaha']; ?></th>
+			<th align=center style='width:95px'><?php echo $_SESSION['lang']['badanusaha']; ?></th>
 			<th align=center><?php echo $_SESSION['lang']['nama']." ".$_SESSION['lang']['pemilik']; ?></th>
 			<th align=center><?php echo $_SESSION['lang']['nama']." ".$_SESSION['lang']['direktur']; ?></th>
 			<th align=center><?php echo $_SESSION['lang']['namapj']; ?></th>
 			<th align=center><?php echo $_SESSION['lang']['jabatan']; ?></th>
-			<th align=center><?php echo $_SESSION['lang']['status'] . " " . $_SESSION['lang']['supplier']; ?></th>
-      <th align=center><?php echo $_SESSION['lang']['status'] . " " . $_SESSION['lang']['persetujuan']; ?></th>
-			<th  align='center' colspan='5'><?php echo $_SESSION['lang']['action']; ?></th>
+			<th align=center style='width:105px'><?php echo $_SESSION['lang']['status'] . " " . $_SESSION['lang']['supplier']; ?></th>
+      <th align=center style='width:125px'><?php echo $_SESSION['lang']['status'] . " " . $_SESSION['lang']['persetujuan']; ?></th>
+			<th align=center style='width:130px'><?php echo $_SESSION['lang']['action']; ?></th>
 		</tr>
 	</thead> 
 	<tbody> 
@@ -1469,12 +1698,21 @@ case'loadDatacalon':
   $where='';
 	if($txtsearchcalon !='')
     {
-       $where.=" and namasupplier LIKE  '%".$txtsearchcalon ."%'";
+       $where.=" and namasupplier LIKE  '%".addslashes($txtsearchcalon)."%'";
     }
     if($txtNoakuncalon!='')
     {
-       $where.=" and supplierid LIKE  '%".$txtNoakuncalon."%'";
+       $where.=" and supplierid LIKE  '%".addslashes($txtNoakuncalon)."%'";
     }
+
+        if($caristatuscalon!='')
+	    {
+	       $where.=" and status = '".addslashes($caristatuscalon)."'";
+	    }
+	    if($caribadancalon!='')
+	    {
+	       $where.=" and badanusaha = '".addslashes($caribadancalon)."'";
+	    }
 
         $limit = 20;
         $page = 1;
@@ -1486,7 +1724,7 @@ case'loadDatacalon':
                 $page = 1;
         }
 		$posisi = $p->cariPosisi($limit,$page);// -Paging- Posisi Data berdasarkan limit
-        $ql2 = "select supplierid from " . $dbname . ".log_5supplier where status in ('0','2','3','4') ".$where."";
+        $ql2 = "select supplierid from " . $dbname . ".log_5supplier where status in ('0','2','3','4') ".$where." order by namasupplier asc";
         //exit('Error '.$ql2);
 		$rjml = fetchData($ql2);
 		$jlhbrs = count($rjml);
@@ -1496,7 +1734,7 @@ case'loadDatacalon':
    
 		$input = "select a.*,b.email,b.full_name from " . $dbname . ".log_5supplier a
 		left join " . $dbname . ".log_5supuser b on a.supplierid = b.id_supplier
-		where a.status in ('0','2','3','4') ".$where."  LIMIT $posisi,$limit";
+		where a.status in ('0','2','3','4') ".$where."  order by namasupplier asc LIMIT $posisi,$limit";
 		$n=$owlPDO->query($input) or die(print " Gagal: ".PDOException::getMessage());
 		$n->setFetchMode(PDO::FETCH_ASSOC);
         $no = $posisi+1;
@@ -1511,38 +1749,33 @@ case'loadDatacalon':
 			}
 			$sup = substr($sup, 0, -1);
             $nor+=1;
+            $tampil = function($v){ $v = trim((string)$v); return ($v === '') ? '-' : htmlspecialchars($v); };
+            $warnaStatus = array('0'=>'#6b7280','1'=>'#1a7f37','2'=>'#a15c00','3'=>'#a15c00','4'=>'#b42318');
+            $warnaPersetujuan = array('0'=>'#a15c00','1'=>'#1a7f37','2'=>'#b42318');
+            $gayaIkon = "style='margin:0 4px;vertical-align:middle'";
             echo"<tr class=rowcontent>";
             echo"<td align=center>" . $nor . "</td>";
-			echo"<td align=left>" . $d['supplierid'] . "</td>";
-			echo"<td align=left>" . $d['namasupplier'] . "</td>";
-			echo"<td align=left>" . $d['badanusaha'] . "</td>";
-			echo"<td align=left>" . $d['namapemilik'] . "</td>";
-			echo"<td align=left>" . $d['namadirektur'] . "</td>";
-			echo"<td align=left>" . $d['namapenanggungjawab'] . "</td>";
-			echo"<td align=left>" . $d['jabatan'] . "</td>";
-			echo "<td align=center>" . $strnama[$d['status']]."</td>";
-      echo "<td align=center>" . $strnamaper[$d['statuspersetujuan']]."</td>";
-			echo"<td align=center>
-				<img src=images/application/application_edit.png class=zImgBtn  caption='Edit' onclick=\"editSupplier2('" . $d['supplierid'] . "','" . $d['namasupplier'] . "','" . $d['badanusaha'] . "','" . $d['namapemilik'] . "','" . $d['namadirektur'] . "','" . $d['namapenanggungjawab'] . "','" . $d['jabatan'] . "','" . $d['status'] . "','" . $d['email'] . "','" .$sup. "');\">
-			</td><td align=center>
-				<img src=images/addplus.png class=zImgBtn  title='Add Detail Supplier' onclick=\"detaildt('".$_SESSION['lang']['detail']."','" . $d['supplierid'] . "','" .$d['namasupplier']."','" .$d['status']."');\"></td>
-        <td align=center><img src=images/application/application_edit_lama.png class=zImgBtn  title='Detail Perubahan Supplier' onclick=\"detailsupp('".$_SESSION['lang']['detail']."','" . $d['supplierid'] . "');\">
-			</td><td align=center>
-				<img src=images/zoom.png class=zImgBtn  title='Add Detail Supplier' onclick=\"detailupload('List Upload','" . $d['supplierid'] . "','" .$d['namasupplier']."','" .$d['badanusaha']."');\">
-			</td>";
-			if($d['status'] == '2' or $d['status'] == '3'){
-				echo"<td align=center>
-					<button class='mybutton' onclick=\"sendUrl('" . $d['supplierid'] . "');\">Kirim link ke Email</button>
-				</td>";
-			}else{
-				echo"<td align=center></td>";
-			}
-            echo"</tr>"; 
+            echo"<td align=left style='white-space:nowrap'>" . htmlspecialchars($d['supplierid']) . "</td>";
+            echo"<td align=left>" . $tampil($d['namasupplier']) . "</td>";
+            echo"<td align=left style='white-space:nowrap'>" . $tampil($d['badanusaha']) . "</td>";
+            echo"<td align=left>" . $tampil($d['namapemilik']) . "</td>";
+            echo"<td align=left>" . $tampil($d['namadirektur']) . "</td>";
+            echo"<td align=left>" . $tampil($d['namapenanggungjawab']) . "</td>";
+            echo"<td align=left>" . $tampil($d['jabatan']) . "</td>";
+            echo"<td align=center style='white-space:nowrap;font-weight:bold;color:" . (isset($warnaStatus[$d['status']]) ? $warnaStatus[$d['status']] : '#000') . "'>" . $strnama[$d['status']] . "</td>";
+            echo"<td align=center style='white-space:nowrap;color:" . (isset($warnaPersetujuan[$d['statuspersetujuan']]) ? $warnaPersetujuan[$d['statuspersetujuan']] : '#000') . "'>" . $strnamaper[$d['statuspersetujuan']] . "</td>";
+            #= ikon aksi dalam satu kolom: ubah, rincian, lihat perubahan (kaca pembesar), dokumen upload (panah unggah)
+            echo"<td align=center style='white-space:nowrap'>
+              <img src=images/application/application_edit.png class=zImgBtn $gayaIkon title='Edit' onclick=\"editSupplier2('" . $d['supplierid'] . "','" . $d['namasupplier'] . "','" . $d['badanusaha'] . "','" . $d['namapemilik'] . "','" . $d['namadirektur'] . "','" . $d['namapenanggungjawab'] . "','" . $d['jabatan'] . "','" . $d['status'] . "','" . $d['email'] . "','" .$sup. "');\">
+              <img src=images/addplus.png class=zImgBtn $gayaIkon title='Rincian: Rek. Bank, NPWP, Alamat, Pajak' onclick=\"detaildt('".$_SESSION['lang']['detail']."','" . $d['supplierid'] . "','" .$d['namasupplier']."','" .$d['status']."');\">
+              <img src=images/zoom.png class=zImgBtn $gayaIkon title='Detail Perubahan Supplier' onclick=\"detailsupp('".$_SESSION['lang']['detail']."','" . $d['supplierid'] . "');\">
+              <img src=images/upload-2-xxl.png class=zImgBtn $gayaIkon title='Dokumen / List Upload' onclick=\"detailupload('List Upload','" . $d['supplierid'] . "','" .$d['namasupplier']."','" .$d['badanusaha']."');\">";
+            echo"</td></tr>"; 
         }
     echo"</tbody>";?>
 		<tfoot>
 			<tr>
-				<th colspan="15" align="center">
+				<td colspan="15" align="center">
 				<?php 
 					//insert Attribute action ex: href/onclick/onchange/etc..
 					$buttonaction = array(
@@ -1554,38 +1787,11 @@ case'loadDatacalon':
 					);
 					echo $p->navHalaman($page,$jml,$buttonaction); //-Paging- Create Element Nav halaman; 
 				?>
-				</th>
+				</td>
 			</tr>
 		</tfoot>
 	</table>
 	<?php
-	break;
-	case 'kirimemail':
-		$newpas = rand_passwd(4);
-		$exp 	= urldecode(base64_encode(date("Ymd")));
-		$url 	=  site_url()."/".segment(1);
-		$qstr = "select * from " . $dbname . ".log_5supuser where id_supplier = '".$idsupplier."' limit 1";
-		$r = fetchData($qstr);
-		if(count($r) >0){
-		$log_5supuser = "UPDATE " . $dbname . ".log_5supuser set password = PASSWORD('" . $newpas . "'), sessionid = 'register' where id_supplier = '".$idsupplier."' limit 1";
-			try{
-				$owlPDO->exec($log_5supuser); 
-			}catch(PDOException $e){
-				echo " Gagal," . addslashes($e->getMessage());
-			}
-			$subject	=	"Aplikasi Data Supplier";
-			$from		=	"STH Grup";
-			$to			=	trim($r[0]['email']);
-			$link 		=   $url."/supplier/?log=".$exp;
-			$content	= 	"<table>";
-			$content	.= "<tr><td>Register Data Supplier</td></tr>";
-			$content	.= "<tr><td>Url </td><td>: $link</td></tr>";
-			$content	.= "<tr><td>Email  </td><td>: $to</td></tr>";
-			$content	.= "<tr><td>Password  </td><td>: $newpas</td></tr>";
-			$content	.= "<tr><td>Email ini dikirim untuk membuka halaman Register Supplier.</td></tr>";
-			$content	.= "</table>";
-		kirimEmailkeSupplier($to,$cc = "",$subject,$content,$mailType='text/html');
-		}
 	break;
     default:
     break;

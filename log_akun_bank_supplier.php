@@ -125,6 +125,7 @@ $str->setFetchMode(PDO::FETCH_OBJ);
 $bar=$str->fetch();
 $nilai=$bar->nilai;
 
+$optpph="<option value=''>".$_SESSION['lang']['pilihdata']."</option>";
 $nilaiex=explode(',', $nilai);
 
 foreach ($nilaiex as $key => $value) {
@@ -142,6 +143,7 @@ foreach ($nilaiex as $key => $value) {
 		
 	/*=====Detail Form Rek Bank Start =====*/
 	
+	$optbank="<option value=''>".$_SESSION['lang']['pilihdata']."</option>";
 	$sql = "SELECT * FROM ".$dbname.".keu_5daftarbank where status='1'";
 	$res = $owlPDO->query($sql)or die(print " Gagal: ".PDOException::getMessage());
 	$res->setFetchMode(PDO::FETCH_ASSOC);
@@ -171,17 +173,17 @@ foreach ($nilaiex as $key => $value) {
 				                    <td><input type=text  nkeypress=\"return_tanpa_kutip(event);\"   class=myinputtext style=\"width:200px;\" value='".$nmsup[$id_supplier]."' disabled></td>
 				                    <td hidden><input type=hidden  id=id_supplier nkeypress=\"return_tanpa_kutip(event);\"   class=myinputtext style=\"width:200px;\" value='".$id_supplier."' disabled></td>
 				                
-				                    <td>".$_SESSION['lang']['namabank']."</td> 
+				                    <td class=bintang>".$_SESSION['lang']['namabank']."</td> 
 				                    <td>:</td>
-				                    <td><select id=bank style=\"width:205px;\" >".$optbank."</select></td>
+				                    <td><select class=select2 id=bank style=\"width:205px;\">".$optbank."</select></td>
 				                </tr>
 
 				                <tr>
-				                    <td>".$_SESSION['lang']['norek']."</td> 
+				                    <td class=bintang>".$_SESSION['lang']['norek']."</td> 
 				                    <td>:</td>
 				                    <td><input type=text  id=rekening nkeypress=\"return_tanpa_kutip(event);\"   class=myinputtext style=\"width:200px;\"></td>
 				              
-				                    <td>".$_SESSION['lang']['atasnama']."</td> 
+				                    <td class=bintang>".$_SESSION['lang']['atasnama']."</td> 
 				                    <td>:</td>
 				                    <td><input type=text  id=atasnama nkeypress=\"return_tanpa_kutip(event);\"   class=myinputtext style=\"width:200px;\"></td>
 				                </tr>
@@ -203,7 +205,7 @@ foreach ($nilaiex as $key => $value) {
 				               
 				                    <td>".$_SESSION['lang']['matauang']."</td>
 				                    <td>:</td>
-				                    <td><select id=matauang style=\"width:205px;\">".$optCurr."</select></td>
+				                    <td><select class=select2 id=matauang style=\"width:205px;\">".$optCurr."</select></td>
 				                </tr>
 
 				                <tr><td>".$_SESSION['lang']['default']."</td>
@@ -274,7 +276,7 @@ foreach ($nilaiex as $key => $value) {
                     <td><input type=text  nkeypress=\"return_tanpa_kutip(event);\"   class=myinputtext style=\"width:200px;\" value='".$nmsup[$id_supplier]."' disabled></td>
                     <td hidden><input type=hidden  id=supplierid nkeypress=\"return_tanpa_kutip(event);\"   class=myinputtext style=\"width:200px;\" value='".$id_supplier."' disabled></td>
                 
-                    <td>".$_SESSION['lang']['npwp']."</td> 
+                    <td class=bintang>".$_SESSION['lang']['npwp']."</td> 
                     <td>:</td>
                     <td><input type=text  id=npwp nkeypress=\"return_tanpa_kutip(event);\"   class=myinputtext style=\"width:200px;\"></td>
                 
@@ -283,7 +285,7 @@ foreach ($nilaiex as $key => $value) {
                     <td><input type=text  id=namanpwp nkeypress=\"return_tanpa_kutip(event);\"   class=myinputtext style=\"width:200px;\"></td>
                 </tr>
                 <tr>
-                    <td>".$_SESSION['lang']['jalan']."</td> 
+                    <td class=bintang>".$_SESSION['lang']['jalan']."</td> 
                     <td>:</td>
                     <td><input type=text  id=jalan nkeypress=\"return_tanpa_kutip(event);\"   class=myinputtext style=\"width:200px;\"></td>
                 
@@ -575,21 +577,21 @@ foreach ($nilaiex as $key => $value) {
                     <td><input type=text  nkeypress=\"return_tanpa_kutip(event);\"   class=myinputtext style=\"width:200px;\" value='".$nmsup[$id_supplier]."' disabled></td>
                     <td hidden><input type=hidden  id=supplierid2 nkeypress=\"return_tanpa_kutip(event);\"   class=myinputtext style=\"width:200px;\" value='".$id_supplier."' disabled></td>
                 
-                    <td>".$_SESSION['lang']['alamat']."</td> 
+                    <td class=bintang>".$_SESSION['lang']['alamat']."</td> 
                     <td>:</td>
                     <td><input type=text  id=alamatsup nkeypress=\"return_tanpa_kutip(event);\"   class=myinputtext style=\"width:200px;\"></td>
                 
-                    <td>".$_SESSION['lang']['kota']."</td> 
+                    <td class=bintang>".$_SESSION['lang']['kota']."</td> 
                     <td>:</td>
                     <td><input type=text  id=kota1 nkeypress=\"return_tanpa_kutip(event);\"   class=myinputtext style=\"width:200px;\"></td>
                 </tr>
 
                 <tr>
-                    <td>".$_SESSION['lang']['cperson']."</td> 
+                    <td class=bintang>".$_SESSION['lang']['cperson']."</td> 
                     <td>:</td>
                     <td><input type=text  id=cperson nkeypress=\"return_tanpa_kutip(event);\"   class=myinputtext style=\"width:200px;\"></td>
                
-                    <td>".$_SESSION['lang']['telp']."</td> 
+                    <td class=bintang>".$_SESSION['lang']['telp']."</td> 
                     <td>:</td>
                     <td><input type=text  id=telp nkeypress=\"return_tanpa_kutip(event);\"   class=myinputtext style=\"width:200px;\"></td>
                
@@ -621,13 +623,13 @@ foreach ($nilaiex as $key => $value) {
                     <td>:</td>
                     <td><input type=text  id=emailkon nkeypress=\"return_tanpa_kutip(event);\"   class=myinputtext style=\"width:200px;\"></td>
                
-                    <td>".$_SESSION['lang']['provinsi']."</td> 
+                    <td class=bintang>".$_SESSION['lang']['provinsi']."</td> 
                     <td>:</td>
                     <td><input type=text  id=provinsi1 nkeypress=\"return_tanpa_kutip(event);\"   class=myinputtext style=\"width:200px;\"></td>
                 </tr>
 
                 <tr>
-                    <td>".$_SESSION['lang']['negara']."</td> 
+                    <td class=bintang>".$_SESSION['lang']['negara']."</td> 
                     <td>:</td>
                     <td><input type=text  id=negara1 nkeypress=\"return_tanpa_kutip(event);\"   class=myinputtext style=\"width:200px;\"></td>
               
@@ -696,13 +698,13 @@ foreach ($nilaiex as $key => $value) {
                 </tr>
 
                  <tr>
-                    <td>".$_SESSION['lang']['pajak']."</td> 
+                    <td class=bintang>".$_SESSION['lang']['pajak']."</td> 
                     <td>:</td>
-                    <td><select id=pph style=\"width:205px;\">".$optpph."</select></td>
+                    <td><select class=select2 id=pph style=\"width:205px;\">".$optpph."</select></td>
                 </tr>
 
                 <tr>
-                    <td>".$_SESSION['lang']['tarif']." %</td> 
+                    <td class=bintang>".$_SESSION['lang']['tarif']." %</td> 
                     <td>:</td>
                     <td><input type=text  id=tarif onkeypress=\"return angka_doang(event);\"   class=myinputtextnumber style=\"width:200px;\" ></td>
                 </tr>

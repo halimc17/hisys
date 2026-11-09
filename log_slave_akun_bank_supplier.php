@@ -27,6 +27,12 @@ $jnsapp = "DS";
 switch($method){
 
   case 'insert':
+    #= isian wajib (bertanda * merah di form): diulang di server, sebutkan satu per satu yang belum diisi
+    $kurangWajib = array();
+    if(trim($bank)===''){ $kurangWajib[] = $_SESSION['lang']['namabank']; }
+    if(trim($rekening)===''){ $kurangWajib[] = $_SESSION['lang']['norek']; }
+    if(trim($atasnama)===''){ $kurangWajib[] = $_SESSION['lang']['atasnama']; }
+    if(!empty($kurangWajib)){ exit("WARNING: Data wajib belum diisi: ".implode(', ',$kurangWajib)."."); }
   //echo $_POST['persetujuan'];
   //exit('Error'.$_POST['persetujuan']);
 
@@ -130,6 +136,12 @@ switch($method){
         break;
 
     case 'update':
+    #= isian wajib (bertanda * merah di form): diulang di server, sebutkan satu per satu yang belum diisi
+    $kurangWajib = array();
+    if(trim($bank)===''){ $kurangWajib[] = $_SESSION['lang']['namabank']; }
+    if(trim($rekening)===''){ $kurangWajib[] = $_SESSION['lang']['norek']; }
+    if(trim($atasnama)===''){ $kurangWajib[] = $_SESSION['lang']['atasnama']; }
+    if(!empty($kurangWajib)){ exit("WARNING: Data wajib belum diisi: ".implode(', ',$kurangWajib)."."); }
 
           $strx = selectQuery($dbname,"log_5rekbank","*","supplierid='".$id_supplier."'  and idbank='".$bank."' and matauang='".$matauang."'");
           $resx = fetchData($strx);
