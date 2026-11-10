@@ -1,564 +1,458 @@
 <?php
-ini_set('display_errors',0);
+/**
+ * Slave PPh 21 Gaji Unit  (SDM > Laporan > Penggajian (Unit) > Print Slip Gaji > PPh 21 Gaji Unit)
+ *
+ * proses=preview  tipe=previewawal | excel | pdf
+ * Isi laporan per karyawan pada periode terpilih (semua dari data gaji yang sudah tersimpan):
+ *   - Gaji / Upah        : komponen tunjangan tetap (parameter KOMTJTETAP) yang ikut perhitungan PPh 21
+ *   - Premi/Lembur/Dll   : komponen pendapatan lain yang ikut perhitungan PPh 21
+ *   - Jumlah bruto       : Gaji/Upah + Premi/Lembur/Dll
+ *   - PPh 21             : potongan PPh 21 (komponen 42) pada periode tersebut
+ * Unit: satu unit atau "ALL" (seluruh unit yang boleh diakses user). Karyawan Staff tidak termasuk (sama seperti perhitungan PPh 21).
+ */
+
+ini_set('display_errors', 0);
 error_reporting(0);
+
 require_once('master_validation.php');
 require_once('config/connection.php');
 require_once('lib/nangkoelib.php');
 require_once('lib/zLib.php');
 require_once('lib/fpdf.php');
-
-$proses        =checkPostGet('proses','');
-$per           =checkPostGet('per','');
-$unit          =checkPostGet('unit','');
-$karyawanid    =checkPostGet('karyawanid','');
-$tipe          =checkPostGet('tipe','');
-$pph21regular  =checkPostGet('pph21regular','');
-$pph21irregular=checkPostGet('pph21irregular','');
-// $pph21x        =checkPostGet('pph21x','');
-// $pph21desemberx=checkPostGet('pph21desemberx','');
-$tjpph21x      =checkPostGet('tjpph21x','');
-$istjpph21     =checkPostGet('istjpph21','');
-$nilaitjpph21  =checkPostGet('nilaitjpph21','');
-$baris         =checkPostGet('baris','');
-
-$pph21x= str_replace(',','', checkPostGet('pph21x',''));
-$pph21desemberx= str_replace(',','', checkPostGet('pph21desemberx',''));
-
-##Bulan
-$bulan12 = substr($per, 5, 2);
-
-switch($proses){
-	// case'prosespph':
-	// 	try {
-	// 	$owlPDO->beginTransaction();
-		
-	// 	$str="select distinct(sudahproses) from ".$dbname.".sdm_5periodegaji where kodeorg='".$unit."' and periode='".$per."'";
-	// 	$res=$owlPDO->query($str) or die(print " Gagal: ".PDOException::getMessage());
-	// 	$res->setFetchMode(PDO::FETCH_ASSOC);
-	// 	$bar=$res->fetch();
-	// 	$aktifperiodegaji=$bar['sudahproses'];
-
-	// 	if($aktifperiodegaji==0){
-	// 		throw new PDOException('Periode gaji '.$per.' belum ditutup.');
-	// 	}
-		
-	// 	$str="select distinct(tutupbuku) from ".$dbname.".setup_periodeakuntansi where kodeorg='".$unit."' and periode='".$per."'";
-	// 	$res=$owlPDO->query($str) or die(print " Gagal: ".PDOException::getMessage());
-	// 	$res->setFetchMode(PDO::FETCH_ASSOC);
-	// 	$bar=$res->fetch();
-	// 	$aktifperiodeacct=$bar['tutupbuku'];
-	// 	if($aktifperiodeacct==1){
-	// 		throw new PDOException('Periode akutansi '.$per.' sudah ditutup.');
-	// 	}
-
-	// 	if($bulan12 == 12){
-	// 		$pph21x  = $pph21desemberx;
-	// 	}		
-		
-	// 	if($baris=='1'){			
-	// 		$str = "delete from " . $dbname . ".sdm_gaji where kodeorg='" . $unit . "' and idkomponen='42' and periodegaji='".$per."'";
-	// 		$owlPDO->exec($str);
-
-	// 		$str = "delete from " . $dbname . ".sdm_pph21 where kodeorg='" . $unit . "' and periode='".$per."'";
-	// 		$owlPDO->exec($str);
-	// 	}
-
-	// 	if($pph21x != 0){
-	// 		$str = "insert into " . $dbname . ".sdm_gaji (`karyawanid`,`kodeorg`,`idkomponen`,`jumlah`,`pengali`,`hk`,`periodegaji`) values ('".$karyawanid."','".$unit."','42','".$pph21x."','1','0','".$per."') ";
-	// 		$owlPDO->exec($str);
-	
-	// 		$str = "insert into " . $dbname . ".sdm_pph21 (`karyawanid`,`kodeorg`,`tipepph`,`nilai`,`periode`) values ('".$karyawanid."','".$unit."','1','".$pph21x."','".$per."') ";
-	// 		$owlPDO->exec($str);
-	// 	}
-		
-	// 	$owlPDO->commit();
-	// 	} catch (PDOException $e) {$owlPDO->rollback(); echo "Error, " . addslashes($e->getMessage()); die();}
-		
-	// break;
-	
-    case 'preview':
-
-		$str="select * from ".$dbname.".sdm_ho_pph21jabatan";
-		$res=$owlPDO->query($str) or die(print " Gagal: ".PDOException::getMessage());
-		$res->setFetchMode(PDO::FETCH_ASSOC);
-		$bar=$res->fetch();
-			@$persenjabatan=$bar['persen'];
-			@$maxjabatan=$bar['max'];
-			
-		$str="select id,status,ptkp from ".$dbname.".sdm_5ptkp_pph21";
-		$res=$owlPDO->query($str) or die(print " Gagal: ".PDOException::getMessage());
-		$res->setFetchMode(PDO::FETCH_ASSOC);
-		while($bar=$res->fetch()){
-			$ptkpdata[$bar['status']]=$bar['ptkp'];
-		} 	
-
-		$str="select level,percent,upto,penambah from ".$dbname.".sdm_ho_pph21_kontribusi order by level";
-		$urut=0;
-		$res=$owlPDO->query($str) or die(print " Gagal: ".PDOException::getMessage());
-		$res->setFetchMode(PDO::FETCH_ASSOC);
-		while($bar=$res->fetch()){
-			$pphtarif[$urut]    =$bar['upto'];
-			$pphpenambah[$urut] =$bar['penambah'];
-			$pphpercent[$urut]  =$bar['percent'];    
-			$urut+=1;  
-		}    
-
-		$dakarbulanan=0;
-		$str = "select karyawanid from ".$dbname.".datakaryawan_hist where approval_status='8' and version_type='B' and lokasitugas='".$unit."' and periodegaji='".$per."' and statuspajak <> '' "; 
-		$res = fetchdata($str);
-		if(count($res)>0){ 
-			$dakarbulanan=1;
-		}
-
-		if($dakarbulanan==1){
-			$strawal = "select * from ".$dbname.".datakaryawan_hist where approval_status='8' and version_type='B' and lokasitugas='".$unit."' and periodegaji='".$per."' and statuspajak <> ''  and (periodeakhirgaji>='" . $per . "' or periodeakhirgaji='') and ( tanggalmasuk<='" . $per . "-31' or tanggalmasuk='0000-00-00' or tanggalmasuk is null)"; 
-		}else{
-			$strawal="select * from ".$dbname.".datakaryawan where lokasitugas='".$unit."' and statuspajak <> '' and (periodeakhirgaji>='" . $per . "' or periodeakhirgaji='') and ( tanggalmasuk<='" . $per . "-31' or tanggalmasuk='0000-00-00' or tanggalmasuk is null) ";
-		}
-		
-		$datakosongx=0;
-		$dtkomplus=array();
-		$dttjtetap=array();
-
-		$dtkomin=array();
-		$rupiah=array();
-
-		$expph='';
-		#= buat komponen yang tidak masuk perhitungan pph dan komponen netto
-		$str="select id from ".$dbname.".sdm_ho_component where pph21='0'";
-		$res=$owlPDO->query($str) or die(print " Gagal: ".PDOException::getMessage());
-		$res->setFetchMode(PDO::FETCH_ASSOC);
-		while($bar=$res->fetch()){
-			if($expph==''){
-				$expph="'".$bar['id']."'";
-			}else{
-				$expph.=",'".$bar['id']."'";
-			}
-		} 	
-
-
-		## Komponen tunjangan tetap
-		$str="select nilai from ".$dbname.".setup_parameterappl where kodeparameter='KOMTJTETAP'";
-		$res=fetchdata($str);
-		$komponentjtetap = $res[0]['nilai'];
-
-		## DT Tunjangan tetap
-		$str="select a.*,plus from ".$dbname.".sdm_gaji a left join ".$dbname.".sdm_ho_component b on a.idkomponen=b.id 
-			where 1=1 and idkomponen in (".$komponentjtetap.")  and periodegaji = '".$per."' ";
-		$res=$owlPDO->query($str) or die(print " Gagal: ".PDOException::getMessage());
-		$res->setFetchMode(PDO::FETCH_ASSOC);
-		while($bar=$res->fetch()){
-			if($bar['plus']==1){
-				$dttjtetap[$bar['idkomponen']]=$bar['idkomponen'];	
-				$rupiah[$bar['karyawanid']][$bar['idkomponen']]+=$bar['jumlah'];
-			}
-		}
-
-		$count_dttjtetap = count($dttjtetap);
-
-		## DT Komplus
-		$str="select a.*,plus from ".$dbname.".sdm_gaji a left join ".$dbname.".sdm_ho_component b on a.idkomponen=b.id 
-			where 1=1 and idkomponen not in (".$expph.",".$komponentjtetap.") and periodegaji = '".$per."' ";
-		$res=$owlPDO->query($str) or die(print " Gagal: ".PDOException::getMessage());
-		$res->setFetchMode(PDO::FETCH_ASSOC);
-		while($bar=$res->fetch()){
-			if($bar['plus']==1){
-				$dtkomplus[$bar['idkomponen']]=$bar['idkomponen'];	
-				$rupiah[$bar['karyawanid']][$bar['idkomponen']]+=$bar['jumlah'];
-			}else{
-				$dtkomin[$bar['idkomponen']]=$bar['idkomponen'];	
-				$rupiah[$bar['karyawanid']][$bar['idkomponen']]+=$bar['jumlah'];
-			}
-		}
-
-		$count_dtkomplus = count($dtkomplus);
-		if($count_dtkomplus == 0){
-			if($proses != 'excel') {
-				$rowspan_dtkompus = "hidden";
-			}
-		}
-
-		## BPJS Beben Perusahaan appl
-		$str="select nilai from ".$dbname.".setup_parameterappl where 1=1 and kodeparameter = 'HRBPJSPER'";
-		$res=$owlPDO->query($str) or die(print " Gagal: ".PDOException::getMessage());
-		$res->setFetchMode(PDO::FETCH_ASSOC);
-		while($bar=$res->fetch()){
-			$komponenBPJSper = $bar['nilai'];
-		}
-
-		## ambil Id komponennya BPJS perusahaan
-		$str="select a.*,plus from ".$dbname.".sdm_gaji a left join ".$dbname.".sdm_ho_component b on a.idkomponen=b.id 
-			where 1=1 and idkomponen in (".$komponenBPJSper.") and periodegaji = '".$per."' ";
-		$res=$owlPDO->query($str) or die(print " Gagal: ".PDOException::getMessage());
-		$res->setFetchMode(PDO::FETCH_ASSOC);
-		while($bar=$res->fetch()){
-				$dtbpjsper[$bar['idkomponen']]=$bar['idkomponen'];	
-				$rupiah[$bar['karyawanid']][$bar['idkomponen']]+=$bar['jumlah'];
-		}
-
-		$count_dtbpjsper = count($dtbpjsper);
-		if($count_dtbpjsper == 0){
-			if($proses != 'excel') {
-				$rowspan_dtbpjsper = 'hidden ';
-			}
-		}
-
-		## BPJS Beben karyawan appl
-		$str="select nilai from ".$dbname.".setup_parameterappl where 1=1 and kodeparameter = 'HRBPJSKAR'";
-		$res=$owlPDO->query($str) or die(print " Gagal: ".PDOException::getMessage());
-		$res->setFetchMode(PDO::FETCH_ASSOC);
-		while($bar=$res->fetch()){
-			$komponenBPJSkar = $bar['nilai'];
-		}
-
-		## ambil Id komponennya BPJS karyawan
-		$str="select a.*,plus from ".$dbname.".sdm_gaji a left join ".$dbname.".sdm_ho_component b on a.idkomponen=b.id 
-			where 1=1 and idkomponen in (".$komponenBPJSkar.") and periodegaji = '".$per."' ";
-		$res=$owlPDO->query($str) or die(print " Gagal: ".PDOException::getMessage());
-		$res->setFetchMode(PDO::FETCH_ASSOC);
-		while($bar=$res->fetch()){
-				$dtbpjskar[$bar['idkomponen']]=$bar['idkomponen'];	
-				$rupiah[$bar['karyawanid']][$bar['idkomponen']]+=$bar['jumlah'];
-		}
-
-		$count_dtbpjskar = count($dtbpjskar);
-		if($count_dtbpjskar == 0){
-			if($proses != 'excel') {
-				$rowspan_dtbpjskar = 'hidden';
-			}
-		}
-
-		## Make Option
-		$nmgolongan = makeOption($dbname, 'sdm_5golongan', 'kodegolongan,namagolongan');
-		$nmjabatan = makeOption($dbname, 'sdm_5jabatan', 'kodejabatan,namajabatan');
-		$optNmKomponen=  makeOption($dbname, 'sdm_ho_component', 'id,name');
-		$optKategori=  makeOption($dbname, 'sdm_5tarifpph21', 'status,kategori');
-
-		$resawal=$owlPDO->query($strawal) or die(print " Gagal: ".PDOException::getMessage());
-		$resawal->setFetchMode(PDO::FETCH_ASSOC);
-		while($barawal=$resawal->fetch()){
-			$dtkarid[$barawal['karyawanid']]		=$barawal['karyawanid'];
-			$nik[$barawal['karyawanid']]			=$barawal['nik'];
-			$nmkar[$barawal['karyawanid']]			=$barawal['namakaryawan'];
-			$golongan[$barawal['karyawanid']]		=$barawal['kodegolongan'];
-			$statuspajak[$barawal['karyawanid']]	=$barawal['statuspajak'];
-			$bagian[$barawal['karyawanid']]			=$barawal['bagian'];
-			$jabatan[$barawal['karyawanid']]		=$barawal['kodejabatan'];	
-			$ptkpnya[$barawal['karyawanid']]		=$ptkpdata[$barawal['statuspajak']];	
-		}
-
-		if ($proses == 'excel') {
-			$stream.= "<table class=sortable cellspacing=1 border=1>";
-		} else {
-			$stream.= "<div class='table-scroll'><table class=sortable cellspacing=1 cellpadding=5 style='width:100%;'>";
-		}
-
-		$style_upper = "style='text-transform: uppercase;'";
-
-		$stream.="<thead>";
-			$stream.="<tr class=rowcontent>";
-				$stream.="<th align=center ".$style_upper." rowspan=3>NO</th>";
-				$stream.="<th align=center ".$style_upper." rowspan=3> NIK </th>";
-				$stream.="<th align=center ".$style_upper." rowspan=3>".$_SESSION['lang']['namakaryawan']."</th>";
-				$stream.="<th align=center ".$style_upper." rowspan=3>Golongan</th>";
-				$stream.="<th align=center ".$style_upper." rowspan=3>".$_SESSION['lang']['statuspajak']."</th>";
-				$stream.="<th align=center ".$style_upper." rowspan=3>".$_SESSION['lang']['bagian']."</th>";
-				$stream.="<th align=center ".$style_upper." rowspan=3>".$_SESSION['lang']['jabatan']."</th>";
-				$stream.="<th align=center ".$style_upper." colspan=".$count_dttjtetap." >GAJI / UPAH</th>";
-				$stream.="<th align=center ".$style_upper." rowspan=3>JUMLAH GAJI</th>";
-				$stream.="<th align=center ".$style_upper." ".$rowspan_dtkompus." colspan=".$count_dtkomplus.">PREMI/LEMBUR/DLL</th>";
-				$stream.="<th align=center ".$style_upper." rowspan=3>JUMLAH PREMI/LEMBUR/DLL</th>";
-
-				if($bulan12 == 12){
-					$stream.="<th align=center ".$style_upper." ".$rowspan_dtbpjsper." colspan=".$count_dtbpjsper.">BPJS <br>(PERUSAHAAN)</th>";
-					$stream.="<th align=center ".$style_upper." ".$rowspan_dtbpjsper." rowspan=3>JUMLAH BPJS <br>(PERUSAHAAN)</th>";
-
-					$stream.="<th align=center ".$style_upper." ".$rowspan_dtbpjskar." colspan=".$count_dtbpjskar.">BPJS <br>(PESERTA)</th>";
-					$stream.="<th align=center ".$style_upper." ".$rowspan_dtbpjskar." rowspan=3>JUMLAH BPJS <br>(PESERTA)</th>";
-				}
-
-				$stream.="<th align=center ".$style_upper." colspan=3>PERHITUNGAN PPH21 (JAN-NOV)</th>";
-				$stream.="<th align=center ".$style_upper." rowspan=3>PPH 21 (JAN-NOV)</th>";
-
-				if($bulan12 == 12){
-
-					## BULAN 12 
-					$stream.="<th align=center ".$style_upper."  colspan=2>PENGURANG PPH 21 DESEMBER </th>";
-					$stream.="<th align=center ".$style_upper."  colspan=2>BRUTO PAJAK</th>";
-					
-					$stream.="<th align=center ".$style_upper."  rowspan=3>PTKP</th>";
-					$stream.="<th align=center ".$style_upper."  rowspan=3>PKP</th>";
-					$stream.="<th align=center ".$style_upper."  rowspan=3>TINGKATAN</th>";
-					$stream.="<th align=center ".$style_upper."  rowspan=3>PPH 21 (DESEMBER)</th>";
-					$stream.="<th align=center ".$style_upper."  rowspan=3>TOTAL PPH 1 TAHUN</th>";
-					## END 12
-
-				}
-				
-
-
-			$stream.="</tr>";	
-
-			$stream.="<tr class=rowcontent>";
-				foreach ($dttjtetap as $komplus){
-					$stream.="<th ".$style_upper." align=center rowspan=2>".$optNmKomponen[$komplus]."</th>";
-				}
-
-				foreach ($dtkomplus as $komplus){
-					$stream.="<th ".$style_upper." align=center rowspan=2>".$optNmKomponen[$komplus]."</th>";
-				}
-
-				if($bulan12 == 12){
-
-					foreach ($dtbpjsper as $komplus){
-						$stream.="<th ".$style_upper." align=center rowspan=2>".$optNmKomponen[$komplus]."</th>";
-					}
-					foreach ($dtbpjskar as $komplus){
-						$stream.="<th ".$style_upper." align=center rowspan=2>".$optNmKomponen[$komplus]."</th>";
-					}
-				}
-
-				$stream.="<th ".$style_upper." align=center rowspan=2>GAJI BRUTO</th>";
-				$stream.="<th ".$style_upper." align=center rowspan=2>TER</th>";
-				$stream.="<th ".$style_upper." align=center rowspan=2>TARIF EFEKTIF RATA RATA</th>";
-
-				if($bulan12 == 12){
-
-					## BULAN 12
-					$stream.="<th ".$style_upper." align=center rowspan=2>PENGURANG PKP</th>";
-					$stream.="<th ".$style_upper." align=center rowspan=2> JHT (PESERTA)</th>";
-					$stream.="<th ".$style_upper." align=center rowspan=2> SEBULAN </th>";
-					$stream.="<th ".$style_upper." align=center rowspan=2> SETAHUN </th>";
-					## END 12
-				}
-			$stream.="</tr>";	
-			$stream .= "<tr class=rowcontent>";
-			$stream .= "</tr>";
-
-		$stream.="</thead>";
-
-		foreach ($dtkarid as $karid){	
-			@$no++;
-			$stream.="<tr class=rowcontent id=row".$no.">";
-			
-			if($tipe != 'excel') {
-				$stream.="<td hidden id=karyawanid".$no.">".$karid."</td>";
-			}
-				$stream.="<td align=center>".$no."</td>";
-				$stream.="<td>".$nik[$karid]."</td>";
-				$stream.="<td>".$nmkar[$karid]."</td>";
-				$stream.="<td align=center>".$nmgolongan[$golongan[$karid]]."</td>";
-				$stream.="<td align=center>".$statuspajak[$karid]."</td>";
-				$stream.="<td align=center>".$bagian[$karid]."</td>";
-				$stream.="<td>".$nmjabatan[$jabatan[$karid]]."</td>";
-
-				foreach ($dttjtetap as $komplus){
-					$stream.="<td align=right >".number_format($rupiah[$karid][$komplus],0)."</td>";
-					@$ttjtetap[$karid]+=$rupiah[$karid][$komplus];
-					@$gttjtetap+=$rupiah[$karid][$komplus];
-				}
-
-				$stream.="<td align=right>".number_format($ttjtetap[$karid])."</td>";
-
-				foreach ($dtkomplus as $komplus){
-					$stream.="<td align=right >".number_format($rupiah[$karid][$komplus],0)."</td>";
-					@$ttdtkompus[$karid]+=$rupiah[$karid][$komplus];
-					@$gttdtkompus+=$rupiah[$karid][$komplus];
-				}
-
-				$stream.="<td align=right>".number_format($ttdtkompus[$karid])."</td>";
-
-				if($bulan12 == 12){
-
-				foreach ($dtbpjsper as $komplus){
-					$stream.="<td align=right >".number_format($rupiah[$karid][$komplus],0)."</td>";
-					@$ttdtbpjsper[$karid]+=$rupiah[$karid][$komplus];
-					@$gttdtbpjsper+=$rupiah[$karid][$komplus];
-				}
-
-				$stream.="<td align=right ".$rowspan_dtbpjsper.">".number_format($ttdtbpjsper[$karid])."</td>";
-				
-				foreach ($dtbpjskar as $komplus){
-					$stream.="<td align=right >".number_format($rupiah[$karid][$komplus],0)."</td>";
-					@$ttdtbpjskar[$karid]+=$rupiah[$karid][$komplus];
-					@$gttdtbpjskar+=$rupiah[$karid][$komplus];
-				}
-
-				$stream.="<td align=right ".$rowspan_dtbpjskar.">".number_format($ttdtbpjskar[$karid])."</td>";
-			}
-
-				## Gaji BRUTO
-				@$gajiBruto[$karid] = $ttdtkompus[$karid] + $ttjtetap[$karid];
-				@$gtgajiBruto = $gttdtkompus + $gttjtetap;
-				$stream.="<td align=right >".number_format($gajiBruto[$karid],0)."</td>";
-
-				
-				$stream.="<td align=center >".$optKategori[$statuspajak[$karid]]."</td>";
-
-				$str = "select * from ".$dbname.".sdm_5tarifpph21 where status = '".$statuspajak[$karid]."' and kategori = '".$optKategori[$statuspajak[$karid]]."'";
-				$res = $owlPDO->query($str) or die(print " Gagal: ".PDOException::getMessage());
-				$res->setFetchMode(PDO::FETCH_ASSOC);
-				$tarifData = $res->fetchAll();
-
-				foreach ($tarifData as $bar) {
-					if ($gajiBruto[$karid]  >= $bar['minim'] && $gajiBruto[$karid]  <= $bar['maxim']) {
-						$tarif_ter[$karid] = $bar['tarif'];
-						break; // Keluar dari loop jika sudah menemukan tarif yang sesuai
-					}
-				}
-
-				$stream.="<td align=center>".number_format($tarif_ter[$karid],2)."</td>";
-
-				## Tarif PPh21
-				@$tarifpph21[$karid] = $gajiBruto[$karid] * $tarif_ter[$karid] /100;
-				@$gttarifpph21 += $gajiBruto[$karid] * $tarif_ter[$karid] /100;
-				$stream.="<td align=right id='pph21x".$no."'>".number_format($tarifpph21[$karid],0)."</td>";
-
-				if($bulan12 == 12){
-
-				## BULAN 12
-
-				## Biaya jabatan
-				$biaya_jabatan[$karid] = $ttjtetap[$karid] + $ttdtkompus[$karid] + $komponenBPJSper[$karid] + ($ttjtetap[$karid] * 0.84 / 100) * $persenjabatan /100;
-
-				if($biaya_jabatan[$karid] >= $maxjabatan){
-					$biaya_jabatan[$karid] = $maxjabatan;
-				}else{
-					$biaya_jabatan[$karid] = $ttjtetap[$karid] + $ttdtkompus[$karid] * $persenjabatan /100;
-				}
-
-				$gtbiayajabatan += $biaya_jabatan[$karid];
-				$stream.="<td align=right >".number_format($biaya_jabatan[$karid],0)."</td>";
-				
-				## Bpjs Peserta
-				$stream.="<td align=right >".number_format($ttdtbpjskar[$karid],0)."</td>";
-
-				## Bruto sebulan
-				$bruto_sebulan[$karid]  = $ttjtetap[$karid] + $ttdtkompus[$karid] + $komponenBPJSper[$karid]  + ($ttjtetap[$karid] * 0.84 / 100) - $biaya_jabatan[$karid] - $ttdtbpjskar[$karid] ;
-				$gtbrutosebulan +=$bruto_sebulan[$karid] ;
-				$stream.="<td align=right >".number_format($bruto_sebulan[$karid],0)."</td>";
-				$stream.="<td align=right >".number_format($bruto_sebulan[$karid] * 12,0)."</td>";
-				$stream.="<td align=right >".number_format($ptkpnya[$karid],0)."</td>";
-
-				$bruto_setahun[$karid] = $bruto_sebulan[$karid] * 12;
-
-				if($bruto_setahun[$karid] > $ptkpnya[$karid] ){
-					$pkp[$karid] = $bruto_setahun[$karid] - $ptkpnya[$karid];
-				}else{
-					$pkp[$karid] = 0;
-				}
-
-
-				$stream.="<td align=right >".number_format($pkp[$karid],0)."</td>";
-
-				if($pkp[$karid]>0){     
-					if($pkp[$karid]<=($pphtarif[0])){
-						$percent_pkp[$karid] = $pphpercent[0];
-					}else if($pkp[$karid]<=($pphtarif[1])){
-						$percent_pkp[$karid] = $pphpercent[1];
-					}else if($pkp[$karid]<=($pphtarif[2])){
-						$percent_pkp[$karid] = $pphpercent[2];
-					}else if($pkp[$karid]<=($pphtarif[3])){
-						$percent_pkp[$karid] = $pphpercent[3];
-					}else{
-						$percent_pkp[$karid] = $pphpercent[4];
-					}
-				}
-
-					$stream.="<td align=right >".number_format($percent_pkp[$karid],2)."</td>";
-
-					$pph21desember[$karid] = $pkp[$karid] * $percent_pkp[$karid] / 100;
-					$gtpph21desember += $pph21desember[$karid];
-					$stream.="<td align=right id='pph21desemberx".$no."' >".number_format($pph21desember[$karid],0)."</td>";
-
-					$pph21setahun[$karid] = $pph21desember[$karid] - $tarifpph21[$karid];
-					$gtpph21setahun += $pph21desember[$karid] - $tarifpph21[$karid];
-					$stream.="<td align=right >".number_format($pph21setahun[$karid],0)."</td>";
-				## END 12
-			}
-
-			$stream.="</tr>";	
-		}
-
-			$stream.="<tr class=rowcontent>";
-				$colspanGt1 = $count_dttjtetap +7;
-				$colspanGt2 = $count_dtkomplus;
-				$colspanGt3 = $count_dtbpjsper;
-				$colspanGt4 = $count_dtbpjskar;
-				$stream.="<td align=center colspan=".$colspanGt1."><b>TOTAL</b></td>";
-				$stream.="<td align=center><b>".number_format($gttjtetap,0)."</b></td>";
-				$stream.="<td align=center colspan=".$colspanGt2."></td>";
-				$stream.="<td align=center ><b>".number_format($gttdtkompus,0)."</b></td>";
-
-				if($bulan12 == 12){
-
-				$stream.="<td align=center colspan=".$colspanGt3. " ".$rowspan_dtbpjsper."></td>";
-				$stream.="<td align=center ".$rowspan_dtbpjsper."><b>".number_format($gttdtbpjsper,0)."</td>";
-
-				$stream.="<td align=center colspan=".$colspanGt4." ".$rowspan_dtbpjskar."></td>";
-				$stream.="<td align=center ".$rowspan_dtbpjskar."><b>".number_format($gttdtbpjskar,0)."</td>";
-				}
-				$stream.="<td align=center ><b>".number_format($gtgajiBruto,0)."</b></td>";
-				$stream.="<td align=center colspan=2></td>";
-				$stream.="<td align=center ><b>".number_format($gttarifpph21,0)."</td>";
-
-				if($bulan12 == 12){
-
-				## BULAN 12
-				$stream.="<td align=center ><b>".number_format($gtbiayajabatan,0)."</td>";
-				$stream.="<td align=center ><b>".number_format($gttdtbpjsper,0)."</td>";
-				$stream.="<td align=center ><b>".number_format($gtbrutosebulan,0)."</td>";
-				$stream.="<td align=center ><b>".number_format($gtbrutosebulan*12,0)."</td>";
-				$stream.="<td align=center colspan=3></td>";
-				$stream.="<td align=center ><b>".number_format($gtpph21desember,0)."</td>";
-				$stream.="<td align=center ><b>".number_format($gtpph21setahun,0)."</td>";
-				## END BULAN 12
-				}
-
-			$stream.="</tr>";	
-		$stream.="<tbody></table></div>";
-
-
-		if($tipe!='excel') {
-			// $stream.="<button class=mybutton onclick=prosespph(".$no.");>".$_SESSION['lang']['proses']."</button>";
-			echo $stream."####".$no;
-		}
-		
-		if($tipe=='excel'){
-			$tglSkrg=date("Ymd");
-			$nop_="laporan_pph_pasal21";
-			if(strlen($stream)>0)
-			{
-					if ($handle = opendir('tempExcel')) {
-							while (false !== ($file = readdir($handle))) {
-							if ($file != "." && $file != ".." && $file != "index.html") {
-									@unlink('tempExcel/'.$file);
-							}
-							}	
-							closedir($handle);
-					}
-					$handle=fopen("tempExcel/".$nop_.".xls",'w');
-					if(!fwrite($handle,$stream)){
-							echo "<script language=javascript1.2>
-							parent.window.alert('Can't convert to excel format');
-							</script>";
-							exit;
-					}else{
-							echo "<script language=javascript1.2>
-							window.location='tempExcel/".$nop_.".xls';
-							</script>";
-					}
-					fclose($handle);
-			}    
-		}
-    break;
-	
-	
-
-######EXCEL	
-    case 'excel':
-        //$stream.="Print Time : ".date('H:i:s, d/m/Y')."<br>By : ".$_SESSION['empl']['name'];	
-         
-        break;	
+require_once('lib/HtmlExcel.php');
+
+$proses  = checkPostGet('proses', '');
+$unit    = addslashes(trim(checkPostGet('unit', '')));
+$per     = addslashes(trim(checkPostGet('per', '')));
+$tipekar = addslashes(trim(checkPostGet('tipekar', '')));
+$tipe    = checkPostGet('tipe', '');
+
+const AMP_BATAS_BARIS = 3000;
+
+switch ($proses) {
+	case 'preview':
+		ampCekInput($unit, $per, $tipekar);
+		ampLaporan($unit, $per, $tipekar, $tipe);
+		break;
+
+	default:
+		break;
 }
-?>
+
+
+#=== Fungsi bantu ===
+
+/** Jalankan query; jika gagal tampilkan pesan umum (detail ke log, tidak ke layar) */
+function ampAmbilSemua($sql)
+{
+	global $owlPDO;
+	try {
+		$res = $owlPDO->query($sql);
+		$res->setFetchMode(PDO::FETCH_ASSOC);
+		return $res->fetchAll();
+	} catch (PDOException $e) {
+		error_log('sdm_slave_2amprahgaji: ' . $e->getMessage());
+		exit('Error, terjadi kesalahan pada database.');
+	}
+}
+
+/** Daftar tipe karyawan yang boleh dipilih (id => nama), tanpa Staff (id 0) */
+function ampTipeKaryawan()
+{
+	global $dbname;
+	$hasil = array();
+	foreach (ampAmbilSemua("select id,tipe from " . $dbname . ".sdm_5tipekaryawan where aktif='1' and id<>'0' order by id") as $bar) {
+		$hasil[$bar['id']] = $bar['tipe'];
+	}
+	return $hasil;
+}
+
+/** Validasi input: unit (atau ALL) harus unit yang boleh diakses, periode yyyy-mm, tipe karyawan dari daftar */
+function ampCekInput($unit, $per, $tipekar)
+{
+	if ($unit == '') {
+		exit('Error, Unit belum dipilih.');
+	}
+	if ($unit != 'ALL') {
+		$unitBoleh = getOrgDetail(1);
+		if (!isset($unitBoleh[$unit])) {
+			exit('Error, Unit ' . htmlspecialchars($unit) . ' tidak boleh diakses.');
+		}
+	}
+	if (!preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $per)) {
+		exit('Error, Periode belum dipilih atau tidak valid.');
+	}
+	if ($tipekar != '') {
+		$tipeBoleh = ampTipeKaryawan();
+		if (!isset($tipeBoleh[$tipekar])) {
+			exit('Error, Tipe karyawan tidak valid.');
+		}
+	}
+}
+
+/** Kode unit yang dilaporkan */
+function ampDaftarUnit($unit)
+{
+	if ($unit == 'ALL') {
+		return array_keys(getOrgDetail(1));
+	}
+	return array($unit);
+}
+
+/** Id komponen tunjangan tetap dari parameter KOMTJTETAP (hanya angka, aman dipakai di SQL) */
+function ampKomponenTunjanganTetap()
+{
+	global $dbname;
+	$res = ampAmbilSemua("select nilai from " . $dbname . ".setup_parameterappl where kodeparameter='KOMTJTETAP'");
+	$id = array();
+	if (count($res) > 0) {
+		foreach (explode(',', str_replace("'", '', $res[0]['nilai'])) as $nilai) {
+			$nilai = trim($nilai);
+			if (preg_match('/^\d+$/', $nilai)) {
+				$id[] = $nilai;
+			}
+		}
+	}
+	return count($id) > 0 ? "'" . implode("','", $id) . "'" : "''";
+}
+
+/** Data laporan: array baris + jumlah karyawan sebelum dibatasi */
+function ampAmbilData($units, $per, $tipekar)
+{
+	global $dbname;
+
+	$daftarUnit = "'" . implode("','", $units) . "'";
+	$tjTetap = ampKomponenTunjanganTetap();
+
+	## Unit yang punya data histori bulanan memakai histori, selain itu memakai data karyawan saat ini
+	$unitHist = array();
+	foreach (ampAmbilSemua("select distinct lokasitugas from " . $dbname . ".datakaryawan_hist where approval_status='8' and version_type='B' and periodegaji='" . $per . "' and statuspajak <> '' and tipekaryawan != 0 and lokasitugas in (" . $daftarUnit . ")") as $bar) {
+		$unitHist[] = $bar['lokasitugas'];
+	}
+	$unitSkrg = array_values(array_diff($units, $unitHist));
+
+	$filterTipe = ($tipekar != '') ? " and tipekaryawan='" . $tipekar . "'" : " and tipekaryawan != 0";
+	$syarat = " and statuspajak <> '' and (periodeakhirgaji>='" . $per . "' or periodeakhirgaji='') and (tanggalmasuk<='" . $per . "-31' or tanggalmasuk='0000-00-00' or tanggalmasuk is null)" . $filterTipe;
+	$kolom = "karyawanid,nik,namakaryawan,statuspajak,kodejabatan,lokasitugas";
+
+	$karyawan = array();
+	if (count($unitHist) > 0) {
+		foreach (ampAmbilSemua("select " . $kolom . " from " . $dbname . ".datakaryawan_hist where approval_status='8' and version_type='B' and periodegaji='" . $per . "' and lokasitugas in ('" . implode("','", $unitHist) . "')" . $syarat) as $bar) {
+			$karyawan[$bar['karyawanid']] = $bar;
+		}
+	}
+	if (count($unitSkrg) > 0) {
+		foreach (ampAmbilSemua("select " . $kolom . " from " . $dbname . ".datakaryawan where lokasitugas in ('" . implode("','", $unitSkrg) . "')" . $syarat) as $bar) {
+			$karyawan[$bar['karyawanid']] = $bar;
+		}
+	}
+
+	## Gaji/upah (tunjangan tetap), premi/lembur/dll, dan PPh 21 per karyawan
+	$gajiUpah = array();
+	$premi = array();
+	foreach (ampAmbilSemua("select a.karyawanid, (a.idkomponen in (" . $tjTetap . ")) as tetap, sum(a.jumlah) as jml from " . $dbname . ".sdm_gaji a join " . $dbname . ".sdm_ho_component b on a.idkomponen=b.id
+		where a.periodegaji='" . $per . "' and a.kodeorg in (" . $daftarUnit . ") and b.plus=1 and b.pph21='1' and a.jumlah > 0 group by a.karyawanid, tetap") as $bar) {
+		if ($bar['tetap'] == 1) {
+			$gajiUpah[$bar['karyawanid']] = $bar['jml'];
+		} else {
+			$premi[$bar['karyawanid']] = $bar['jml'];
+		}
+	}
+	$pph = array();
+	foreach (ampAmbilSemua("select karyawanid, sum(jumlah) as jml from " . $dbname . ".sdm_gaji
+		where idkomponen='42' and periodegaji='" . $per . "' and kodeorg in (" . $daftarUnit . ") and jumlah > 0 group by karyawanid") as $bar) {
+		$pph[$bar['karyawanid']] = $bar['jml'];
+	}
+
+	$nmJabatan = makeOption($dbname, 'sdm_5jabatan', 'kodejabatan,namajabatan');
+
+	## Hanya karyawan yang punya gaji / PPh pada periode ini
+	$baris = array();
+	foreach ($karyawan as $id => $k) {
+		$g = isset($gajiUpah[$id]) ? $gajiUpah[$id] : 0;
+		$p = isset($premi[$id]) ? $premi[$id] : 0;
+		$x = isset($pph[$id]) ? $pph[$id] : 0;
+		if ($g <= 0 && $p <= 0 && $x <= 0) {
+			continue;
+		}
+		$baris[] = array(
+			'unit' => $k['lokasitugas'],
+			'nik' => $k['nik'],
+			'nama' => trim($k['namakaryawan']),
+			'status' => $k['statuspajak'],
+			'jabatan' => isset($nmJabatan[$k['kodejabatan']]) ? $nmJabatan[$k['kodejabatan']] : '',
+			'gaji' => $g,
+			'premi' => $p,
+			'bruto' => $g + $p,
+			'pph' => $x,
+		);
+	}
+	usort($baris, function ($a, $b) {
+		$c = strcmp($a['unit'], $b['unit']);
+		return $c != 0 ? $c : strcasecmp($a['nama'], $b['nama']);
+	});
+
+	$jumlahSemua = count($baris);
+	return array('baris' => array_slice($baris, 0, AMP_BATAS_BARIS), 'jumlah' => $jumlahSemua);
+}
+
+/** Keterangan filter yang dipakai (untuk layar, Excel, dan PDF) */
+function ampInfoFilter($unit, $per, $tipekar, $jumlah)
+{
+	$tipeBoleh = ampTipeKaryawan();
+	$info = 'Unit: ' . ($unit == 'ALL' ? 'SEMUA UNIT' : $unit . ' - ' . getNamaOrg($unit));
+	$info .= ' | Periode: ' . $per;
+	$info .= ' | Tipe karyawan: ' . ($tipekar != '' ? $tipeBoleh[$tipekar] : 'SEMUA (SELAIN STAFF)');
+	$info .= ' | Jumlah karyawan: ' . number_format($jumlah);
+	if ($jumlah > AMP_BATAS_BARIS) {
+		$info .= ' (ditampilkan ' . number_format(AMP_BATAS_BARIS) . ' pertama, persempit filter untuk melihat sisanya)';
+	}
+	return $info;
+}
+
+
+#=== Laporan ===
+function ampLaporan($unit, $per, $tipekar, $tipe)
+{
+	$units = ampDaftarUnit($unit);
+	$data = ampAmbilData($units, $per, $tipekar);
+	$baris = $data['baris'];
+	$info = ampInfoFilter($unit, $per, $tipekar, $data['jumlah']);
+	$tampilUnit = count($units) > 1;
+
+	$total = array('gaji' => 0, 'premi' => 0, 'bruto' => 0, 'pph' => 0);
+	foreach ($baris as $b) {
+		foreach ($total as $kunci => $nilai) {
+			$total[$kunci] += $b[$kunci];
+		}
+	}
+
+	if ($tipe == 'pdf') {
+		ampKeluarPdf($baris, $total, $unit, $per, $info, $tampilUnit);
+		return;
+	}
+
+	$adaExcel = ($tipe == 'excel');
+	$judulKolom = array('NO');
+	if ($tampilUnit) {
+		$judulKolom[] = 'UNIT';
+	}
+	$judulKolom = array_merge($judulKolom, array('NIK', 'NAMA KARYAWAN', 'STATUS PAJAK', 'JABATAN', 'GAJI / UPAH', 'PREMI / LEMBUR / DLL', 'JUMLAH BRUTO', 'PPH 21'));
+	$kolom = count($judulKolom);
+
+	$html = '';
+	if ($adaExcel) {
+		$html .= "<table class=sortable cellspacing=1 border=1>";
+	} else {
+		$html .= "<div style='margin:6px 2px;font-size:12px'>" . htmlspecialchars($info) . "</div>";
+		$html .= "<div class='table-scroll' style='max-height:75vh;overflow-y:auto'><table class=sortable cellspacing=1 cellpadding=5 style='width:100%;'>";
+	}
+
+	$html .= "<thead><tr class=rowcontent>";
+	foreach ($judulKolom as $judul) {
+		$html .= "<th align=center>" . $judul . "</th>";
+	}
+	$html .= "</tr></thead>";
+
+	$no = 0;
+	foreach ($baris as $b) {
+		$no++;
+		$html .= "<tr class=rowcontent>";
+		$html .= "<td align=center>" . $no . "</td>";
+		if ($tampilUnit) {
+			$html .= "<td align=center>" . htmlspecialchars($b['unit']) . "</td>";
+		}
+		$html .= "<td style='mso-number-format:\"\\@\"'>" . htmlspecialchars($b['nik']) . "</td>";
+		$html .= "<td>" . htmlspecialchars($b['nama']) . "</td>";
+		$html .= "<td align=center>" . htmlspecialchars($b['status']) . "</td>";
+		$html .= "<td>" . htmlspecialchars($b['jabatan']) . "</td>";
+		$html .= "<td align=right>" . number_format($b['gaji'], 0) . "</td>";
+		$html .= "<td align=right>" . number_format($b['premi'], 0) . "</td>";
+		$html .= "<td align=right>" . number_format($b['bruto'], 0) . "</td>";
+		$html .= "<td align=right>" . number_format($b['pph'], 0) . "</td>";
+		$html .= "</tr>";
+	}
+	if ($no == 0) {
+		$html .= "<tr class=rowcontent><td colspan=" . $kolom . " align=center>Data tidak ditemukan</td></tr>";
+	} else {
+		$html .= "<tr class=rowcontent><td align=center colspan=" . ($kolom - 4) . "><b>TOTAL</b></td>"
+			. "<td align=right><b>" . number_format($total['gaji'], 0) . "</b></td>"
+			. "<td align=right><b>" . number_format($total['premi'], 0) . "</b></td>"
+			. "<td align=right><b>" . number_format($total['bruto'], 0) . "</b></td>"
+			. "<td align=right><b>" . number_format($total['pph'], 0) . "</b></td></tr>";
+	}
+	$html .= $adaExcel ? "</table>" : "</table></div>";
+
+	if ($adaExcel) {
+		ampKeluarExcel($html, $unit, $per, $info, $kolom);
+		return;
+	}
+	echo $html . "####" . $no;
+}
+
+
+/** Kop laporan: nama PT dari induk unit (untuk semua unit: PT milik user) */
+function ampKop($unit, $per, $info)
+{
+	global $dbname;
+
+	if ($unit == 'ALL') {
+		$hdpt = setheadreport($_SESSION['empl']['lokasitugas'], $_SESSION['empl']['kodeorganisasi']);
+	} else {
+		$induk = makeOption($dbname, 'organisasi', 'kodeorganisasi,induk', "kodeorganisasi='" . $unit . "'");
+		$pt = isset($induk[$unit]) ? $induk[$unit] : $_SESSION['empl']['kodeorganisasi'];
+		$hdpt = setheadreport($unit, $pt);
+	}
+
+	return array(
+		'nama' => $hdpt['nama'],
+		'logo' => isset($hdpt['logo']) ? $hdpt['logo'] : '',
+		'judul' => 'PPH 21 GAJI UNIT - PERIODE ' . $per,
+		'info' => $info,
+		'tarik' => 'Ditarik oleh ' . $_SESSION['empl']['name'] . ' (' . $_SESSION['standard']['username'] . ') pada ' . date('d-m-Y H:i:s'),
+	);
+}
+
+
+#=== Excel ===
+function ampKeluarExcel($html, $unit, $per, $info, $kolom)
+{
+	$kop = ampKop($unit, $per, $info);
+	$kopHtml = "<table>
+		<tr><td colspan=" . $kolom . "><b>" . htmlspecialchars($kop['nama']) . "</b></td></tr>
+		<tr><td colspan=" . $kolom . "><b>" . htmlspecialchars($kop['judul']) . "</b></td></tr>
+		<tr><td colspan=" . $kolom . ">" . htmlspecialchars($kop['info']) . "</td></tr>
+		<tr><td colspan=" . $kolom . ">" . htmlspecialchars($kop['tarik']) . "</td></tr>
+		<tr><td colspan=" . $kolom . ">&nbsp;</td></tr>
+		</table>";
+
+	$xls = new HtmlExcel();
+	$xls->addSheet("PPh21GajiUnit", $kopHtml . $html);
+	$xls->headers("PPh21GajiUnit_" . ($unit == 'ALL' ? 'SEMUAUNIT' : $unit) . "_" . $per . "_" . date('YmdHis') . ".xls");
+	echo $xls->buildFile();
+	exit;
+}
+
+
+/** Potong teks agar muat di sel PDF */
+function ampFit($pdf, $teks, $lebar, $ukuran = 7)
+{
+	$teks = utf8_decode($teks);
+	$pdf->SetFont('Arial', '', $ukuran);
+	if ($pdf->GetStringWidth($teks) <= $lebar - 2) {
+		return $teks;
+	}
+	while (strlen($teks) > 1 && $pdf->GetStringWidth($teks . '...') > $lebar - 2) {
+		$teks = substr($teks, 0, -1);
+	}
+	return $teks . '...';
+}
+
+
+#=== PDF (landscape A4) ===
+function ampKeluarPdf($baris, $total, $unit, $per, $info, $tampilUnit)
+{
+	$kop = ampKop($unit, $per, $info);
+
+	if (!class_exists('PDFPph21GajiUnit')) {
+		class PDFPph21GajiUnit extends FPDF
+		{
+			public $kop = array();
+			public $judulKolom = array();
+			public $lebar = array();
+
+			function Header()
+			{
+				$width = $this->w - $this->lMargin - $this->rMargin;
+				if ($this->kop['logo'] != '' && file_exists($this->kop['logo'])) {
+					$this->Image($this->kop['logo'], $this->lMargin, $this->tMargin, 18);
+				}
+				$this->SetFont('Arial', 'B', 11);
+				$this->SetXY($this->lMargin + 22, $this->tMargin + 2);
+				$this->Cell(160, 6, utf8_decode($this->kop['nama']), 0, 1, 'L');
+				$this->SetY($this->tMargin + 15);
+				$this->SetFont('Arial', 'B', 13);
+				$this->Cell($width, 7, utf8_decode($this->kop['judul']), 0, 1, 'C');
+				$this->SetFont('Arial', '', 8);
+				$this->Cell($width, 5, utf8_decode($this->kop['info']), 0, 1, 'C');
+				$this->Cell($width, 5, utf8_decode($this->kop['tarik']), 0, 1, 'C');
+				$this->Ln(1);
+				$this->SetFillColor(220, 220, 220);
+				$this->SetFont('Arial', 'B', 7);
+				foreach ($this->judulKolom as $i => $judul) {
+					$this->Cell($this->lebar[$i], 8, $judul, 1, 0, 'C', true);
+				}
+				$this->Ln();
+			}
+
+			function Footer()
+			{
+				$this->SetY(-12);
+				$this->SetFont('Arial', 'I', 7);
+				$this->Cell(0, 8, 'Halaman ' . $this->PageNo() . ' / {nb}', 0, 0, 'R');
+			}
+		}
+	}
+
+	# kolom: No, [Unit], NIK, Nama, Status, Jabatan, Gaji/Upah, Premi/Lembur/Dll, Jumlah Bruto, PPh 21
+	if ($tampilUnit) {
+		$judulKolom = array('No', 'Unit', 'NIK', 'Nama Karyawan', 'Status', 'Jabatan', 'Gaji / Upah', 'Premi/Lembur/Dll', 'Jumlah Bruto', 'PPh 21');
+		$lebar = array(9, 14, 26, 56, 14, 40, 30, 30, 30, 28);
+		$kunci = array(null, 'unit', 'nik', 'nama', 'status', 'jabatan', 'gaji', 'premi', 'bruto', 'pph');
+	} else {
+		$judulKolom = array('No', 'NIK', 'Nama Karyawan', 'Status', 'Jabatan', 'Gaji / Upah', 'Premi/Lembur/Dll', 'Jumlah Bruto', 'PPh 21');
+		$lebar = array(9, 28, 62, 16, 46, 32, 32, 32, 20);
+		$kunci = array(null, 'nik', 'nama', 'status', 'jabatan', 'gaji', 'premi', 'bruto', 'pph');
+	}
+	$angka = array('gaji', 'premi', 'bruto', 'pph');
+
+	$pdf = new PDFPph21GajiUnit('L', 'mm', 'A4');
+	$pdf->kop = $kop;
+	$pdf->judulKolom = $judulKolom;
+	$pdf->lebar = $lebar;
+	$pdf->AliasNbPages();
+	$pdf->SetAutoPageBreak(false, 16);
+	$pdf->AddPage();
+
+	$tinggi = 6;
+	$no = 0;
+	foreach ($baris as $b) {
+		$no++;
+		if ($pdf->GetY() + $tinggi > $pdf->h - $pdf->bMargin) {
+			$pdf->AddPage();
+		}
+		$pdf->SetFont('Arial', '', 7);
+		foreach ($kunci as $i => $k) {
+			if ($k === null) {
+				$pdf->Cell($lebar[$i], $tinggi, $no, 1, 0, 'C');
+			} elseif (in_array($k, $angka)) {
+				$pdf->Cell($lebar[$i], $tinggi, number_format($b[$k], 0), 1, 0, 'R');
+			} else {
+				$pdf->Cell($lebar[$i], $tinggi, ampFit($pdf, (string)$b[$k], $lebar[$i]), 1, 0, ($k == 'nama' || $k == 'jabatan') ? 'L' : 'C');
+			}
+		}
+		$pdf->Ln();
+	}
+
+	if ($no == 0) {
+		$pdf->Cell(array_sum($lebar), $tinggi, 'Data tidak ditemukan', 1, 1, 'C');
+	} else {
+		if ($pdf->GetY() + $tinggi > $pdf->h - $pdf->bMargin) {
+			$pdf->AddPage();
+		}
+		$n = count($lebar);
+		$lebarLabel = array_sum($lebar) - $lebar[$n - 4] - $lebar[$n - 3] - $lebar[$n - 2] - $lebar[$n - 1];
+		$pdf->SetFont('Arial', 'B', 7);
+		$pdf->Cell($lebarLabel, $tinggi, 'TOTAL', 1, 0, 'C');
+		$pdf->Cell($lebar[$n - 4], $tinggi, number_format($total['gaji'], 0), 1, 0, 'R');
+		$pdf->Cell($lebar[$n - 3], $tinggi, number_format($total['premi'], 0), 1, 0, 'R');
+		$pdf->Cell($lebar[$n - 2], $tinggi, number_format($total['bruto'], 0), 1, 0, 'R');
+		$pdf->Cell($lebar[$n - 1], $tinggi, number_format($total['pph'], 0), 1, 1, 'R');
+	}
+
+	$pdf->Ln(2);
+	$pdf->SetFont('Arial', 'I', 7);
+	$pdf->MultiCell(0, 4, utf8_decode('Gaji/Upah = tunjangan tetap | Premi/Lembur/Dll = pendapatan lain yang ikut perhitungan PPh 21 | Jumlah Bruto = Gaji/Upah + Premi/Lembur/Dll | PPh 21 = potongan PPh 21 pada periode ini'));
+	$pdf->Output();
+	exit;
+}
