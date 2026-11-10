@@ -1,3 +1,72 @@
+// ===== Select2: tampilan ikut berubah saat nilai select diubah lewat kode (tanpa memicu onchange) =====
+function perbaruiSelect2(el) {
+  if (!window.jQuery) {
+    return;
+  }
+  var s2 = jQuery(el).data("select2");
+  if (!s2) {
+    return;
+  }
+  s2.dataAdapter.current(function (data) {
+    s2.trigger("selection:update", { data: data });
+  });
+}
+
+if (window.jQuery) {
+  jQuery(function () {
+    var asli = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value");
+    jQuery("select.select2").each(function () {
+      Object.defineProperty(this, "value", {
+        get: function () {
+          return asli.get.call(this);
+        },
+        set: function (nilai) {
+          asli.set.call(this, nilai);
+          perbaruiSelect2(this);
+        },
+        configurable: true,
+      });
+    });
+  });
+}
+
+// ===== Tarikan Excel / PDF daftar jurnal sesuai filter pencarian =====
+function paramFilterJM() {
+  var ambil = function (id) {
+    return encodeURIComponent(document.getElementById(id).value.trim());
+  };
+  return (
+    "nojurnal=" + ambil("nojurnalsch") +
+    "&kodeorg=" + ambil("kodeorgsch") +
+    "&tipetransaksi=" + ambil("tipetransaksisch") +
+    "&revisi=" + ambil("revisisch") +
+    "&statsch=" + ambil("statsch") +
+    "&noreferensi=" + ambil("noreferensisch") +
+    "&tanggalmulai=" + ambil("tanggalmulaisch") +
+    "&tanggalselesai=" + ambil("tanggalselesaisch")
+  );
+}
+
+function tarikJM(format) {
+  var mulai = document.getElementById("tanggalmulaisch").value;
+  var selesai = document.getElementById("tanggalselesaisch").value;
+  if ((mulai != "" && selesai == "") || (mulai == "" && selesai != "")) {
+    alert("Tanggal mulai dan tanggal selesai harus diisi lengkap.");
+    return;
+  }
+  var tujuan =
+    "keu_jurnalmemorial_slave.php?method=" +
+    (format == "pdf" ? "pdflist" : "excellist") +
+    "&" +
+    paramFilterJM();
+  alertify
+    .popup(
+      format == "pdf" ? "Report PDF" : "Report Ms.Excel",
+      "<iframe frameborder=0 style='width:100%;height:100%;overflow:none' src='" + tujuan + "'></iframe>"
+    )
+    .set({ resizable: true, maximizable: true, overflow: false })
+    .resizeTo("90%", "85%");
+}
 function showhideinfo() {
   var row = document.getElementById("forminfo");
   if (row !== null) {

@@ -6,6 +6,7 @@ include_once('lib/zLib.php');
 include('lib/zFunction.php');
 include('lib/rTable.php');
 echo open_body();
+require_once('lib/zSelect2.php');
 include('master_mainMenu.php');
 ?>
 <script language=javascript src='js/zReport.js'></script>
@@ -13,6 +14,11 @@ include('master_mainMenu.php');
 <script language="javascript" src="js/zMaster.js"></script>
 <script language=javascript src=js/zTools.js></script>
 <script language=javascript src=js/zSearch.js></script>
+<script language=javascript src='js/zSelect2.js?ver=1'></script>
+<style>
+/* dropdown select2 di atas dialog */
+body > .select2-container{z-index:2100}
+</style>
 <script language=javascript1.2 src='js/formTable.js'></script>
 <script language=javascript src='js/keu_jurnalmemorial.js?v=<?php echo time(); ?>'></script>
 <!--deklarasi untuk option-->
@@ -98,58 +104,43 @@ echo"<table border=0>
 	<td align=center style='width:70px;height:10px!important;cursor:pointer;' onclick=showformupload()>
 		<img class=delliconBig src=images/edit.png title='Upload Excel'><br>Upload Excel</td>
 	<td>
-	 <fieldset><legend>".$_SESSION['lang']['find']."</legend>"; 
-	echo"<table>";
-	echo"
+	 <fieldset><legend>".$_SESSION['lang']['find']."</legend>";
+	echo"<table cellspacing=2 cellpadding=1>
 		<tr>
 			<td>".$_SESSION['lang']['nojurnal']."</td>
-			<td>:</td>		
-			<td>
-				<input type=text id=nojurnalsch size=50 class=myinputtext style=\"width:150px;\">
-			</td>
+			<td>:</td>
+			<td><input type=text id=nojurnalsch class=myinputtext style=\"width:190px;\"></td>
 			<td>".$_SESSION['lang']['unit']."</td>
-			<td>:</td>		
-			<td>
-				<select id=kodeorgsch  style=\"width:154px;\">'".$optunitsch."'</select>
-				<img id=kodeorgsch onclick=z.elSearch('kodeorgsch',event) class=zImgBtn src=images/onebit_02.png style=position:relative;top:3px;left:3px;>
-			</td>
+			<td>:</td>
+			<td><select class=select2 id=kodeorgsch style=\"width:200px;\">".$optunitsch."</select></td>
 			<td>".$_SESSION['lang']['tipetransaksi']."</td>
-			<td>:</td>		
-			<td>
-				<select id=tipetransaksisch style=\"width:154px;\">'".$opttipetransaksisch."'</select>
-			</td>
-		</tr>	
-		
+			<td>:</td>
+			<td><select class=select2 id=tipetransaksisch style=\"width:200px;\">".$opttipetransaksisch."</select></td>
+		</tr>
 		<tr>
 			<td>".$_SESSION['lang']['tanggal']."</td>
-			<td>:</td>		
+			<td>:</td>
 			<td>
-				<input type=text class=myinputtext id=tanggalmulaisch name=tanggalmulaisch readonly onmousemove=setCalendar(this.id) onkeypress=return false;  maxlength=10 style=width:61px;/>
+				<input type=text class=myinputtext id=tanggalmulaisch name=tanggalmulaisch readonly onmousemove=setCalendar(this.id) onkeypress=return false; maxlength=10 style=\"width:84px;\"/>
 				s/d
-				<input type=text class=myinputtext id=tanggalselesaisch name=tanggalselesaisch readonly onmousemove=setCalendar(this.id) onkeypress=return false;  maxlength=10 style=width:61px;/>			
+				<input type=text class=myinputtext id=tanggalselesaisch name=tanggalselesaisch readonly onmousemove=setCalendar(this.id) onkeypress=return false; maxlength=10 style=\"width:84px;\"/>
 			</td>
 			<td>".$_SESSION['lang']['noreferensi']."</td>
-			<td>:</td>		
-			<td>
-				<input type=text id=noreferensisch size=200 class=myinputtext style=\"width:150px;\">
-			</td>
+			<td>:</td>
+			<td><input type=text id=noreferensisch class=myinputtext style=\"width:190px;\"></td>
 			<td>".$_SESSION['lang']['revisi']."</td>
-			<td>:</td>		
-			<td>
-				<select id=revisisch  style=\"width:154px;\">'".$optrevisisch."'</select>
-			</td>
+			<td>:</td>
+			<td><select class=select2 id=revisisch style=\"width:200px;\">".$optrevisisch."</select></td>
 		</tr>
 		<tr>
 			<td>".$_SESSION['lang']['status']."</td>
-			<td>:</td>		
-			<td>
-				<select id=statsch  style=\"width:154px;\">'".$optstatsch."'</select>
+			<td>:</td>
+			<td><select class=select2 id=statsch style=\"width:190px;\">".$optstatsch."</select></td>
+			<td colspan=6 style='padding-top:4px'>
+				<button class=mybutton onclick=loaddata(0)>".$_SESSION['lang']['find']."</button>
+				<button class=mybutton onclick=tarikJM('excel')>".$_SESSION['lang']['excel']."</button>
+				<button class=mybutton onclick=tarikJM('pdf')>PDF</button>
 			</td>
-		</tr>
-
-		<tr>
-			<td></td><td></td>
-			<td colspan=3><button class=mybutton onclick=loaddata(0)>".$_SESSION['lang']['find']."</button></td>
 		</tr>
 	</table>";
 echo"</fieldset></td>";
@@ -234,13 +225,13 @@ echo "<legend><b>".$_SESSION['lang']['form']."</b></legend>
 		<td  ".$style.">".$_SESSION['lang']['matauang']." & ".$_SESSION['lang']['kurs']."</td>
 		<td>:</td>		
 		<td>
-			<select id=matauang  style=\"width:95px;\" onchange=getkurs()>'".$optmatauang."'</select>
+			<select class=select2 id=matauang  style=\"width:95px;\" onchange=getkurs()>".$optmatauang."</select>
 			<input class=myinputtextnumber id=kurs disabled style=\"width:50px;\" onkeypress='return angka_doang(event)' />
 		</td>
 		<td>".$_SESSION['lang']['tipetransaksi']."</td>
 		<td>:</td>		
 		<td>
-			<select id=tipetransaksi onchange=getrevisi() style=\"width:154px;\">'".$opttipetransaksi."'</select>
+			<select class=select2 id=tipetransaksi onchange=getrevisi() style=\"width:154px;\">".$opttipetransaksi."</select>
 		</td>
 	</tr>
 
@@ -250,7 +241,7 @@ echo "<legend><b>".$_SESSION['lang']['form']."</b></legend>
 		<td ".$style.">".$_SESSION['lang']['unit']."</td>
 		<td>:</td>		
 		<td>
-			<select id=kodeorg  style=\"width:154px;\">'".$optunit."'</select>
+			<select class=select2 id=kodeorg  style=\"width:154px;\">".$optunit."</select>
 		</td>
 		<td ".$style.">".$_SESSION['lang']['noreferensi']."</td>
 		<td>:</td>		
@@ -258,7 +249,7 @@ echo "<legend><b>".$_SESSION['lang']['form']."</b></legend>
 		<td>".$_SESSION['lang']['revisi']."</td>
 		<td>:</td>		
 		<td>
-			<select id=revisi  style=\"width:154px;\">'".$optrevisi."'</select>
+			<select class=select2 id=revisi  style=\"width:154px;\">".$optrevisi."</select>
 		</td>
 	</tr>
 	
@@ -287,40 +278,22 @@ echo"</div>";//<input type=hidden id=method value='insertht'>
 echo"<div id=inputdata style=display:none>";
 OPEN_BOX();
 echo"
-	<fieldset style=width:20%;float:left;margin-right:15px;><legend>" . $_SESSION['lang']['form'] . "</legend>
-		<table border=0>
+	<fieldset style='float:left'><legend>" . $_SESSION['lang']['form'] . " Upload Excel</legend>
+		<table border=0 cellspacing=2>
 			<tr>
 				<td>" . $_SESSION['lang']['file'] . "</td>
 				<td>:</td>
-				<td>
-					<input type='file' name='upload' id='upload' >
-				</td>
+				<td><input type='file' name='upload' id='upload' accept='.xls,.xlsx'></td>
 			</tr>
 			<tr>
 				<td></td>
 				<td></td>
 				<td>
-					<button class=mybutton onclick=fileSelected('') style=width:84px;color:blue;>Preview</button>
-					<!--<button class=mybutton id=formuploaddt onclick=formupload() style=width:60px;color:red;>Download Template</button>-->
+					<button class=mybutton onclick=fileSelected('') style='color:blue;'>Preview</button>
+					<a href='keu_jurnalmemorial_slave.php?method=downloadtemplate' class=mybutton id=formuploaddt style='text-decoration:none;display:inline-block;'>Download Template</a>
 				</td>
 			</tr>
 		</table>
-		
-	</fieldset>
-	";
-
-echo"
-	<fieldset style='width:20%;height:70px;'><legend>Template Upload</legend>
-		<table border=0>
-			<tr>
-				<td></td>
-				<td></td>
-				<td>
-					<a href='tempExcel/tempjurnalmemo.xlsx' class=mybutton id=formuploaddt style=width:60px;>Download Template</button>
-				</td>
-			</tr>
-		</table>
-		
 	</fieldset>
 	";
 CLOSE_BOX();
@@ -383,8 +356,7 @@ $frm[0].="<legend><b>".$_SESSION['lang']['form']."</b></legend>";
 				<td  ".$style.">".$_SESSION['lang']['namakegiatan']."</td>
 				<td>:</td>		
 				<td>
-					<select id=kodekegiatan  style=\"width:154px;\">'".$optkegiatan."'</select>
-					<img id=kodekegiatan onclick=z.elSearch('kodekegiatan',event) class=zImgBtn src=images/onebit_02.png style=position:relative;top:3px;left:3px;>
+					<select class=select2 id=kodekegiatan  style=\"width:154px;\">".$optkegiatan."</select>
 				</td>
 			</tr>
 			
@@ -392,15 +364,13 @@ $frm[0].="<legend><b>".$_SESSION['lang']['form']."</b></legend>";
 			<td ".$style.">".$_SESSION['lang']['akun']."</td>
 				<td>:</td>		
 				<td>
-					<select id=noakun  style=\"width:154px;\" onchange=getkodekegiatanalokasi()>'".$optakundt."'</select>
-					<img id=noakun onclick=z.elSearch('noakun',event) class=zImgBtn src=images/onebit_02.png style=position:relative;top:3px;left:3px;>
+					<select class=select2 id=noakun  style=\"width:154px;\" onchange=getkodekegiatanalokasi()>".$optakundt."</select>
 				</td>
 				
 				<td>".$_SESSION['lang']['aktivadalam']."</td>
 				<td>:</td>		
 				<td>
-					<select id=kodeasset  style=\"width:154px;\">'".$optadk."'</select>
-					<img id=kodeasset onclick=z.elSearch('kodeasset',event) class=zImgBtn src=images/onebit_02.png style=position:relative;top:3px;left:3px;>
+					<select class=select2 id=kodeasset  style=\"width:154px;\">".$optadk."</select>
 				</td>
 			</tr>
 			
@@ -409,7 +379,7 @@ $frm[0].="<legend><b>".$_SESSION['lang']['form']."</b></legend>";
 				<td ".$style.">".$_SESSION['lang']['status']."</td>
 				<td>:</td>
 				<td>
-					<select id=ketjumlah style=\"width:154px;\">
+					<select class=select2 id=ketjumlah style=\"width:154px;\">
 						<option value=debet>Debet</option>
 						<option value=kredit>Kredit</option>
 					</select>
@@ -418,8 +388,7 @@ $frm[0].="<legend><b>".$_SESSION['lang']['form']."</b></legend>";
 				<td ".$style.">".$_SESSION['lang']['namakaryawan']."</td>
 				<td>:</td>		
 				<td>
-					<select id=nik  style=\"width:154px;\">'".$optnik."'</select>
-					<img id=nik onclick=z.elSearch('nik',event) class=zImgBtn src=images/onebit_02.png style=position:relative;top:3px;left:3px;>
+					<select class=select2 id=nik  style=\"width:154px;\">".$optnik."</select>
 				</td>
 			</tr>
 			
@@ -433,8 +402,7 @@ $frm[0].="<legend><b>".$_SESSION['lang']['form']."</b></legend>";
 				<td ".$style.">".$_SESSION['lang']['customer']."</td>
 				<td>:</td>		
 				<td>
-					<select id=kodecustomer  style=\"width:154px;\">'".$optcustomer."'</select>
-					<img id=kodecustomer onclick=z.elSearch('kodecustomer',event) class=zImgBtn src=images/onebit_02.png style=position:relative;top:3px;left:3px;>
+					<select class=select2 id=kodecustomer  style=\"width:154px;\">".$optcustomer."</select>
 				</td>	
 			</tr>
 			
@@ -447,8 +415,7 @@ $frm[0].="<legend><b>".$_SESSION['lang']['form']."</b></legend>";
 				<td ".$style.">".$_SESSION['lang']['namasupplier']."</td>
 				<td>:</td>		
 				<td>
-					<select id=kodesupplier  style=\"width:154px;\">'".$optsupplier."'</select>
-					<img id=kodesupplier onclick=z.elSearch('kodesupplier',event) class=zImgBtn src=images/onebit_02.png style=position:relative;top:3px;left:3px;>
+					<select class=select2 id=kodesupplier  style=\"width:154px;\">".$optsupplier."</select>
 				</td>	
 			</tr>
 			
@@ -457,8 +424,7 @@ $frm[0].="<legend><b>".$_SESSION['lang']['form']."</b></legend>";
 				<td ".$style.">".$_SESSION['lang']['kodevhc']."</td>
 				<td>:</td>		
 				<td>
-					<select id=kodevhc  style=\"width:154px;\">'".$optvhc."'</select>
-					<img id=kodevhc onclick=z.elSearch('kodevhc',event) class=zImgBtn src=images/onebit_02.png style=position:relative;top:3px;left:3px;>
+					<select class=select2 id=kodevhc  style=\"width:154px;\">".$optvhc."</select>
 				</td>
 			</tr>
 			
@@ -466,8 +432,7 @@ $frm[0].="<legend><b>".$_SESSION['lang']['form']."</b></legend>";
 				<td ".$style.">".$_SESSION['lang']['alokasi']."</td>
 				<td>:</td>		
 				<td>
-					<select id=kodeblok  style=\"width:154px;\">'".$optalokasi."'</select>
-					<img id=kodeblok onclick=z.elSearch('kodeblok',event) class=zImgBtn src=images/onebit_02.png style=position:relative;top:3px;left:3px;>
+					<select class=select2 id=kodeblok  style=\"width:154px;\">".$optalokasi."</select>
 				</td>
 			</tr>
 			
@@ -522,7 +487,7 @@ $frm[1].="<fieldset style='float:left'>
 				<td>".$_SESSION['lang']['kriteria']."</td>
 				<td>:</td>
 				<td>
-					<select id='kriteriaefil'>". $optkriteria."</select>
+					<select class=select2 id='kriteriaefil'>". $optkriteria."</select>
 				</td>
 			</tr>
 			<tr>

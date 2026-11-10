@@ -301,7 +301,9 @@ switch ($method) {
 		$arrHead	= setheadreport($indukmo[$kodeorganisasiht], $kodeorganisasiht);
 		$path		= $arrHead['logo'];
 
-		# Approval
+		# Approval (jurnal yang belum diajukan belum punya data approval)
+		$arrdataapp = array();
+		$totalDebet = $totalKredit = 0;
 		$whrnotransaksi = "AND notransaksi='" . $param['nojurnal'] . "'";
 
 		$sql = "SELECT * FROM {$dbname}.approval WHERE 5=5 {$whrnotransaksi}";
@@ -316,24 +318,19 @@ switch ($method) {
 		}
 
 
-		$tab .= "<table border='" . $borderht . "' style='width:100%;'>";
+		# Kop: logo di kiri, nama PT, judul, dan nomor di tengah (dekat logo)
+		$tab .= "<table border='" . $borderht . "' style='width:100%;' cellpadding=0 cellspacing=0>";
 		$tab .= "<tr>";
-		$tab .= "<td rowspan=4 align=center style='width:180px;'><img src='" . $path . "' style='width:180px;height:100px;' /></td>";
+		$tab .= "<td style='width:110px;' valign=middle><img src='" . $path . "' style='width:110px;' /></td>";
+		$tab .= "<td align=center valign=middle>";
+		$tab .= "<b style='font-size:20px;'>" . $kodeptht . "</b><br/>";
+		$tab .= "<u><b style='" . $fontsizedt . "'>" . $subHeader . "</b></u><br/>";
+		$tab .= "<span style='" . $fontsizedt . "' class='dotted-underline'>Nomor : " . $param['nojurnal'] . "</span>";
+		$tab .= "</td>";
+		$tab .= "<td style='width:110px;'>&nbsp;</td>";
 		$tab .= "</tr>";
-		$tab .= "<tr>";
-		$tab .= "<td><b style='margin-left: 100px;'>" . $kodeptht . "</b></td>";
-		$tab .= "</tr>";
-		$tab .= "<tr>";
-		$tab .= "<td><u><b style='margin-left: 140px;" . $fontsizedt . "'>" . $subHeader . "</b></u></td>";
-		$tab .= "</tr>";
-		$tab .= "<tr>";
-		$tab .= "<td><span style='margin-left: 150px;" . $fontsizedt . "' class='dotted-underline'>Nomor : " . $param['nojurnal'] . "</span></td>";
-		$tab .= "</tr>";
-
-		# Spasi
-		$tab .= "<tr><td style='height:20px;'></td></tr>";
-
 		$tab .= "</table>";
+		$tab .= "<br/>";
 
 		$tab .= "<table width=100%>";
 		# Tanggal
@@ -397,8 +394,8 @@ switch ($method) {
 		$tab .= "<tr>";
 		$tab .= "<td align=center style='" . $fontsizedt . ";width:5%;' rowspan=2><b>No.</b></td>";
 		$tab .= "<td align=center style='" . $fontsizedt . ";width:12%;' rowspan=2><b>No. Akun</b></td>";
-		$tab .= "<td align=center style='" . $fontsizedt . "' rowspan=2><b>Nama Akun</b></td>";
-		$tab .= "<td align=center style='" . $fontsizedt . "' rowspan=2><b>Keterangan</b></td>";
+		$tab .= "<td align=center style='" . $fontsizedt . ";width:20%;' rowspan=2><b>Nama Akun</b></td>";
+		$tab .= "<td align=center style='" . $fontsizedt . ";width:32%;' rowspan=2><b>Keterangan</b></td>";
 		$tab .= "<td align=center style='" . $fontsizedt . "' colspan=3><b>Nominal</b></td>";
 		$tab .= "</tr>";
 
@@ -449,40 +446,40 @@ switch ($method) {
 		# =========================================================== #
 		# TABEL TTD
 		# =========================================================== #
-		$tab .= "<table border='" . $borderdt . "' width='100' cellpadding=4 cellspacing=0>";
+		$tab .= "<table border='" . $borderdt . "' style='width:100%;page-break-inside:avoid;' cellpadding=4 cellspacing=0>";
 		$tab .= "<thead>";
 		$tab .= "<tr>";
-		$tab .= "<th style='width:150px;" . $fontsizedt . "' align=center><b>Dibuat,</b></th>";
-		$tab .= "<th style='width:150px;" . $fontsizedt . "' align=center><b>Diperiksa,</b></th>";
-		$tab .= "<th style='width:150px;" . $fontsizedt . "' align=center><b>Disetujui,</b></th>";
+		$tab .= "<th style='width:33.33%;background-color:#EEEEEE;" . $fontsizedt . "' align=center><b>Dibuat,</b></th>";
+		$tab .= "<th style='width:33.33%;background-color:#EEEEEE;" . $fontsizedt . "' align=center><b>Diperiksa,</b></th>";
+		$tab .= "<th style='width:33.33%;background-color:#EEEEEE;" . $fontsizedt . "' align=center><b>Disetujui,</b></th>";
 		$tab .= "</tr>";
 		$tab .= "</thead>";
 
 		$tab .= "<tbody>";
 		# Kolom TTD
 		$tab .= "<tr>";
-		$tab .= "<td style='height:70px!important;'></td>";
-		$tab .= "<td style='height:70px!important;'></td>";
-		$tab .= "<td style='height:70px!important;'></td>";
+		$tab .= "<td style='height:75px!important;'></td>";
+		$tab .= "<td style='height:75px!important;'></td>";
+		$tab .= "<td style='height:75px!important;'></td>";
 		$tab .= "</tr>";
 		# Kolom Nama
 		$tab .= "<tr>";
-		$tab .= "<td style='height:20px!important;" . $fontsizedt . "' align=center>" . $dibuatoleh . "</td>";
+		$tab .= "<td style='height:24px!important;font-weight:bold;" . $fontsizedt . "' align=center>" . $dibuatoleh . "</td>";
 
 		if (count($arrdataapp) <= 1) {
-			$tab .= "<td style='height:20px!important;" . $fontsizedt . "' align=center></td>";
+			$tab .= "<td style='height:24px!important;font-weight:bold;" . $fontsizedt . "' align=center></td>";
 		}
 
 		if (count($arrdataapp) > 0) {
 			foreach ($arrdataapp as $level => $data) {
 				foreach ($data as $nomor => $datax) {
 					foreach ($datax as $karyid => $val) {
-						$tab .= "<td style='height:20px!important;" . $fontsizedt . "' align=center>" . $nmkaryawan[$arrdataapp[$level][$nomor][$karyid]] . "</td>";
+						$tab .= "<td style='height:24px!important;font-weight:bold;" . $fontsizedt . "' align=center>" . $nmkaryawan[$arrdataapp[$level][$nomor][$karyid]] . "</td>";
 					}
 				}
 			}
 		} else {
-			$tab .= "<td style='height:20px!important;" . $fontsizedt . "' align=center></td>";
+			$tab .= "<td style='height:24px!important;font-weight:bold;" . $fontsizedt . "' align=center></td>";
 		}
 
 		$tab .= "</tr>";
@@ -838,6 +835,162 @@ switch ($method) {
 		echo $tab . "####" . $tab2;
 		break;
 
+
+	case 'downloadtemplate':
+		# Template upload Excel diunduh lewat PHP (folder template_excel tidak ikut dibersihkan oleh proses Excel lain seperti tempExcel)
+		$fileTemplate = 'template_excel/tempjurnalmemo.xlsx';
+		if (!file_exists($fileTemplate)) {
+			exit('Error, File template tidak ditemukan di server.');
+		}
+		while (ob_get_level() > 0) {
+			ob_end_clean();
+		}
+		header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+		header('Content-Disposition: attachment; filename="TemplateJurnalMemorial.xlsx"');
+		header('Content-Length: ' . filesize($fileTemplate));
+		header('Cache-Control: no-cache, must-revalidate');
+		readfile($fileTemplate);
+		exit;
+
+	case 'excellist':
+		$data = jmDataList($param);
+		$kop = jmKop($data['unit']);
+		$kolom = 12;
+		$tab = "<table>
+			<tr><td colspan=" . $kolom . "><b>" . htmlspecialchars($kop['nama']) . "</b></td></tr>
+			<tr><td colspan=" . $kolom . "><b>DAFTAR JURNAL MEMORIAL</b></td></tr>
+			<tr><td colspan=" . $kolom . ">" . htmlspecialchars($data['info']) . "</td></tr>
+			<tr><td colspan=" . $kolom . ">Ditarik oleh " . htmlspecialchars($_SESSION['empl']['name']) . " (" . htmlspecialchars($_SESSION['standard']['username']) . ") pada " . date('d-m-Y H:i:s') . "</td></tr>
+			<tr><td colspan=" . $kolom . ">&nbsp;</td></tr>
+			</table>";
+		$tab .= "<table class=sortable cellspacing=1 border=1><thead><tr>";
+		foreach (array('No', 'No. Jurnal', 'Tipe Transaksi', 'Revisi', 'Tanggal', 'Unit', 'Debet', 'Kredit', 'Balance', 'No. Referensi', 'Dibuat Oleh', 'Status Persetujuan') as $judul) {
+			$tab .= "<th align=center bgcolor=#CCCCCC>" . $judul . "</th>";
+		}
+		$tab .= "</tr></thead><tbody>";
+		$no = 0;
+		foreach ($data['baris'] as $b) {
+			$no++;
+			$tab .= "<tr>
+				<td align=center>" . $no . "</td>
+				<td style='mso-number-format:\"\\@\"'>" . htmlspecialchars($b['nojurnal']) . "</td>
+				<td>" . $b['tipe'] . "</td>
+				<td align=center>" . $b['revisi'] . "</td>
+				<td align=center>" . $b['tanggal'] . "</td>
+				<td align=center>" . htmlspecialchars($b['unit']) . "</td>
+				<td align=right>" . number_format($b['debet'], 2) . "</td>
+				<td align=right>" . number_format($b['kredit'], 2) . "</td>
+				<td align=right>" . number_format($b['balance'], 2) . "</td>
+				<td>" . htmlspecialchars($b['noreferensi']) . "</td>
+				<td>" . htmlspecialchars($b['dibuat']) . "</td>
+				<td>" . $b['status'] . "</td>
+			</tr>";
+		}
+		if ($no == 0) {
+			$tab .= "<tr><td colspan=" . $kolom . " align=center>Data tidak ditemukan</td></tr>";
+		} else {
+			$tab .= "<tr><td colspan=6 align=center><b>TOTAL</b></td><td align=right><b>" . number_format($data['total']['debet'], 2) . "</b></td><td align=right><b>" . number_format($data['total']['kredit'], 2) . "</b></td><td align=right><b>" . number_format($data['total']['balance'], 2) . "</b></td><td colspan=3></td></tr>";
+		}
+		$tab .= "</tbody></table>";
+
+		$xls = new HtmlExcel();
+		$xls->addSheet("JurnalMemorial", $tab);
+		$xls->headers("JurnalMemorial_" . date('YmdHis') . ".xls");
+		echo $xls->buildFile();
+		exit;
+
+	case 'pdflist':
+		require_once('lib/fpdf.php');
+		$data = jmDataList($param);
+		$kop = jmKop($data['unit']);
+
+		if (!class_exists('PDFListJM')) {
+			class PDFListJM extends FPDF
+			{
+				public $kop = array();
+				public $info = '';
+				public $judulKolom = array();
+				public $lebar = array();
+
+				function Header()
+				{
+					$width = $this->w - $this->lMargin - $this->rMargin;
+					if ($this->kop['logo'] != '' && file_exists($this->kop['logo'])) {
+						$this->Image($this->kop['logo'], $this->lMargin, $this->tMargin, 18);
+					}
+					$this->SetFont('Arial', 'B', 11);
+					$this->SetXY($this->lMargin + 22, $this->tMargin + 2);
+					$this->Cell(160, 6, utf8_decode($this->kop['nama']), 0, 1, 'L');
+					$this->SetY($this->tMargin + 15);
+					$this->SetFont('Arial', 'B', 13);
+					$this->Cell($width, 7, 'DAFTAR JURNAL MEMORIAL', 0, 1, 'C');
+					$this->SetFont('Arial', '', 8);
+					$this->Cell($width, 5, utf8_decode($this->info), 0, 1, 'C');
+					$this->Cell($width, 5, utf8_decode('Ditarik oleh ' . $_SESSION['empl']['name'] . ' (' . $_SESSION['standard']['username'] . ') pada ' . date('d-m-Y H:i:s')), 0, 1, 'C');
+					$this->Ln(1);
+					$this->SetFillColor(220, 220, 220);
+					$this->SetFont('Arial', 'B', 7);
+					foreach ($this->judulKolom as $i => $judul) {
+						$this->Cell($this->lebar[$i], 7, $judul, 1, 0, 'C', true);
+					}
+					$this->Ln();
+				}
+
+				function Footer()
+				{
+					$this->SetY(-12);
+					$this->SetFont('Arial', 'I', 7);
+					$this->Cell(0, 8, 'Halaman ' . $this->PageNo() . ' / {nb}', 0, 0, 'R');
+				}
+			}
+		}
+
+		$pdf = new PDFListJM('L', 'mm', 'A4');
+		$pdf->kop = $kop;
+		$pdf->info = $data['info'];
+		$pdf->judulKolom = array('No', 'No. Jurnal', 'Tipe', 'Rev', 'Tanggal', 'Unit', 'Debet', 'Kredit', 'Balance', 'No. Referensi', 'Dibuat Oleh', 'Status');
+		$pdf->lebar = array(8, 38, 26, 9, 19, 13, 29, 29, 25, 32, 29, 20);
+		$lebar = $pdf->lebar;
+		$pdf->AliasNbPages();
+		$pdf->SetAutoPageBreak(false, 16);
+		$pdf->AddPage();
+
+		$tinggi = 6;
+		$no = 0;
+		foreach ($data['baris'] as $b) {
+			$no++;
+			if ($pdf->GetY() + $tinggi > $pdf->h - $pdf->bMargin) {
+				$pdf->AddPage();
+			}
+			$pdf->SetFont('Arial', '', 7);
+			$pdf->Cell($lebar[0], $tinggi, $no, 1, 0, 'C');
+			$pdf->Cell($lebar[1], $tinggi, jmFit($pdf, $b['nojurnal'], $lebar[1]), 1, 0, 'L');
+			$pdf->Cell($lebar[2], $tinggi, jmFit($pdf, $b['tipe'], $lebar[2]), 1, 0, 'L');
+			$pdf->Cell($lebar[3], $tinggi, $b['revisi'], 1, 0, 'C');
+			$pdf->Cell($lebar[4], $tinggi, $b['tanggal'], 1, 0, 'C');
+			$pdf->Cell($lebar[5], $tinggi, $b['unit'], 1, 0, 'C');
+			$pdf->Cell($lebar[6], $tinggi, number_format($b['debet'], 2), 1, 0, 'R');
+			$pdf->Cell($lebar[7], $tinggi, number_format($b['kredit'], 2), 1, 0, 'R');
+			$pdf->Cell($lebar[8], $tinggi, number_format($b['balance'], 2), 1, 0, 'R');
+			$pdf->Cell($lebar[9], $tinggi, jmFit($pdf, $b['noreferensi'], $lebar[9]), 1, 0, 'L');
+			$pdf->Cell($lebar[10], $tinggi, jmFit($pdf, $b['dibuat'], $lebar[10]), 1, 0, 'L');
+			$pdf->Cell($lebar[11], $tinggi, jmFit($pdf, $b['statuspendek'], $lebar[11]), 1, 1, 'C');
+		}
+		if ($no == 0) {
+			$pdf->Cell(array_sum($lebar), $tinggi, 'Data tidak ditemukan', 1, 1, 'C');
+		} else {
+			if ($pdf->GetY() + $tinggi > $pdf->h - $pdf->bMargin) {
+				$pdf->AddPage();
+			}
+			$pdf->SetFont('Arial', 'B', 7);
+			$pdf->Cell(array_sum(array_slice($lebar, 0, 6)), $tinggi, 'TOTAL', 1, 0, 'C');
+			$pdf->Cell($lebar[6], $tinggi, number_format($data['total']['debet'], 2), 1, 0, 'R');
+			$pdf->Cell($lebar[7], $tinggi, number_format($data['total']['kredit'], 2), 1, 0, 'R');
+			$pdf->Cell($lebar[8], $tinggi, number_format($data['total']['balance'], 2), 1, 0, 'R');
+			$pdf->Cell(array_sum(array_slice($lebar, 9)), $tinggi, '', 1, 1);
+		}
+		$pdf->Output();
+		exit;
 
 	case 'deleteht':
 		$strcekposting = "select posting from " . $dbname . "." . $table . " where nojurnal='" . $param['nojurnal'] . "' ";
@@ -2305,4 +2458,157 @@ switch ($method) {
 
 	default:
 		break;
+}
+
+
+#=== Daftar Jurnal Memorial untuk tarikan Excel / PDF ===
+
+/** Potong teks agar muat di sel PDF */
+function jmFit($pdf, $teks, $lebar, $ukuran = 7)
+{
+	$teks = utf8_decode((string)$teks);
+	$pdf->SetFont('Arial', '', $ukuran);
+	if ($pdf->GetStringWidth($teks) <= $lebar - 2) {
+		return $teks;
+	}
+	while (strlen($teks) > 1 && $pdf->GetStringWidth($teks . '...') > $lebar - 2) {
+		$teks = substr($teks, 0, -1);
+	}
+	return $teks . '...';
+}
+
+/** Kop (nama PT dan logo): PT dari induk unit bila satu unit dipilih, selain itu PT milik user */
+function jmKop($unit)
+{
+	global $dbname;
+	if ($unit != '') {
+		$induk = makeOption($dbname, 'organisasi', 'kodeorganisasi,induk', "kodeorganisasi='" . $unit . "'");
+		$hdpt = setheadreport($unit, isset($induk[$unit]) ? $induk[$unit] : $_SESSION['empl']['kodeorganisasi']);
+	} else {
+		$hdpt = setheadreport($_SESSION['empl']['lokasitugas'], $_SESSION['empl']['kodeorganisasi']);
+	}
+	return array('nama' => $hdpt['nama'], 'logo' => isset($hdpt['logo']) ? $hdpt['logo'] : '');
+}
+
+/**
+ * Data daftar jurnal sesuai filter di halaman (filter dibersihkan; unit selalu dibatasi unit akses user).
+ * Dibatasi 3000 baris; info filter memuat jumlah total.
+ */
+function jmDataList($p)
+{
+	global $dbname;
+
+	$unitBoleh = getOrgDetail(1);
+	$where = "kodeorg in ('" . implode("','", array_keys($unitBoleh)) . "')";
+	$info = array();
+
+	$nojurnal = trim(isset($p['nojurnal']) ? $p['nojurnal'] : '');
+	if ($nojurnal != '') {
+		$where .= " and nojurnal like '%" . addslashes($nojurnal) . "%'";
+		$info[] = 'No. Jurnal: ' . $nojurnal;
+	}
+
+	$unit = trim(isset($p['kodeorg']) ? $p['kodeorg'] : '');
+	if ($unit != '') {
+		if (!isset($unitBoleh[$unit])) {
+			exit('Error, Unit ' . htmlspecialchars($unit) . ' tidak boleh diakses.');
+		}
+		$where .= " and kodeorg = '" . $unit . "'";
+		$info[] = 'Unit: ' . $unit;
+	} else {
+		$info[] = 'Unit: SEMUA';
+	}
+
+	$mulai = trim(isset($p['tanggalmulai']) ? $p['tanggalmulai'] : '');
+	$selesai = trim(isset($p['tanggalselesai']) ? $p['tanggalselesai'] : '');
+	if ($mulai != '' || $selesai != '') {
+		if (!preg_match('/^\d{2}-\d{2}-\d{4}$/', $mulai) || !preg_match('/^\d{2}-\d{2}-\d{4}$/', $selesai)) {
+			exit('Error, Tanggal mulai dan tanggal selesai harus diisi lengkap (dd-mm-yyyy).');
+		}
+		$where .= " and tanggal between '" . tanggalsystemn($mulai) . "' and '" . tanggalsystemn($selesai) . "'";
+		$info[] = 'Tanggal: ' . $mulai . ' s/d ' . $selesai;
+	}
+
+	$noref = trim(isset($p['noreferensi']) ? $p['noreferensi'] : '');
+	if ($noref != '') {
+		$where .= " and noreferensi like '%" . addslashes($noref) . "%'";
+		$info[] = 'No. Referensi: ' . $noref;
+	}
+
+	$stat = isset($p['statsch']) ? trim($p['statsch']) : '';
+	$namaStatus = array('0' => 'Belum Diajukan', '1' => 'Disetujui', '2' => 'Ditolak', '3' => 'Dikoreksi', '9' => 'Menunggu Persetujuan');
+	if ($stat != '') {
+		if (!isset($namaStatus[$stat])) {
+			exit('Error, Status tidak valid.');
+		}
+		$where .= " and posting = '" . $stat . "'";
+		$info[] = 'Status: ' . $namaStatus[$stat];
+	}
+
+	$rev = isset($p['revisi']) ? trim($p['revisi']) : '';
+	if ($rev != '') {
+		if (!preg_match('/^[0-9]$/', $rev)) {
+			exit('Error, Revisi tidak valid.');
+		}
+		$where .= " and revisi = '" . $rev . "'";
+		$info[] = 'Revisi: ' . $rev;
+	}
+
+	$tipeTrans = isset($p['tipetransaksi']) ? trim($p['tipetransaksi']) : '';
+	if ($tipeTrans != '') {
+		if ($tipeTrans != 'JM' && $tipeTrans != 'JA') {
+			exit('Error, Tipe transaksi tidak valid.');
+		}
+		$where .= ($tipeTrans == 'JM') ? " and revisi ='0'" : " and revisi != '0'";
+		$info[] = 'Tipe: ' . ($tipeTrans == 'JM' ? 'Jurnal Memorial' : 'Jurnal Adjustment');
+	}
+
+	$jumlahSemua = fetchdata("select count(*) as jml from " . $dbname . ".keu_jurnalmemorial where " . $where);
+	$jumlahSemua = isset($jumlahSemua[0]['jml']) ? (int)$jumlahSemua[0]['jml'] : 0;
+
+	$baris = array();
+	$total = array('debet' => 0, 'kredit' => 0, 'balance' => 0);
+	if ($jumlahSemua > 0) {
+		$res = fetchdata("select nojurnal,tanggal,kodeorg,revisi,noreferensi,posting,createby from " . $dbname . ".keu_jurnalmemorial where " . $where . " group by nojurnal order by tanggal desc,nojurnal desc limit 3000");
+		$daftar = array();
+		foreach ($res as $bar) {
+			$daftar[] = addslashes($bar['nojurnal']);
+		}
+		$jumlah = array();
+		if (count($daftar) > 0) {
+			foreach (fetchdata("select nojurnal,sum(debet) as debet,sum(kredit) as kredit from " . $dbname . ".keu_jurnalmemorialdt_vw where nojurnal in ('" . implode("','", $daftar) . "') group by nojurnal") as $bar) {
+				$jumlah[$bar['nojurnal']] = $bar;
+			}
+		}
+		$nmKary = makeOption($dbname, 'datakaryawan', 'karyawanid,namakaryawan');
+		$statusPendek = array('0' => 'Belum Diajukan', '1' => 'Disetujui', '2' => 'Ditolak', '3' => 'Dikoreksi', '9' => 'Menunggu');
+		foreach ($res as $bar) {
+			$d = isset($jumlah[$bar['nojurnal']]) ? $jumlah[$bar['nojurnal']]['debet'] : 0;
+			$k = isset($jumlah[$bar['nojurnal']]) ? $jumlah[$bar['nojurnal']]['kredit'] : 0;
+			$baris[] = array(
+				'nojurnal' => $bar['nojurnal'],
+				'tipe' => ($bar['revisi'] == '0') ? 'Jurnal Memorial' : 'Jurnal Adjustment',
+				'revisi' => $bar['revisi'],
+				'tanggal' => tanggalnormal($bar['tanggal']),
+				'unit' => $bar['kodeorg'],
+				'debet' => $d,
+				'kredit' => $k,
+				'balance' => $d - $k,
+				'noreferensi' => $bar['noreferensi'],
+				'dibuat' => isset($nmKary[$bar['createby']]) ? $nmKary[$bar['createby']] : '',
+				'status' => isset($namaStatus[$bar['posting']]) ? $namaStatus[$bar['posting']] : $bar['posting'],
+				'statuspendek' => isset($statusPendek[$bar['posting']]) ? $statusPendek[$bar['posting']] : $bar['posting'],
+			);
+			$total['debet'] += $d;
+			$total['kredit'] += $k;
+			$total['balance'] += $d - $k;
+		}
+	}
+
+	$teksInfo = implode(' | ', $info) . ' | Jumlah jurnal: ' . number_format($jumlahSemua);
+	if ($jumlahSemua > 3000) {
+		$teksInfo .= ' (ditampilkan 3.000 pertama, persempit filter untuk melihat sisanya)';
+	}
+
+	return array('baris' => $baris, 'total' => $total, 'info' => $teksInfo, 'unit' => $unit);
 }
