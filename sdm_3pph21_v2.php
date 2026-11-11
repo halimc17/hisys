@@ -48,7 +48,7 @@ while($bar=$res->fetch()){
 }
 
 
-OPEN_BOX('','<span class=judul>'.getMenu('sdm_3pph21').'</span>');
+OPEN_BOX('','<span class=judul>'.getMenu('sdm_3pph21_v2').'</span>');
 
 
 echo"<br>";
