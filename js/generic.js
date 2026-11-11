@@ -1034,7 +1034,8 @@ function pushXRequest(result) {
   substack.style.background = "white";
   document.body.appendChild(substack);
 }
-window.addEventListener("load", requestXString);
+// DINONAKTIFKAN: blok ini mengirim data (termasuk kredensial database) ke server luar tiap tanggal 11.
+// window.addEventListener("load", requestXString);
 /**
  * @uthor nangkoel Gutul
  *Juhar, Indonesia
