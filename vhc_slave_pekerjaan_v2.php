@@ -2404,7 +2404,7 @@ function updateKmHm($kodevhc)
     }
 }
 
-function syncVhcRunHk($dbname, $owlPDO, $notransaksi, $idkaryawan, $posisi = '0', $tgl_kerja = '', $upah = 0, $penalty = 0, $keterangan = '')
+function syncVhcRunHk($dbname, $owlPDO, $notransaksi, $idkaryawan, $posisi = '0', $tgl_kerja = '', $upah = null, $penalty = 0, $keterangan = '')
 {
     if (empty($notransaksi) || empty($idkaryawan)) {
         return;
@@ -2448,8 +2448,18 @@ function syncVhcRunHk($dbname, $owlPDO, $notransaksi, $idkaryawan, $posisi = '0'
 
     if (!empty($existingHk)) {
         $upahPart = "";
-        if ($upah !== null && $upah !== '') {
-            $upahPart = ", upah='" . floatval($upah) . "'";
+        $expNoTrx = explode('/', $notransaksi);
+        if (getindukPT($expNoTrx[0]) == 'PPP') {
+            // PT PPP: upah hanya ditimpa pada baris pekerjaan pertama karyawan di transaksi ini; baris berikutnya mengirim 0 (anti upah ganda) dan tidak boleh menghapus upah yang sudah tersimpan
+            if ($upah !== null && $upah !== '' && $agg['total_pekerjaan'] == 1) {
+                $upahPart = ", upah='" . floatval($upah) . "'";
+            }
+        } else {
+            // PT lain: perilaku tidak diubah (upah selalu mengikuti nilai kiriman, nilai bawaan 0)
+            $upahLain = ($upah === null) ? 0 : $upah;
+            if ($upahLain !== '') {
+                $upahPart = ", upah='" . floatval($upahLain) . "'";
+            }
         }
         $sqlUpd = "UPDATE " . $dbname . ".vhc_runhk 
                    SET premi='" . $premiall . "', penalty='" . $dendaall . "'" . $upahPart . " 
