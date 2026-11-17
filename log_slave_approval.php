@@ -11661,8 +11661,8 @@ switch ($method) {
                             $nourut = $bar['nourut'];
                             $kdbrg = $bar['kodebarang'];
                             $nopp = $bar['nopp'];
-                            $orgpp = substr($nopp, 15, 4);
-                            $jenispp = substr($nopp, 12, 2);
+                            $expNoPP = explode('/', $nopp); $orgpp = isset($expNoPP[4]) ? $expNoPP[4] : '';
+                            $jenispp = isset($expNoPP[3]) ? $expNoPP[3] : ''; if ($orgpp == '' || $jenispp == '') { throw new PDOException("Nomor PP/SR tidak valid: " . $nopp); }
 
                             $str = "select tipepp from " . $dbname . ".log_prapoht where nopp='" . $nopp . "'";
                             $res = fetchdata($str);

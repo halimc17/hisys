@@ -1807,7 +1807,7 @@ switch ($method) {
 					##CREATE NEW PR
 					$awal=0;
 					$nourut=substr($nopp,0,3);
-					$crnopp=str_replace($nourut,'',$nopp);
+					$crnopp=substr($nopp,strlen($nourut));
 					$str="select nopp from ".$dbname.".log_prapoht where nopp like '%".$crnopp."' order by nopp desc limit 1";
 					$res=fetchdata($str);
 					$awal=substr($res[0]['nopp'],0,3);
