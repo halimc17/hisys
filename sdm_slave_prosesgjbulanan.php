@@ -126,7 +126,7 @@ if ($numrows > 0) {
 }
 
 if (!$aktif and $method != 'estgaji') {
-	exit("Accounting perid has been closed");
+	exit("Accounting period has been closed");
 } elseif (!$aktif) {
 	echo "close";
 }
@@ -1727,6 +1727,7 @@ foreach ($id as $key => $val) {
 			$list1 .= "<th rowspan=2 >" . $_SESSION['lang']['nomor'] . "</th>";
 			$list1 .= "<th rowspan=2 >" . $_SESSION['lang']['periodegaji'] . "</th>";
 			$list1 .= "<th rowspan=2 >" . $_SESSION['lang']['namakaryawan'] . "</th>";
+			$list1 .= "<th rowspan=2 >No Induk</th>";
 			$list1 .= "<th rowspan=2 >" . $_SESSION['lang']['statuspajak'] . "</th>";
 			$list1 .= "<th rowspan=2 >Kode Catu</th>";
 
@@ -1756,6 +1757,7 @@ foreach ($id as $key => $val) {
 		$list1 .= "<td align=center>" . $nox . "</td>";
 		$list1 .= "<td align=center>" . $param['periodegaji'] . "</td>";
 		$list1 .= "<td>" . $namakar[$val[0]] . "</td>";
+		$list1 .= "<td align='center'>" . htmlspecialchars((string) $nikkary[$val[0]], ENT_QUOTES, 'UTF-8') . "</td>";
 		$list1 .= "<td align='center'>" . $statuspajak[$val[0]] . "</td>";
 		$list1 .= "<td align='center'>" . $kodecatu[$val[0]] . "</td>";
 		foreach ($dtkomplus as $komplus) {
@@ -1814,6 +1816,7 @@ foreach ($id as $key => $val) {
 			$list2 .= "<th rowspan=2 >" . $_SESSION['lang']['nomor'] . "</th>";
 			$list2 .= "<th rowspan=2 >" . $_SESSION['lang']['periodegaji'] . "</th>";
 			$list2 .= "<th rowspan=2 >" . $_SESSION['lang']['namakaryawan'] . "</th>";
+			$list2 .= "<th rowspan=2 >No Induk</th>";
 			$list2 .= "<th rowspan=2 >" . $_SESSION['lang']['statuspajak'] . "</th>";
 			$list2 .= "<th rowspan=2 >Kode Catu</th>";
 
@@ -1842,6 +1845,7 @@ foreach ($id as $key => $val) {
 		$list2 .= "<td align=center>" . $no . "</td>";
 		$list2 .= "<td align=center>" . $param['periodegaji'] . "</td>";
 		$list2 .= "<td>" . $namakar[$val[0]] . "</td>";
+		$list2 .= "<td align='center'>" . htmlspecialchars((string) $nikkary[$val[0]], ENT_QUOTES, 'UTF-8') . "</td>";
 		$list2 .= "<td align='center'>" . $statuspajak[$val[0]] . "</td>";
 		$list2 .= "<td align='center'>" . $kodecatu[$val[0]] . "</td>";
 
@@ -1931,7 +1935,7 @@ foreach ($id as $key => $val) {
 
 ##grand total
 $list2 .= "<tr class=rowcontent>";
-$list2 .= "<th colspan=5>GRAND TOTAL</th>";
+$list2 .= "<th colspan=6>GRAND TOTAL</th>";
 
 // exit('warning:'.print_r($grandtotalplus));
 
