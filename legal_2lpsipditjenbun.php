@@ -23,19 +23,35 @@ while ($bar = $res->fetch()) {
 	$optPeriode .= "<option value='" . $bar->tahun . "'>" . $bar->tahun . "</option>";
 }
 
-//=================dropdown unit (kebun) dengan optgroup per PT;
+//=================dropdown unit (kebun + pabrik) dengan optgroup per PT;
+// pabrik digabung ke optgroup sesuai induknya (pabrik CARM induknya CAR, satu grup dgn kebun CAR);
 $optUnit = "<option value=''>" . $_SESSION['lang']['all'] . "</option>";
+$arrGrpUnit = array();
 foreach (getOrgDetail(23) as $key => $val) {
 	$induk = makeOption($dbname, 'organisasi', 'kodeorganisasi,induk', "kodeorganisasi='" . $key . "'");
 	$d = $induk[$key];
-	if ($d != $n) {
-		$optUnit .= "<optgroup label='" . $d . " - " . getNamaOrg($d) . "'>";
+	$labelGrp = $d . " - " . getNamaOrg($d);
+	$optGrp = "<option value='" . $key . "'>" . $key . " - " . $val . "</option>";
+	if (!isset($arrGrpUnit[$labelGrp])) {
+		$arrGrpUnit[$labelGrp] = "";
 	}
-	$optUnit .= "<option value='" . $key . "'>" . $key . " - " . $val . "</option>";
-	$n = $d;
-	if ($d != $n) {
-		$optUnit .= "</optgroup>";
+	$arrGrpUnit[$labelGrp] .= $optGrp;
+}
+// tambah pabrik ke grup sesuai induknya
+$strPabrik = "select kodeorganisasi, namaorganisasi, induk from " . $dbname . ".organisasi where tipe='PABRIK' order by kodeorganisasi asc";
+$resPabrik = $owlPDO->query($strPabrik) or die(print " Gagal: " . PDOException::getMessage());
+$resPabrik->setFetchMode(PDO::FETCH_OBJ);
+while ($barPabrik = $resPabrik->fetch()) {
+	$labelGrp = $barPabrik->induk . " - " . getNamaOrg($barPabrik->induk);
+	if (!isset($arrGrpUnit[$labelGrp])) {
+		$arrGrpUnit[$labelGrp] = "";
 	}
+	$arrGrpUnit[$labelGrp] .= "<option value='" . $barPabrik->kodeorganisasi . "'>" . $barPabrik->kodeorganisasi . " - " . $barPabrik->namaorganisasi . "</option>";
+}
+// render urut label grup (induk)
+ksort($arrGrpUnit);
+foreach ($arrGrpUnit as $labelGrp => $isiGrp) {
+	$optUnit .= "<optgroup label='" . $labelGrp . "'>" . $isiGrp . "</optgroup>";
 }
 
 //=================dropdown inti/plasma;

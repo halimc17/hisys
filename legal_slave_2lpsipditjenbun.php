@@ -19,10 +19,10 @@ if ($proses == 'preview' || $proses == 'excel') {
 		exit("Error : Jenis produksi tidak boleh kosong");
 	}
 
-	// filter unit (kebun)
+	// filter unit (kebun/pabrik) — mengikuti kolom computed: TBS=kodeorg, selain TBS=millcode
 	$whrUnit = "";
 	if ($unit != '') {
-		$whrUnit = " and v.kodeorg='" . $unit . "'";
+		$whrUnit = " and if(v.kodebarang='40000003', v.kodeorg, v.millcode)='" . $unit . "'";
 	}
 
 	// filter inti/plasma via organisasi.inti (1=Inti, 0=Plasma)
@@ -40,39 +40,44 @@ if ($proses == 'preview' || $proses == 'excel') {
 	$rNama = $qNama->fetch();
 	$namaJenis = $rNama['namabarang'];
 
-	// daftar kebun sesuai filter (nama + inti/plasma)
+	// daftar unit sesuai filter (kebun/pabrik + inti/plasma)
 	$arrKebun = array();
-	$strKbn = "select kodeorganisasi, namaorganisasi, inti from " . $dbname . ".organisasi
-				where tipe='KEBUN' and kodeorganisasi in (select distinct kodeorg from " . $dbname . ".pabrik_timbangan where kodebarang='" . $jenis . "' and substr(tanggal,1,4)='" . $periode . "' and kodeorg!='')" .
+	$whrTipe = "tipe in ('KEBUN','PABRIK')";
+	$strKbn = "select kodeorganisasi, namaorganisasi, inti, tipe from " . $dbname . ".organisasi
+				where " . $whrTipe . " and kodeorganisasi in (select distinct if(kodebarang='40000003', kodeorg, millcode) from " . $dbname . ".pabrik_timbangan where kodebarang='" . $jenis . "' and substr(tanggal,1,4)='" . $periode . "' and if(kodebarang='40000003', kodeorg, millcode)!='')" .
 				$whrIntiplasma . "
 				order by kodeorganisasi asc";
 	if ($unit != '') {
-		$strKbn = "select kodeorganisasi, namaorganisasi, inti from " . $dbname . ".organisasi
-					where tipe='KEBUN' and kodeorganisasi='" . $unit . "'" . $whrIntiplasma . "
+		$strKbn = "select kodeorganisasi, namaorganisasi, inti, tipe from " . $dbname . ".organisasi
+					where " . $whrTipe . " and kodeorganisasi='" . $unit . "'" . $whrIntiplasma . "
 					order by kodeorganisasi asc";
 	}
 	$qKbn = $owlPDO->query($strKbn) or die(print " Gagal: " . PDOException::getMessage());
 	$qKbn->setFetchMode(PDO::FETCH_ASSOC);
 	while ($rKbn = $qKbn->fetch()) {
-		$arrKebun[$rKbn['kodeorganisasi']] = array('nama' => $rKbn['namaorganisasi'], 'inti' => $rKbn['inti']);
+		$labelUnit = $rKbn['kodeorganisasi'] . " - " . $rKbn['namaorganisasi'];
+		if ($rKbn['tipe'] == 'KEBUN') {
+			$labelUnit .= " (" . ($rKbn['inti'] == '1' ? 'INTI' : 'PLASMA') . ")";
+		}
+		$arrKebun[$rKbn['kodeorganisasi']] = array('nama' => $rKbn['namaorganisasi'], 'inti' => $rKbn['inti'], 'label' => $labelUnit);
 	}
 
-	// agregasi per unit per bulan
+	// agregasi per unit per bulan: TBS grup per kodeorg, selain TBS grup per millcode
 	$arrData = array();
-	$str = "select v.kodeorg, substr(v.tanggal,1,7) as bulan, sum(v.beratbersih) as jumlah
+	$str = "select if(v.kodebarang='40000003', v.kodeorg, v.millcode) as unit, substr(v.tanggal,1,7) as bulan, sum(v.beratbersih) as jumlah
 			from " . $dbname . ".pabrik_timbangan v
-			join " . $dbname . ".organisasi o on o.kodeorganisasi=v.kodeorg
+			join " . $dbname . ".organisasi o on o.kodeorganisasi=if(v.kodebarang='40000003', v.kodeorg, v.millcode)
 			where v.kodebarang='" . $jenis . "'
 			and substr(v.tanggal,1,4)='" . $periode . "'
-			and v.kodeorg!=''" .
+			and if(v.kodebarang='40000003', v.kodeorg, v.millcode)!=''" .
 			$whrUnit . $whrIntiplasma . "
-			group by v.kodeorg, substr(v.tanggal,1,7)
-			order by v.kodeorg asc, bulan asc";
+			group by unit, substr(v.tanggal,1,7)
+			order by unit asc, bulan asc";
 	$qData = $owlPDO->query($str) or die(print " Gagal: " . PDOException::getMessage());
 	$qData->setFetchMode(PDO::FETCH_ASSOC);
 	while ($rData = $qData->fetch()) {
 		$bln = (int)substr($rData['bulan'], 5, 2);
-		$arrData[$rData['kodeorg']][$bln] = $rData['jumlah'];
+		$arrData[$rData['unit']][$bln] = $rData['jumlah'];
 	}
 
 	// ===== render tabel =====
@@ -100,7 +105,7 @@ if ($proses == 'preview' || $proses == 'excel') {
 			}
 			$no++;
 			$tab .= "<tr class=rowheader>
-				<td colspan=4 align=left><b>" . $kodekebun . " - " . $valkebun['nama'] . " (" . ($valkebun['inti'] == '1' ? 'INTI' : 'PLASMA') . ")</b>
+				<td colspan=4 align=left><b>" . $valkebun['label'] . "</b>
 				</td>
 			</tr>";
 
@@ -134,7 +139,7 @@ if ($proses == 'preview' || $proses == 'excel') {
 			</tr>";
 			// total per unit
 			$tab .= "<tr class=rowcontent style='background-color:#bbb;font-weight:bold;'>
-				<td colspan=3 align=right>TOTAL " . $kodekebun . " - " . $valkebun['nama'] . "</td>
+				<td colspan=3 align=right>TOTAL " . $valkebun['label'] . "</td>
 				<td align=right>" . number_format($sub1 + $sub2, 0) . "</td>
 			</tr>";
 			$grandTotal += ($sub1 + $sub2);
