@@ -49,6 +49,409 @@ $kriteriaefil   = checkPostGet('kriteriaefil', '');
 $emodul         = 'PR';
 $jenisApp       = 'PR';
 
+#nama requester untuk opsi dropdown: "Nama (Departemen)", kurung hanya bila departemen ada
+if (!function_exists('ppNamaRequester')) {
+	function ppNamaRequester($nama, $bagian, $mapDept)
+	{
+		$d = isset($mapDept[$bagian]) ? $mapDept[$bagian] : $bagian;
+		return htmlspecialchars($nama) . ($d != '' ? ' (' . htmlspecialchars($d) . ')' : '');
+	}
+}
+#=== Filter daftar PR/SR serta tarikan Excel/PDF (dipakai bersama oleh list, Excel, dan PDF) ===
+#filter dibersihkan dulu: teks bebas di-escape, kode di-whitelist, tanggal dd-mm-yyyy, tahun 4 digit (kosong = semua tahun)
+if (!function_exists('ppFilter')) {
+	function ppFilter()
+	{
+		global $owlPDO;
+		$f = array('nopp' => '', 'tgl' => '', 'tahun' => '', 'unit' => '', 'tipe' => '', 'dibuat' => '', 'status' => '', 'progres' => '', 'kelompok' => '');
+		$v = trim((string)checkPostGet('carinopppr', ''));
+		if ($v != '') {
+			$f['nopp'] = substr($owlPDO->quote($v), 1, -1);
+		}
+		$v = trim((string)checkPostGet('caritanggalpppr', ''));
+		if (preg_match('/^(\d{2})-(\d{2})-(\d{4})$/', $v, $m)) {
+			$f['tgl'] = $m[3] . '-' . $m[2] . '-' . $m[1];
+		}
+		$v = trim((string)checkPostGet('caritahun', ''));
+		if (preg_match('/^\d{4}$/', $v)) {
+			$f['tahun'] = $v;
+		}
+		$v = trim((string)checkPostGet('cariunit', ''));
+		if (preg_match('/^[A-Za-z0-9]{1,10}$/', $v)) {
+			$f['unit'] = $v;
+		}
+		$v = (string)checkPostGet('caritipe', '');
+		if (in_array($v, array('PR', 'SR', 'CP', 'NR'), true)) {
+			$f['tipe'] = $v;
+		}
+		$v = trim((string)checkPostGet('caridibuat', ''));
+		if (preg_match('/^\d{1,10}$/', $v)) {
+			$f['dibuat'] = $v;
+		}
+		$v = (string)checkPostGet('caristatus', '');
+		if (in_array($v, array('draft', 'menunggu', 'disetujui', 'ditolak', 'return'), true)) {
+			$f['status'] = $v;
+		}
+		$v = (string)checkPostGet('cariprogres', '');
+		if (in_array($v, array('belum', 'alokasi', 'rfq', 'sebagian', 'selesai', 'tolakitem'), true)) {
+			$f['progres'] = $v;
+		}
+		$v = trim((string)checkPostGet('carikelompok', ''));
+		if (preg_match('/^[A-Za-z0-9]{1,5}$/', $v)) {
+			$f['kelompok'] = $v;
+		}
+		return $f;
+	}
+}
+if (!function_exists('ppWhere')) {
+	function ppWhere()
+	{
+		global $dbname;
+		$f = ppFilter();
+		$where = "h.unit in (" . getOrgDetail(2) . ")";
+		if ($f['nopp'] != '') {
+			$where .= " and h.nopp like '%" . $f['nopp'] . "%'";
+		}
+		if ($f['tgl'] != '') {
+			$where .= " and h.tanggal='" . $f['tgl'] . "'";
+		} elseif ($f['tahun'] != '') {
+			$where .= " and h.tanggal>='" . $f['tahun'] . "-01-01' and h.tanggal<='" . $f['tahun'] . "-12-31'";
+		}
+		if ($f['unit'] != '') {
+			$where .= " and h.unit='" . $f['unit'] . "'";
+		}
+		if ($f['tipe'] != '') {
+			$where .= " and h.tipepp='" . $f['tipe'] . "'";
+		}
+		if ($f['dibuat'] != '') {
+			$where .= " and h.dibuat='" . $f['dibuat'] . "'";
+		}
+		if ($f['kelompok'] != '') {
+			$where .= " and exists (select 1 from " . $dbname . ".log_prapodt d where d.nopp=h.nopp and left(d.kodebarang,3)='" . $f['kelompok'] . "')";
+		}
+		$apTolak = "exists (select 1 from " . $dbname . ".approval a where a.notransaksi=h.nopp and a.jenispersetujuan='PR' and a.status='3')";
+		if ($f['status'] == 'draft') {
+			$where .= " and h.close='0'";
+		} elseif ($f['status'] == 'menunggu') {
+			$where .= " and h.close='1'";
+		} elseif ($f['status'] == 'disetujui') {
+			$where .= " and h.close='2'";
+		} elseif ($f['status'] == 'ditolak') {
+			$where .= " and h.close='3' and " . $apTolak;
+		} elseif ($f['status'] == 'return') {
+			$where .= " and h.close='3' and not " . $apTolak;
+		}
+		#progres pembelian (hanya PR/SR yang sudah disetujui), urutan sama dengan ppTahap()
+		$exPo = "exists (select 1 from " . $dbname . ".log_prapodt d where d.nopp=h.nopp and d.status!='3' and d.create_po='1')";
+		$exOpen = "exists (select 1 from " . $dbname . ".log_prapodt d where d.nopp=h.nopp and d.status!='3' and d.create_po!='1')";
+		$exAktif = "exists (select 1 from " . $dbname . ".log_prapodt d where d.nopp=h.nopp and d.status!='3')";
+		$exTolak = "exists (select 1 from " . $dbname . ".log_prapodt d where d.nopp=h.nopp and d.status='3')";
+		$exLv = "exists (select 1 from " . $dbname . ".log_listverifikasi v where v.nopp=h.nopp)";
+		$exRfq = "exists (select 1 from " . $dbname . ".log_listverifikasi v where v.nopp=h.nopp and v.status='1')";
+		if ($f['progres'] == 'belum') {
+			$where .= " and h.close='2' and " . $exAktif . " and not " . $exPo . " and not " . $exLv;
+		} elseif ($f['progres'] == 'alokasi') {
+			$where .= " and h.close='2' and not " . $exPo . " and not " . $exRfq . " and " . $exLv;
+		} elseif ($f['progres'] == 'rfq') {
+			$where .= " and h.close='2' and not " . $exPo . " and " . $exRfq;
+		} elseif ($f['progres'] == 'sebagian') {
+			$where .= " and h.close='2' and " . $exPo . " and " . $exOpen;
+		} elseif ($f['progres'] == 'selesai') {
+			$where .= " and h.close='2' and " . $exPo . " and not " . $exOpen;
+		} elseif ($f['progres'] == 'tolakitem') {
+			$where .= " and h.close='2' and " . $exTolak;
+		}
+		return $where;
+	}
+}
+#keterangan filter yang aktif untuk kop tarikan
+if (!function_exists('ppInfoFilter')) {
+	function ppInfoFilter()
+	{
+		global $dbname, $ppTerpotong;
+		$f = ppFilter();
+		$arrStatus = array('draft' => 'Belum Diajukan', 'menunggu' => 'Menunggu Persetujuan', 'disetujui' => 'Disetujui', 'ditolak' => 'Ditolak', 'return' => 'PR/SR Return');
+		$arrProg = array('belum' => 'Menunggu Verifikasi Purchasing', 'alokasi' => 'Dialokasi ke Purchaser', 'rfq' => 'Perbandingan Harga (RFQ)', 'sebagian' => 'Sebagian PO', 'selesai' => 'Selesai PO', 'tolakitem' => 'Ada Item Ditolak Purchasing');
+		$info = array();
+		$info[] = 'Tahun: ' . ($f['tahun'] != '' ? $f['tahun'] : 'Semua');
+		if ($f['nopp'] != '') {
+			$info[] = 'No. PR/SR: ' . stripslashes($f['nopp']);
+		}
+		if ($f['tgl'] != '') {
+			$info[] = 'Tanggal: ' . tanggalnormal($f['tgl']);
+		}
+		if ($f['unit'] != '') {
+			$info[] = 'Unit: ' . $f['unit'];
+		}
+		if ($f['tipe'] != '') {
+			$info[] = 'Tipe: ' . $f['tipe'];
+		}
+		if ($f['dibuat'] != '') {
+			$nm = fetchdata("select namakaryawan from " . $dbname . ".datakaryawan where karyawanid='" . $f['dibuat'] . "'");
+			$info[] = 'Dibuat: ' . (isset($nm[0]['namakaryawan']) ? $nm[0]['namakaryawan'] : $f['dibuat']);
+		}
+		if ($f['kelompok'] != '') {
+			$nm = fetchdata("select kelompok from " . $dbname . ".log_5klbarang where kode='" . $f['kelompok'] . "'");
+			$info[] = 'Kelompok Barang: ' . $f['kelompok'] . (isset($nm[0]['kelompok']) ? ' ' . $nm[0]['kelompok'] : '');
+		}
+		if ($f['status'] != '') {
+			$info[] = 'Status: ' . $arrStatus[$f['status']];
+		}
+		if ($f['progres'] != '') {
+			$info[] = 'Progres: ' . $arrProg[$f['progres']];
+		}
+		if (!empty($ppTerpotong)) {
+			$info[] = 'Dibatasi 3000 data terbaru, persempit filter bila perlu';
+		}
+		return implode(' | ', $info);
+	}
+}
+#progres pembelian satu PR/SR yang sudah disetujui, dari jumlah item per tahap
+if (!function_exists('ppTahap')) {
+	function ppTahap($inf)
+	{
+		$aktif = $inf['n_item'] - $inf['n_tolak'];
+		if ($inf['n_item'] == 0) {
+			return 'Disetujui';
+		}
+		if ($aktif <= 0) {
+			return 'Semua Item Ditolak Purchasing';
+		}
+		if ($inf['n_po'] >= $aktif) {
+			return 'Selesai PO';
+		}
+		if ($inf['n_po'] > 0) {
+			return 'Sebagian PO';
+		}
+		if ($inf['n_rfq'] > 0) {
+			return 'Perbandingan Harga (RFQ)';
+		}
+		if ($inf['n_alok'] > 0) {
+			return 'Dialokasi ke Purchaser';
+		}
+		return 'Menunggu Verifikasi Purchasing';
+	}
+}
+if (!function_exists('ppWarnaTahap')) {
+	function ppWarnaTahap($tahap)
+	{
+		$w = array(
+			'Selesai PO' => array('#c6efce', '#006100'),
+			'Belum Diajukan' => array('#ffeb9c', '#9c5700'),
+			'Menunggu Persetujuan' => array('#ffeb9c', '#9c5700'),
+			'Menunggu Verifikasi Purchasing' => array('#ffeb9c', '#9c5700')
+		);
+		return isset($w[$tahap]) ? $w[$tahap] : array('', '');
+	}
+}
+#warna kolom Status PR/SR: kuning belum diajukan, biru menunggu persetujuan, hijau disetujui, merah ditolak, oranye return
+if (!function_exists('ppWarnaStatusPR')) {
+	function ppWarnaStatusPR($key)
+	{
+		$w = array(
+			'draft' => array('#ffeb9c', '#9c5700'),
+			'menunggu' => array('#ddebf7', '#1f4e78'),
+			'disetujui' => array('#c6efce', '#006100'),
+			'ditolak' => array('#ffc7ce', '#9c0006'),
+			'return' => array('#fce4d6', '#a04000')
+		);
+		return isset($w[$key]) ? $w[$key] : array('', '');
+	}
+}
+if (!function_exists('ppStyleStatusExcel')) {
+	function ppStyleStatusExcel($key)
+	{
+		$w = ppWarnaStatusPR($key);
+		return $w[0] != '' ? " bgcolor=" . $w[0] . " style='color:" . $w[1] . ";font-weight:bold'" : '';
+	}
+}
+if (!function_exists('ppStatusKey')) {
+	function ppStatusKey($close, $inf)
+	{
+		if ($close == '0') {
+			return 'draft';
+		}
+		if ($close == '1') {
+			return 'menunggu';
+		}
+		if ($close == '3') {
+			return $inf['tahap'] == 'Ditolak Approval' ? 'ditolak' : 'return';
+		}
+		return 'disetujui';
+	}
+}
+#kelompok barang di list: kelompok pertama saja, sisanya "(+N)"; daftar lengkap ada di tooltip dan tarikan
+if (!function_exists('ppKelompokRingkas')) {
+	function ppKelompokRingkas($kelompok)
+	{
+		$arr = $kelompok == '' ? array() : explode('; ', $kelompok);
+		if (count($arr) <= 1) {
+			return $kelompok;
+		}
+		return $arr[0] . ' (+' . (count($arr) - 1) . ')';
+	}
+}
+#sel progres sederhana untuk list: nama tahap (berwarna untuk tahap tertentu) dan satu baris keterangan singkat
+if (!function_exists('ppSelProgres')) {
+	function ppSelProgres($inf, $close)
+	{
+		$aktif = $inf['n_item'] - $inf['n_tolak'];
+		$ket = '';
+		if ($close == '2') {
+			if ($inf['n_po'] > 0) {
+				$ket = 'PO ' . $inf['n_po'] . '/' . $aktif;
+			} elseif ($inf['n_rfq'] > 0) {
+				$ket = 'RFQ ' . $inf['n_rfq'] . '/' . $aktif;
+			} elseif ($inf['n_alok'] > 0) {
+				$ket = 'Alokasi ' . $inf['n_alok'] . '/' . $aktif;
+			}
+			if ($inf['n_tolak'] > 0) {
+				$ket .= ($ket != '' ? ' | ' : '') . 'Ditolak ' . $inf['n_tolak'];
+			}
+		} elseif ($close == '1' || $close == '3') {
+			$ket = $inf['detail'];
+		}
+		$w = ppWarnaTahap($inf['tahap']);
+		$style = $w[0] != '' ? "background-color:" . $w[0] . ";color:" . $w[1] . ";" : "";
+		return "<td align=center style='text-transform:none;" . $style . "'><b>" . htmlspecialchars($inf['tahap']) . "</b>" . ($ket != '' ? "<br><span style='font-size:11px'>" . htmlspecialchars($ket) . "</span>" : "") . "</td>";
+	}
+}
+#data header PR/SR sesuai filter (satu halaman atau untuk tarikan), lengkap dengan progres per PR/SR
+if (!function_exists('ppRows')) {
+	function ppRows($limitSql)
+	{
+		global $dbname;
+		return fetchdata("select h.* from " . $dbname . ".log_prapoht h where " . ppWhere() . " order by h.tanggal desc, h.nopp desc " . $limitSql);
+	}
+}
+if (!function_exists('ppInfo')) {
+	function ppInfo($rows)
+	{
+		global $dbname, $owlPDO;
+		$info = array();
+		$daftar = array();
+		foreach ($rows as $r) {
+			$daftar[$r['nopp']] = $owlPDO->quote($r['nopp']);
+			$info[$r['nopp']] = array('n_item' => 0, 'n_tolak' => 0, 'n_po' => 0, 'n_alok' => 0, 'n_rfq' => 0, 'po' => array(), 'kel' => array(), 'app' => array(), 'detail' => '', 'tahap' => '', 'kelompok' => '', 'pembuat' => '');
+		}
+		if (count($daftar) == 0) {
+			return $info;
+		}
+		$idKary = array();
+		foreach ($rows as $r) {
+			$idKary[$r['dibuat']] = $owlPDO->quote($r['dibuat']);
+		}
+		foreach (array_chunk(array_values($daftar), 500) as $chunk) {
+			$in = implode(',', $chunk);
+			foreach (fetchdata("select nopp, count(*) as n_item, sum(status='3') as n_tolak, sum(status!='3' and create_po='1') as n_po from " . $dbname . ".log_prapodt where nopp in (" . $in . ") group by nopp") as $b) {
+				$info[$b['nopp']]['n_item'] = (int)$b['n_item'];
+				$info[$b['nopp']]['n_tolak'] = (int)$b['n_tolak'];
+				$info[$b['nopp']]['n_po'] = (int)$b['n_po'];
+			}
+			foreach (fetchdata("select nopp, count(distinct kodebarang) as n_alok, count(distinct case when status='1' then kodebarang end) as n_rfq from " . $dbname . ".log_listverifikasi where nopp in (" . $in . ") group by nopp") as $b) {
+				$info[$b['nopp']]['n_alok'] = (int)$b['n_alok'];
+				$info[$b['nopp']]['n_rfq'] = (int)$b['n_rfq'];
+			}
+			foreach (fetchdata("select p.nopp, p.nopo, h.stat_release from " . $dbname . ".log_podt p left join " . $dbname . ".log_poht h on h.nopo=p.nopo where p.nopp in (" . $in . ") group by p.nopp, p.nopo") as $b) {
+				$info[$b['nopp']]['po'][] = array($b['nopo'], $b['stat_release'] == '1');
+			}
+			foreach (fetchdata("select distinct nopp, left(kodebarang,3) as kel from " . $dbname . ".log_prapodt where nopp in (" . $in . ") order by nopp, kel") as $b) {
+				$info[$b['nopp']]['kel'][] = $b['kel'];
+			}
+			foreach (fetchdata("select notransaksi, level, status, komentar, karyawanid from " . $dbname . ".approval where jenispersetujuan='PR' and notransaksi in (" . $in . ") order by notransaksi, level") as $b) {
+				if (isset($info[$b['notransaksi']])) {
+					$info[$b['notransaksi']]['app'][] = $b;
+					$idKary[$b['karyawanid']] = $owlPDO->quote($b['karyawanid']);
+				}
+			}
+		}
+		$nmKary = array();
+		foreach (array_chunk(array_values($idKary), 500) as $chunk) {
+			foreach (fetchdata("select karyawanid, namakaryawan from " . $dbname . ".datakaryawan where karyawanid in (" . implode(',', $chunk) . ")") as $b) {
+				$nmKary[$b['karyawanid']] = $b['namakaryawan'];
+			}
+		}
+		$nmKlp = makeOption($dbname, 'log_5klbarang', 'kode,kelompok');
+		foreach ($rows as $r) {
+			$n = $r['nopp'];
+			$inf = $info[$n];
+			$inf['pembuat'] = isset($nmKary[$r['dibuat']]) ? $nmKary[$r['dibuat']] : '';
+			$kel = array();
+			foreach ($inf['kel'] as $k) {
+				$kel[] = $k . ' ' . (isset($nmKlp[$k]) ? $nmKlp[$k] : '');
+			}
+			$inf['kelompok'] = implode('; ', $kel);
+			if ($r['close'] == '0') {
+				$inf['tahap'] = 'Belum Diajukan';
+				$inf['detail'] = 'Item: ' . $inf['n_item'];
+			} elseif ($r['close'] == '1') {
+				$inf['tahap'] = 'Menunggu Persetujuan';
+				foreach ($inf['app'] as $a) {
+					if ($a['status'] == '0') {
+						$inf['detail'] = 'Menunggu: ' . (isset($nmKary[$a['karyawanid']]) ? $nmKary[$a['karyawanid']] : $a['karyawanid']) . ' (level ' . $a['level'] . ')';
+						break;
+					}
+				}
+			} elseif ($r['close'] == '3') {
+				$inf['tahap'] = 'PR/SR Return';
+				foreach ($inf['app'] as $a) {
+					if ($a['status'] == '3') {
+						$inf['tahap'] = 'Ditolak Approval';
+						$inf['detail'] = 'Ditolak oleh ' . (isset($nmKary[$a['karyawanid']]) ? $nmKary[$a['karyawanid']] : $a['karyawanid']) . ' (level ' . $a['level'] . ')' . ($a['komentar'] != '' ? ': ' . $a['komentar'] : '');
+						break;
+					}
+				}
+			} else {
+				$inf['tahap'] = ppTahap($inf);
+				$inf['detail'] = 'Item ' . $inf['n_item'] . ' | Dialokasi ' . $inf['n_alok'] . ' | RFQ ' . $inf['n_rfq'] . ' | PO ' . $inf['n_po'] . ' | Ditolak ' . $inf['n_tolak'];
+			}
+			$info[$n] = $inf;
+		}
+		return $info;
+	}
+}
+#teks status resmi (sama dengan kolom Status di list) untuk tarikan Excel/PDF
+if (!function_exists('ppStatusTeks')) {
+	function ppStatusTeks($close, $inf)
+	{
+		if ($close == '0') {
+			return 'Belum Diajukan';
+		}
+		if ($close == '1') {
+			return 'Menunggu Persetujuan';
+		}
+		if ($close == '3') {
+			return $inf['tahap'] == 'Ditolak Approval' ? 'Ditolak' : 'PR/SR Return';
+		}
+		return 'Disetujui';
+	}
+}
+if (!function_exists('ppDataList')) {
+	function ppDataList($maks = 3000)
+	{
+		global $ppTerpotong;
+		$rows = ppRows("limit " . ((int)$maks + 1));
+		$ppTerpotong = count($rows) > $maks;
+		return array_slice($rows, 0, $maks);
+	}
+}
+#teks yang kepanjangan dipotong dan diberi "..." supaya tidak tumpang tindih ke kolom sebelah
+if (!function_exists('ppFit')) {
+	function ppFit($pdf, $txt, $w, $f = 7)
+	{
+		$txt = utf8_decode($txt);
+		$pdf->SetFont('Arial', '', $f);
+		if ($pdf->GetStringWidth($txt) <= $w - 2) {
+			return $txt;
+		}
+		while (strlen($txt) > 1 && $pdf->GetStringWidth($txt . '...') > $w - 2) {
+			$txt = substr($txt, 0, -1);
+		}
+		return rtrim($txt) . '...';
+	}
+}
+
+
 switch ($method) {
 	case 'get_isi':
 		if (isset($kdorg)) {
@@ -123,12 +526,12 @@ switch ($method) {
 				$chk = '1';
 			}
 			if ($val['karyawanid'] == $requester) {
-				$optkar .= "<option value='" . $val['karyawanid'] . "' selected>" . $val['namakaryawan'] . " (" . $nmdept[$val['bagian']] . ")</option>";
+				$optkar .= "<option value='" . $val['karyawanid'] . "' selected>" . ppNamaRequester($val['namakaryawan'], $val['bagian'], $nmdept) . "</option>";
 			} else {
 				if ($_SESSION['standard']['userid'] == $val['karyawanid']) {
-					$optkar .= "<option value='" . $val['karyawanid'] . "' selected>" . $val['namakaryawan'] . " (" . $nmdept[$val['bagian']] . ")</option>";
+					$optkar .= "<option value='" . $val['karyawanid'] . "' selected>" . ppNamaRequester($val['namakaryawan'], $val['bagian'], $nmdept) . "</option>";
 				} else {
-					$optkar .= "<option value='" . $val['karyawanid'] . "'>" . $val['namakaryawan'] . " (" . $nmdept[$val['bagian']] . ")</option>";
+					$optkar .= "<option value='" . $val['karyawanid'] . "'>" . ppNamaRequester($val['namakaryawan'], $val['bagian'], $nmdept) . "</option>";
 				}
 			}
 		}
@@ -162,12 +565,12 @@ switch ($method) {
 						$chk = '1';
 					}
 					if ($val['karyawanid'] == $requester) {
-						$optkar .= "<option value='" . $val['karyawanid'] . "' selected>" . $val['namakaryawan'] . " (" . $nmdept[$val['bagian']] . ")</option>";
+						$optkar .= "<option value='" . $val['karyawanid'] . "' selected>" . ppNamaRequester($val['namakaryawan'], $val['bagian'], $nmdept) . "</option>";
 					} else {
 						if ($_SESSION['standard']['userid'] == $val['karyawanid']) {
-							$optkar .= "<option value='" . $val['karyawanid'] . "' selected>" . $val['namakaryawan'] . " (" . $nmdept[$val['bagian']] . ")</option>";
+							$optkar .= "<option value='" . $val['karyawanid'] . "' selected>" . ppNamaRequester($val['namakaryawan'], $val['bagian'], $nmdept) . "</option>";
 						} else {
-							$optkar .= "<option value='" . $val['karyawanid'] . "'>" . $val['namakaryawan'] . " (" . $nmdept[$val['bagian']] . ")</option>";
+							$optkar .= "<option value='" . $val['karyawanid'] . "'>" . ppNamaRequester($val['namakaryawan'], $val['bagian'], $nmdept) . "</option>";
 						}
 					}
 				}
@@ -177,7 +580,7 @@ switch ($method) {
 		if ($chk == '0') {
 			if ($_SESSION['empl']['tipekaryawan'] == '0') {
 				$nmdept = makeOption($dbname, 'sdm_5departemen', 'kode,nama', "kode='" . $_SESSION['empl']['bagian'] . "'");
-				$optkar .= "<option value='" . $_SESSION['standard']['userid'] . "' selected>" . $_SESSION['empl']['name'] . " (" . $nmdept[$_SESSION['empl']['bagian']] . ")</option>";
+				$optkar .= "<option value='" . $_SESSION['standard']['userid'] . "' selected>" . ppNamaRequester($_SESSION['empl']['name'], $_SESSION['empl']['bagian'], $nmdept) . "</option>";
 			}
 		}
 
@@ -209,23 +612,190 @@ switch ($method) {
 		}
 		break;
 
+	case 'excellist':
+		include_once('lib/HtmlExcel.php');
+		$rows = ppDataList();
+		$info = ppInfo($rows);
+		$hdpt = setheadreport($_SESSION['empl']['kodeorganisasi'], $_SESSION['empl']['kodeorganisasi']);
+		$arrTipe = array('PR' => 'Purchase Request', 'SR' => 'Service Request', 'CP' => 'Capex Request', 'NR' => 'Non-Inventory Request');
+		$kolom = 17;
+		$stream = "<table>
+			<tr><td colspan=" . $kolom . "><b>" . htmlspecialchars($hdpt['nama']) . "</b></td></tr>
+			<tr><td colspan=" . $kolom . "><b>PURCHASE/SERVICE REQUEST</b></td></tr>
+			<tr><td colspan=" . $kolom . ">" . htmlspecialchars(ppInfoFilter()) . "</td></tr>
+			<tr><td colspan=" . $kolom . ">Ditarik oleh " . htmlspecialchars($_SESSION['empl']['name']) . " (" . htmlspecialchars($_SESSION['standard']['username']) . ") pada " . date('d-m-Y H:i:s') . "</td></tr>
+			<tr><td colspan=" . $kolom . ">&nbsp;</td></tr>
+			</table>";
+		$stream .= "<table class=sortable cellspacing=1 cellpadding=3 border=1>
+			<thead><tr>
+				<th align=center bgcolor=#CCCCCC>No</th>
+				<th align=center bgcolor=#CCCCCC>PT</th>
+				<th align=center bgcolor=#CCCCCC>Unit</th>
+				<th align=center bgcolor=#CCCCCC>No. PR/SR</th>
+				<th align=center bgcolor=#CCCCCC>Tipe</th>
+				<th align=center bgcolor=#CCCCCC>Kelompok Barang</th>
+				<th align=center bgcolor=#CCCCCC>Tanggal</th>
+				<th align=center bgcolor=#CCCCCC>Dibuat Oleh</th>
+				<th align=center bgcolor=#CCCCCC>Status</th>
+				<th align=center bgcolor=#CCCCCC>Progres Proses</th>
+				<th align=center bgcolor=#CCCCCC>Posisi / Keterangan</th>
+				<th align=center bgcolor=#CCCCCC>Item</th>
+				<th align=center bgcolor=#CCCCCC>Dialokasi</th>
+				<th align=center bgcolor=#CCCCCC>RFQ</th>
+				<th align=center bgcolor=#CCCCCC>PO</th>
+				<th align=center bgcolor=#CCCCCC>Ditolak</th>
+				<th align=center bgcolor=#CCCCCC>No. PO</th>
+			</tr></thead><tbody>";
+		$no = 0;
+		foreach ($rows as $r) {
+			$no++;
+			$inf = $info[$r['nopp']];
+			$wrn = ppWarnaTahap($inf['tahap']);
+			$styleSt = $wrn[0] != '' ? " bgcolor=" . $wrn[0] . " style='color:" . $wrn[1] . ";font-weight:bold'" : '';
+			$listPo = array();
+			foreach ($inf['po'] as $po) {
+				$listPo[] = $po[0] . ($po[1] ? ' (Release)' : ' (Belum Release)');
+			}
+			$ket = $inf['detail'] . ($r['ket_balik'] != '' ? ($inf['detail'] != '' ? ' | ' : '') . 'Become Out Standing : ' . $r['ket_balik'] : '');
+			$stream .= "<tr>
+				<td align=center>" . $no . "</td>
+				<td align=center>" . htmlspecialchars($r['pt']) . "</td>
+				<td align=center>" . htmlspecialchars($r['unit']) . "</td>
+				<td>" . htmlspecialchars($r['nopp']) . "</td>
+				<td>" . htmlspecialchars(isset($arrTipe[$r['tipepp']]) ? $arrTipe[$r['tipepp']] : $r['tipepp']) . "</td>
+				<td>" . htmlspecialchars($inf['kelompok']) . "</td>
+				<td align=center>" . tanggalnormal($r['tanggal']) . "</td>
+				<td>" . htmlspecialchars($inf['pembuat']) . "</td>
+				<td align=center" . ppStyleStatusExcel(ppStatusKey($r['close'], $inf)) . ">" . ppStatusTeks($r['close'], $inf) . "</td>
+				<td align=center" . $styleSt . ">" . htmlspecialchars($inf['tahap']) . "</td>
+				<td>" . htmlspecialchars($ket) . "</td>
+				<td align=right>" . $inf['n_item'] . "</td>
+				<td align=right>" . $inf['n_alok'] . "</td>
+				<td align=right>" . $inf['n_rfq'] . "</td>
+				<td align=right>" . $inf['n_po'] . "</td>
+				<td align=right>" . $inf['n_tolak'] . "</td>
+				<td>" . nl2br(htmlspecialchars(implode("\n", $listPo))) . "</td>
+			</tr>";
+		}
+		if ($no == 0) {
+			$stream .= "<tr><td colspan=" . $kolom . " align=center>Data tidak ditemukan</td></tr>";
+		}
+		$stream .= "</tbody></table>";
+		$xls = new HtmlExcel();
+		$xls->addSheet("PurchaseServiceRequest", $stream);
+		$xls->headers("PurchaseServiceRequest_" . date('YmdHis') . ".xls");
+		echo $xls->buildFile();
+		exit;
+
+	case 'pdflist':
+		require_once('lib/fpdf.php');
+		$rows = ppDataList();
+		$info = ppInfo($rows);
+		$hdpt = setheadreport($_SESSION['empl']['kodeorganisasi'], $_SESSION['empl']['kodeorganisasi']);
+		$infoFilter = ppInfoFilter();
+		if (!class_exists('PDFListPP')) {
+			class PDFListPP extends FPDF
+			{
+				public $colW = array();
+
+				function Header()
+				{
+					global $hdpt, $infoFilter;
+					$width = $this->w - $this->lMargin - $this->rMargin;
+					if (file_exists($hdpt['logo'])) {
+						$this->Image($hdpt['logo'], $this->lMargin, $this->tMargin, 18);
+					}
+					$this->SetFont('Arial', 'B', 11);
+					$this->SetXY($this->lMargin + 22, $this->tMargin + 2);
+					$this->Cell(160, 6, utf8_decode($hdpt['nama']), 0, 1, 'L');
+					$this->SetY($this->tMargin + 15);
+					$this->SetFont('Arial', 'B', 13);
+					$this->Cell($width, 7, 'PURCHASE/SERVICE REQUEST', 0, 1, 'C');
+					$this->SetFont('Arial', '', 8);
+					$this->MultiCell($width, 4, utf8_decode($infoFilter), 0, 'C');
+					$this->Cell($width, 5, utf8_decode('Ditarik oleh ' . $_SESSION['empl']['name'] . ' (' . $_SESSION['standard']['username'] . ') pada ' . date('d-m-Y H:i:s')), 0, 1, 'C');
+					$this->Ln(1);
+					$this->SetFillColor(220, 220, 220);
+					$this->SetFont('Arial', 'B', 8);
+					$judul = array('No', 'No. PR/SR', 'Unit', 'Tipe', 'Tanggal', 'Kelompok Barang', 'Dibuat Oleh', 'Status', 'Progres Proses', 'Item/Alok/RFQ/PO/Tolak', 'No. PO');
+					foreach ($judul as $i => $j) {
+						$this->Cell($this->colW[$i], 6, $j, 1, 0, 'C', true);
+					}
+					$this->Ln();
+				}
+
+				function Footer()
+				{
+					$this->SetY(-12);
+					$this->SetFont('Arial', 'I', 7);
+					$this->Cell(0, 8, 'Halaman ' . $this->PageNo() . ' / {nb}', 0, 0, 'R');
+				}
+			}
+		}
+		$pdf = new PDFListPP('L', 'mm', 'A4');
+		$pdf->AliasNbPages();
+		$pdf->SetAutoPageBreak(false, 16);
+		$width = $pdf->w - $pdf->lMargin - $pdf->rMargin;
+		$colFixed = array(8, 36, 13, 9, 17, 38, 28, 24, 40, 34); #semua kolom kecuali No. PO
+		$pdf->colW = array_merge($colFixed, array($width - array_sum($colFixed)));
+		$pdf->AddPage();
+		$h = 6;
+		$no = 0;
+		foreach ($rows as $r) {
+			$no++;
+			if ($pdf->GetY() + $h > $pdf->h - $pdf->bMargin) {
+				$pdf->AddPage();
+			}
+			$inf = $info[$r['nopp']];
+			$c = $pdf->colW;
+			$listPo = array();
+			foreach ($inf['po'] as $po) {
+				$listPo[] = $po[0];
+			}
+			$pdf->SetFont('Arial', '', 7);
+			$pdf->Cell($c[0], $h, $no, 1, 0, 'C');
+			$pdf->Cell($c[1], $h, ppFit($pdf, $r['nopp'], $c[1]), 1, 0, 'L');
+			$pdf->Cell($c[2], $h, $r['unit'], 1, 0, 'C');
+			$pdf->Cell($c[3], $h, $r['tipepp'], 1, 0, 'C');
+			$pdf->Cell($c[4], $h, tanggalnormal($r['tanggal']), 1, 0, 'C');
+			$pdf->Cell($c[5], $h, ppFit($pdf, $inf['kelompok'], $c[5]), 1, 0, 'L');
+			$pdf->Cell($c[6], $h, ppFit($pdf, $inf['pembuat'], $c[6]), 1, 0, 'L');
+			$wrnS = ppWarnaStatusPR(ppStatusKey($r['close'], $inf));
+			if ($wrnS[0] != '') {
+				sscanf($wrnS[0], '#%02x%02x%02x', $sr, $sg, $sb);
+				sscanf($wrnS[1], '#%02x%02x%02x', $tr, $tg, $tb);
+				$pdf->SetFillColor($sr, $sg, $sb);
+				$pdf->SetTextColor($tr, $tg, $tb);
+			}
+			$pdf->Cell($c[7], $h, ppFit($pdf, ppStatusTeks($r['close'], $inf), $c[7]), 1, 0, 'L', $wrnS[0] != '');
+			$pdf->SetTextColor(0, 0, 0);
+			$wrn = ppWarnaTahap($inf['tahap']);
+			if ($wrn[0] != '') {
+				sscanf($wrn[0], '#%02x%02x%02x', $br, $bg, $bb);
+				sscanf($wrn[1], '#%02x%02x%02x', $fr, $fg, $fb);
+				$pdf->SetFillColor($br, $bg, $bb);
+				$pdf->SetTextColor($fr, $fg, $fb);
+			}
+			$pdf->Cell($c[8], $h, ppFit($pdf, $inf['tahap'], $c[8]), 1, 0, 'L', $wrn[0] != '');
+			$pdf->SetTextColor(0, 0, 0);
+			$pdf->Cell($c[9], $h, ($r['close'] == '2') ? $inf['n_item'] . '/' . $inf['n_alok'] . '/' . $inf['n_rfq'] . '/' . $inf['n_po'] . '/' . $inf['n_tolak'] : '-', 1, 0, 'C');
+			$pdf->Cell($c[10], $h, ppFit($pdf, implode('; ', $listPo), $c[10]), 1, 1, 'L');
+		}
+		if ($no == 0) {
+			$pdf->Cell(array_sum($pdf->colW), $h, 'Data tidak ditemukan', 1, 1, 'C');
+		}
+		$pdf->Output();
+		exit;
+
 	case 'loaddata':
+		$tab = '';
 		$arrTipe = array('PR' => 'Purchase Request', 'SR' => 'Service Request', 'CP' => 'Capex Request', 'NR' => 'Non-Inventory Requset');
 		$arrorgdet = getOrgDetail(2);
-		$where = "1=1";
-
-		if ($carinopppr != '') {
-			$where .= " and nopp like '%" . $carinopppr . "%'";
-		}
-
-		if ($caritanggalpppr != '') {
-			$where .= " and tanggal = '" . tanggalsystem($caritanggalpppr) . "'";
-		}
 
 		$limit = 20;
 		$page = 0;
 		if (isset($pages)) {
-			$page = $pages;
+			$page = (int)$pages;
 			if ($page < 0)
 				$page = 0;
 		}
@@ -233,28 +803,28 @@ switch ($method) {
 
 		$no = (($page * $limit));
 
-		$str = "select * from " . $dbname . ".log_prapoht where " . $where . " and unit in (" . $arrorgdet . ")";
-		$res = fetchdata($str);
-		$jlhbrs = count($res);
+		#filter dibersihkan di ppFilter dan sama dengan yang dipakai tarikan Excel/PDF
+		$cnt = fetchdata("select count(*) as jml from " . $dbname . ".log_prapoht h where " . ppWhere());
+		$jlhbrs = isset($cnt[0]['jml']) ? (int)$cnt[0]['jml'] : 0;
 
 		if ($jlhbrs <= 0) {
-			$tab .= "<tr class=rowcontent><td colspan='10' style='text-align:center'>" . $_SESSION['lang']['errdatanotexist'] . "</td></tr>";
+			$tab .= "<tr class=rowcontent><td colspan='12' style='text-align:center'>" . $_SESSION['lang']['errdatanotexist'] . "</td></tr>";
 		} else {
-			$str = "select * from " . $dbname . ".log_prapoht where " . $where . " and unit in (" . $arrorgdet . ") order by tanggal desc, nopp desc limit " . $offset . "," . $limit . "";
-			$res = fetchdata($str);
+			$res = ppRows("limit " . $offset . "," . $limit);
+			$info = ppInfo($res);
 			foreach ($res as $val) {
 				$no++;
+				$inf = $info[$val['nopp']];
 
 				## GET NAMA PEMBUAT PR
-				$optnama = makeOption($dbname, 'datakaryawan', 'karyawanid,namakaryawan', "karyawanid='" . $val['dibuat'] . "'");
-				$namapembuat = $optnama[$val['dibuat']];
+				$namapembuat = $inf['pembuat'];
 
 				## GET Status
 				$stt = "";
 				$countApp = getCountApproval($jenisApp, $val['unit']);
 				if ($val['close'] == '0') {
 					$totalrow = getTotalRow($dbname, 'log_prapodt', "nopp='" . $val['nopp'] . "'");
-					$stt = "<a href=# id=seeprog onclick=frm_ajun('" . $val['nopp'] . "','" . $val['close'] . "','" . $totalrow . "') title=\"Click untuk mengubah status\">Belum Diajukan</a>";
+					$stt = "<a href=# id=seeprog onclick=frm_ajun('" . $val['nopp'] . "','" . $val['close'] . "','" . $totalrow . "') title=\"Klik untuk mengajukan PR/SR (minimal harus ada satu barang di rincian)\">Belum Diajukan</a>";
 				} elseif ($val['close'] == '1') {
 					$stt = "<a href=# id=seeprog onclick=frm_ajun('" . $val['nopp'] . "','" . $val['close'] . "','1') title=\"Menunggu Keputusan\">Menunggu Persetujuan</a>";
 				} else {
@@ -302,30 +872,20 @@ switch ($method) {
 				}
 
 				$bgcolor = '';
-				if ($val['close'] == '3') {
-					$bgcolor = 'style=background:orange';
-				} else if ($val['close'] == '2') {
-					$strx = "select count(nopp) as nopp from " . $dbname . ".log_prapodt where nopp='" . $val['nopp'] . "' and status='3'";
-					$resx = fetchdata($strx);
-					$countx = $resx[0]['nopp'];
-					if ($countx > 0) {
-						$bgcolor = 'style=background:#42f5c2';
-					}
+				#warna status dipasang di kolom Status (bukan di seluruh baris); kuncinya mengikuti teks status yang tampil
+				if ($val['close'] == '0') {
+					$statKey = 'draft';
+				} elseif ($val['close'] == '1') {
+					$statKey = 'menunggu';
+				} elseif ($counttolak > 0) {
+					$statKey = 'ditolak';
+				} elseif ($val['close'] == '3') {
+					$statKey = 'return';
+				} else {
+					$statKey = 'disetujui';
 				}
-
-				// kamus kelompok barang
-				$sql = "select a.nopp, a.kodebarang, b.kelompok FROM " . $dbname . ".log_prapodt a LEFT JOIN " . $dbname . ".log_5klbarang b on substr(a.kodebarang,1,3)=b.kode where 1";
-				$qry = $owlPDO->query($sql) or die(print " Gagal: " . PDOException::getMessage());
-				$qry->setFetchMode(PDO::FETCH_ASSOC);
-				while ($bar = $qry->fetch()) {
-					$kelompok = substr($bar['kodebarang'], 0, 3);
-					$kelompok2 = $bar['kelompok'];
-					$kamuskelompokbarangpp[$bar['nopp']] = $kelompok . ' ' . $kelompok2;
-				}
-
-				// echo "<pre>";
-				// print_r($kamuskelompokbarangpp);
-				// echo "</pre>";
+				$wrnSt = ppWarnaStatusPR($statKey);
+				$styleStatusPR = $wrnSt[0] != '' ? "background-color:" . $wrnSt[0] . ";color:" . $wrnSt[1] . ";" : "";
 
 				## Cek Chat
 				$ingChat = "chat0";
@@ -345,13 +905,13 @@ switch ($method) {
 					$tab .= "<td align=center>" . $val['nopp'] . "</td>";
 				}
 				$tab .= "<td align=center>" . $arrTipe[$val['tipepp']] . "</td>
-					<td>" . @$kamuskelompokbarangpp[$val['nopp']] . "</td>
+					<td title=\"" . htmlspecialchars($inf['kelompok']) . "\">" . htmlspecialchars(ppKelompokRingkas($inf['kelompok'])) . "</td>
 					<td align=center style='min-width:80px'>" . tanggalnormal($val['tanggal']) . "</td>
 					<td align=center>
 						<img src='images/" . $ingChat . ".png' onclick=\"loadPPChat('" . $val['nopp'] . "','',event);\" class='resicon'>
 					</td>
 					<td align=center>" . $namapembuat . "</td>
-					<td align=center>" . $stt . "</td>";
+					<td align=center style='" . $styleStatusPR . "'>" . $stt . "</td>" . ppSelProgres($inf, $val['close']);
 
 				if ($val['dibuat'] == $_SESSION['standard']['userid']) {
 					if ($val['close'] == '0') {
@@ -377,12 +937,13 @@ switch ($method) {
 			}
 
 			## PAGING
-			$tab .= createpaging($jlhbrs, $limit, $page, '10', 'loadData', 'getPage');
+			$tab .= createpaging($jlhbrs, $limit, $page, '12', 'loadData', 'getPage');
 			$tab .= "</table>";
 		}
 
 		echo $tab;
 		break;
+
 
 
 
@@ -479,6 +1040,28 @@ switch ($method) {
 		$dibuat   = $res[0]['dibuat'];
 		$requester = $res[0]['requester'];
 
+		#tampilan ringkas dan peta alokasi purchaser per barang (dipakai kalau diminta dari menu Purchase/Service Request)
+		$rapi = (checkPostGet('ringkas', '') == '1');
+		$hdrRow = $res[0];
+		$adaVhc = true;
+		$lvMap = array();
+		if ($rapi) {
+			$stmtV = $owlPDO->prepare("select count(*) from " . $dbname . ".log_prapodt where nopp=? and (kodevhc!='' or kmhm!='' and kmhm!='0')");
+			$stmtV->execute(array($nopp));
+			$adaVhc = ((int)$stmtV->fetchColumn() > 0);
+			$stmtL = $owlPDO->prepare("select v.kodebarang, v.status, k.namakaryawan from " . $dbname . ".log_listverifikasi v left join " . $dbname . ".datakaryawan k on k.karyawanid=v.karyawanid where v.nopp=?");
+			$stmtL->execute(array($nopp));
+			foreach ($stmtL->fetchAll(PDO::FETCH_ASSOC) as $bL) {
+				if (!isset($lvMap[$bL['kodebarang']])) {
+					$lvMap[$bL['kodebarang']] = array('rfq' => false, 'nama' => array());
+				}
+				if ($bL['status'] == '1') {
+					$lvMap[$bL['kodebarang']]['rfq'] = true;
+				}
+				$lvMap[$bL['kodebarang']]['nama'][] = $bL['namakaryawan'];
+			}
+		}
+
 
 
 		$optdepartmen = makeOption($dbname, 'datakaryawan', 'karyawanid,bagian', "karyawanid='" . $requester . "'");
@@ -491,6 +1074,54 @@ switch ($method) {
 		$optpurchaser = makeOption($dbname, 'datakaryawan', 'karyawanid,namakaryawan', "karyawanid='" . $dibuat . "' or karyawanid='" . $requester . "'");
 		$purchaser = $optpurchaser[$dibuat];
 
+		#=== tampilan ringkas (hanya dari menu Purchase/Service Request): gaya rapi + ringkasan progres proses ===
+		if ($rapi) {
+			$tab .= "<style>
+				#ppDetailWrap{font-size:12px}
+				#ppDetailWrap .ppSecTitle{font-weight:bold;font-size:13px;margin:12px 0 4px 0;padding-bottom:3px;border-bottom:2px solid #275370;color:#275370}
+				#ppDetailWrap table.sortable td{padding:4px 6px}
+				#ppDetailWrap .ppStep{margin:6px 0;line-height:1.8}
+				#ppDetailWrap .ppStep span{color:#999}
+				#ppDetailWrap .ppStep span:not(:last-child)::after{content:' \\203A ';color:#bbb;margin:0 6px}
+				#ppDetailWrap .ppStep span.ppOn{color:#006100;font-weight:bold}
+				#ppDetailWrap .ppRingkas{margin:4px 0 6px 0;line-height:1.6}
+			</style><div id='ppDetailWrap'>";
+			$pinfAll = ppInfo(array($hdrRow));
+			$pinf = $pinfAll[$hdrRow['nopp']];
+			$closeP = $hdrRow['close'];
+			$aktifP = $pinf['n_item'] - $pinf['n_tolak'];
+			$adaRelease = false;
+			foreach ($pinf['po'] as $poP) {
+				if ($poP[1]) {
+					$adaRelease = true;
+				}
+			}
+			$langkah = array();
+			$langkah[] = array('Dibuat', true);
+			$langkah[] = array('Diajukan', $closeP >= 1);
+			if ($closeP == '3') {
+				$langkah[] = array($pinf['tahap'] == 'Ditolak Approval' ? 'Ditolak Approval' : 'PR/SR Return', true);
+			} else {
+				$langkah[] = array('Disetujui', $closeP == '2');
+			}
+			$langkah[] = array('Dialokasi Purchaser (' . $pinf['n_alok'] . '/' . $aktifP . ')', $closeP == '2' && $pinf['n_alok'] > 0);
+			$langkah[] = array('Perbandingan Harga (' . $pinf['n_rfq'] . '/' . $aktifP . ')', $closeP == '2' && $pinf['n_rfq'] > 0);
+			$linkPo = '';
+			foreach ($pinf['po'] as $poP) {
+				$linkPo .= " &middot; <a style=\"cursor:pointer;color:#0000cc;text-decoration:underline\" title=\"Lihat / cetak PO\" onclick=\"masterPDF('log_poht','" . htmlspecialchars(addslashes($poP[0]), ENT_QUOTES) . "','','log_slave_print_detail_po',event)\">" . htmlspecialchars($poP[0]) . "</a>";
+			}
+			$langkah[] = array('PO (' . $pinf['n_po'] . '/' . $aktifP . ')', $closeP == '2' && $pinf['n_po'] > 0, $linkPo);
+			$langkah[] = array('PO Release', $adaRelease);
+			$tab .= "<div class='ppSecTitle'>Progres Proses</div><div class='ppStep'>";
+			foreach ($langkah as $l) {
+				$tab .= "<span class='" . ($l[1] ? 'ppOn' : '') . "'>" . htmlspecialchars($l[0]) . (isset($l[2]) ? $l[2] : '') . "</span>";
+			}
+			$tab .= "</div><div class='ppRingkas'><b>" . htmlspecialchars($pinf['tahap']) . "</b>";
+			if ($pinf['detail'] != '') {
+				$tab .= "<br>" . htmlspecialchars($pinf['detail']);
+			}
+			$tab .= "</div><div class='ppSecTitle'>Informasi PR/SR dan Persetujuan</div>";
+		}
 		$tab .= "<div style='width:auto;overflow:auto;'>
 			<table border=0 cellspacing=1 cellpadding=5 class=sortable>
 				<thead>
@@ -629,6 +1260,7 @@ switch ($method) {
 
 		$arrvalbudget = validasibudget($tipepp, $unitht);
 		## GET DETAIL PR
+		$tab .= $rapi ? "<div class='ppSecTitle'>Detail Barang</div>" : "";
 		$tab .= "<table border=0 cellspacing=1 cellpadding=3 class=sortable>
 			<thead>
 			<tr style='font-weight:bold'>
@@ -640,8 +1272,7 @@ switch ($method) {
 				<td rowspan=2 style='text-align:center' width='50px'>" . $_SESSION['lang']['jmlhDiminta'] . "</td>
 				<td rowspan=2 style='text-align:center' width='50px'>Jumlah di Setujui</td>
 				<td rowspan=2 style='text-align:center'>Prioritas</td>
-				<td rowspan=2 style='text-align:center'>" . $_SESSION['lang']['kodevhc'] . "</td>
-				<td rowspan=2 style='text-align:center'>KM/HM</td>
+				" . (!$rapi || $adaVhc ? "<td rowspan=2 style='text-align:center'>" . $_SESSION['lang']['kodevhc'] . "</td><td rowspan=2 style='text-align:center'>KM/HM</td>" : "") . "
 				<td rowspan=2 style='text-align:center'>" . $_SESSION['lang']['tanggal'] . " PR/SR</td>
 				<td rowspan=2 style='text-align:center'>" . $_SESSION['lang']['tgldibutuhkan'] . "</td>   
 				<td rowspan=2 style='text-align:center' width='50px'>" . $_SESSION['lang']['stock'] . "</td>
@@ -656,6 +1287,9 @@ switch ($method) {
 		}
 		if ($tipepp == 'SR') {
 			$tab .= "<td rowspan=2 style='text-align:center'>" . $_SESSION['lang']['noakun'] . " " . $_SESSION['lang']['budget'] . "</td>";
+		}
+		if ($rapi) {
+			$tab .= "<td rowspan=2 style='text-align:center'>Status Proses</td>";
 		}
 		$tab .= "<td rowspan=2 style='text-align:center'>" . $_SESSION['lang']['nopo'] . "</td>
 				<td rowspan=2 style='text-align:center'>" . $_SESSION['lang']['tanggal'] . " PO/SO</td>
@@ -753,6 +1387,7 @@ switch ($method) {
 					<td style='text-align:right'>" . hidezerodecimal($val['jumlah'], 2) . "</td>
 					<td style='text-align:left' nowrap>" . $val['prioritas'] . " - " . $prioritas . "</td>";
 
+				if (!$rapi || $adaVhc) {
 				$tab .= "<td>";
 				if ($val['kodevhc'] != '') {
 					$tab .= "<table>";
@@ -776,10 +1411,11 @@ switch ($method) {
 					$tab .= "</table>";
 				}
 				$tab .= "</td>";
+				}
 
 				//$tab.="<td style='text-align:center;cursor:pointer' onclick=showdocsparepart('".$prddari."','".$prdsampai."','".substr($nopp,-4)."','".$val['kodevhc']."',event)><font color=blue>".$noplat."</font></td>
 
-				$tab .= "<td align=center>" . hidezerodecimal($val['kmhm'], 2) . "</td>
+				$tab .= (!$rapi || $adaVhc ? "<td align=center>" . hidezerodecimal($val['kmhm'], 2) . "</td>" : "") . "
 					<td align=center nowrap>" . tanggalnormal($tanggalht) . "</td>
 					<td align=center nowrap>" . tanggalnormal($val['tgl_sdt']) . "</td>
 					<td align=center>" . hidezerodecimal($val['stock'], 2) . "</td>
@@ -796,6 +1432,30 @@ switch ($method) {
 					$tab .= "<td style='text-align:center'>" . getNamaAkun($val['noakunbudget']) . "</td>";
 				}
 				#== abdul
+				if ($rapi) {
+					#status proses item: ditolak / sudah PO / perbandingan harga / dialokasi / belum dialokasi
+					$kdItem = $val['kodebarang'];
+					if ($val['status'] == '3') {
+						$stItem = 'Ditolak Purchasing';
+					} elseif ($val['create_po'] == '1') {
+						$stItem = 'Sudah PO';
+					} elseif (isset($lvMap[$kdItem]) && $lvMap[$kdItem]['rfq']) {
+						$stItem = 'Perbandingan Harga (RFQ)';
+					} elseif (isset($lvMap[$kdItem])) {
+						$stItem = 'Dialokasi: ' . implode(', ', $lvMap[$kdItem]['nama']);
+					} elseif ($hdrRow['close'] == '2') {
+						$stItem = 'Belum Dialokasi';
+					} else {
+						$stItem = '-';
+					}
+					$wrnItem = ppWarnaTahap($stItem == 'Sudah PO' ? 'Selesai PO' : ($stItem == 'Belum Dialokasi' ? 'Menunggu Verifikasi Purchasing' : ''));
+					$styleItem = $wrnItem[0] != '' ? " style='text-align:center;background-color:" . $wrnItem[0] . ";color:" . $wrnItem[1] . ";font-weight:bold'" : " style='text-align:center'";
+					$noPoItem = '';
+					if ($stItem == 'Sudah PO' && $nopo != '') {
+						$noPoItem = "<br><a style=\"cursor:pointer;color:#0000cc;text-decoration:underline\" title=\"Lihat / cetak PO\" onclick=\"masterPDF('log_poht','" . htmlspecialchars(addslashes($nopo), ENT_QUOTES) . "','','log_slave_print_detail_po',event)\">" . htmlspecialchars($nopo) . "</a>";
+					}
+					$tab .= "<td" . $styleItem . ">" . htmlspecialchars($stItem) . $noPoItem . "</td>";
+				}
 				$tab .= "<td style='text-align:center'>" . $nopo . "</td>
 					<td style='text-align:center;min-width:80px'>" . $tglpo . "</td>
 					<td>" . $hketerangan . "</td>
@@ -807,6 +1467,9 @@ switch ($method) {
 		</table>
 		</div>";
 		if ($kdbarang != '') {
+			if ($rapi) {
+				$tab .= "<details style='margin:8px 0'><summary style='cursor:pointer;font-weight:bold'>Keterangan Anggaran dan Validasi</summary>";
+			}
 			$arrsts = array('1' => 'Aktif', '0' => 'Non Aktif');
 			$arrdgt = array('3' => 'Per Kelompok Barang', '5' => 'Per Sub Kelompok Barang', '9' => 'Per Kode Barang');
 			$tab .= "<table><tr>";
@@ -852,10 +1515,14 @@ switch ($method) {
 				<ul>Kelompok Barang : 3 digit pertama dari kode barang.</ul>";
 			}
 			$tab .= "</fieldset><div style=clear:both></div>";
+			if ($rapi) {
+				$tab .= "</details>";
+			}
 		}
 
 
 		## GET FILE UPLOAD
+		$tab .= $rapi ? "<div class='ppSecTitle'>Dokumen Pendukung</div>" : "";
 		$tab .= "<br>
 		<div style='width:auto;overflow:auto;'>
 			<table border=0 cellspacing=1 cellpadding=5 class=sortable>
@@ -896,6 +1563,9 @@ switch ($method) {
 		## GET DETAIL ANGGARAN
 		$tab .= "<div id=dtFormDetail style=\"overflow:auto;\"></div>";
 
+		if ($rapi) {
+			$tab .= "</div>";
+		}
 		echo $tab;
 		break;
 
@@ -1611,6 +2281,9 @@ switch ($method) {
 		break;
 
 	case 'formPersetujuan':
+		if (!preg_match('/^[A-Za-z0-9\/._ -]+$/', (string)$nopp)) {
+			exit("Gagal : Nomor PR/SR tidak valid");
+		}
 		$kd = substr($nopp, 17, 2);
 		$unit = substr($nopp, 15, 4);
 
@@ -1664,22 +2337,133 @@ switch ($method) {
 			$optKry .= "<option value='" . $rkry['karyawanid'] . "'>" . $rkry['namakaryawan'] . " [" . $rkry['lokasitugas'] . "]</option>";
 		}
 
-		$tab = "<fieldset style=width:300px;>
+		#informasi PR/SR yang diajukan
+		$stmtH = $owlPDO->prepare("select tipepp, unit, tanggal, dibuat, requester from " . $dbname . ".log_prapoht where nopp=?");
+		$stmtH->execute(array($nopp));
+		$hdr = $stmtH->fetch(PDO::FETCH_ASSOC);
+		if (!$hdr) {
+			exit("Gagal : PR/SR tidak ditemukan");
+		}
+		$nmKarH = makeOption($dbname, 'datakaryawan', 'karyawanid,namakaryawan', "karyawanid='" . $hdr['dibuat'] . "' or karyawanid='" . $hdr['requester'] . "'");
+		$nmDeptH = makeOption($dbname, 'sdm_5departemen', 'kode,nama');
+		$deptReq = makeOption($dbname, 'datakaryawan', 'karyawanid,bagian', "karyawanid='" . $hdr['requester'] . "'");
+		$arrTipeH = array('PR' => 'Purchase Request (INV)', 'SR' => 'Service Request (JASA)', 'CP' => 'Capex Request (ASET)', 'NR' => 'Non-Inventory Request (NON-INV)');
+		$nmPrio = makeOption($dbname, 'log_5prioritas', 'kode,nama');
+		$stmtI = $owlPDO->prepare("select d.kodebarang, d.jumlahpp, d.satuanpp, d.prioritas, d.tgl_sdt, d.keterangan, b.namabarang from " . $dbname . ".log_prapodt d left join " . $dbname . ".log_5masterbarang b on b.kodebarang=d.kodebarang where d.nopp=? order by d.kodebarang");
+		$stmtI->execute(array($nopp));
+		$itemAjuan = $stmtI->fetchAll(PDO::FETCH_ASSOC);
+		$countApprAjuan = getCountApproval('PR', $unit, $departemen);
+
+		#jabatan penyetuju untuk keterangan pilihan "Kepada"
+		$arrKry = array();
+		$res->closeCursor();
+		$resKry = $owlPDO->query($str);
+		$resKry->setFetchMode(PDO::FETCH_ASSOC);
+		$idKry = array();
+		$rowsKry = array();
+		while ($rk = $resKry->fetch()) {
+			$rowsKry[] = $rk;
+			$idKry[$rk['karyawanid']] = $owlPDO->quote($rk['karyawanid']);
+		}
+		$jabKry = array();
+		if (count($idKry) > 0) {
+			foreach (fetchdata("select b.karyawanid, j.namajabatan from " . $dbname . ".datakaryawan b left join " . $dbname . ".sdm_5jabatan j on j.kodejabatan=b.kodejabatan where b.karyawanid in (" . implode(',', $idKry) . ")") as $bj) {
+				$jabKry[$bj['karyawanid']] = $bj['namajabatan'];
+			}
+		}
+		$optKry = "";
+		foreach ($rowsKry as $rk) {
+			$jb = isset($jabKry[$rk['karyawanid']]) ? $jabKry[$rk['karyawanid']] : '';
+			$optKry .= "<option value='" . htmlspecialchars($rk['karyawanid'], ENT_QUOTES) . "'>" . htmlspecialchars($rk['namakaryawan']) . ($jb != '' ? " - " . htmlspecialchars($jb) : "") . " (" . htmlspecialchars($rk['lokasitugas']) . ")</option>";
+		}
+
+		$tab = "<fieldset style='min-width:640px;max-width:860px'>
 			<legend>" . $_SESSION['lang']['pengajuan'] . "</legend>";
-		$tab .= "<table cellspacing=1 border=0>
+		$tab .= "<div style='font-weight:bold;margin:2px 0 4px 0;padding-bottom:3px;border-bottom:2px solid #275370;color:#275370'>Informasi PR/SR yang diajukan</div>";
+		$tab .= "<table cellspacing=1 cellpadding=3 border=0 style='width:100%'>
 			<tr>
-				<td>No. PP/PR</td>
-				<td>:</td>
-				<td><input class=myinputtext style=width:165px type=\"text\" id=\"fnopp\" name=\"fnopp\" disabled value='" . $nopp . "' /></td>
+				<td style='width:120px'>No. PR/SR</td>
+				<td style='width:10px'>:</td>
+				<td style='width:280px'><input class=myinputtext style='width:100%;box-sizing:border-box' type=\"text\" id=\"fnopp\" name=\"fnopp\" disabled value='" . htmlspecialchars($nopp, ENT_QUOTES) . "' /></td>
+				<td style='width:140px;padding-left:15px'>Tipe</td>
+				<td style='width:10px'>:</td>
+				<td>" . htmlspecialchars(isset($arrTipeH[$hdr['tipepp']]) ? $arrTipeH[$hdr['tipepp']] : $hdr['tipepp']) . "</td>
 			</tr>
 			<tr>
-				<td>" . $_SESSION['lang']['kepada'] . "</td>
+				<td>Unit</td>
 				<td>:</td>
-				<td><select style=width:170px  id=\"karywn_id\" name=\"karywn_id\">" . $optKry . "</select></td>
+				<td>" . htmlspecialchars($hdr['unit'] . " - " . getNamaOrg($hdr['unit'])) . "</td>
+				<td style='padding-left:15px'>Tanggal</td>
+				<td>:</td>
+				<td>" . tanggalnormal($hdr['tanggal']) . "</td>
+			</tr>
+			<tr>
+				<td>Dibuat oleh</td>
+				<td>:</td>
+				<td>" . htmlspecialchars(isset($nmKarH[$hdr['dibuat']]) ? $nmKarH[$hdr['dibuat']] : $hdr['dibuat']) . "</td>
+				<td style='padding-left:15px'>Requester</td>
+				<td>:</td>
+				<td>" . ppNamaRequester(isset($nmKarH[$hdr['requester']]) ? $nmKarH[$hdr['requester']] : $hdr['requester'], isset($deptReq[$hdr['requester']]) ? $deptReq[$hdr['requester']] : '', $nmDeptH) . "</td>
+			</tr>
+			<tr>
+				<td>Jumlah barang</td>
+				<td>:</td>
+				<td><b>" . count($itemAjuan) . "</b> barang</td>
+				<td style='padding-left:15px'>Tingkat persetujuan</td>
+				<td>:</td>
+				<td>" . ($countApprAjuan > 0 ? $countApprAjuan . " tingkat" : "-") . "</td>
+			</tr>
+		</table>";
+		$tab .= "<div style='max-height:230px;overflow:auto;margin:8px 0'>
+			<table cellspacing=1 cellpadding=3 border=0 class=sortable style='width:100%'>
+				<thead>
+				<tr class=rowheader>
+					<th align=center>No.</th>
+					<th align=center>Kode Barang</th>
+					<th align=center>Nama Barang</th>
+					<th align=center>Jumlah</th>
+					<th align=center>Satuan</th>
+					<th align=center>Prioritas</th>
+					<th align=center>Tgl Dibutuhkan</th>
+					<th align=center>Keterangan</th>
+				</tr>
+				</thead>
+				<tbody>";
+		$noAj = 0;
+		foreach ($itemAjuan as $it) {
+			$noAj++;
+			$tglSdtAj = ($it['tgl_sdt'] != '' && $it['tgl_sdt'] != '0000-00-00') ? tanggalnormal($it['tgl_sdt']) : '';
+			$tab .= "<tr class=rowcontent>
+					<td align=center>" . $noAj . "</td>
+					<td align=center>" . htmlspecialchars($it['kodebarang']) . "</td>
+					<td>" . htmlspecialchars($it['namabarang']) . "</td>
+					<td align=right>" . hidezerodecimal($it['jumlahpp'], 2) . "</td>
+					<td align=center>" . htmlspecialchars($it['satuanpp']) . "</td>
+					<td>" . htmlspecialchars($it['prioritas'] . (isset($nmPrio[$it['prioritas']]) ? " - " . $nmPrio[$it['prioritas']] : "")) . "</td>
+					<td align=center>" . $tglSdtAj . "</td>
+					<td>" . htmlspecialchars($it['keterangan']) . "</td>
+				</tr>";
+		}
+		if ($noAj == 0) {
+			$tab .= "<tr class=rowcontent><td colspan=8 align=center>Belum ada barang di rincian</td></tr>";
+		}
+		$tab .= "</tbody></table></div>";
+		$tab .= "<div style='font-weight:bold;margin:8px 0 4px 0;padding-bottom:3px;border-bottom:2px solid #275370;color:#275370'>Diajukan kepada</div>
+		<table cellspacing=1 cellpadding=3 border=0 style='width:100%'>
+			<tr>
+				<td style='width:120px'>" . $_SESSION['lang']['kepada'] . "</td>
+				<td style='width:10px'>:</td>
+				<td style='width:420px'><select style='width:100%' id=\"karywn_id\" name=\"karywn_id\">" . $optKry . "</select></td>
+				<td></td>
+			</tr>
+			<tr>
+				<td colspan=2></td>
+				<td colspan=2 style='color:#555;font-size:11px'>Penyetuju tingkat 1; persetujuan berlanjut otomatis ke tingkat berikutnya.</td>
 			</tr>
 			<input type=\"hidden\" id=\"cls_stat\" name=\"cls_stat\" value=0 />
 			<tr>
-				<td><td><td>
+				<td colspan=2></td>
+				<td colspan=2>
 					<button class=mybutton onclick=reset_data_setuju()>" . $_SESSION['lang']['cancel'] . "</button>
 					<button class=mybutton onclick=save_persetujuan() >" . $_SESSION['lang']['diajukan'] . "</button>
 				</td>

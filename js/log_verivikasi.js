@@ -1,13 +1,55 @@
+
+//isi pilihan (select2) lalu perbarui tampilannya; kalau pilihan tidak ada kembali ke pilihan pertama
+function setSelVP(id, v) {
+	var el = document.getElementById(id);
+	el.value = v;
+	if (el.selectedIndex < 0) {
+		el.selectedIndex = 0;
+	}
+	if (window.jQuery) {
+		jQuery(el).trigger('change.select2');
+	}
+}
+
+//select2 untuk dropdown di dalam baris daftar (satuan, purchaser, kontrak); dipanggil setiap isi baris dimuat ulang
+function initSelect2VP(root) {
+	if (!window.jQuery || !jQuery.fn.select2 || !root) {
+		return;
+	}
+	jQuery(root).find('select.select2vp').each(function () {
+		var el = jQuery(this);
+		if (el.hasClass('select2-hidden-accessible')) {
+			return;
+		}
+		el.select2({ dropdownAutoWidth: true, width: el.attr('data-w') || '100%' });
+	});
+}
+
+//kembali ke tampilan awal (tahun sekarang, tanpa filter lain)
 function showalllist2(pg) {
 	document.getElementById('txtsearch').value = '';
-	document.getElementById('tgl_cari').selectedIndex = 0;
-	document.getElementById('purId').selectedIndex = 0;
-	document.getElementById('unitIdCr').selectedIndex = 0;
-	document.getElementById('klmpkBrg').selectedIndex = 0;
-	document.getElementById('kdBarangCari').selectedIndex = 0;
-	document.getElementById('statPP').selectedIndex = 0;
-	document.getElementById('jenis').selectedIndex = 0;
+	document.getElementById('kdBarangCari').value = '';
+	document.getElementById('kontrakaIdCr').value = '';
+	setSelVP('filterTahun', String(new Date().getFullYear()));
+	setSelVP('tgl_cari', '');
+	setSelVP('purId', '');
+	setSelVP('unitIdCr', '');
+	setSelVP('klmpkBrg', '');
+	setSelVP('statPP', '');
+	setSelVP('jenis', '');
+	setSelVP('crstrategis', '');
+	setSelVP('crkategori', '');
+	setSelVP('kontrakIdCr', '');
 	loaddata(pg);
+}
+
+//memilih periode (yyyy-mm) otomatis menyesuaikan tahun supaya hasilnya tidak kosong
+function ubahPeriodeVP() {
+	var p = document.getElementById('tgl_cari').value;
+	if (p != '') {
+		setSelVP('filterTahun', p.substring(0, 4));
+	}
+	loaddata(0);
 }
 
 function getPagex() {
@@ -17,30 +59,41 @@ function getPagex() {
 	loaddata(paged);
 }
 
+//parameter filter yang dipakai list, paging, dan tarikan Excel/PDF
+function getFilterParamVP() {
+	var p = 'crnopp=' + encodeURIComponent(trim(document.getElementById('txtsearch').value));
+	p += '&crtahun=' + encodeURIComponent(document.getElementById('filterTahun').value);
+	p += '&crperiode=' + encodeURIComponent(trim(document.getElementById('tgl_cari').value));
+	p += '&crpurchaser=' + encodeURIComponent(trim(document.getElementById('purId').value));
+	p += '&crunit=' + encodeURIComponent(trim(document.getElementById('unitIdCr').value));
+	p += '&crkelbarang=' + encodeURIComponent(trim(document.getElementById('klmpkBrg').value));
+	p += '&crbarang=' + encodeURIComponent(trim(document.getElementById('kdBarangCari').value));
+	p += '&crstatus=' + encodeURIComponent(trim(document.getElementById('statPP').value));
+	p += '&crjenis=' + encodeURIComponent(trim(document.getElementById('jenis').value));
+	p += '&crstrategis=' + encodeURIComponent(trim(document.getElementById('crstrategis').value));
+	p += '&crkontrak=' + encodeURIComponent(trim(document.getElementById('kontrakIdCr').value));
+	p += '&crkontraka=' + encodeURIComponent(trim(document.getElementById('kontrakaIdCr').value));
+	p += '&crkategori=' + encodeURIComponent(trim(document.getElementById('crkategori').value));
+	return p;
+}
+
+function tampilTarikanVP(judul, tujuan) {
+	alertify.popup(judul, "<iframe frameborder=0 style='width:100%;height:100%;overflow:none' src='" + tujuan + "'></iframe>").set({ 'resizable': true, 'maximizable': true, 'overflow': false }).resizeTo('80%', '70%');
+}
+
+function exportExcelVP() {
+	tampilTarikanVP('Report Ms.Excel', 'log_slave_verivikasipp.php?method=excellist&' + getFilterParamVP());
+}
+
+function exportPdfVP() {
+	tampilTarikanVP('Report PDF', 'log_slave_verivikasipp.php?method=pdflist&' + getFilterParamVP());
+}
+
 function loaddata(pg) {
 	document.getElementById('contload').style.display = "block";
 	document.getElementById('containtool').style.display = "none";
-					
-	crnopp = document.getElementById('txtsearch').value;
-	crperiode = trim(document.getElementById('tgl_cari').options[document.getElementById('tgl_cari').selectedIndex].value);
-	crpurchaser = trim(document.getElementById('purId').options[document.getElementById('purId').selectedIndex].value);
-	crunit = trim(document.getElementById('unitIdCr').options[document.getElementById('unitIdCr').selectedIndex].value);
-	crkelbarang = trim(document.getElementById('klmpkBrg').options[document.getElementById('klmpkBrg').selectedIndex].value);
-	crbarang = trim(document.getElementById('kdBarangCari').value);
-	crstatus = trim(document.getElementById('statPP').options[document.getElementById('statPP').selectedIndex].value);
-	crjenis = trim(document.getElementById('jenis').options[document.getElementById('jenis').selectedIndex].value);
-	crstrategis = trim(document.getElementById('crstrategis').options[document.getElementById('crstrategis').selectedIndex].value);
 
-	//Umar
-	crkontrak  = trim(document.getElementById('kontrakIdCr').options[document.getElementById('kontrakIdCr').selectedIndex].value);
-	crkontraka = trim(document.getElementById('kontrakaIdCr').value);
-	crkategori = trim(document.getElementById('crkategori').value);
-	//End Umar
-
-	param = 'method=loaddata&crnopp=' + crnopp + '&crperiode=' + crperiode + '&crpurchaser=' + crpurchaser + '&crunit=' + crunit + '&crkelbarang=' + crkelbarang + '&crbarang=' + crbarang + '&crstatus=' + crstatus + '&crjenis=' + crjenis + '&page=' + pg +'&crstrategis='+crstrategis;
-	param += '&crkontrak=' + crkontrak;
-	param += '&crkontraka=' + crkontraka;
-	param += '&crkategori=' + crkategori;
+	param = 'method=loaddata&' + getFilterParamVP() + '&page=' + encodeURIComponent(pg);
 	tujuan = 'log_slave_verivikasipp.php';
 
 	function respog() {
@@ -53,6 +106,7 @@ function loaddata(pg) {
 					document.getElementById('contain').innerHTML = con.responseText;
 					closeDialog();
 					leftFixedTable();
+					initSelect2VP(document.getElementById('contain'));
 				}
 			} else {
 				busy_off();
@@ -308,6 +362,7 @@ function loadpurchaserLoop(nopp, kodebarang, nourut, bariske, maxbaris) {
 					alert(con.responseText);
 				} else {
 					document.getElementById('listpurchaser_' + nourut).innerHTML = con.responseText;
+					initSelect2VP(document.getElementById('listpurchaser_' + nourut));
 					document.getElementById('tmbldrop'+nourut).style.display="none";
 					document.getElementById('flag'+nourut).value="";
 					if(bariske <= maxbaris){
@@ -1977,4 +2032,4 @@ function viewKontrakDetail(nokontrak){
 		}
 	});
 }
-//End Umar
+//End Umar

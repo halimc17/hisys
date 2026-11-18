@@ -217,7 +217,12 @@ function loadNotifikasi() {
 
 function getDtPP(kdunit) {
   displayFormInput();
-  param = "method=getBarangPP" + "&kdPt=" + kdunit;
+  //barang yang ditampilkan mengikuti pilihan Tahun di form pencarian (default tahun sekarang)
+  var selTahun = document.getElementById("schtahun");
+  param =
+    "method=getBarangPP" +
+    "&kdPt=" + encodeURIComponent(kdunit) +
+    "&schtahun=" + encodeURIComponent(selTahun ? selTahun.value : "");
   tujuan = "log_slave_pnwrharga.php";
   post_response_text(tujuan, param, respog);
 
@@ -233,6 +238,7 @@ function getDtPP(kdunit) {
           document.getElementById("formEditData2").style.display = "none";
           document.getElementById("listBrgPP").style.display = "block";
           document.getElementById("dataBarang").innerHTML = data[0];
+          aturKolomReject();
           document.getElementById("schunit").innerHTML = data[1];
           document.getElementById("schpt").value = data[2];
           document.getElementById("noUrut").value = 1;
@@ -255,16 +261,25 @@ function schgetDtPP() {
   schklbrg = document.getElementById("schklbrg").value;
   schkdbrg = document.getElementById("schkdbrg").value;
 
+  schtahun = document.getElementById("schtahun").value;
+
   param =
     "method=schgetDtPP" +
     "&schnopp=" +
-    schnopp +
+    encodeURIComponent(schnopp) +
     "&schjenis=" +
-    schjenis +
+    encodeURIComponent(schjenis) +
     "&schunit=" +
-    schunit;
+    encodeURIComponent(schunit);
   param +=
-    "&schklbrg=" + schklbrg + "&schpt=" + schpt + "&schkdbrg=" + schkdbrg;
+    "&schklbrg=" +
+    encodeURIComponent(schklbrg) +
+    "&schpt=" +
+    encodeURIComponent(schpt) +
+    "&schkdbrg=" +
+    encodeURIComponent(schkdbrg) +
+    "&schtahun=" +
+    encodeURIComponent(schtahun);
 
   tujuan = "log_slave_pnwrharga.php";
   post_response_text(tujuan, param, respog);
@@ -277,6 +292,87 @@ function schgetDtPP() {
           alert(con.responseText);
         } else {
           document.getElementById("dataBarang").innerHTML = con.responseText;
+          aturKolomReject();
+        }
+      } else {
+        busy_off();
+        error_catch(con.status);
+      }
+    }
+  }
+}
+
+//kolom Reject hanya tampil kalau ada barang PT PPP di daftar (tombol Reject khusus PT PPP)
+function aturKolomReject() {
+  var ada = document.querySelectorAll("#dataBarang .btnReject").length > 0;
+  var th = document.getElementById("thReject");
+  if (th) {
+    th.style.display = ada ? "" : "none";
+  }
+  var sel = document.querySelectorAll("#dataBarang .tdReject");
+  for (var i = 0; i < sel.length; i++) {
+    sel[i].style.display = ada ? "" : "none";
+  }
+}
+
+//Reject barang yang sudah dialokasi ke purchaser ini (belum masuk RFQ): kembali ke pembuat PR/SR beserta alasan
+var rejectNopp = "";
+var rejectKode = "";
+function rejectBrg(nopp, kodebarang) {
+  rejectNopp = nopp;
+  rejectKode = kodebarang;
+  //hitung barang lain dari PR/SR yang sama yang ada di daftar (tidak ikut ditolak)
+  var lain = 0;
+  var sel = document.querySelectorAll("#dataBarang [id^='nopplst_']");
+  for (var i = 0; i < sel.length; i++) {
+    var cell = sel[i];
+    var no = cell.id.replace("nopplst_", "");
+    var kd = document.getElementById("kodebrg_" + no);
+    if (cell.innerHTML == nopp && kd && kd.innerHTML != kodebarang) {
+      lain++;
+    }
+  }
+  var infoLain =
+    "<br><b>Hanya barang ini yang ditolak.</b> Barang lain di PR/SR yang sama tidak ikut ditolak" +
+    (lain > 0 ? " (di daftar Anda masih ada " + lain + " barang lain dari PR/SR ini)." : ".");
+  var isi =
+    "<div style='padding:8px;line-height:1.5'>" +
+    "<b>Reject " + nopp + " - " + kodebarang + "</b><br>" +
+    "Barang ditolak dan dikembalikan ke pembuat PR/SR (mendapat notifikasi beserta alasan), lalu hilang dari daftar Anda." + infoLain + "<br><br>" +
+    "Alasan : <input type=text id=alasanRejectBrg class=myinputtext maxlength=200 style='width:85%'><br><br>" +
+    "<button class=mybutton onclick=simpanRejectBrg()>Reject</button>" +
+    "</div>";
+  alertify
+    .popup("Reject Barang", isi)
+    .set({ resizable: true, maximizable: true })
+    .resizeTo("45%", "40%");
+}
+
+function simpanRejectBrg() {
+  var alasan = trim(document.getElementById("alasanRejectBrg").value);
+  if (alasan.length < 3) {
+    alert("Alasan penolakan harus diisi.");
+    return;
+  }
+  if (!confirm("Barang ini akan ditolak dan dikembalikan ke pembuat PR/SR. Lanjutkan?")) {
+    return;
+  }
+  param =
+    "method=rejectbrg&nopp=" + encodeURIComponent(rejectNopp) +
+    "&kodebarang=" + encodeURIComponent(rejectKode) +
+    "&alasan=" + encodeURIComponent(alasan);
+  post_response_text("log_slave_pnwrharga.php", param, respog);
+
+  function respog() {
+    if (con.readyState == 4) {
+      if (con.status == 200) {
+        busy_off();
+        if (!isSaveResponse(con.responseText)) {
+          alert(con.responseText);
+        } else {
+          alertify.popup().destroy();
+          alert(con.responseText);
+          schgetDtPP();
         }
       } else {
         busy_off();

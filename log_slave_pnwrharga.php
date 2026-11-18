@@ -23,6 +23,10 @@ $crnopp = checkPostGet('crnopp', '');
 $crtanggal = checkPostGet('crtanggal', '');
 $schnopp = checkPostGet('schnopp', '');
 $schjenis = checkPostGet('schjenis', '');
+$schtahun = trim((string)checkPostGet('schtahun', ''));
+if (!preg_match('/^\d{4}$/', $schtahun)) {
+	$schtahun = ''; #kosong = semua tahun
+}
 $schunit = checkPostGet('schunit', '');
 $schpt = checkPostGet('schpt', '');
 $schklbrg = checkPostGet('schklbrg', '');
@@ -995,11 +999,11 @@ if ($xmethod != '') {
 		case 'getBarangPP':
 			$no = 0;
 			$tab = '';
-			$str = "select a.*,c.realisasi,c.satuankonversi,d.jumlahpesan, c.nokontrak,c.hasilkonversi, b.ket_balik from " . $dbname . ".log_listverifikasi a 
+			$str = "select a.*,c.realisasi,c.satuankonversi,d.jumlahpesan, c.nokontrak,c.hasilkonversi, b.ket_balik, b.pt as pt_pr from " . $dbname . ".log_listverifikasi a 
 			left join " . $dbname . ".log_prapoht b on a.nopp=b.nopp 
 			left join " . $dbname . ".log_prapodt c on a.nopp=c.nopp and a.kodebarang = c.kodebarang 
 			left join " . $dbname . ".log_podt d on a.nopp=d.nopp and a.kodebarang = d.kodebarang 
-			where a.karyawanid='" . $_SESSION['standard']['userid'] . "' and a.status='0' and skip='0' and pemenang='0' and b.pt='" . $kdPt . "' group by a.karyawanid,a.nopp,a.kodebarang order by c.tgl_sdt asc, a.nopp asc";
+			where a.karyawanid='" . $_SESSION['standard']['userid'] . "' and a.status='0' and skip='0' and pemenang='0' and b.pt='" . $kdPt . "'" . ($schtahun != '' ? " and substr(b.tanggal,1,4)='" . $schtahun . "'" : "") . " group by a.karyawanid,a.nopp,a.kodebarang order by c.tgl_sdt asc, a.nopp asc";
 			// echo $str;
 			$res = $owlPDO->query($str) or die(print " Gagal: " . PDOException::getMessage());
 			$res->setFetchMode(PDO::FETCH_ASSOC);
@@ -1042,9 +1046,10 @@ if ($xmethod != '') {
 				<td style=width:50px>" . $mySatuan . "</td>
 				<td style=width:50px id='nokontrak_" . $no . "'>" . $bar['nokontrak'] . "</td>
 				<td  style='width:20px' align=center><input type=checkbox id=pilBrg_" . $no . " onclick=\"cekchklist('" . $no . "','" . $countitem . "')\" /></td>
+					<td style='width:60px' class=tdReject align=center>" . (isset($bar['pt_pr']) && $bar['pt_pr'] == 'PPP' ? "<button class='mybutton btnReject' style='padding:1px 8px;font-size:11px;background:#fff;color:#b71c1c;border:1px solid #d9534f;border-radius:4px' title='Reject: tolak barang ini dan kembalikan ke pembuat PR/SR dengan alasan. Barang hilang dari daftar Anda. Khusus PT PPP.' onclick=\"rejectBrg('" . htmlspecialchars(addslashes($bar['nopp']), ENT_QUOTES) . "','" . htmlspecialchars(addslashes($bar['kodebarang']), ENT_QUOTES) . "')\">Reject</button>" : "") . "</td>
 			</tr>";
 			}
-			$tab .= "<tr><td colspan=7 align=center>
+			$tab .= "<tr><td colspan=9 align=center>
 			<button class=mybutton onclick=lanjutAdd() >" . $_SESSION['lang']['lanjut'] . "</button>
 			<button class=mybutton onclick=skiprph() style='display:none'>Skip</button>
 		</td></tr>";
@@ -1082,13 +1087,17 @@ if ($xmethod != '') {
 				$where .= " and a.nopp like '%" . $schunit . "%' ";
 			}
 
+			if ($schtahun != '') {
+				$where .= " and substr(b.tanggal,1,4)='" . $schtahun . "' ";
+			}
+
 			if ($schjenis != '') {
 				$where .= " and a.kodebarang in (select kodebarang from " . $dbname . ".log_5masterbarang where jenis='" . $schjenis . "')";
 			}
 
 			$no = 0;
 			$tab = '';
-			$str = "select a.*,c.realisasi,d.jumlahpesan, c.nokontrak,c.satuankonversi,c.hasilkonversi from " . $dbname . ".log_listverifikasi a 
+			$str = "select a.*,c.realisasi,d.jumlahpesan, c.nokontrak,c.satuankonversi,c.hasilkonversi, b.pt as pt_pr from " . $dbname . ".log_listverifikasi a 
 			left join " . $dbname . ".log_prapoht b on a.nopp=b.nopp 
 			left join " . $dbname . ".log_prapodt c on a.nopp=c.nopp and a.kodebarang = c.kodebarang 
 			left join " . $dbname . ".log_podt d on a.nopp=d.nopp and a.kodebarang = d.kodebarang 
@@ -1098,7 +1107,7 @@ if ($xmethod != '') {
 			$res->setFetchMode(PDO::FETCH_ASSOC);
 
 			if ($jlhkolom <= 0) {
-				$tab .= "<tr class=rowcontent><td colspan=7 align=center style='width:838px'>" . $_SESSION['lang']['datanotfound'] . "</td></tr>";
+				$tab .= "<tr class=rowcontent><td colspan=9 align=center style='width:838px'>" . $_SESSION['lang']['datanotfound'] . "</td></tr>";
 			} else {
 				while ($bar = $res->fetch()) {
 					$optBarang = makeOption($dbname, 'log_5masterbarang', 'kodebarang,namabarang', "kodebarang='" . $bar['kodebarang'] . "'");
@@ -1121,12 +1130,69 @@ if ($xmethod != '') {
 					<td style=width:50px>" . $mySatuan . "</td>
 					<td style=width:50px id='nokontrak_" . $no . "'>" . $bar['nokontrak'] . "</td>
 					<td  style='width:25px' align=center><input type=checkbox id=pilBrg_" . $no . " onclick=\"cekchklist('" . $no . "','" . $jlhkolom . "')\" /></td>
+					<td style='width:60px' class=tdReject align=center>" . (isset($bar['pt_pr']) && $bar['pt_pr'] == 'PPP' ? "<button class='mybutton btnReject' style='padding:1px 8px;font-size:11px;background:#fff;color:#b71c1c;border:1px solid #d9534f;border-radius:4px' title='Reject: tolak barang ini dan kembalikan ke pembuat PR/SR dengan alasan. Barang hilang dari daftar Anda. Khusus PT PPP.' onclick=\"rejectBrg('" . htmlspecialchars(addslashes($bar['nopp']), ENT_QUOTES) . "','" . htmlspecialchars(addslashes($bar['kodebarang']), ENT_QUOTES) . "')\">Reject</button>" : "") . "</td>
 				</tr>";
 				}
-				$tab .= "<tr><td colspan=7 align=center><button class=mybutton onclick=lanjutAdd() >" . $_SESSION['lang']['lanjut'] . "</button></td></tr>";
+				$tab .= "<tr><td colspan=9 align=center><button class=mybutton onclick=lanjutAdd() >" . $_SESSION['lang']['lanjut'] . "</button></td></tr>";
 			}
 
 			echo $tab;
+			break;
+
+		case 'rejectbrg':
+			#tolak barang yang sudah dialokasi ke purchaser ini dan belum masuk RFQ; alurnya sama dengan Drop/Reject di PR/SR Verifikasi
+			$alasan = trim((string)checkPostGet('alasan', ''));
+			$userid = $_SESSION['standard']['userid'];
+			if ($nopp == '' or $kodebarang == '') {
+				exit("Gagal : Data PR/SR tidak lengkap");
+			}
+			if (strlen($alasan) < 3) {
+				exit("Gagal : Alasan penolakan harus diisi");
+			}
+			$alasan = substr($alasan, 0, 200);
+
+			#barang harus milik purchaser yang login dan masih menunggu RFQ
+			$stmt = $owlPDO->prepare("select count(*) from " . $dbname . ".log_listverifikasi where nopp=? and kodebarang=? and karyawanid=? and status='0' and skip='0' and pemenang='0'");
+			$stmt->execute(array($nopp, $kodebarang, $userid));
+			if ((int)$stmt->fetchColumn() == 0) {
+				exit("Gagal : Barang bukan alokasi Anda atau sudah diproses di RFQ");
+			}
+			#tidak boleh ditolak kalau ada purchaser lain yang sudah memakainya di RFQ/pemenang
+			$stmt = $owlPDO->prepare("select count(*) from " . $dbname . ".log_listverifikasi where nopp=? and kodebarang=? and (status!='0' or pemenang!='0')");
+			$stmt->execute(array($nopp, $kodebarang));
+			if ((int)$stmt->fetchColumn() > 0) {
+				exit("Gagal : Barang sudah masuk proses RFQ, tidak bisa ditolak");
+			}
+			$stmt = $owlPDO->prepare("select b.create_po, b.status, a.dibuat, a.pt from " . $dbname . ".log_prapodt b left join " . $dbname . ".log_prapoht a on a.nopp=b.nopp where b.nopp=? and b.kodebarang=?");
+			$stmt->execute(array($nopp, $kodebarang));
+			$dtItem = $stmt->fetch(PDO::FETCH_ASSOC);
+			if (!$dtItem) {
+				exit("Gagal : Barang PR/SR tidak ditemukan");
+			}
+			if ($dtItem['pt'] != 'PPP') {
+				exit("Gagal : Reject barang hanya berlaku untuk PT PPP");
+			}
+			if ($dtItem['create_po'] != '0' or $dtItem['status'] != '0') {
+				exit("Gagal : Barang sudah PO atau sudah ditolak");
+			}
+
+			try {
+				$owlPDO->beginTransaction();
+				$stmt = $owlPDO->prepare("update " . $dbname . ".log_prapodt set status='3', purchaser='0', alasanstatus=?, ditolakoleh=? where nopp=? and kodebarang=?");
+				$stmt->execute(array($alasan, $userid, $nopp, $kodebarang));
+				$stmt = $owlPDO->prepare("delete from " . $dbname . ".log_listverifikasi where nopp=? and kodebarang=? and status='0' and pemenang='0'");
+				$stmt->execute(array($nopp, $kodebarang));
+				#notifikasi penolakan ke pembuat PR/SR
+				$msgdt = "PR/SR dengan No " . $nopp . " dan kodebarang : " . $kodebarang . " ditolak dengan alasan " . pnwrEsc($alasan);
+				createnotif($nopp, 'TOLAKPR', $msgdt, $dtItem['dibuat'], date('Y-m-d H:i:s'));
+				$owlPDO->commit();
+			} catch (PDOException $e) {
+				if ($owlPDO->inTransaction()) {
+					$owlPDO->rollBack();
+				}
+				exit("Gagal : Penolakan barang tidak dapat disimpan");
+			}
+			echo "Barang sudah ditolak dan dikembalikan ke pembuat PR/SR";
 			break;
 
 		case 'cekBarang':

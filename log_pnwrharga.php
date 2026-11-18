@@ -142,33 +142,53 @@ while($rKelompok=$qKelompok->fetch())
     echo"<input type=hidden id=noUrut value='1' /><input type=hidden id=notransaksi value='' />";
     //tampilkan form mengambil get PP
     echo"<div id=listBrgPP  style=display:none>";
-	
+
+	#tahun PR/SR barang yang dialokasikan ke purchaser ini: default tahun sekarang, "Semua Tahun" untuk seluruh tahun
+	$arrTahunBrg=array($tahunSkrg=>$tahunSkrg);
+	foreach(fetchdata("select distinct year(b.tanggal) as thn from ".$dbname.".log_listverifikasi a left join ".$dbname.".log_prapoht b on a.nopp=b.nopp where a.karyawanid='".$_SESSION['standard']['userid']."' and a.status='0' and b.tanggal>'0000-00-00'") as $val){
+		$arrTahunBrg[$val['thn']]=$val['thn'];
+	}
+	krsort($arrTahunBrg);
+	$optTahunBrg="<option value=''>Semua Tahun</option>";
+	foreach($arrTahunBrg as $thn){
+		$optTahunBrg.="<option value='".$thn."'".($thn==$tahunSkrg?" selected":"").">".$thn."</option>";
+	}
+
 	echo"<fieldset><legend>".$_SESSION['lang']['find']."</legend>
 		<table>
 			<tr>
-				<td>".$_SESSION['lang']['nopp']."</td>
+				<td>Tahun</td>
 				<td>:</td>
-				<td><input type=text id=schnopp style=width:150px size=25 maxlength=30 class=myinputtext></td>		
-				
-				<td>".$_SESSION['lang']['jenis']."</td><td>:</td><td><select class=select2 style=width:100px  id='schjenis' name='jenis'>".$optjenis."</select></td>
-				<td>".$_SESSION['lang']['unit']."</td><td>:</td><td><select class=select2 style=width:100px  id='schunit' name='jenis'>".$optunit."</select></td>
-			
-				<td><input type=text hidden id=schpt style=width:150px size=25 maxlength=30 class=myinputtext></td>		
+				<td style='width:220px'><select id=schtahun class=select2 style='width:100%'>".$optTahunBrg."</select></td>
+				<td style='padding-left:15px'>".$_SESSION['lang']['nopp']."</td>
+				<td>:</td>
+				<td style='width:220px'><input type=text id=schnopp maxlength=30 class=myinputtext style='width:100%;box-sizing:border-box'></td>
+				<td style='padding-left:15px'>".$_SESSION['lang']['jenis']."</td>
+				<td>:</td>
+				<td style='width:160px'><select id='schjenis' class=select2 style='width:100%'>".$optjenis."</select></td>
 			</tr>
 			<tr>
-				<td>".$_SESSION['lang']['kelompokbarang']."</td><td>:</td><td> <select id=schklbrg class=select2 style=width:155px onchange=getBarangCari()>".$optKelompokBrg."</select></td>
-				
-				<td>".$_SESSION['lang']['namabarang']."</td><td>:</td><td><select id=schkdbrg class=select2 style=width:100px>".$optBrgCari."</select>&nbsp;<img hidden src=\"images/search.png\" class=\"resicon\" title='".$_SESSION['lang']['find']." ".$_SESSION['lang']['namabarang']."' onclick=\"searchBrgCari('".$_SESSION['lang']['find']." ".$_SESSION['lang']['namabarang']."','<fieldset style=min-width:93%>".$_SESSION['lang']['find']."&nbsp;<input type=text class=myinputtext id=nmBrg><button class=mybutton onclick=findBrg2()>".$_SESSION['lang']['find']."</button></fieldset><div id=containerBarang style=overflow=auto;max-height=300;max-width=400></div>',event);\"></td>
-				<td align=center><button class=mybutton onclick=schgetDtPP()>".$_SESSION['lang']['find']."</button></td>
+				<td>".$_SESSION['lang']['unit']."</td>
+				<td>:</td>
+				<td><select id='schunit' class=select2 style='width:100%'>".$optunit."</select></td>
+				<td style='padding-left:15px'>".$_SESSION['lang']['kelompokbarang']."</td>
+				<td>:</td>
+				<td><select id=schklbrg class=select2 style='width:100%' onchange=getBarangCari()>".$optKelompokBrg."</select></td>
+				<td style='padding-left:15px'>".$_SESSION['lang']['namabarang']."</td>
+				<td>:</td>
+				<td><select id=schkdbrg class=select2 style='width:100%'>".$optBrgCari."</select></td>
 			</tr>
-			
-	
-	
-	
-	</table></fieldset>";
+			<tr>
+				<td colspan=9>
+					<button class=mybutton onclick=schgetDtPP()>".$_SESSION['lang']['find']."</button>
+					<input type=hidden id=schpt value=''>
+				</td>
+			</tr>
+		</table></fieldset>";
 	
 	echo"
     <fieldset><legend>".$_SESSION['lang']['daftarbarang']."</legend>
+    <div style='padding:2px 4px 6px 4px;color:#555'>Keterangan: tombol <b style='color:#b71c1c'>Reject</b> menolak barang tersebut dan mengembalikannya ke pembuat PR/SR dengan alasan (pembuat mendapat notifikasi). Barang hilang dari daftar Anda. Hanya untuk barang yang belum masuk RFQ dan hanya berlaku untuk PT PPP.</div>
     <div style='height:500px;overflow:auto'>
     <table border=0 cellspacing=1 class=sortable style='width:100%'>
         <thead>
@@ -181,6 +201,7 @@ while($rKelompok=$qKelompok->fetch())
             <td align=center>".$_SESSION['lang']['satuan']."</td>
             <td align=center>".$_SESSION['lang']['kontrak']."</td>
             <td align=center><input type=checkbox onclick=clikcAll() id=dtSemua /></td>
+            <td align=center id=thReject>Reject</td>
         </tr>            
         <tr style='display:none'>
         <td>kode</td>
@@ -435,4 +456,4 @@ while($rKelompok=$qKelompok->fetch())
     CLOSE_BOX();
     echo"</div>";
     echo close_body(); 
-    ?>
+    ?>

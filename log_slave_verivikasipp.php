@@ -50,11 +50,457 @@ $crkategori = checkPostGet('crkategori','');
 $tab 		= "";
 
 $namabarang = makeOption($dbname, 'log_5masterbarang', 'kodebarang,namabarang');
+
+#=== Filter daftar PR/SR Verifikasi serta tarikan Excel/PDF (dipakai bersama oleh list, Excel, dan PDF) ===
+#filter dibersihkan dulu: teks bebas di-escape, kode/angka di-whitelist, tahun 4 digit (kosong = semua tahun)
+if (!function_exists('vpFilter')) {
+	function vpFilter()
+	{
+		global $owlPDO;
+		$f = array('nopp' => '', 'periode' => '', 'purchaser' => '', 'unit' => '', 'kelbarang' => '', 'barang' => '', 'status' => '', 'jenis' => '', 'strategis' => '', 'kontrak' => '', 'nokontrak' => '', 'kategori' => '', 'tahun' => '');
+		$v = trim((string)checkPostGet('crnopp', ''));
+		if ($v != '') {
+			$f['nopp'] = substr($owlPDO->quote($v), 1, -1);
+		}
+		$v = trim((string)checkPostGet('crperiode', ''));
+		if (preg_match('/^\d{4}-\d{2}$/', $v)) {
+			$f['periode'] = $v;
+		}
+		$v = trim((string)checkPostGet('crpurchaser', ''));
+		if (preg_match('/^\d{1,10}$/', $v)) {
+			$f['purchaser'] = $v;
+		}
+		$v = trim((string)checkPostGet('crunit', ''));
+		if (preg_match('/^[A-Za-z0-9]{1,10}$/', $v)) {
+			$f['unit'] = $v;
+		}
+		$v = trim((string)checkPostGet('crkelbarang', ''));
+		if (preg_match('/^[A-Za-z0-9]{1,5}$/', $v)) {
+			$f['kelbarang'] = $v;
+		}
+		$v = trim((string)checkPostGet('crbarang', ''));
+		if ($v != '') {
+			$f['barang'] = substr($owlPDO->quote($v), 1, -1);
+		}
+		$v = (string)checkPostGet('crstatus', '');
+		if (in_array($v, array('0', '1'), true)) {
+			$f['status'] = $v;
+		}
+		$v = (string)checkPostGet('crjenis', '');
+		if (in_array($v, array('slow', 'fast', 'non'), true)) {
+			$f['jenis'] = $v;
+		}
+		$v = (string)checkPostGet('crstrategis', '');
+		if (in_array($v, array('0', '1'), true)) {
+			$f['strategis'] = $v;
+		}
+		#Kontrak: '1' = hanya yang sudah berkontrak; selain itu hanya yang belum berkontrak (perilaku lama)
+		$v = (string)checkPostGet('crkontrak', '');
+		$f['kontrak'] = ($v === '1') ? '1' : '0';
+		$v = trim((string)checkPostGet('crkontraka', ''));
+		if ($v != '') {
+			$f['nokontrak'] = substr($owlPDO->quote($v), 1, -1);
+		}
+		$v = trim((string)checkPostGet('crkategori', ''));
+		if (preg_match('/^\d{1,3}$/', $v)) {
+			$f['kategori'] = $v;
+		}
+		$v = trim((string)checkPostGet('crtahun', ''));
+		if (preg_match('/^\d{4}$/', $v)) {
+			$f['tahun'] = $v;
+		}
+		return $f;
+	}
+}
+#kategori barang: dari master barang, kalau kosong dari sub kelompok; '1,4' dipilih menurut unit (akhiran M = 1, selain itu 4)
+if (!function_exists('vpKategoriExpr')) {
+	function vpKategoriExpr()
+	{
+		return "CASE
+			WHEN c.idkategorinya != '' and c.idkategorinya='1,4' and substr(a.unit,-1)='M' THEN '1'
+			WHEN c.idkategorinya != '' and c.idkategorinya='1,4' and substr(a.unit,-1)!='M' THEN '4'
+			WHEN c.idkategorinya != '' and c.idkategorinya!='1,4' THEN c.idkategorinya
+			WHEN d.idkategori != '' and d.idkategori='1,4' and substr(a.unit,-1)='M' THEN '1'
+			WHEN d.idkategori != '' and d.idkategori='1,4' and substr(a.unit,-1)!='M' THEN '4'
+			WHEN d.idkategori != '' and d.idkategori!='1,4' THEN d.idkategori
+		END";
+	}
+}
+if (!function_exists('vpFrom')) {
+	function vpFrom()
+	{
+		global $dbname;
+		return " FROM " . $dbname . ".log_prapodt b LEFT JOIN " . $dbname . ".log_prapoht a ON a.nopp = b.nopp
+			LEFT JOIN " . $dbname . ".log_5masterbarang c ON c.kodebarang = b.kodebarang and c.idkategorinya !=''
+			LEFT JOIN " . $dbname . ".log_5subklbarang d ON d.kode = substr(b.kodebarang,1,5)
+			WHERE a.close > '1' and b.status='0' and b.create_po!='3' ";
+	}
+}
+if (!function_exists('vpWhere')) {
+	function vpWhere()
+	{
+		global $dbname;
+		$f = vpFilter();
+		$where = " and substr(a.tanggal,1,4)<='" . date('Y') . "'";
+		if ($f['periode'] != '') {
+			$where .= " and a.tanggal LIKE '" . $f['periode'] . "%'";
+		} elseif ($f['tahun'] != '') {
+			$where .= " and substr(a.tanggal,1,4)='" . $f['tahun'] . "'";
+		}
+		if ($f['nopp'] != '') {
+			$where .= " and b.nopp like '%" . $f['nopp'] . "%'";
+		}
+		if ($f['purchaser'] != '') {
+			$where .= " and b.nopp in (select nopp from " . $dbname . ".log_listverifikasi where karyawanid = '" . $f['purchaser'] . "') and b.kodebarang in (select kodebarang from " . $dbname . ".log_listverifikasi where karyawanid = '" . $f['purchaser'] . "')";
+		}
+		if ($f['unit'] != '') {
+			$where .= " and b.nopp like '%" . $f['unit'] . "%'";
+		}
+		if ($f['kelbarang'] != '') {
+			$where .= " and left(b.kodebarang,3) = '" . $f['kelbarang'] . "'";
+		}
+		if ($f['barang'] != '') {
+			$where .= " and b.kodebarang in (select kodebarang from " . $dbname . ".log_5masterbarang where namabarang like '%" . $f['barang'] . "%')";
+		}
+		if ($f['status'] === '0') {
+			$where .= " and (b.nopp not in (select z.nopp from " . $dbname . ".log_listverifikasi z where z.nopp=b.nopp and z.kodebarang=b.kodebarang))";
+		}
+		if ($f['status'] === '1') {
+			$where .= " and b.create_po = '1'";
+		}
+		if ($f['jenis'] != '') {
+			$where .= " and b.kodebarang in (select kodebarang from " . $dbname . ".log_5masterbarang where jenis='" . $f['jenis'] . "')";
+		}
+		if ($f['strategis'] != '') {
+			$where .= " and b.hargalama='" . $f['strategis'] . "'";
+		}
+		if ($f['kontrak'] === '1') {
+			$where .= " and b.nokontrak != ''";
+		} else {
+			$where .= " and b.nokontrak = ''";
+		}
+		if ($f['nokontrak'] != '') {
+			$where .= " and b.nokontrak LIKE '%" . $f['nokontrak'] . "%'";
+		}
+		$where .= " and a.unit in (" . getOrgDetail(2) . ")";
+		if ($f['kategori'] != '') {
+			$where .= " and (" . vpKategoriExpr() . ")='" . $f['kategori'] . "'";
+		}
+		return $where;
+	}
+}
+#keterangan filter yang aktif untuk kop tarikan
+if (!function_exists('vpInfoFilter')) {
+	function vpInfoFilter()
+	{
+		global $dbname, $vpTerpotong;
+		$f = vpFilter();
+		$info = array();
+		$info[] = 'Tahun: ' . ($f['tahun'] != '' ? $f['tahun'] : 'Semua');
+		if ($f['periode'] != '') {
+			$info[] = 'Periode: ' . $f['periode'];
+		}
+		if ($f['nopp'] != '') {
+			$info[] = 'No. PR/SR: ' . stripslashes($f['nopp']);
+		}
+		if ($f['unit'] != '') {
+			$info[] = 'Unit: ' . $f['unit'];
+		}
+		if ($f['purchaser'] != '') {
+			$nm = fetchdata("select namakaryawan from " . $dbname . ".datakaryawan where karyawanid='" . $f['purchaser'] . "'");
+			$info[] = 'Purchaser: ' . (isset($nm[0]['namakaryawan']) ? $nm[0]['namakaryawan'] : $f['purchaser']);
+		}
+		if ($f['kelbarang'] != '') {
+			$nm = fetchdata("select kelompok from " . $dbname . ".log_5klbarang where kode='" . $f['kelbarang'] . "'");
+			$info[] = 'Kelompok Barang: ' . $f['kelbarang'] . (isset($nm[0]['kelompok']) ? ' - ' . $nm[0]['kelompok'] : '');
+		}
+		if ($f['barang'] != '') {
+			$info[] = 'Nama Barang: ' . stripslashes($f['barang']);
+		}
+		if ($f['status'] !== '') {
+			$info[] = 'Status: ' . ($f['status'] === '1' ? 'Sudah PO' : 'Belum Alokasi');
+		}
+		if ($f['jenis'] != '') {
+			$info[] = 'Jenis: ' . ucfirst($f['jenis']);
+		}
+		if ($f['strategis'] !== '') {
+			$info[] = 'Strategies: ' . ($f['strategis'] === '1' ? 'Ya' : 'Tidak');
+		}
+		if ($f['kategori'] != '') {
+			$nm = fetchdata("select jenis from " . $dbname . ".log_5kategoribarang where id='" . $f['kategori'] . "'");
+			$info[] = 'Kategori: ' . (isset($nm[0]['jenis']) ? $nm[0]['jenis'] : $f['kategori']);
+		}
+		$info[] = 'Kontrak: ' . ($f['kontrak'] === '1' ? 'Ya' : 'Tidak');
+		if ($f['nokontrak'] != '') {
+			$info[] = 'No. Kontrak: ' . stripslashes($f['nokontrak']);
+		}
+		if (!empty($vpTerpotong)) {
+			$info[] = 'Dibatasi 3000 data pertama, persempit filter bila perlu';
+		}
+		return implode(' | ', $info);
+	}
+}
+#data PR/SR sesuai filter untuk tarikan Excel/PDF (dibatasi supaya tidak berat), lengkap dengan nama kelompok, kategori, prioritas, purchaser, status
+if (!function_exists('vpDataList')) {
+	function vpDataList($maks = 3000)
+	{
+		global $dbname, $owlPDO, $vpTerpotong;
+		$rows = fetchdata("SELECT " . vpKategoriExpr() . " as kategori, a.unit, a.tanggal, b.keteranganubah, a.close, a.pt, a.ket_balik, a.tipepp, b.* " . vpFrom() . vpWhere() . " group by b.nopp, b.kodebarang ORDER BY a.tanggal desc, b.nopp desc, b.kodebarang asc limit " . ((int)$maks + 1));
+		$vpTerpotong = count($rows) > $maks;
+		$rows = array_slice($rows, 0, $maks);
+
+		#purchaser yang sudah dialokasikan per item (satu query per 500 nomor PR/SR)
+		$daftarNopp = array();
+		foreach ($rows as $r) {
+			$daftarNopp[$r['nopp']] = $owlPDO->quote($r['nopp']);
+		}
+		$purch = array();
+		$rfq = array();
+		$noPo = array();
+		foreach (array_chunk(array_values($daftarNopp), 500) as $chunk) {
+			$lv = fetchdata("select nopp,kodebarang,karyawanid,status from " . $dbname . ".log_listverifikasi where nopp in (" . implode(',', $chunk) . ") group by nopp,kodebarang,karyawanid");
+			foreach ($lv as $b) {
+				$purch[$b['nopp'] . '|' . $b['kodebarang']][] = $b['karyawanid'];
+				if ($b['status'] == '1') {
+					$rfq[$b['nopp'] . '|' . $b['kodebarang']] = true;
+				}
+			}
+			$pd = fetchdata("select nopp,kodebarang,nopo from " . $dbname . ".log_podt where nopp in (" . implode(',', $chunk) . ") group by nopp,kodebarang");
+			foreach ($pd as $b) {
+				$noPo[$b['nopp'] . '|' . $b['kodebarang']] = $b['nopo'];
+			}
+		}
+		$nmKary = makeOption($dbname, 'datakaryawan', 'karyawanid,namakaryawan');
+		$nmKlp = makeOption($dbname, 'log_5klbarang', 'kode,kelompok');
+		$nmKat = makeOption($dbname, 'log_5kategoribarang', 'id,jenis');
+		$nmPrio = makeOption($dbname, 'log_5prioritas', 'kode,nama');
+		$satBrg = makeOption($dbname, 'log_5masterbarang', 'kodebarang,satuan');
+		foreach ($rows as $i => $r) {
+			$namaPur = array();
+			$ada = isset($purch[$r['nopp'] . '|' . $r['kodebarang']]);
+			if ($ada) {
+				foreach ($purch[$r['nopp'] . '|' . $r['kodebarang']] as $id) {
+					$namaPur[] = isset($nmKary[$id]) ? $nmKary[$id] : $id;
+				}
+			}
+			$rows[$i]['x_purchaser'] = implode('; ', $namaPur);
+			$kunci = $r['nopp'] . '|' . $r['kodebarang'];
+			if ($r['create_po'] == '1') {
+				$rows[$i]['x_status'] = 'Sudah PO';
+			} elseif (isset($rfq[$kunci])) {
+				$rows[$i]['x_status'] = 'Proses Perbandingan Harga';
+			} else {
+				$rows[$i]['x_status'] = $ada ? 'Dialokasi' : 'Belum Dialokasi';
+			}
+			$rows[$i]['x_nopo'] = isset($noPo[$kunci]) ? $noPo[$kunci] : '';
+			$kdKlp = substr($r['kodebarang'], 0, 3);
+			$rows[$i]['x_kelompok'] = isset($nmKlp[$kdKlp]) ? $nmKlp[$kdKlp] : '';
+			$rows[$i]['x_kategori'] = isset($nmKat[$r['kategori']]) ? $nmKat[$r['kategori']] : '';
+			$rows[$i]['x_prioritas'] = $r['prioritas'] . (isset($nmPrio[$r['prioritas']]) ? ' - ' . $nmPrio[$r['prioritas']] : '');
+			$rows[$i]['x_strategies'] = ($r['hargalama'] != 0) ? 'Ya' : 'Tidak';
+			$rows[$i]['x_tipe'] = isset($r['tipepp']) ? $r['tipepp'] : '';
+			if ($r['satuankonversi'] == '') {
+				$rows[$i]['x_aktual'] = hidezerodecimal($r['jumlah'], 3);
+				$rows[$i]['x_satuan'] = isset($satBrg[$r['kodebarang']]) ? $satBrg[$r['kodebarang']] : '';
+			} else {
+				$rows[$i]['x_aktual'] = hidezerodecimal($r['hasilkonversi'], 3);
+				$rows[$i]['x_satuan'] = $r['satuankonversi'];
+			}
+			$rows[$i]['x_diminta'] = hidezerodecimal($r['jumlahpp'], 3);
+		}
+		return $rows;
+	}
+}
+#warna status: latar dan teks (hijau Sudah PO, kuning Belum Dialokasi)
+if (!function_exists('vpWarnaStatus')) {
+	function vpWarnaStatus($status)
+	{
+		$w = array('Sudah PO' => array('#c6efce', '#006100'), 'Belum Dialokasi' => array('#ffeb9c', '#9c5700'));
+		return isset($w[$status]) ? $w[$status] : array('', '');
+	}
+}
+#teks yang kepanjangan dipotong dan diberi "..." supaya tidak tumpang tindih ke kolom sebelah
+if (!function_exists('vpFit')) {
+	function vpFit($pdf, $txt, $w, $f = 7)
+	{
+		$txt = utf8_decode($txt);
+		$pdf->SetFont('Arial', '', $f);
+		if ($pdf->GetStringWidth($txt) <= $w - 2) {
+			return $txt;
+		}
+		while (strlen($txt) > 1 && $pdf->GetStringWidth($txt . '...') > $w - 2) {
+			$txt = substr($txt, 0, -1);
+		}
+		return rtrim($txt) . '...';
+	}
+}
 //End Umar
 
 
 switch ($method)
 {
+	case 'excellist':
+		include_once('lib/HtmlExcel.php');
+		$rows = vpDataList();
+		$hdpt = setheadreport($_SESSION['empl']['kodeorganisasi'], $_SESSION['empl']['kodeorganisasi']);
+		$kolom = 20;
+		$stream = "<table>
+			<tr><td colspan=" . $kolom . "><b>" . htmlspecialchars($hdpt['nama']) . "</b></td></tr>
+			<tr><td colspan=" . $kolom . "><b>PR/SR VERIFIKASI</b></td></tr>
+			<tr><td colspan=" . $kolom . ">" . htmlspecialchars(vpInfoFilter()) . "</td></tr>
+			<tr><td colspan=" . $kolom . ">Ditarik oleh " . htmlspecialchars($_SESSION['empl']['name']) . " (" . htmlspecialchars($_SESSION['standard']['username']) . ") pada " . date('d-m-Y H:i:s') . "</td></tr>
+			<tr><td colspan=" . $kolom . ">&nbsp;</td></tr>
+			</table>";
+		$stream .= "<table class=sortable cellspacing=1 cellpadding=3 border=1>
+			<thead><tr>
+				<th align=center bgcolor=#CCCCCC>No</th>
+				<th align=center bgcolor=#CCCCCC>No. PR/SR</th>
+				<th align=center bgcolor=#CCCCCC>Tanggal PR/SR</th>
+				<th align=center bgcolor=#CCCCCC>Unit</th>
+				<th align=center bgcolor=#CCCCCC>Tipe</th>
+				<th align=center bgcolor=#CCCCCC>Kode Barang</th>
+				<th align=center bgcolor=#CCCCCC>Nama Barang</th>
+				<th align=center bgcolor=#CCCCCC>Kelompok Barang</th>
+				<th align=center bgcolor=#CCCCCC>Kategori</th>
+				<th align=center bgcolor=#CCCCCC>Strategies</th>
+				<th align=center bgcolor=#CCCCCC>Prioritas</th>
+				<th align=center bgcolor=#CCCCCC>Tgl Dibutuhkan</th>
+				<th align=center bgcolor=#CCCCCC>Jumlah Diminta</th>
+				<th align=center bgcolor=#CCCCCC>Aktual</th>
+				<th align=center bgcolor=#CCCCCC>Satuan</th>
+				<th align=center bgcolor=#CCCCCC>Purchaser</th>
+				<th align=center bgcolor=#CCCCCC>No. Kontrak</th>
+				<th align=center bgcolor=#CCCCCC>Status</th>
+				<th align=center bgcolor=#CCCCCC>No. PO</th>
+				<th align=center bgcolor=#CCCCCC>Keterangan</th>
+			</tr></thead><tbody>";
+		$no = 0;
+		foreach ($rows as $r) {
+			$no++;
+			$wrn = vpWarnaStatus($r['x_status']);
+			$styleSt = $wrn[0] != '' ? " bgcolor=" . $wrn[0] . " style='color:" . $wrn[1] . ";font-weight:bold'" : '';
+			$tglSdt = ($r['tgl_sdt'] != '' && $r['tgl_sdt'] != '0000-00-00') ? tanggalnormal($r['tgl_sdt']) : '';
+			$ketBalik = $r['ket_balik'] != '' ? 'Become Out Standing : ' . $r['ket_balik'] : '';
+			$stream .= "<tr>
+				<td align=center>" . $no . "</td>
+				<td>" . htmlspecialchars($r['nopp']) . "</td>
+				<td align=center>" . tanggalnormal($r['tanggal']) . "</td>
+				<td align=center>" . htmlspecialchars($r['unit']) . "</td>
+				<td align=center>" . htmlspecialchars($r['x_tipe']) . "</td>
+				<td align=center>" . htmlspecialchars($r['kodebarang']) . "</td>
+				<td>" . htmlspecialchars(isset($namabarang[$r['kodebarang']]) ? $namabarang[$r['kodebarang']] : '') . "</td>
+				<td>" . htmlspecialchars($r['x_kelompok']) . "</td>
+				<td>" . htmlspecialchars($r['x_kategori']) . "</td>
+				<td align=center>" . $r['x_strategies'] . "</td>
+				<td>" . htmlspecialchars($r['x_prioritas']) . "</td>
+				<td align=center>" . $tglSdt . "</td>
+				<td align=right>" . $r['x_diminta'] . "</td>
+				<td align=right>" . $r['x_aktual'] . "</td>
+				<td align=center>" . htmlspecialchars($r['x_satuan']) . "</td>
+				<td>" . htmlspecialchars($r['x_purchaser']) . "</td>
+				<td>" . htmlspecialchars($r['nokontrak']) . "</td>
+				<td align=center" . $styleSt . ">" . $r['x_status'] . "</td>
+				<td>" . htmlspecialchars($r['x_nopo']) . "</td>
+				<td>" . htmlspecialchars($ketBalik) . "</td>
+			</tr>";
+		}
+		if ($no == 0) {
+			$stream .= "<tr><td colspan=" . $kolom . " align=center>Data tidak ditemukan</td></tr>";
+		}
+		$stream .= "</tbody></table>";
+		$xls = new HtmlExcel();
+		$xls->addSheet("PRSRVerifikasi", $stream);
+		$xls->headers("PRSRVerifikasi_" . date('YmdHis') . ".xls");
+		echo $xls->buildFile();
+		exit;
+
+	case 'pdflist':
+		require_once('lib/fpdf.php');
+		$rows = vpDataList();
+		$hdpt = setheadreport($_SESSION['empl']['kodeorganisasi'], $_SESSION['empl']['kodeorganisasi']);
+		$infoFilter = vpInfoFilter();
+		if (!class_exists('PDFListVP')) {
+			class PDFListVP extends FPDF
+			{
+				public $colW = array();
+
+				function Header()
+				{
+					global $hdpt, $infoFilter;
+					$width = $this->w - $this->lMargin - $this->rMargin;
+					if (file_exists($hdpt['logo'])) {
+						$this->Image($hdpt['logo'], $this->lMargin, $this->tMargin, 18);
+					}
+					$this->SetFont('Arial', 'B', 11);
+					$this->SetXY($this->lMargin + 22, $this->tMargin + 2);
+					$this->Cell(160, 6, utf8_decode($hdpt['nama']), 0, 1, 'L');
+					$this->SetY($this->tMargin + 15);
+					$this->SetFont('Arial', 'B', 13);
+					$this->Cell($width, 7, 'PR/SR VERIFIKASI', 0, 1, 'C');
+					$this->SetFont('Arial', '', 8);
+					$this->MultiCell($width, 4, utf8_decode($infoFilter), 0, 'C');
+					$this->Cell($width, 5, utf8_decode('Ditarik oleh ' . $_SESSION['empl']['name'] . ' (' . $_SESSION['standard']['username'] . ') pada ' . date('d-m-Y H:i:s')), 0, 1, 'C');
+					$this->Ln(1);
+					$this->SetFillColor(220, 220, 220);
+					$this->SetFont('Arial', 'B', 8);
+					$judul = array('No', 'No. PR/SR', 'Tanggal', 'Tipe', 'Kode Barang', 'Nama Barang', 'Kelompok Barang', 'Prioritas', 'Diminta', 'Satuan', 'Purchaser', 'Status');
+					foreach ($judul as $i => $j) {
+						$this->Cell($this->colW[$i], 6, $j, 1, 0, 'C', true);
+					}
+					$this->Ln();
+				}
+
+				function Footer()
+				{
+					$this->SetY(-12);
+					$this->SetFont('Arial', 'I', 7);
+					$this->Cell(0, 8, 'Halaman ' . $this->PageNo() . ' / {nb}', 0, 0, 'R');
+				}
+			}
+		}
+		$pdf = new PDFListVP('L', 'mm', 'A4');
+		$pdf->AliasNbPages();
+		$pdf->SetAutoPageBreak(false, 16);
+		$width = $pdf->w - $pdf->lMargin - $pdf->rMargin;
+		$colFixed = array(8, 34, 17, 9, 19, 46, 30, 22, 13, 11, 32); #semua kolom kecuali Status
+		$pdf->colW = array_merge($colFixed, array($width - array_sum($colFixed)));
+		$pdf->AddPage();
+		$h = 6;
+		$no = 0;
+		foreach ($rows as $r) {
+			$no++;
+			if ($pdf->GetY() + $h > $pdf->h - $pdf->bMargin) {
+				$pdf->AddPage();
+			}
+			$c = $pdf->colW;
+			$pdf->SetFont('Arial', '', 7);
+			$pdf->Cell($c[0], $h, $no, 1, 0, 'C');
+			$pdf->Cell($c[1], $h, vpFit($pdf, $r['nopp'], $c[1]), 1, 0, 'L');
+			$pdf->Cell($c[2], $h, tanggalnormal($r['tanggal']), 1, 0, 'C');
+			$pdf->Cell($c[3], $h, $r['x_tipe'], 1, 0, 'C');
+			$pdf->Cell($c[4], $h, $r['kodebarang'], 1, 0, 'C');
+			$pdf->Cell($c[5], $h, vpFit($pdf, isset($namabarang[$r['kodebarang']]) ? $namabarang[$r['kodebarang']] : '', $c[5]), 1, 0, 'L');
+			$pdf->Cell($c[6], $h, vpFit($pdf, $r['x_kelompok'], $c[6]), 1, 0, 'L');
+			$pdf->Cell($c[7], $h, vpFit($pdf, $r['x_prioritas'], $c[7]), 1, 0, 'L');
+			$pdf->Cell($c[8], $h, $r['x_diminta'], 1, 0, 'R');
+			$pdf->Cell($c[9], $h, vpFit($pdf, $r['x_satuan'], $c[9]), 1, 0, 'C');
+			$pdf->Cell($c[10], $h, vpFit($pdf, $r['x_purchaser'], $c[10]), 1, 0, 'L');
+			$wrn = vpWarnaStatus($r['x_status']);
+			if ($wrn[0] != '') {
+				sscanf($wrn[0], '#%02x%02x%02x', $br, $bg, $bb);
+				sscanf($wrn[1], '#%02x%02x%02x', $fr, $fg, $fb);
+				$pdf->SetFillColor($br, $bg, $bb);
+				$pdf->SetTextColor($fr, $fg, $fb);
+			}
+			$pdf->Cell($c[11], $h, vpFit($pdf, $r['x_status'], $c[11]), 1, 1, 'L', $wrn[0] != '');
+			$pdf->SetTextColor(0, 0, 0);
+		}
+		if ($no == 0) {
+			$pdf->Cell(array_sum($pdf->colW), $h, 'Data tidak ditemukan', 1, 1, 'C');
+		}
+		$pdf->Output();
+		exit;
+
 	case 'loaddata':
 		$tab="";
 		// $tab.="<button onclick='formReturnBatch()' class='mybutton'>Drop</button>";
@@ -86,109 +532,24 @@ switch ($method)
 			</thead>
 			<tbody>"; */
 		
-		$thnSkrng=date("Y");
-        
 		$limit=20;
-        $page=0;
-        if(isset($pages))
+		$page=0;
+		if(isset($pages))
 		{
-			$page=$pages;
-			if($page<0) 
+			$page=(int)$pages;
+			if($page<0)
 				$page=0;
-        }
+		}
 		$offset=$page*$limit;
-		
-		$where = "";
-		if($crnopp!='')
-		{
-			$where.=" and b.nopp like '%".$crnopp."%'";
-		}
-		
-		if($crperiode!='')
-		{
-			$where.=" and a.tanggal LIKE '".$crperiode."%'";
-		}
-		
-		if($crpurchaser!='')
-		{
-			$where.=" and b.nopp in (select nopp from ".$dbname.".log_listverifikasi where karyawanid = '".$crpurchaser."') and b.kodebarang in (select kodebarang from ".$dbname.".log_listverifikasi where karyawanid = '".$crpurchaser."')";
-		}
-		
-		if($crunit!='')
-		{
-			$where.=" and b.nopp like '%".$crunit."%'";
-		}
-		
-		if($crkelbarang!='')
-		{
-			$where.=" and left(b.kodebarang,3) = '".$crkelbarang."'";
-		}
-		
-		if($crbarang!='')
-		{
-			$where.=" and b.kodebarang in (select kodebarang from ".$dbname.".log_5masterbarang where namabarang like '%".$crbarang."%')";
-		}
-		
-		if($crstatus!='')
-		{
-			if($crstatus==0)
-			{
-				$where.=" and (b.nopp not in (select z.nopp from ".$dbname.".log_listverifikasi z where z.nopp=b.nopp and z.kodebarang=b.kodebarang))";
-			}
-			if($crstatus==1)
-			{
-				$where.=" and b.create_po = '".$crstatus."'";
-			}
-		}
-		
-		if($crjenis!='')
-		{
-			$where.=" and kodebarang in (select kodebarang from ".$dbname.".log_5masterbarang where jenis='".$crjenis."')";
-		}
-		
-		if($crstrategis!=''){
-			$where.=" and b.hargalama='".$crstrategis."'";
-		}
+		$no=$offset;
 
-		if ($crkontrak == '' || $crkontrak == 0) {
-			$where .= " and b.nokontrak = ''";
-		} else {
-			$where .= " and b.nokontrak != ''";
-		}
+		#filter (dibersihkan di vpFilter) sama dengan yang dipakai tarikan Excel/PDF
+		$where = vpWhere();
 
-		if ($crkontraka != '') {
-			$where .= " and b.nokontrak LIKE '%".$crkontraka."%'";
-		}
-		
-        $no=(($page*$limit));
+		#jumlah baris untuk paging (memakai join yang sama supaya filter kategori ikut terhitung)
+		$cnt=fetchdata("select count(*) as jml from (select 1 as x ".vpFrom().$where." group by b.nopp, b.kodebarang) t");
+		$jlhbrs=isset($cnt[0]['jml'])?(int)$cnt[0]['jml']:0;
 
-		$detailAkses = getOrgDetail(2);
-		// if(getUnitByMgrPurc($_SESSION['standard']['userid'])!=''){			
-			$where.=" and a.unit in (".$detailAkses.")";
-		// }
-		
-		
-		// $str="select count(*) as jmlhrow FROM ".$dbname.".log_prapodt b LEFT JOIN ".$dbname.".log_prapoht a ON a.nopp = b.nopp 
-		// WHERE a.close > '1' and b.status='0' and b.create_po!='3' and substr(tanggal,1,4)='".$thnSkrng."' ".$where." ORDER BY purchaser asc,a.tglp5,a.tglp4,a.tglp3,a.tglp2,a.tglp1 desc";
-		
-		$str="select * FROM ".$dbname.".log_prapodt b LEFT JOIN ".$dbname.".log_prapoht a ON a.nopp = b.nopp 
-		WHERE a.close > '1' and b.status='0' and b.create_po!='3' and substr(tanggal,1,4)<='".$thnSkrng."' ".$where." group by b.nopp, b.kodebarang ORDER BY purchaser asc ";
-		$res=fetchdata($str);
-		$jlhbrs= count($res);
-		// echo $jlhbrs;
-		// $tab.="<tr>
-			// <td colspan=16>Total Items: ".$jlhbrs."</td>
-		// </tr>";
-		
-		// #ambil list unit yang dimiliki
-		// $where.=" and (unit in (select kodeorganisasi FROM ".$dbname.".organisasi where tipe in (select tipeorg FROM ".$dbname.".log_5list_purchaser where managerid='".$_SESSION['standard']['userid']."'))";
-		// #ambil juga list unit yang tidak diassign kesiapapun (kalau gak diambil nanti pr gak akan pernah ter verifikasi)
-		// // $where.=" or unit in (select kodeorganisasi FROM ".$dbname.".organisasi where tipe not in (select tipeorg FROM ".$dbname.".log_5list_purchaser) and length(kodeorganisasi)='4'))";
-		// $detailAkses = getOrgDetail(2);
-		// if(getUnitByMgrPurc($_SESSION['standard']['userid'])!=''){			
-			$where.=" and unit in (".$detailAkses.")";
-		// }
-		
 		$sPeriodeCari="select * from ".$dbname.".log_5kategoribarang order by id";
 		$qPeriodeCari=$owlPDO->query($sPeriodeCari) or die(print " Gagal: ".PDOException::getMessage());
 		$qPeriodeCari->setFetchMode(PDO::FETCH_ASSOC);
@@ -196,35 +557,8 @@ switch ($method)
 			$optkat[$rPeriodeCari['id']]=$rPeriodeCari['jenis'];
 		}
 
-		if($crkategori!=''){
-			$where.=" AND 
-			CASE
-				WHEN c.idkategorinya != '' and c.idkategorinya='1,4' and substr(a.unit,-1)='M' THEN substr(c.idkategorinya,1,1) ='".$crkategori."'
-				WHEN c.idkategorinya != '' and c.idkategorinya='1,4' and substr(a.unit,-1)!='M' THEN substr(c.idkategorinya,-1) ='".$crkategori."'
-				WHEN c.idkategorinya != '' and c.idkategorinya!='1,4' THEN c.idkategorinya ='".$crkategori."'
-				WHEN d.idkategori != '' and d.idkategori='1,4' and substr(a.unit,-1)='M' THEN substr(d.idkategori,1,1) ='".$crkategori."'
-				WHEN d.idkategori != '' and d.idkategori='1,4' and substr(a.unit,-1)!='M' THEN substr(d.idkategori,1,1) ='".$crkategori."'
-				WHEN d.idkategori != '' and d.idkategori!='1,4' THEN d.idkategori ='".$crkategori."'
-			END";
-		}
-		
-        $str = "SELECT  
-		CASE
-			WHEN c.idkategorinya != '' and c.idkategorinya='1,4' and substr(a.unit,-1)='M' THEN '1'
-			WHEN c.idkategorinya != '' and c.idkategorinya='1,4' and substr(a.unit,-1)!='M' THEN '4'
-			WHEN c.idkategorinya != '' and c.idkategorinya!='1,4' THEN c.idkategorinya
-			WHEN d.idkategori != '' and d.idkategori='1,4' and substr(a.unit,-1)='M' THEN '1'
-			WHEN d.idkategori != '' and d.idkategori='1,4' and substr(a.unit,-1)!='M' THEN '4'
-			WHEN d.idkategori != '' and d.idkategori!='1,4' THEN d.idkategori
-		END
-		as kategori,
-		a.unit, a.`tanggal`, b.keteranganubah, a.`close`, a.pt, a.ket_balik,a.tipepp, b.*  
-		FROM ".$dbname.".log_prapodt b  LEFT JOIN  ".$dbname.".log_prapoht a ON a.nopp = b.nopp 
-		LEFT JOIN ".$dbname.".log_5masterbarang c ON c.kodebarang = b.kodebarang and c.idkategorinya !=''
-		LEFT JOIN ".$dbname.".log_5subklbarang d ON d.kode = substr(b.kodebarang,1,5)
-		WHERE a.close > '1' and b.status='0' and b.create_po!='3' and substr(tanggal,1,4)<='".$thnSkrng."' ".$where."  
-		group by b.nopp, b.kodebarang ORDER BY create_po asc, nopp asc limit ".$offset.",".$limit."";
-
+		$str = "SELECT ".vpKategoriExpr()." as kategori, a.unit, a.`tanggal`, b.keteranganubah, a.`close`, a.pt, a.ket_balik,a.tipepp, b.* ".vpFrom().$where."
+		group by b.nopp, b.kodebarang ORDER BY a.tanggal desc, b.nopp desc, b.kodebarang asc limit ".$offset.",".$limit."";
 
 		$res=$owlPDO->query($str) or die(print " Gagal: ".PDOException::getMessage());
 		$total=owlBaris($res);
@@ -309,6 +643,25 @@ switch ($method)
 				$ckh='';
 			}
 			
+			#status item: alasan kenapa tidak bisa diubah (sudah PO / proses perbandingan harga), selain itu posisi alokasi purchaser
+			$rfqJalan = (isset($arrstatusrfq[$bar->nopp][$bar->kodebarang]['jumlah']) && $arrstatusrfq[$bar->nopp][$bar->kodebarang]['jumlah'] >= 1);
+			$nopoItem = ($rCek>0) ? $rPoDet['nopo'] : '';
+			if($bar->create_po==1){
+				$statusKey = 'Sudah PO';
+				$statusTxt = 'Sudah PO'.($nopoItem!='' ? '<br><a style="cursor:pointer;color:#0000cc;text-decoration:underline" title="Lihat / cetak PO" onclick="masterPDF(\'log_poht\',\''.htmlspecialchars(addslashes($nopoItem),ENT_QUOTES).'\',\'\',\'log_slave_print_detail_po\',event)">'.htmlspecialchars($nopoItem).'</a> ('.($stat==1 ? 'Release' : 'Belum Release').')' : '');
+			}elseif($rfqJalan){
+				$statusKey = 'Proses Perbandingan Harga';
+				$statusTxt = 'Proses Perbandingan Harga';
+			}elseif(count($arrpr)>0){
+				$statusKey = 'Dialokasi';
+				$statusTxt = 'Dialokasi';
+			}else{
+				$statusKey = 'Belum Dialokasi';
+				$statusTxt = 'Belum Dialokasi';
+			}
+			$wrnStatus = vpWarnaStatus($statusKey);
+			$styleStatus = $wrnStatus[0]!='' ? " style='background-color:".$wrnStatus[0].";color:".$wrnStatus[1].";font-weight:bold'" : "";
+
 			$read_only2 = $stat_view = "";
 			if($bar->create_po==1)
 			{
@@ -355,11 +708,17 @@ switch ($method)
 			$optprioritas = makeOption($dbname,'log_5prioritas','kode,nama',"kode='".$bar->prioritas."'");
 			$prioritas = $optprioritas[$bar->prioritas];
 			
-			$tab.="<tr class=rowcontent id='tr_".$no."' title='".$_SESSION['lang']['tgldibutuhkan'].":".tanggalnormal($bar->tgl_sdt)."' ".$trStyle.">";
+			#item yang sudah PO tidak bisa diubah: teks baris dibuat abu-abu (kontrolnya sudah disabled)
+			$trClass = 'rowcontent';
+			if($bar->create_po==1)
+			{
+				$trClass = 'rowcontent rowterkunci';
+			}
+			$tab.="<tr class='".$trClass."' id='tr_".$no."' title='".$_SESSION['lang']['tgldibutuhkan'].":".tanggalnormal($bar->tgl_sdt)."' ".$trStyle.">";
 			if($disabledrop==false){
-				$tab.="<td align=center>".$no."<button id=tmbldrop".$no." title='Drop !' onclick=\"getDropData('".$bar->nopp."')\" class='mybutton'>Drop</button></td>";
+				$tab.="<td align=center style='white-space:nowrap'><span style='display:inline-block;min-width:26px;text-align:right'>".$no."</span><button id=tmbldrop".$no." title='Drop PR/SR: menolak semua item pada nomor PR/SR ini yang belum dialokasi ke purchaser. Item hilang dari daftar dan pembuat PR/SR mendapat notifikasi.' onclick=\"getDropData('".$bar->nopp."')\" class='mybutton' style='padding:1px 8px;font-size:11px;margin-left:6px;background:#fff;color:#b71c1c;border:1px solid #d9534f;border-radius:4px'>Drop</button></td>";
 			}else{				
-				$tab.="<td align=center>".$no."<button id=tmbldrop".$no." style=display:none; title='Drop !' onclick=\"getDropData('".$bar->nopp."')\" class='mybutton'>Drop</button></td>";
+				$tab.="<td align=center style='white-space:nowrap'><span style='display:inline-block;min-width:26px;text-align:right'>".$no."</span><button id=tmbldrop".$no." title='Drop PR/SR: menolak semua item pada nomor PR/SR ini yang belum dialokasi ke purchaser. Item hilang dari daftar dan pembuat PR/SR mendapat notifikasi.' onclick=\"getDropData('".$bar->nopp."')\" class='mybutton' style='display:none;padding:1px 8px;font-size:11px;margin-left:6px;background:#fff;color:#b71c1c;border:1px solid #d9534f;border-radius:4px'>Drop</button></td>";
 			}
 			$tab.="
 				<input id=nomorurut".$no." name=nomorurut[]  value=".$no." hidden>
@@ -487,10 +846,10 @@ switch ($method)
 			<td align=right>".$juml."</td>
 			<td align=right>
 				<input type=hidden disabled  id=hrealisasi_".$no." name=hrealisasi_".$no." onkeypress='return angka_doang(event)' class='myinputtextnumber' ".$read_only2." value='".$real."' style='width:60px;' />
-				<input type=text disabled  id=realisasi_".$no." name=realisasi_".$no." onkeypress='return angka_doang(event)' class='myinputtextnumber' ".$read_only2." value='".$real."' style='width:60px;' />
+				<input type=text disabled  id=realisasi_".$no." name=realisasi_".$no." onkeypress='return angka_doang(event)' ".$read_only2." value='".$real."' style='width:60px;border:0;background:transparent;text-align:right;font:inherit;color:inherit;-webkit-text-fill-color:currentColor;opacity:1' />
 			</td>
 			<td align=center>
-				<select id=satuan_".$no." id=satuan_".$no." ".$read_only2." onchange='getSatuanKonversi(this.value,".$bar->kodebarang.",".$no.")'>".$optSat."</select>
+				<select id=satuan_".$no." class=select2vp data-w=100px ".$read_only2." onchange='getSatuanKonversi(this.value,".$bar->kodebarang.",".$no.")'>".$optSat."</select>
 			</td>
 			<td align=center title=\"Selisih Tanggal PP dengan Tanggal Hari ini\" style='display:none'>".$jmlHari."</td>
 			<td>
@@ -523,7 +882,7 @@ switch ($method)
 				{
 						$tab.="<tr>
 						<td colspan=2>
-							<select style=width:150px id=purchase_name_".$no." id=purchase_name_".$no." ".$read_only2.">".$optPur."</select>
+							<select id=purchase_name_".$no." class=select2vp data-w=170px ".$read_only2.">".$optPur."</select>
 						</td>
 						<td>
 							<img id='detail_add_".$no."' title='Tambah' class=zImgBtn onclick=\"addpurchase('".$bar->nopp."','".$bar->kodebarang."','".$no."')\" src='images/plus.png'/>
@@ -548,7 +907,7 @@ switch ($method)
 					$optktrk.="<option value='".$resx[0]['nokontrak']."'>".$resx[0]['nokontrak']."</option>";
 				}
 				if($bar->create_po == 0){
-					$tab.="<select style=width:150px id=nokontrak_".$no." id=nokontrak_".$no." ".$read_only2." onchange=\"addkontrak('".$bar->nopp."','".$bar->kodebarang."','".$no."')\">".$optktrk."</select>";
+					$tab.="<select id=nokontrak_".$no." class=select2vp data-w=170px ".$read_only2." onchange=\"addkontrak('".$bar->nopp."','".$bar->kodebarang."','".$no."')\">".$optktrk."</select>";
 				} else {
 					$tab .= "<a style='cursor:pointer' onclick='viewKontrakDetail(`".$resx[0]['nokontrak']."`)'>".$resx[0]['nokontrak']."</a>";
 				}
@@ -556,6 +915,8 @@ switch ($method)
 			
 			$tab.="</td>";
 			
+			$tab.="<td align=center".$styleStatus.">".$statusTxt."</td>";
+
 			$tab.="<td align=center style='display:none'><input type=checkbox id=lokalpusat_".$no."  ".$ckh." /> Local</td>
 			<td align=center style='display:none'>
 				<img style='display:none' src=images/save.png class=zImgBtn  title='Save' onclick=\"AddPur('".$no."');\">
@@ -566,7 +927,7 @@ switch ($method)
 			$tab .= "</tr>";
 		}
 		
-		$colspan=19;
+		$colspan=20;
 
 		$tab.=createpaging($jlhbrs,$limit,$page,$colspan,'loaddata','getPagex');
 		$tab.="</tbody>
@@ -991,7 +1352,7 @@ switch ($method)
 		
 		$tab.="<tr>
 			<td colspan=2>
-				<select style=width:150px id=purchase_name_".$nourut." id=purchase_name_".$nourut.">".$optPur."</select>
+				<select id=purchase_name_".$nourut." class=select2vp data-w=170px>".$optPur."</select>
 			</td>
 			<td>
 				<img id='detail_add_".$nourut."' title='Tambah' class=zImgBtn onclick=\"addpurchase('".$nopp."','".$kodebarang."','".$nourut."')\" src='images/plus.png'/>
@@ -3922,6 +4283,7 @@ switch ($method)
 	break;
 
 	case 'getDropData':
+			$tab .= "<div style='padding:6px 4px;line-height:1.5'><b>Drop PR/SR ".htmlspecialchars($nopp)."</b><br>Item yang dicentang akan ditolak (di-drop): hilang dari daftar verifikasi dan pembuat PR/SR mendapat notifikasi penolakan beserta keterangan yang diisi. Hanya item yang belum dialokasi ke purchaser yang bisa di-drop.</div>";
 		$tab .= "<table class='sortable' cellspacing='1' border='0' cellpadding=5 style='max-height:500px'>";
 			$tab .= "<thead>";
 				$tab .= "<tr class='rowheader'>";

@@ -17,25 +17,65 @@ function cariData(pg) {
   document.getElementById("persetujuan").style.display = "none";
   loadData(pg);
 }
+//isi pilihan (select2) lalu perbarui tampilannya; kalau pilihan tidak ada kembali ke pilihan pertama
+function setSelPP(id, v) {
+  var el = document.getElementById(id);
+  el.value = v;
+  if (el.selectedIndex < 0) {
+    el.selectedIndex = 0;
+  }
+  if (window.jQuery) {
+    jQuery(el).trigger("change.select2");
+  }
+}
+//kembali ke tampilan awal (tahun sekarang, tanpa filter lain)
 function showalllist(pg) {
   document.getElementById("txtsearch").value = "";
   document.getElementById("tgl_cari").value = "";
+  setSelPP("filterTahun", String(new Date().getFullYear()));
+  setSelPP("filterUnit", "");
+  setSelPP("filterTipe", "");
+  setSelPP("filterStatus", "");
+  setSelPP("filterProgres", "");
+  setSelPP("filterDibuat", "");
+  setSelPP("filterKelompok", "");
   document.getElementById("form_pp").style.display = "none";
   document.getElementById("list_pp").style.display = "block";
   document.getElementById("persetujuan").style.display = "none";
   loadData(pg);
 }
+//nilai elemen filter; kosong bila elemen tidak ada (log_pp.js juga dimuat halaman lain)
+function valPP(id) {
+  var el = document.getElementById(id);
+  return el ? el.value : "";
+}
+//parameter filter yang dipakai list, paging, dan tarikan Excel/PDF
+function getFilterParamPP() {
+  var p = "carinopppr=" + encodeURIComponent(trim(valPP("txtsearch")));
+  p += "&caritanggalpppr=" + encodeURIComponent(trim(valPP("tgl_cari")));
+  p += "&caritahun=" + encodeURIComponent(valPP("filterTahun"));
+  p += "&cariunit=" + encodeURIComponent(valPP("filterUnit"));
+  p += "&caritipe=" + encodeURIComponent(valPP("filterTipe"));
+  p += "&caristatus=" + encodeURIComponent(valPP("filterStatus"));
+  p += "&cariprogres=" + encodeURIComponent(valPP("filterProgres"));
+  p += "&caridibuat=" + encodeURIComponent(valPP("filterDibuat"));
+  p += "&carikelompok=" + encodeURIComponent(valPP("filterKelompok"));
+  return p;
+}
+function tampilTarikanPP(judul, tujuan) {
+  alertify
+    .popup(judul, "<iframe frameborder=0 style='width:100%;height:100%;overflow:none' src='" + tujuan + "'></iframe>")
+    .set({ resizable: true, maximizable: true, overflow: false })
+    .resizeTo("80%", "70%");
+}
+function exportExcelPP() {
+  tampilTarikanPP("Report Ms.Excel", "log_slave_pp.php?method=excellist&" + getFilterParamPP());
+}
+function exportPdfPP() {
+  tampilTarikanPP("Report PDF", "log_slave_pp.php?method=pdflist&" + getFilterParamPP());
+}
 function loadData(pg) {
-  carinopppr = document.getElementById("txtsearch").value;
-  caritanggalpppr = document.getElementById("tgl_cari").value;
-  param =
-    "method=loaddata" +
-    "&page=" +
-    pg +
-    "&carinopppr=" +
-    carinopppr +
-    "&caritanggalpppr=" +
-    caritanggalpppr;
+  param = "method=loaddata&" + getFilterParamPP() + "&page=" + encodeURIComponent(pg);
   tujuan = "log_slave_pp.php";
   post_response_text(tujuan, param, respog);
   function respog() {
@@ -80,10 +120,10 @@ function clear_all_data() {
 function fillField(nopp, tipepp, tgl, kd_org, stat, statTgl, requester) {
   if (statTgl != "0") {
     if (stat == 1) {
-      alert("This PR (" + nopp + ") being on submission process");
+      alert("PR/SR " + nopp + " tidak bisa diubah karena sedang dalam proses persetujuan.");
       return false;
     } else if (stat == 2) {
-      alert("This PR (" + nopp + ") has been passed submission process");
+      alert("PR/SR " + nopp + " tidak bisa diubah karena sudah disetujui.");
       return false;
     }
   } else if (statTgl == "0") {
@@ -92,10 +132,10 @@ function fillField(nopp, tipepp, tgl, kd_org, stat, statTgl, requester) {
     document.getElementById("detailTable").style.display = "block";
     document.getElementById("persetujuan").style.display = "none";
     document.getElementById("method").value = "update";
-    document.getElementById("kd_bag").value = kd_org;
+    setSelPP("kd_bag", kd_org);
     document.getElementById("kd_bag").disabled = true;
     document.getElementById("requester").disabled = true;
-    document.getElementById("tipe").value = tipepp;
+    setSelPP("tipe", tipepp);
     document.getElementById("tipe").disabled = true;
     document.getElementById("nopp").value = nopp;
     document.getElementById("nopp").disabled = true;
@@ -134,14 +174,14 @@ function delPp(nopp, stat, statTgl) {
   paged = parseFloat(pg) - 1;
   if (statTgl != 0) {
     if (stat == 1) {
-      alert("No.PP" + nopp + ". being on submission process");
+      alert("PR/SR " + nopp + " tidak bisa dihapus karena sedang dalam proses persetujuan.");
       return false;
     } else if (stat == 2) {
-      alert("No.PP" + nopp + ". has been passed submission process");
+      alert("PR/SR " + nopp + " tidak bisa dihapus karena sudah disetujui.");
       return false;
     }
   } else {
-    a = confirm("Delete,  Are you sure?");
+    a = confirm("Hapus PR/SR ini? Data yang dihapus tidak bisa dikembalikan.");
     if (a) {
       param = "nopp=" + nopp;
       param += "&method=delete";
@@ -155,7 +195,7 @@ function delPp(nopp, stat, statTgl) {
             } else {
               //alert(con.responseText);
               document.getElementById("contain").innerHTML = con.responseText;
-              alert("Deleted");
+              alert("PR/SR berhasil dihapus.");
               getPage2(paged);
             }
           } else {
@@ -172,7 +212,7 @@ function delPp(nopp, stat, statTgl) {
 }
 function previewDetail(nopp, ev) {
   //showDetail(nopp, ev);
-  param = "nopp=" + nopp + "&method=getDetailPP";
+  param = "nopp=" + nopp + "&method=getDetailPP&ringkas=1";
   tujuan = "log_slave_pp.php";
   post_response_text(tujuan, param, respog);
   function respog() {
@@ -296,7 +336,7 @@ function submitfile() {
   formdata.append("nopp", nopp);
   formdata.append("kriteriaefil", kriteriaefil);
   if (getValue("upload") == "") {
-    alert("warning : Upload file has been empty.");
+    alert("File belum dipilih. Pilih file yang akan diunggah terlebih dulu.");
     return false;
   }
   document.getElementsByClassName("mybutton").disabled = true;
@@ -314,7 +354,7 @@ function submitfile() {
         } else {
           //=== Success Response
           document.getElementsByClassName("mybutton").disabled = false;
-          alert("Uploaded Success.");
+          alert("File berhasil diunggah.");
           document.getElementById("upload").value = "";
           loadfiles(nopp);
         }
@@ -339,7 +379,7 @@ function submitfilex(nopp) {
   formdata.append("nopp", nopp);
   formdata.append("kriteriaefil", kriteriaefil);
   if (getValue("upload") == "") {
-    alert("warning : Upload file has been empty.");
+    alert("File belum dipilih. Pilih file yang akan diunggah terlebih dulu.");
     return false;
   }
   document.getElementsByClassName("mybutton").disabled = true;
@@ -357,7 +397,7 @@ function submitfilex(nopp) {
         } else {
           //=== Success Response
           document.getElementsByClassName("mybutton").disabled = false;
-          alert("Uploaded Success.");
+          alert("File berhasil diunggah.");
           document.getElementById("upload").value = "";
           loadfiles(nopp);
         }
@@ -485,6 +525,9 @@ function getrequester(requester, newFunc, nopp) {
           document.getElementById("requester").innerHTML = trim(
             con.responseText
           );
+          if (window.jQuery) {
+            jQuery("#requester").trigger("change.select2");
+          }
           console.log(typeof newFunc);
           if (typeof newFunc !== "undefined" && typeof newFunc == "function") {
             eval(newFunc(nopp));
@@ -595,9 +638,9 @@ function findBrg(kodebarang, noakun) {
   rkd_bag = document.getElementById("kd_bag").value;
   tipe = getValue("tipe");
   if (txt == "") {
-    alert("Text is obligatory");
+    alert("Kata kunci pencarian harus diisi.");
   } else if (txt.length < 1) {
-    alert("Too short words");
+    alert("Kata kunci pencarian terlalu pendek.");
   } else {
     param =
       "txtfind=" +
@@ -729,10 +772,10 @@ function frm_aju() {
   // row=row-3;
   // min=-1;
   if (tbl === null) {
-    alert("Please input the details");
+    alert("Belum ada barang di rincian. Tambahkan minimal satu barang sebelum mengajukan.");
     return false;
   } else {
-    if (confirm("Process submission ??")) {
+    if (confirm("Ajukan PR/SR ini untuk persetujuan?")) {
       document.getElementById("list_pp").style.display = "none";
       document.getElementById("form_pp").style.display = "none";
       document.getElementById("persetujuan").style.display = "block";
@@ -874,7 +917,7 @@ function editdt(
   document.getElementById("kmhm").value = kmhm;
   document.getElementById("kd_project").value = kd_project;
 
-  document.getElementById("prioritas").value = prioritas;
+  setSelPP("prioritas", prioritas);
 
   document.getElementById("imgbarang").style.display = "none";
   document.getElementById("methoddt").value = "updatedt";
@@ -896,7 +939,7 @@ function cleardt() {
   document.getElementById("infodt").style.display = "none";
 
   document.getElementById("jmlhDiminta").value = "";
-  document.getElementById("prioritas").selectedIndex = 0;
+  setSelPP("prioritas", "");
   // document.getElementById("tgl_sdt").value = getdatenow(2);
   document.getElementById("tgl_sdt").value = getdatenow();
   document.getElementById("kd_vhc").value = "";
@@ -1189,7 +1232,8 @@ function save_persetujuan() {
   stat = trim(document.getElementById("cls_stat").value);
   kary = trim(document.getElementById("karywn_id").value);
   if (kary == "") {
-    alert("Please verify  your selection");
+    alert("Pilih karyawan penyetuju terlebih dulu.");
+    return false;
   } else {
     method = "insert_persetujuan";
     param =
@@ -1219,7 +1263,9 @@ function save_persetujuan() {
       }
     }
   }
-  var answer = confirm("Are you sure?");
+  var selK = document.getElementById("karywn_id");
+  var namaK = selK && selK.selectedIndex >= 0 ? selK.options[selK.selectedIndex].text : "";
+  var answer = confirm("Ajukan PR/SR " + nopp + " untuk persetujuan kepada " + namaK + "?");
   if (answer) {
     post_response_text(tujuan, param, respog);
   } else {
@@ -1235,11 +1281,11 @@ function reset_data_setuju() {
 }
 function frm_ajun(nopp, stat, totrow) {
   if (totrow == 0) {
-    alert("Can`t update, No item in detail.");
+    alert("PR/SR tidak bisa diajukan karena belum ada barang di rincian. Klik ikon Edit, lalu tambahkan minimal satu barang.");
     return false;
   }
   if (stat > 0) {
-    alert("Can`t edit or delete while waiting for approval");
+    alert("PR/SR sedang dalam proses persetujuan, tidak bisa diubah atau dihapus.");
     return false;
   } else {
     document.getElementById("list_pp").style.display = "none";
@@ -1261,6 +1307,9 @@ function frm_ajun(nopp, stat, totrow) {
           document.getElementById("persetujuandata").innerHTML =
             con.responseText;
           //getKar();
+          if (window.jQuery && jQuery.fn.select2) {
+            jQuery("#karywn_id").select2({ dropdownAutoWidth: true, width: "100%" });
+          }
         }
       } else {
         busy_off();
@@ -1279,7 +1328,7 @@ function searchAngrn(title, content, ev) {
 function findAngrn() {
   txt2 = trim(document.getElementById("no_angrn").value);
   if (txt2 == "") {
-    alert("Text is obligatory");
+    alert("Kata kunci pencarian harus diisi.");
   } else {
     param = "txtfind2=" + txt2;
     tujuan = "log_slave_get_brg.php";
@@ -1314,7 +1363,7 @@ function findVhc() {
   jumlah = trim(document.getElementById("jmlhDiminta").value);
   rkd_bag =document.getElementById("kd_bag").options[document.getElementById("kd_bag").selectedIndex].value;
   // if (txt3 == "") {
-    // alert("Text is obligatory");
+    // alert("Kata kunci pencarian harus diisi.");
   // } else {
     param = "txtfind3=" + txt3 + "&rkd_bag=" + rkd_bag+ "&jumlah=" + jumlah+ "&kdvhc=" + kdvhc;
     tujuan = "log_slave_get_kodevhc.php";
@@ -1344,7 +1393,7 @@ function findproject() {
       document.getElementById("kd_bag").selectedIndex
     ].value;
   if (txt3 == "") {
-    alert("Text is obligatory");
+    alert("Kata kunci pencarian harus diisi.");
   } else {
     param = "txtfind3=" + txt3 + "&rkd_bag=" + rkd_bag;
     tujuan = "log_slave_get_kodeproject.php";
@@ -1625,7 +1674,7 @@ function editDetail(id) {
           alert(con.responseText);
         } else {
           // Success Response
-          alert("Edit succeed");
+          alert("Perubahan berhasil disimpan.");
         }
       } else {
         busy_off();
@@ -1669,7 +1718,7 @@ function deleteDetail(id) {
           if (row) {
             row.style.display = "none";
           } else {
-            alert("Row undetected");
+            alert("Baris data tidak ditemukan.");
           }
         }
       } else {
@@ -2007,4 +2056,4 @@ function getjumlahpervhc(no){
 		document.getElementById("jlhpervhc"+no).disabled=true;
 		document.getElementById("jlhpervhc"+no).value="";
 	}
-}
+}

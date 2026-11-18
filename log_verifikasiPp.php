@@ -15,8 +15,13 @@ OPEN_BOX('','<span class=judul>'.getMenu('log_verifikasiPp').'</span>');
 <script>
 	$(document).ready(function() {
 		$('.select2').select2({
-			dropdownAutoWidth:true
+			dropdownAutoWidth:true,
+			width:'100%'
 		});
+		//daftar pilihan select2 harus tampil di atas popup/dialog
+		$('<style>.select2-container--open .select2-dropdown{z-index:100000;}</style>').appendTo('head');
+		//dropdown baris tidak boleh menimpa header tabel saat daftar di-scroll; baris yang sudah PO berteks abu-abu
+		$('<style>#contload thead th{z-index:10;} #contload .select2-container{z-index:0;} #contload tr.rowterkunci td{color:#777;}</style>').appendTo('head');
 	});
 </script>
 <div id="action_list">
@@ -111,6 +116,19 @@ $optstrategis.="<option value=''>".$_SESSION['lang']['all']."</option>";
 $optstrategis.="<option value='1'>Ya</option>";
 $optstrategis.="<option value='0'>Tidak</option>";
 
+#tahun PR/SR: default tahun sekarang, "Semua Tahun" untuk seluruh tahun
+$tahunSkrg=date('Y');
+$arrTahun=array($tahunSkrg=>$tahunSkrg);
+$resTahun=fetchData("select distinct year(tanggal) as thn from ".$dbname.".log_prapoht where tanggal>'0000-00-00'");
+foreach($resTahun as $val){
+	$arrTahun[$val['thn']]=$val['thn'];
+}
+krsort($arrTahun);
+$optTahun="<option value=''>Semua Tahun</option>";
+foreach($arrTahun as $thn){
+	$optTahun.="<option value='".$thn."'".($thn==$tahunSkrg?" selected":"").">".$thn."</option>";
+}
+
 echo"<table>
 	<tr valign=middle>
 		<td onclick=displaySummary() align=center style='width:55px;cursor:pointer;display:none'>
@@ -127,95 +145,87 @@ echo"<table>
 				<legend>".$_SESSION['lang']['find']."</legend>
 				<table border=0 cellpadding=1 cellspacing=1>
 					<tr>
-						<td>".$_SESSION['lang']['carinopp']."</td>
+						<td>Tahun</td>
 						<td>:</td>
-						<td>
-							<!--<input type=text id=txtsearch style=width:150px size=25 maxlength=30 class=myinputtext onkeypress='enterkey(event,loaddata(0))'>-->
-							<input type=text id=txtsearch style=width:150px size=25 maxlength=30 class=myinputtext>
+						<td style='width:220px'>
+							<select id=filterTahun class=select2 style='width:100%' onchange='loaddata(0)'>".$optTahun."</select>
 						</td>
-						
-						<td>".$_SESSION['lang']['periode']."</td>
+						<td style='padding-left:15px'>".$_SESSION['lang']['periode']."</td>
 						<td>:</td>
-						<td>
-							<select id=tgl_cari onchange='enterkey(event,loaddata(0))' style=width:100px>".$optPeriodeCari."</select>
+						<td style='width:150px'>
+							<select id=tgl_cari class=select2 style='width:100%' onchange='ubahPeriodeVP()'>".$optPeriodeCari."</select>
 						</td>
-						
-						<td>".$_SESSION['lang']['purchaser']."</td>
+						<td style='padding-left:15px'>".$_SESSION['lang']['carinopp']."</td>
 						<td>:</td>
-						<td>
-							<select style=width:100px onchange='enterkey(event,loaddata(0))' id=purId name=purId>".$optPur."</select>
+						<td style='width:150px'>
+							<input type=text id=txtsearch style='width:100%;box-sizing:border-box' maxlength=30 class=myinputtext onkeyup=\"enterkey(event,function(){loaddata(0)})\">
 						</td>
-						
-						<td>".$_SESSION['lang']['unit']."</td>
+						<td style='padding-left:15px'>".$_SESSION['lang']['unit']."</td>
 						<td>:</td>
-						<td>
-							<select style=width:100px id=unitIdCr onchange='enterkey(event,loaddata(0))' name=unitIdCr>".$optListUnit."</select>
+						<td style='width:200px'>
+							<select id=unitIdCr class=select2 style='width:100%' onchange='loaddata(0)'>".$optListUnit."</select>
 						</td>
-						<td>".$_SESSION['lang']['kontrak']."</td>
+						<td style='padding-left:15px'>".$_SESSION['lang']['purchaser']."</td>
 						<td>:</td>
-						<td>
-							<select style=width:100px id=kontrakIdCr onchange='enterkey(event,loaddata(0))'>".$optstrategis."</select>
+						<td style='width:170px'>
+							<select id=purId class=select2 style='width:100%' onchange='loaddata(0)'>".$optPur."</select>
 						</td>
-						
-						
-						<td>No ".$_SESSION['lang']['kontrak']."</td>
-						<td>:</td>
-						<td>
-							<input type=text id=kontrakaIdCr onkeyup='enterkey(event,loaddata(0))' style=width:96px placeholder=".$_SESSION['lang']['all']." class=myinputtext>
-						</td>
-						
 					</tr>
 					<tr>
 						<td>".$_SESSION['lang']['kelompokbarang']."</td>
 						<td>:</td>
 						<td>
-							<select id=klmpkBrg onchange='enterkey(event,loaddata(0))' style=width:155px onchange=getBarangCari()>".$optKelompokBrg."</select>
+							<select id=klmpkBrg class=select2 style='width:100%' onchange='loaddata(0)'>".$optKelompokBrg."</select>
 						</td>
-						
-						<td>".$_SESSION['lang']['namabarang']."</td>
+						<td style='padding-left:15px'>".$_SESSION['lang']['namabarang']."</td>
 						<td>:</td>
 						<td>
-							<!--<input type=text id=kdBarangCari style=width:96px placeholder=".$_SESSION['lang']['all']." class=myinputtext onkeypress='enterkey(event,loaddata(0))'>-->
-							<input type=text id=kdBarangCari style=width:96px placeholder=".$_SESSION['lang']['all']." class=myinputtext>
+							<input type=text id=kdBarangCari style='width:100%;box-sizing:border-box' placeholder=\"".$_SESSION['lang']['all']."\" class=myinputtext onkeyup=\"enterkey(event,function(){loaddata(0)})\">
 						</td>
-						
-						<td>".$_SESSION['lang']['status']."</td>
+						<td style='padding-left:15px'>".$_SESSION['lang']['status']."</td>
 						<td>:</td>
 						<td>
-							<select style=width:100px onchange='enterkey(event,loaddata(0))' id='statPP' name='statPP'>".$optStatusPP."</select>
+							<select id=statPP class=select2 style='width:100%' onchange='loaddata(0)'>".$optStatusPP."</select>
 						</td>
-						
-						<td>".$_SESSION['lang']['jenis']."</td>
+						<td style='padding-left:15px'>".$_SESSION['lang']['jenis']."</td>
 						<td>:</td>
 						<td>
-							<select style=width:100px onchange='enterkey(event,loaddata(0))' id='jenis' name='jenis'>".$optjenis."</select>
+							<select id=jenis class=select2 style='width:100%' onchange='loaddata(0)'>".$optjenis."</select>
 						</td>
-						
-						<td>Strategies</td>
+						<td style='padding-left:15px'>Strategies</td>
 						<td>:</td>
 						<td>
-							<select style=width:100px onchange='enterkey(event,loaddata(0))' id='crstrategis' name='crstrategis'>".$optstrategis."</select>
+							<select id=crstrategis class=select2 style='width:100%' onchange='loaddata(0)'>".$optstrategis."</select>
 						</td>
-
+					</tr>
+					<tr>
 						<td>Kategori</td>
 						<td>:</td>
 						<td>
-							<select style=width:100px onchange='enterkey(event,loaddata(0))' id='crkategori' name='crkategori'>".$optkat."</select>
+							<select id=crkategori class=select2 style='width:100%' onchange='loaddata(0)'>".$optkat."</select>
 						</td>
-						
-						</tr>
-						<tr>
-							<td></td>
-							<td></td>
-							<td align=left>
-								<button class=mybutton onclick=loaddata(0)>".$_SESSION['lang']['find']."</button>
-							</td>
+						<td style='padding-left:15px'>".$_SESSION['lang']['kontrak']."</td>
+						<td>:</td>
+						<td>
+							<select id=kontrakIdCr class=select2 style='width:100%' onchange='loaddata(0)'>".$optstrategis."</select>
+						</td>
+						<td style='padding-left:15px'>No ".$_SESSION['lang']['kontrak']."</td>
+						<td>:</td>
+						<td>
+							<input type=text id=kontrakaIdCr style='width:100%;box-sizing:border-box' placeholder=\"".$_SESSION['lang']['all']."\" class=myinputtext onkeyup=\"enterkey(event,function(){loaddata(0)})\">
+						</td>
+						<td colspan=6 style='padding-left:15px'>
+							<button class=mybutton onclick=loaddata(0)>".$_SESSION['lang']['find']."</button>
+							<button class=mybutton onclick=exportExcelVP()>".$_SESSION['lang']['excel']."</button>
+							<button class=mybutton onclick=exportPdfVP()>PDF</button>
+						</td>
 					</tr>
 				</table>
 			</fieldset>
 		</td>
 	</tr>
-</table>"; 
+</table>";
+
 ?>
 
 </div>
@@ -229,13 +239,14 @@ OPEN_BOX(); //2 O
 
 <img style='display:none' onclick=dataKeExcel(event) src=images/excel.jpg class=resicon title='MS.Excel'> 
 <div style='display:none;' id='containtool'></div>
-<div style="overflow:auto;height:65vh" class='table-scroll' id='contload'>
+<div style='padding:2px 4px 6px 4px;color:#555'>Keterangan: tombol <b style='color:#b71c1c'>Drop</b> menolak semua item pada nomor PR/SR tersebut yang belum dialokasi ke purchaser (item hilang dari daftar dan pembuat PR/SR mendapat notifikasi). Tombol hanya muncul pada PR/SR yang belum punya purchaser.</div>
+<div style="overflow:auto;height:65vh;width:100%" class='table-scroll' id='contload'>
 
 <?php
-echo"<table class=\"sortable\" cellspacing=\"1\" border=\"0\">
+echo"<table class=\"sortable\" cellspacing=\"1\" border=\"0\" style=\"width:100%\">
 	<thead>
 	<tr class=rowheader>
-		<th align='center'>No.</th>
+		<th align='center' style='min-width:85px'>No.</th>
 		<th align='center' style='display:none'>".$_SESSION['lang']['kodeorg']."</th>
 		<th align='center'>No PR/SR</th>
 		<th align='center'>".$_SESSION['lang']['kodebarang']."</th>
@@ -254,6 +265,7 @@ echo"<table class=\"sortable\" cellspacing=\"1\" border=\"0\">
 		<th align='center' style='display:none'>O.sth</th>
 		<th align='center'>".$_SESSION['lang']['purchaser']."</th>
 		<th align='center'>Kontrak</th>
+		<th align='center' style='min-width:110px'>Status</th>
 		<th align='center' width=60px style='display:none'>".$_SESSION['lang']['lokasitugas']."</th>
 		<th align=\"center\" style='display:none'>View</th>
 	</tr>
@@ -270,4 +282,4 @@ echo"<table class=\"sortable\" cellspacing=\"1\" border=\"0\">
 echo"</div>";
 CLOSE_BOX();
 echo close_body();
-?>
+?>

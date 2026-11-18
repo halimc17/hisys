@@ -4,6 +4,7 @@ include('lib/nangkoelib.php');
 include_once('lib/zLib.php');
 echo open_body();
 include('master_mainMenu.php');
+require_once('lib/zSelect2.php');
 OPEN_BOX('','<span class=judul>'.getMenu('log_pp').'</span>');
 ?>
 
@@ -25,25 +26,128 @@ if($user_id=='' or $user_id==0000000000)
 }
 
 ##PENCARIAN
+$tahunSkrg=date('Y');
+$arrTahun=array($tahunSkrg=>$tahunSkrg);
+foreach(fetchdata("select distinct year(tanggal) as thn from ".$dbname.".log_prapoht where tanggal>'0000-00-00'") as $val){
+	$arrTahun[$val['thn']]=$val['thn'];
+}
+krsort($arrTahun);
+$optTahun="<option value=''>Semua Tahun</option>";
+foreach($arrTahun as $thn){
+	$optTahun.="<option value='".$thn."'".($thn==$tahunSkrg?" selected":"").">".$thn."</option>";
+}
+
+#unit yang punya PR/SR dan boleh diakses
+$optUnitCari="<option value=''>".$_SESSION['lang']['all']."</option>";
+foreach(fetchdata("select distinct unit from ".$dbname.".log_prapoht where unit in (".getOrgDetail(2).") order by unit") as $val){
+	$optUnitCari.="<option value='".htmlspecialchars($val['unit'],ENT_QUOTES)."'>".htmlspecialchars($val['unit'])." - ".htmlspecialchars(getNamaOrg($val['unit']))."</option>";
+}
+
+$optTipeCari="<option value=''>".$_SESSION['lang']['all']."</option>";
+foreach(array('PR'=>'Purchase Request (INV)','SR'=>'Service Request (JASA)','CP'=>'Capex Request (ASET)','NR'=>'Non-Inventory Request (NON-INV)') as $k=>$v){
+	$optTipeCari.="<option value='".$k."'>".$v."</option>";
+}
+
+$optStatusCari="<option value=''>".$_SESSION['lang']['all']."</option>";
+foreach(array('draft'=>'Belum Diajukan','menunggu'=>'Menunggu Persetujuan','disetujui'=>'Disetujui','ditolak'=>'Ditolak','return'=>'PR/SR Return') as $k=>$v){
+	$optStatusCari.="<option value='".$k."'>".$v."</option>";
+}
+
+$optProgresCari="<option value=''>".$_SESSION['lang']['all']."</option>";
+foreach(array('belum'=>'Menunggu Verifikasi Purchasing','alokasi'=>'Dialokasi ke Purchaser','rfq'=>'Perbandingan Harga (RFQ)','sebagian'=>'Sebagian PO','selesai'=>'Selesai PO','tolakitem'=>'Ada Item Ditolak Purchasing') as $k=>$v){
+	$optProgresCari.="<option value='".$k."'>".$v."</option>";
+}
+
+#pembuat PR/SR (urut menurut nama)
+$optDibuatCari="<option value=''>".$_SESSION['lang']['all']."</option>";
+foreach(fetchdata("select distinct h.dibuat, k.namakaryawan from ".$dbname.".log_prapoht h left join ".$dbname.".datakaryawan k on k.karyawanid=h.dibuat where h.unit in (".getOrgDetail(2).") order by k.namakaryawan") as $val){
+	$optDibuatCari.="<option value='".$val['dibuat']."'>".htmlspecialchars($val['namakaryawan']!=''?$val['namakaryawan']:$val['dibuat'])."</option>";
+}
+
+$optKelompokCari="<option value=''>".$_SESSION['lang']['all']."</option>";
+foreach(fetchdata("select distinct kode,kelompok from ".$dbname.".log_5klbarang order by kode asc") as $val){
+	$optKelompokCari.="<option value='".htmlspecialchars($val['kode'],ENT_QUOTES)."'>".htmlspecialchars($val['kode']." - ".$val['kelompok'])."</option>";
+}
+
 echo "<div id='action_list'>
 	<table>
-		<tr valign=middle>
-		<td align=center style='width:100px;cursor:pointer;' onclick=displayFormInput()>
+		<tr valign=top>
+		<td align=center valign=middle style='width:100px;cursor:pointer;' onclick=displayFormInput()>
 		<img class=delliconBig src=images/skyblue/addbig.png title='" . $_SESSION['lang']['new'] . "'><br>" . $_SESSION['lang']['new'] . "</td>
-	<td align=center style='width:100px;cursor:pointer;' onclick=showalllist(0)>
+	<td align=center valign=middle style='width:100px;cursor:pointer;' onclick=showalllist(0)>
 		<img class=delliconBig src=images/skyblue/list.png title='" . $_SESSION['lang']['list'] . "'><br>" . $_SESSION['lang']['list'] . "</td>
 	</td>
 			<td>
 				<fieldset>
 					<legend>".$_SESSION['lang']['find']."</legend>
-					No. PR/SR  : <input type=text id=txtsearch size=25 maxlength=30 class=myinputtext>
-					".$_SESSION['lang']['tanggal']." : <input type=text class=myinputtext id=tgl_cari onmousemove=setCalendar(this.id) onkeypress=return false;  size=10 maxlength=10 readonly/>
-					<button class=mybutton onclick=cariData(0)>".$_SESSION['lang']['find']."</button>
+					<table border=0 cellpadding=1 cellspacing=1>
+						<tr>
+							<td>Tahun</td>
+							<td>:</td>
+							<td style='width:150px'><select id=filterTahun class=select2 style='width:100%' onchange='cariData(0)'>".$optTahun."</select></td>
+							<td style='padding-left:15px'>No. PR/SR</td>
+							<td>:</td>
+							<td style='width:170px'><input type=text id=txtsearch maxlength=30 class=myinputtext style='width:100%;box-sizing:border-box' onkeyup=\"enterkey(event,function(){cariData(0)})\"></td>
+							<td style='padding-left:15px'>".$_SESSION['lang']['tanggal']."</td>
+							<td>:</td>
+							<td style='width:110px'><input type=text class=myinputtext id=tgl_cari onmousemove=setCalendar(this.id) onkeypress=return false; style='width:100%;box-sizing:border-box' maxlength=10 readonly/></td>
+							<td style='padding-left:15px'>".$_SESSION['lang']['unit']."</td>
+							<td>:</td>
+							<td style='width:200px'><select id=filterUnit class=select2 style='width:100%' onchange='cariData(0)'>".$optUnitCari."</select></td>
+						</tr>
+						<tr>
+							<td>".$_SESSION['lang']['tipe']."</td>
+							<td>:</td>
+							<td><select id=filterTipe class=select2 style='width:100%' onchange='cariData(0)'>".$optTipeCari."</select></td>
+							<td style='padding-left:15px'>".$_SESSION['lang']['status']."</td>
+							<td>:</td>
+							<td><select id=filterStatus class=select2 style='width:100%' onchange='cariData(0)'>".$optStatusCari."</select></td>
+							<td style='padding-left:15px'>Progres</td>
+							<td>:</td>
+							<td><select id=filterProgres class=select2 style='width:100%' onchange='cariData(0)'>".$optProgresCari."</select></td>
+							<td style='padding-left:15px'>".$_SESSION['lang']['dbuat_oleh']."</td>
+							<td>:</td>
+							<td><select id=filterDibuat class=select2 style='width:100%' onchange='cariData(0)'>".$optDibuatCari."</select></td>
+						</tr>
+						<tr>
+							<td>".$_SESSION['lang']['kelompokbarang']."</td>
+							<td>:</td>
+							<td colspan=4><select id=filterKelompok class=select2 style='width:100%' onchange='cariData(0)'>".$optKelompokCari."</select></td>
+							<td colspan=6 style='padding-left:15px'>
+								<button class=mybutton onclick=cariData(0)>".$_SESSION['lang']['find']."</button>
+								<button class=mybutton onclick=exportExcelPP()>".$_SESSION['lang']['excel']."</button>
+								<button class=mybutton onclick=exportPdfPP()>PDF</button>
+							</td>
+						</tr>
+					</table>
 				</fieldset>
 			</td>
+				<td valign=top>
+					<fieldset id=fsWarnaStatus style='display:flex;flex-direction:column'>
+						<legend>Warna Status</legend>
+					<div style='flex:1;display:flex;flex-direction:column;justify-content:space-between'>
+						<span style='display:block;margin:2px 0;padding:1px 10px;font-size:13px;line-height:18px;border-radius:3px;text-align:center;background:#ffeb9c;color:#9c5700;font-weight:bold' title='Masih draft, belum diajukan untuk persetujuan'>Belum Diajukan</span>
+						<span style='display:block;margin:2px 0;padding:1px 10px;font-size:13px;line-height:18px;border-radius:3px;text-align:center;background:#ddebf7;color:#1f4e78;font-weight:bold' title='Sudah diajukan, menunggu keputusan approval'>Menunggu Persetujuan</span>
+						<span style='display:block;margin:2px 0;padding:1px 10px;font-size:13px;line-height:18px;border-radius:3px;text-align:center;background:#c6efce;color:#006100;font-weight:bold' title='Sudah disetujui dan diproses purchasing'>Disetujui</span>
+						<span style='display:block;margin:2px 0;padding:1px 10px;font-size:13px;line-height:18px;border-radius:3px;text-align:center;background:#ffc7ce;color:#9c0006;font-weight:bold' title='Ditolak oleh approval'>Ditolak</span>
+						<span style='display:block;margin:2px 0;padding:1px 10px;font-size:13px;line-height:18px;border-radius:3px;text-align:center;background:#fce4d6;color:#a04000;font-weight:bold' title='Dikembalikan ke pembuat'>PR/SR Return</span>
+					</div>
+					</fieldset>
+				</td>
 		</tr>
-	</table> 
-</div>";
+	</table>
+</div>
+<script>
+$(document).ready(function(){
+	$('#action_list .select2').select2({dropdownAutoWidth:true,width:'100%'});
+	//kotak filter dan kotak Warna Status dibuat sama tinggi
+	var fsAtas = $('#action_list fieldset');
+	var tinggiAtas = Math.max(fsAtas.eq(0).outerHeight(), fsAtas.eq(1).outerHeight());
+	fsAtas.css({'box-sizing':'border-box','height':tinggiAtas+'px'});
+	//daftar pilihan select2 harus tampil di atas popup/dialog
+	$('<style>.select2-container--open .select2-dropdown{z-index:100000;}</style>').appendTo('head');
+});
+</script>";
 
 CLOSE_BOX();
 
@@ -56,7 +160,8 @@ echo"<!--<fieldset>
 	<!--<img src='images/pdf.jpg' onclick=\"masterPDF('log_prapoht','','','log_print_pdf_pp',event)\" width='20' height='20' />-->
 	<!--<img onclick=\"javascript:print()\" style='width: 20px; height: 20px; cursor: pointer;' title='Print Page' src='images/printer.png'>-->
 	
-	<div style='overflow:auto;'>
+	<style>#contain a#seeprog{color:inherit;font-weight:bold}</style>
+		<div style='overflow:auto;'>
 	<table class='sortable' cellspacing='1' cellpadding=5 border='0' style='width:100%;text-transform:uppercase;'>
 		<thead>
 		<tr class=rowheader>
@@ -70,6 +175,7 @@ echo"<!--<fieldset>
 			<th align='center'>Chat</th>
 			<th align='center'>".$_SESSION['lang']['dbuat_oleh']."</th>
 			<th align='center'>".$_SESSION['lang']['status']."</th>
+			<th align='center'>Progres</th>
 			<th align='center'>Action</th>
 		</tr>
 		</thead>
@@ -77,22 +183,7 @@ echo"<!--<fieldset>
 			<script>loadData(0)</script>
 		</tbody>
 	</table>
-	<fieldset style=float:left>
-	<legend>Note</legend>
-	<table>
-		<tr>
-			<td style='width:20px;background:#42f5c2'>&nbsp;</td>
-			<td>:</td>
-			<td>Ada beberapa item yang di close oleh departemen purchasing</td>
-		</tr>
-		<tr>
-			<td style='width:20px;background:orange'>&nbsp;</td>
-			<td>:</td>
-			<td>Ditolak oleh Approval</td>
-		</tr>
-	</table>
 	</div>
-</fieldset>
 ";
 
 CLOSE_BOX(); //2 C
@@ -104,10 +195,8 @@ OPEN_BOX();
 
 /* Organisasi */
 $optBagian = "<option value=''>".$_SESSION['lang']['pilihdata']."</option>";
-$sStr = selectQuery($dbname, "organisasi", "kodeorganisasi", "LENGTH(kodeorganisasi) = 4 AND kodeorganisasi IN (".getOrgDetail(2).")", "inti DESC");
-$qStr = fetchData($sStr);
-foreach($qStr as $val){
-    $optBagian .= "<option value='".$val['kodeorganisasi']."'>".$val['kodeorganisasi']."</option>";
+foreach(fetchData("select kodeorganisasi, namaorganisasi from ".$dbname.".organisasi where LENGTH(kodeorganisasi) = 4 AND kodeorganisasi IN (".getOrgDetail(2).") order by inti DESC, kodeorganisasi ASC") as $val){
+    $optBagian .= "<option value='".htmlspecialchars($val['kodeorganisasi'],ENT_QUOTES)."'>".htmlspecialchars($val['kodeorganisasi']." - ".$val['namaorganisasi'])."</option>";
 }
 
 $opttipe="";
@@ -128,85 +217,86 @@ $as=date("Y-m-d");
 $as2=date('Y-m-d', strtotime('+7 days', strtotime($as)));
 
 ##GET Requester
+$nmdeptAll = makeOption($dbname,'sdm_5departemen','kode,nama');
+if (!function_exists('ppNamaRequester')) {
+	function ppNamaRequester($nama, $bagian, $mapDept)
+	{
+		$d = isset($mapDept[$bagian]) ? $mapDept[$bagian] : $bagian;
+		return htmlspecialchars($nama) . ($d != '' ? ' (' . htmlspecialchars($d) . ')' : '');
+	}
+}
 $optkar="";
-$chk="0";
+$sendiri=false;
 $str="select karyawanid,namakaryawan,nik,bagian from ".$dbname.".datakaryawan where lokasitugas='".$unitkerja."' and (tanggalkeluar='0000-00-00' or tanggalkeluar>='".$as."') order by namakaryawan asc";
 $res=fetchdata($str);
 foreach($res as $val){
-	$nmdept = makeOption($dbname,'sdm_5departemen','kode,nama',"kode='".$val['bagian']."'");
 	if($_SESSION['standard']['userid']==$val['karyawanid']){
-		$chk='1';
-	}
-	if($_SESSION['standard']['userid']==$val['karyawanid']){
-		$optkar.="<option value='".$val['karyawanid']."' selected>".$val['namakaryawan']." (".$nmdept[$val['bagian']].")</option>";	
 		$sendiri=true;
+		$optkar.="<option value='".$val['karyawanid']."' selected>".ppNamaRequester($val['namakaryawan'],$val['bagian'],$nmdeptAll)."</option>";
 	}else{
-		$sendiri=false;
-		@$optkar.="<option value='".$val['karyawanid']."'>".$val['namakaryawan']." (".$nmdept[$val['bagian']].")</option>";											
+		$optkar.="<option value='".$val['karyawanid']."'>".ppNamaRequester($val['namakaryawan'],$val['bagian'],$nmdeptAll)."</option>";
 	}
 }
+#pengguna yang login selalu ada di pilihan, walau tidak termasuk daftar karyawan unit
 if($sendiri==false){
-	$optkar.="<option value='".$_SESSION['standard']['userid']."' selected>".getKary($_SESSION['standard']['userid'])." (".$nmdept[getKary($_SESSION['standard']['userid'],'bagian')].")</option>";	
+	$optkar.="<option value='".$_SESSION['standard']['userid']."' selected>".ppNamaRequester(getKary($_SESSION['standard']['userid']),getKary($_SESSION['standard']['userid'],'bagian'),$nmdeptAll)."</option>";
 }
-
-
-if($chk=='0'){
-	if($_SESSION['empl']['tipekaryawan']=='0'){
-		$nmdept = makeOption($dbname,'sdm_5departemen','kode,nama',"kode='".$_SESSION['empl']['bagian']."'");
-		$optkar.="<option value='".$_SESSION['standard']['userid']."' selected>".$_SESSION['empl']['name']." (".$nmdept[$_SESSION['empl']['bagian']].")</option>";
-	}
-}
-
 echo"<fieldset>
-	<legend>".$_SESSION['lang']['header']."</legend>
-	<table cellspacing='1' border='0' id='opl' class='urutaninputan'>
-		<tr>
-			<td class='bintang'>".$_SESSION['lang']['namaorganisasi']."</td>
-			<td>:</td>
-			<td>
-				<select id='kd_bag' style='width:200px' onchange=\"getrequester()\">".$optBagian."</select>
-			</td>
-		</tr>
-		<tr>
-			<td>".$_SESSION['lang']['tipe']."</td>
-			<td>:</td>
-			<td>
-				<select id='tipe' style='width:200px'>".$opttipe."</select>
-			</td>
-		</tr>
-		<tr>
-			<td>".$_SESSION['lang']['nopp']."</td>
-			<td>:</td>
-			<td>
-				<input type='text' id='nopp' class='myinputtext' disabled='disabled' style='width:196px' />
-			</td>
-		</tr>		
-		<tr>
-			<td>".$_SESSION['lang']['tanggal']."</td>
-			<td>:</td>
-			<td>
-				<!--<input type='text' class='myinputtext' id='tgl_pp' name='tgl_pp' value='".tanggalnormal($as)."' readonly='readonly' style='width:196px'/>-->
-				<input type=text class=myinputtext style='width:195px;' id=tgl_pp onkeypress='return tanpa_kutip(event)' onmousemove='setCalendar(this.id)'  value='".tanggalnormal($as)."'>
-			</td>
-		</tr>
-		<tr>
-			<td>Requester</td>
-			<td>:</td>
-			<td>
-				<select id=requester style='width:180px'>".$optkar."</select>
-				<img id='requester' onclick=z.elSearch('requester',event) class='resicon' src='images/onebit_02.png' style='position:relative;top:3px;left:3px;'>
-			</td>
-		</tr>
-		<tr>
-			<td colspan=2></td>
-			<td>
-				<input type='hidden' id='method' value='insert' />
-				<input type='hidden' id='user_id' name='user_id' value='".$_SESSION['standard']['userid']."' />
-				<button class=mybutton id='dtl_pem' onclick=\"get_isi()\">".$_SESSION['lang']['save']."</button>
-			</td>
-		</tr>
-	</table>
-</fieldset>
+		<legend>".$_SESSION['lang']['header']."</legend>
+		<table cellspacing='1' cellpadding='3' border='0' id='opl' class='urutaninputan'>
+			<tr>
+				<td class='bintang' style='white-space:nowrap'>".$_SESSION['lang']['namaorganisasi']."</td>
+				<td>:</td>
+				<td style='width:300px'>
+					<select id='kd_bag' class='select2pp' style='width:100%' onchange=\"getrequester()\">".$optBagian."</select>
+				</td>
+			</tr>
+			<tr>
+				<td>".$_SESSION['lang']['tipe']."</td>
+				<td>:</td>
+				<td>
+					<select id='tipe' class='select2pp' style='width:100%'>".$opttipe."</select>
+				</td>
+			</tr>
+			<tr>
+				<td>".$_SESSION['lang']['nopp']."</td>
+				<td>:</td>
+				<td>
+					<input type='text' id='nopp' class='myinputtext' disabled='disabled' style='width:100%;box-sizing:border-box' />
+				</td>
+			</tr>
+			<tr>
+				<td>".$_SESSION['lang']['tanggal']."</td>
+				<td>:</td>
+				<td>
+					<input type=text class=myinputtext style='width:100%;box-sizing:border-box' id=tgl_pp onkeypress='return tanpa_kutip(event)' onmousemove='setCalendar(this.id)'  value='".tanggalnormal($as)."'>
+				</td>
+			</tr>
+			<tr>
+				<td class='bintang'>Requester</td>
+				<td>:</td>
+				<td>
+					<select id=requester class='select2pp' style='width:100%'>".$optkar."</select>
+				</td>
+			</tr>
+			<tr>
+				<td colspan=2></td>
+				<td>
+					<input type='hidden' id='method' value='insert' />
+					<input type='hidden' id='user_id' name='user_id' value='".$_SESSION['standard']['userid']."' />
+					<button class=mybutton id='dtl_pem' onclick=\"get_isi()\">".$_SESSION['lang']['save']."</button>
+				</td>
+			</tr>
+		</table>
+	</fieldset>
+	<script>
+	$(document).ready(function(){
+		//select2 untuk form PR/SR; lebar mengikuti kolom, daftar tampil di atas dialog
+		$('#form_pp .select2pp').select2({dropdownAutoWidth:true,width:'100%'});
+		//tinggi kolom isian disamakan dengan select2
+		$('<style>#opl input.myinputtext{height:26px;box-sizing:border-box}</style>').appendTo('head');
+	});
+	</script>
 
 <fieldset>
 <legend>".$_SESSION['lang']['detail']."</legend>
@@ -243,7 +333,7 @@ echo"<fieldset>
 			<input type=number min='1' class=myinputtextnumber style='width:80px' id=jmlhDiminta onkeypress='return angka_doang(event)'>
 		</td>
 		<td style='text-align:center;vertical-align:top'>
-			<select id='prioritas'>".$optpri."</select>
+			<select id='prioritas' class='select2pp' style='width:190px'>".$optpri."</select>
 		</td>
 		<td style='text-align:center;vertical-align:top'>
 			<input type=text class=myinputtext style='width:70px;text-align:center' id=tgl_sdt onkeypress='return tanpa_kutip(event)' onmousemove='setCalendar(this.id)' readonly=readonly value='".tanggalnormal($as2)."'>
@@ -397,4 +487,4 @@ CLOSE_BOX();
 echo "</div>";
 echo close_body();
 
-?>
+?>
