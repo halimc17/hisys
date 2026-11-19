@@ -5,7 +5,9 @@
  * proses=preview    : tampilkan perhitungan (tipe=excel -> unduh Excel)
  *                     - Jan-Nov  : PPh 21 = penghasilan bruto bulan berjalan x TER (kategori A/B/C)
  *                     - Desember : PPh 21 setahun (tarif Pasal 17) dikurangi PPh 21 Jan-Nov
- * proses=prosespph  : simpan hasil per karyawan ke sdm_gaji (komponen 42 / 153) dan sdm_pph21
+ * sistem=Bulanan|Harian : wajib; karyawan dipilah menurut sistem gaji di data karyawan, berlaku untuk preview, Excel, PDF, dan proses
+ * proses=panellain / templatelain / uploadlain / hapuslain : penghasilan lain (jasa produksi, dana motivasi, dll) lewat upload Excel, khusus PT PPP
+ * proses=prosessemua : hitung ulang di server lalu simpan seluruh karyawan sekaligus (satu transaksi) ke sdm_gaji (komponen 42 / 153) dan sdm_pph21
  */
 
 ini_set('display_errors', 0);
@@ -24,19 +26,57 @@ $per          = addslashes(trim(checkPostGet('per', '')));
 $unit         = addslashes(trim(checkPostGet('unit', '')));
 $karyawanid   = addslashes(trim(checkPostGet('karyawanid', '')));
 $tipe         = checkPostGet('tipe', '');
+$sistem       = checkPostGet('sistem', '');   # sistem gaji karyawan yang dihitung / diproses: Bulanan atau Harian (wajib)
+# kode khusus di kolom kodejenis sdm_pph21_penghasilanlain untuk PPh 21 manual (bukan penghasilan; dikurangkan dari PPh 21 sistem)
+define('PPH_KODE_MANUAL', 'PPH21M');
 $baris        = checkPostGet('baris', '');
 $pph21x       = pphAngka(checkPostGet('pph21x', ''));
 $tjpph21x     = pphAngka(checkPostGet('tjpph21x', ''));
 
 switch ($proses) {
-	case 'prosespph':
+	case 'prosessemua':
 		pphCekInput($per, $unit);
-		pphSimpan($per, $unit, $karyawanid, $baris, $pph21x, $tjpph21x);
+		pphCekSistem($sistem);
+		pphProsesSemua($per, $unit);
 		break;
 
 	case 'preview':
 		pphCekInput($per, $unit);
+		pphCekSistem($sistem);
 		pphPreview($per, $unit, $tipe);
+		break;
+
+	case 'panelpjd':
+		pphCekInput($per, $unit);
+		if (getindukPT($unit) != 'PPP') {
+			exit('Error, Panel ini khusus unit PT PPP.');
+		}
+		pphPanelPjd($unit, $per);
+		break;
+
+	case 'panellain':
+		pphCekInput($per, $unit);
+		pphCekSistem($sistem);
+		pphCekPpp($unit);
+		pphPanelLain($unit, $per, $sistem);
+		break;
+
+	case 'templatelain':
+		pphCekInput($per, $unit);
+		pphCekSistem($sistem);
+		pphTemplateLain($unit, $per, $sistem);
+		break;
+
+	case 'uploadlain':
+		pphCekInput($per, $unit);
+		pphCekSistem($sistem);
+		pphUploadLain($per, $unit, $sistem);
+		break;
+
+	case 'hapuslain':
+		pphCekInput($per, $unit);
+		pphCekSistem($sistem);
+		pphHapusLain($per, $unit, $sistem);
 		break;
 
 	default:
@@ -51,6 +91,14 @@ function pphAngka($nilai)
 {
 	$nilai = str_replace(',', '', $nilai);
 	return is_numeric($nilai) ? $nilai : 0;
+}
+
+/** Sistem gaji wajib dipilih: Bulanan atau Harian */
+function pphCekSistem($sistem)
+{
+	if (!in_array($sistem, array('Bulanan', 'Harian'), true)) {
+		exit('Error, Sistem gaji belum dipilih (Bulanan atau Harian).');
+	}
 }
 
 /** Validasi input: unit wajib & termasuk unit yang boleh diakses user, periode format yyyy-mm */
@@ -171,53 +219,843 @@ function pphHitungPasal17($pkp, $batas, $penambah, $persen)
 }
 
 
-#=== Simpan hasil PPh 21 satu karyawan ===
-function pphSimpan($per, $unit, $karyawanid, $baris, $pph21x, $tjpph21x)
+/**
+ * PJD (khusus PT PPP) yang masuk perhitungan PPh 21 periode ini: realisasi selesai, biaya yang ditanggung karyawan
+ * sudah diverifikasi HRD (nilai = jumlahhrd), dan klaim (penyelesaian) sudah dibayar di kas bank dan diposting.
+ * Bulan klaim dibayar menentukan periode: Jan-Nov bulan periode itu, Desember seluruh tahun.
+ * Satu baris = satu PJD per jenis biaya.
+ */
+function pphPjdPeriode($unit, $per)
 {
-	global $owlPDO, $dbname;
+	global $dbname;
 
+	$tahun = substr($per, 0, 4);
+	if (substr($per, 5, 2) == '12') {
+		$awal = $tahun . '-01-01';
+		$akhir = $tahun . '-12-31';
+	} else {
+		$awal = $per . '-01';
+		$akhir = date('Y-m-t', strtotime($per . '-01'));
+	}
+	$sql = "select h.notransaksi, h.karyawanid, h.tgldinasdarireal, h.tgldinassampaireal, k.nik, k.namakaryawan, k.tipekaryawan, k.statuspajak,
+			d.jenisbiaya, sum(d.jumlahhrd) as jumlah,
+			(select max(kd.tanggal) from " . $dbname . ".keu_kasbankdt kd
+				where kd.nodok = h.notransaksi and kd.lainnya = concat('claimpjd#', h.notransaksi)
+				and exists (select 1 from " . $dbname . ".keu_kasbankht kh where kh.notransaksi=kd.notransaksi and kh.kodeorg=kd.kodeorg and kh.posting=1)
+			) as tglbayar
+		from " . $dbname . ".sdm_pjdinasht h
+		join " . $dbname . ".sdm_pjdinasdt d on d.notransaksi=h.notransaksi
+		left join " . $dbname . ".datakaryawan k on k.karyawanid=h.karyawanid
+		where h.kodeorg='" . $unit . "' and h.statuspengajuan='1' and h.statusrealisasi='1'
+			and d.sumber='1' and d.tanggungan='1' and d.statusverifikasihrd='1' and d.jumlahhrd>0
+		group by h.notransaksi, d.jenisbiaya
+		having tglbayar is not null and tglbayar >= '" . $awal . "' and tglbayar <= '" . $akhir . "'
+		order by tglbayar, h.notransaksi, d.jenisbiaya";
+	return pphAmbilSemua($sql);
+}
+
+/** Panel di atas tabel PPh 21 (hanya baca): PJD yang ikut dihitung sebagai penghasilan periode ini */
+function pphPanelPjd($unit, $per)
+{
+	global $dbname;
+
+	$nmJenis = makeOption($dbname, 'sdm_5jenisbiayapjdinas', 'id,keterangan');
+	$perPjd = array();
+	foreach (pphPjdPeriode($unit, $per) as $b) {
+		## karyawan staff (tipe 0) atau tanpa status pajak tidak ada di perhitungan PPh 21 v3: PJD-nya tidak ditampilkan
+		if ($b['tipekaryawan'] == '0' || $b['statuspajak'] == '') {
+			continue;
+		}
+		$no = $b['notransaksi'];
+		if (!isset($perPjd[$no])) {
+			$perPjd[$no] = array('nik' =>$b['nik'], 'nama' => $b['namakaryawan'], 'dari' => $b['tgldinasdarireal'], 'sampai' => $b['tgldinassampaireal'], 'tglbayar' => $b['tglbayar'], 'rincian' => array(), 'total' => 0);
+		}
+		$namaJenis = isset($nmJenis[$b['jenisbiaya']]) ? $nmJenis[$b['jenisbiaya']] : 'Jenis ' . $b['jenisbiaya'];
+		$perPjd[$no]['rincian'][] = $namaJenis . ': ' . number_format($b['jumlah'], 0);
+		$perPjd[$no]['total'] += $b['jumlah'];
+	}
+
+	$keterangan = (substr($per, 5, 2) == '12')
+		? 'Desember: seluruh PJD yang klaimnya dibayar di kas bank Januari-Desember ' . substr($per, 0, 4) . '.'
+		: 'PJD yang klaimnya dibayar di kas bank pada bulan ' . $per . '.';
+
+	$html = "<fieldset style='margin:6px 0'><legend>Penghasilan Perjalanan Dinas masuk perhitungan (khusus PT PPP)</legend>";
+	$html .= "<div style='margin:0 2px 6px 2px;font-size:11px;color:#555'>" . htmlspecialchars($keterangan) . " Sudah realisasi dan diverifikasi HRD (nilai = jumlah HRD). Otomatis masuk kolom Perjalanan Dinas di tabel di bawah; tidak masuk slip gaji dan aktual rekap gaji.</div>";
+	$html .= "<details open><summary style='cursor:pointer;font-weight:bold'>" . count($perPjd) . " PJD</summary>";
+	$html .= "<table class=sortable cellspacing=1 cellpadding=4 border=0 style='width:100%'><thead><tr class=rowheader>
+		<th align=center>No</th><th align=center>NIK</th><th align=center>Nama</th><th align=center>No. PJD</th>
+		<th align=center>Tgl Dinas</th><th align=center>Tgl Bayar Kas Bank</th><th align=center>Rincian Biaya</th><th align=center>Jumlah</th></tr></thead><tbody>";
+	$no = 0;
+	$total = 0;
+	foreach ($perPjd as $nomor => $p) {
+		$no++;
+		$total += $p['total'];
+		$tglDinas = ($p['dari'] != '' && $p['dari'] != '0000-00-00') ? tanggalnormal($p['dari']) : '';
+		if ($p['sampai'] != '' && $p['sampai'] != '0000-00-00' && $p['sampai'] != $p['dari']) {
+			$tglDinas .= ' s/d ' . tanggalnormal($p['sampai']);
+		}
+		$html .= "<tr class=rowcontent>
+			<td align=center>" . $no . "</td>
+			<td>" . htmlspecialchars($p['nik']) . "</td>
+			<td>" . htmlspecialchars($p['nama']) . "</td>
+			<td>" . htmlspecialchars($nomor) . "</td>
+			<td align=center>" . $tglDinas . "</td>
+			<td align=center>" . tanggalnormal($p['tglbayar']) . "</td>
+			<td>" . htmlspecialchars(implode('; ', $p['rincian'])) . "</td>
+			<td align=right>" . number_format($p['total'], 0) . "</td></tr>";
+	}
+	if ($no == 0) {
+		$html .= "<tr class=rowcontent><td colspan=8 align=center>Tidak ada PJD yang klaimnya dibayar pada periode ini</td></tr>";
+	} else {
+		$html .= "<tr class=rowcontent><td colspan=7 align=center><b>TOTAL</b></td><td align=right><b>" . number_format($total, 0) . "</b></td></tr>";
+	}
+	$html .= "</tbody></table></details></fieldset>";
+	echo $html;
+}
+
+#=== Proses PPh 21 seluruh karyawan sekaligus ===
+/**
+ * Hitung ulang di server (nilai dari browser tidak dipakai), lalu simpan semua karyawan dalam satu transaksi:
+ * hasil proses sebelumnya untuk unit dan periode ini diganti. Gagal di tengah = tidak ada yang berubah.
+ */
+function pphProsesSemua($per, $unit)
+{
+	global $owlPDO, $dbname, $pphHasil, $sistem, $pphRincian;
+
+	## Validasi tutup buku: gaji sudah ditutup, periode akuntansi belum ditutup
+	$statusPeriode = pphStatusPeriode($per, $unit);
+	foreach ($statusPeriode['pesan'] as $pesan) {
+		if ($pesan[0] == 'salah') {
+			exit('Error, ' . $pesan[1] . '.');
+		}
+	}
+	$adaRincian = pphTabelRincianAda();   # snapshot rincian pendapatan (sql_pph21_v3.sql)
+
+	## Hitung dengan rumus yang sama dengan tampilan (keluaran tampilan dibuang)
+	ob_start();
+	pphPreview($per, $unit, 'proses');
+	ob_end_clean();
+	if (count($pphHasil) == 0) {
+		exit('Error, Tidak ada karyawan yang dihitung untuk unit dan periode ini.');
+	}
+
+	$jumlahKaryawan = 0;
+	$totalPph = 0;
+	$jumlahPph = 0;
+	$totalTj = 0;
 	try {
 		$owlPDO->beginTransaction();
-
-		## Validasi tutup buku: gaji sudah ditutup, periode akuntansi belum ditutup
-		$statusPeriode = pphStatusPeriode($per, $unit);
-		foreach ($statusPeriode['pesan'] as $pesan) {
-			if ($pesan[0] == 'salah') {
-				throw new PDOException($pesan[1] . '.');
+		## hanya hasil karyawan yang dihitung ulang (sistem gaji terpilih) yang diganti, sistem gaji lain tidak disentuh
+		$idHitung = array();
+		## seluruh karyawan sistem gaji ini (termasuk yang kini tanpa pendapatan), agar hasil lama yang sudah tidak berlaku ikut terhapus
+		foreach (array_keys(pphKaryawanScope($per, $unit, $sistem)) as $idKar) {
+			$idHitung[] = $owlPDO->quote((string) $idKar);
+		}
+		foreach (array_chunk($idHitung, 200) as $potong) {
+			$in = implode(',', $potong);
+			$owlPDO->exec("delete from " . $dbname . ".sdm_gaji where kodeorg='" . $unit . "' and idkomponen in ('42','153') and periodegaji='" . $per . "' and karyawanid in (" . $in . ")");
+			$owlPDO->exec("delete from " . $dbname . ".sdm_pph21 where kodeorg='" . $unit . "' and periode='" . $per . "' and karyawanid in (" . $in . ")");
+			if ($adaRincian) {
+				$owlPDO->exec("delete from " . $dbname . ".sdm_pph21_rincian where kodeorg='" . $unit . "' and periode='" . $per . "' and karyawanid in (" . $in . ")");
 			}
 		}
 
-		## Baris pertama: hapus hasil proses sebelumnya untuk unit & periode ini
-		if ($baris == '1') {
-			$owlPDO->exec("delete from " . $dbname . ".sdm_gaji where kodeorg='" . $unit . "' and idkomponen='42' and periodegaji='" . $per . "'");
-			$owlPDO->exec("delete from " . $dbname . ".sdm_gaji where kodeorg='" . $unit . "' and idkomponen='153' and periodegaji='" . $per . "'");
-			$owlPDO->exec("delete from " . $dbname . ".sdm_pph21 where kodeorg='" . $unit . "' and periode='" . $per . "'");
+		$stmtGaji =$owlPDO->prepare("insert into " . $dbname . ".sdm_gaji (`karyawanid`,`kodeorg`,`idkomponen`,`jumlah`,`pengali`,`hk`,`periodegaji`) values (?, ?, ?, ?, '1', '0', ?)");
+		$stmtPph = $owlPDO->prepare("insert into " . $dbname . ".sdm_pph21 (`karyawanid`,`kodeorg`,`tipepph`,`nilai`,`periode`) values (?, ?, 'regular', ?, ?)");
+		foreach ($pphHasil as $karyawanid => $hasil) {
+			$pph21 = $hasil[0];
+			$tj = $hasil[1];
+			if ($pph21 != 0) {
+				$stmtGaji->execute(array($karyawanid, $unit, '42', $pph21, $per));
+				$stmtPph->execute(array($karyawanid, $unit, $pph21, $per));
+				$totalPph += $pph21;
+				$jumlahPph++;
+			}
+			if ($tj != 0) {
+				$stmtGaji->execute(array($karyawanid, $unit, '153', $tj, $per));
+				$totalTj += $tj;
+			}
+			$jumlahKaryawan++;
+		}
+		$totalLebih = 0;
+		foreach ($pphRincian as $rLebih) {
+			$totalLebih += $rLebih['lebih'];
 		}
 
-		## Potongan PPh 21
-		if ($pph21x != 0) {
-			$owlPDO->exec("insert into " . $dbname . ".sdm_gaji (`karyawanid`,`kodeorg`,`idkomponen`,`jumlah`,`pengali`,`hk`,`periodegaji`) values ('" . $karyawanid . "','" . $unit . "','42','" . $pph21x . "','1','0','" . $per . "') ");
-			$owlPDO->exec("insert into " . $dbname . ".sdm_pph21 (`karyawanid`,`kodeorg`,`tipepph`,`nilai`,`periode`) values ('" . $karyawanid . "','" . $unit . "','1','" . $pph21x . "','" . $per . "') ");
+		## Snapshot rincian pendapatan yang dipakai pada hitungan ini (satu baris per karyawan yang dihitung)
+		if ($adaRincian) {
+			$stmtRincian = $owlPDO->prepare("insert into " . $dbname . ".sdm_pph21_rincian (`kodeorg`,`periode`,`karyawanid`,`sistemgaji`,`metode`,`pendapatangaji`,`pjd`,`penghasilanlain`,`rincianlain`,`totalpendapatan`,`tunjanganpajak`,`pengurang`,`tarifter`,`punyanpwp`,`pph21terhutang`,`pph21jannov`,`pph21sistem`,`pph21manual`,`pph21lebih`,`pph21`,`diprosesoleh`,`diprosespada`) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now())");
+			foreach ($pphRincian as $karyawanid => $r) {
+				$lainTeks = array();   # rincian per jenis, format KODE=jumlah dipisah titik koma (mis. JP=3000000;DM=250000)
+				foreach ($r['lain'] as $kodeLain => $jmlLain) {
+					$lainTeks[] = $kodeLain . '=' . $jmlLain;
+				}
+				$stmtRincian->execute(array($unit, $per, (string) $karyawanid, $r['sistem'], $r['metode'], $r['gaji'], $r['pjd'], array_sum($r['lain']), implode(';', $lainTeks), $r['total'], $r['tunjangan'], $r['pengurang'], $r['tarif'], $r['npwp'], $r['terhutang'], $r['jannov'], $r['sistem21'], $r['manual'], $r['lebih'], $r['pph21'], $_SESSION['standard']['userid']));
+			}
 		}
-
-		## Tunjangan PPh 21
-		if ($tjpph21x != 0) {
-			$owlPDO->exec("insert into " . $dbname . ".sdm_gaji (`karyawanid`,`kodeorg`,`idkomponen`,`jumlah`,`pengali`,`hk`,`periodegaji`) values ('" . $karyawanid . "','" . $unit . "','153','" . $tjpph21x . "','1','0','" . $per . "') ");
-		}
-
 		$owlPDO->commit();
 	} catch (PDOException $e) {
-		$owlPDO->rollback();
-		echo "Error, " . addslashes($e->getMessage());
-		die();
+		if ($owlPDO->inTransaction()) {
+			$owlPDO->rollBack();
+		}
+		error_log('sdm_slave_3pph21_v3 proses: ' . $e->getMessage());
+		exit('Error, PPh 21 tidak dapat disimpan; tidak ada data yang berubah.');
 	}
+	echo 'Berhasil, ' . $jumlahKaryawan . ' karyawan ' . $sistem . ' diproses, ' . $jumlahPph . ' karyawan terkena PPh 21. Total PPh 21: Rp ' . number_format($totalPph, 0) . ($totalTj != 0 ? ' | Total tunjangan PPh 21: Rp ' . number_format($totalTj, 0) : '') . '.'
+		. ($totalLebih > 0 ? ' Lebih bayar (tidak dipotong): Rp ' . number_format($totalLebih, 0) . '.' : '')
+		. ($adaRincian ? ' Rincian pendapatan tersimpan.' : ' Catatan: rincian pendapatan belum tersimpan karena tabel snapshot belum dibuat (jalankan sql_pph21_v3.sql).')
+		## ringkasan terstruktur untuk notifikasi di layar (teks di atas tetap sebagai cadangan)
+		. '@@RINGKAS@@' . json_encode(array(
+			'unit' => $unit,
+			'periode' => $per,
+			'sistem' => $sistem,
+			'diproses' => $jumlahKaryawan,
+			'terkena' => $jumlahPph,
+			'total' => $totalPph,
+			'tunjangan' => $totalTj,
+			'rincian' => $adaRincian,
+			'lebih' => $totalLebih,
+		));
+}
+
+/** Tabel snapshot rincian pendapatan sudah dibuat */
+function pphTabelRincianAda()
+{
+	global $dbname;
+	$a = pphAmbilSemua("show tables from `" . $dbname . "` like 'sdm_pph21_rincian'");
+	return count($a) > 0;
+}
+
+#=== Penghasilan lain lewat upload Excel (khusus PT PPP): jasa produksi, dana motivasi, dll ===
+
+/** Fitur ini khusus unit PT PPP */
+function pphCekPpp($unit)
+{
+	if (getindukPT($unit) != 'PPP') {
+		exit('Error, Fitur ini khusus unit PT PPP.');
+	}
+}
+
+/** Tabel penghasilan lain sudah dibuat (jalankan sql_pph21_v3.sql bila belum) */
+function pphTabelLainAda()
+{
+	global $dbname;
+	$a = pphAmbilSemua("show tables from `" . $dbname . "` like 'sdm_pph21_penghasilanlain'");
+	return count($a) > 0;
+}
+
+/** Kolom template / upload: jenis penghasilan lain + kolom PPh 21 Manual (disimpan di tabel yang sama dengan kode khusus) */
+function pphJenisTemplate()
+{
+	$hasil = pphJenisLain();
+	$hasil[PPH_KODE_MANUAL] = 'PPh 21 Manual';
+	return $hasil;
+}
+
+/**
+ * Jenis penghasilan lain yang bisa diunggah: kode => nama (urut = urutan kolom template Excel).
+ * Jenis baru cukup ditambah satu baris di sini; kode maksimal 10 karakter (huruf/angka), jangan diganti bila sudah ada data.
+ */
+function pphJenisLain($semua = false)
+{
+	return array(
+		'JP' => 'Jasa Produksi',
+		'DM' => 'Dana Motivasi',
+	);
+}
+
+/**
+ * Penghasilan lain yang masuk perhitungan periode ini: [karyawanid][kodejenis] => jumlah.
+ * Januari-November = upload periode itu, Desember = seluruh upload Januari-Desember (sama seperti PJD).
+ */
+function pphLainPeriode($unit, $per)
+{
+	global $dbname;
+
+	$tahun = substr($per, 0, 4);
+	if (substr($per, 5, 2) == '12') {
+		$awal = $tahun . '-01';
+		$akhir = $tahun . '-12';
+	} else {
+		$awal = $per;
+		$akhir = $per;
+	}
+	$hasil = array();
+	foreach (pphAmbilSemua("select karyawanid, kodejenis, sum(jumlah) as jumlah from " . $dbname . ".sdm_pph21_penghasilanlain
+		where kodeorg='" . $unit . "' and periode >= '" . $awal . "' and periode <= '" . $akhir . "' and kodejenis <> '" . PPH_KODE_MANUAL . "'
+		group by karyawanid, kodejenis having sum(jumlah) > 0") as $b) {
+		$hasil[$b['karyawanid']][$b['kodejenis']] = $b['jumlah'];
+	}
+	return $hasil;
+}
+
+/**
+ * PPh 21 manual (sudah dilaporkan secara manual, khusus PT PPP): 'ini' = periode yang dihitung,
+ * 'jannov' = jumlah Januari-November (hanya diisi untuk periode Desember; dihitung sebagai PPh 21 yang sudah dibayar).
+ * Bentuk: [karyawanid] => jumlah.
+ */
+function pphManualPeriode($unit, $per)
+{
+	global $dbname;
+
+	$hasil = array('ini' => array(), 'jannov' => array());
+	$tahun = substr($per, 0, 4);
+	foreach (pphAmbilSemua("select karyawanid, sum(jumlah) as jumlah from " . $dbname . ".sdm_pph21_penghasilanlain where kodeorg='" . $unit . "' and periode='" . $per . "' and kodejenis='" . PPH_KODE_MANUAL . "' group by karyawanid") as $b) {
+		$hasil['ini'][$b['karyawanid']] = $b['jumlah'];
+	}
+	if (substr($per, 5, 2) == '12') {
+		foreach (pphAmbilSemua("select karyawanid, sum(jumlah) as jumlah from " . $dbname . ".sdm_pph21_penghasilanlain where kodeorg='" . $unit . "' and periode >= '" . $tahun . "-01' and periode <= '" . $tahun . "-11' and kodejenis='" . PPH_KODE_MANUAL . "' group by karyawanid") as $b) {
+			$hasil['jannov'][$b['karyawanid']] = $b['jumlah'];
+		}
+	}
+	return $hasil;
+}
+
+/** Karyawan yang ikut perhitungan unit & periode ini pada sistem gaji terpilih: [karyawanid] => baris (nik, nama, statuspajak) */
+function pphKaryawanScope($per, $unit, $sistem)
+{
+	$sql = preg_replace('/^select \*/', 'select karyawanid, nik, namakaryawan, statuspajak', pphSqlKaryawan($per, $unit)) . " and sistemgaji='" . $sistem . "' order by namakaryawan";
+	$hasil = array();
+	foreach (pphAmbilSemua($sql) as $b) {
+		$hasil[$b['karyawanid']] = $b;
+	}
+	return $hasil;
+}
+
+/** Nilai upload periode ini (periode yang dipilih saja) untuk karyawan tertentu: [karyawanid][kodejenis] => jumlah */
+function pphLainTersimpan($unit, $per, $idKaryawan)
+{
+	global $dbname, $owlPDO;
+
+	$hasil = array();
+	if (count($idKaryawan) == 0) {
+		return $hasil;
+	}
+	foreach (array_chunk($idKaryawan, 300) as $potong) {
+		$in = array();
+		foreach ($potong as $id) {
+			$in[] = $owlPDO->quote((string) $id);
+		}
+		foreach (pphAmbilSemua("select karyawanid, kodejenis, jumlah from " . $dbname . ".sdm_pph21_penghasilanlain
+			where kodeorg='" . $unit . "' and periode='" . $per . "' and karyawanid in (" . implode(',', $in) . ")") as $b) {
+			$hasil[$b['karyawanid']][$b['kodejenis']] = $b['jumlah'];
+		}
+	}
+	return $hasil;
+}
+
+/** Panel upload: unduh template, upload Excel, hapus data, dan ringkasan nilai yang sudah diunggah */
+function pphPanelLain($unit, $per, $sistem)
+{
+	$h = function ($teks) {
+		return htmlspecialchars($teks, ENT_QUOTES);
+	};
+	$gaya = "margin:8px 2px 10px 2px;padding:10px 16px;background:#fff;border:1px solid #c9d6e2;border-left:5px solid #2f6fb0;border-radius:6px;font-size:13px";
+
+	if (!pphTabelLainAda()) {
+		echo "<div style='" . $gaya . ";border-left-color:#b42318'><b>Penghasilan Lain (Upload Excel)</b><div style='color:#b42318;margin-top:4px'>Tabel belum dibuat di database. Jalankan sql_pph21_v3.sql terlebih dahulu.</div></div>";
+		return;
+	}
+
+	$status = pphStatusPeriode($per, $unit);
+	$jenis = pphJenisTemplate();
+	$karyawan = pphKaryawanScope($per, $unit, $sistem);
+	$tersimpan = pphLainTersimpan($unit, $per, array_keys($karyawan));
+
+	$total = array();
+	$jumlahOrang = array();
+	foreach ($tersimpan as $kid => $perJenis) {
+		foreach ($perJenis as $kode => $jml) {
+			if ($jml > 0) {
+				$total[$kode] = (isset($total[$kode]) ? $total[$kode] : 0) + $jml;
+				$jumlahOrang[$kode] = (isset($jumlahOrang[$kode]) ? $jumlahOrang[$kode] : 0) + 1;
+			}
+		}
+	}
+	$semuaJenis = pphJenisTemplate();
+
+	$html = "<div style='" . $gaya . "'>";
+	$html .= "<div style='display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap'>";
+	$html .= "<div><b style='font-size:14px'>Penghasilan Lain &amp; PPh 21 Manual (Upload Excel)</b><div style='font-size:12px;color:#555'>" . $h(implode(', ', $jenis)) . " &middot; " . $h($unit) . " &middot; " . $h($per) . " &middot; sistem gaji " . $h($sistem) . "</div></div>";
+	$html .= "<div style='display:flex;gap:8px;align-items:center;flex-wrap:wrap'>";
+	$html .= "<button class=mybutton type=button onclick='unduhTemplateLain()' title='Template berisi daftar karyawan, tinggal isi angka'>Unduh Template</button>";
+	if (!$status['akunTutup']) {
+		$html .= "<input type=file id=fileLain accept='.xlsx' style='max-width:230px;font-size:12px'>";
+		$html .= "<button class=mybutton type=button id=btnUploadLain onclick='uploadLain()'>Upload</button>";
+		if (count($total) > 0) {
+			$html .= "<button class=mybutton type=button onclick='hapusLain()' title='Hapus seluruh angka yang diunggah untuk periode dan sistem gaji ini'>Hapus Data Upload</button>";
+		}
+	}
+	$html .= "</div></div>";
+
+	if ($status['akunTutup']) {
+		$html .= "<div style='margin-top:6px;font-size:12px;color:#b42318'>Periode akuntansi sudah ditutup: upload dan hapus data dinonaktifkan.</div>";
+	} else {
+		$html .= "<div style='margin-top:6px;font-size:12px;color:#555'>Cara pakai: Unduh Template, isi angka per karyawan pada kolom jenis (kosongkan bila tidak ada), simpan sebagai .xlsx, lalu Upload. Kolom ID Karyawan, NIK, dan Nama jangan diubah. Upload ulang akan mengganti angka karyawan yang ada di file. Kolom PPh 21 Manual diisi bila PPh 21 sudah dilaporkan secara manual: saat proses, PPh 21 sistem dikurangi angka ini (potongan tidak pernah minus; bila manual melebihi hitungan sistem, kelebihannya dicatat sebagai lebih bayar).</div>";
+	}
+
+	if (count($total) > 0) {
+		$html .= "<table class=sortable cellspacing=1 cellpadding=4 style='margin-top:8px'><thead><tr class=rowheader><th>Jenis</th><th>Karyawan</th><th>Total</th></tr></thead><tbody>";
+		foreach ($total as $kode => $nilai) {
+			$html .= "<tr class=rowcontent><td>" . $h(isset($semuaJenis[$kode]) ? $semuaJenis[$kode] : $kode) . "</td><td align=right>" . number_format($jumlahOrang[$kode]) . "</td><td align=right>" . number_format($nilai) . "</td></tr>";
+		}
+		$html .= "</tbody></table>";
+
+		$html .= "<details style='margin-top:6px'><summary style='cursor:pointer'>Rincian per karyawan (" . count($tersimpan) . ")</summary><table class=sortable cellspacing=1 cellpadding=4 style='margin-top:4px'><thead><tr class=rowheader><th>NIK</th><th>Nama</th>";
+		foreach ($jenis as $kode => $nama) {
+			$html .= "<th>" . $h($nama) . "</th>";
+		}
+		$html .= "</tr></thead><tbody>";
+		foreach ($karyawan as $kid => $k) {
+			if (!isset($tersimpan[$kid])) {
+				continue;
+			}
+			$html .= "<tr class=rowcontent><td>" . $h($k['nik']) . "</td><td>" . $h($k['namakaryawan']) . "</td>";
+			foreach ($jenis as $kode => $nama) {
+				$html .= "<td align=right>" . (isset($tersimpan[$kid][$kode]) ? number_format($tersimpan[$kid][$kode]) : '') . "</td>";
+			}
+			$html .= "</tr>";
+		}
+		$html .= "</tbody></table></details>";
+	} else {
+		$html .= "<div style='margin-top:8px;font-size:12px;color:#8a5a00'>Belum ada angka yang diunggah untuk periode dan sistem gaji ini.</div>";
+	}
+	if (substr($per, 5, 2) == '12') {
+		$html .= "<div style='margin-top:6px;font-size:12px;color:#555'>Desember: yang dihitung adalah total upload Januari-Desember " . $h(substr($per, 0, 4)) . " (pajak Januari-November yang sudah dipotong dikurangkan pada hitungan setahun).</div>";
+	}
+	echo $html . "</div>";
+}
+
+/** Unduh template Excel: daftar karyawan unit/periode/sistem gaji + satu kolom per jenis penghasilan, tinggal isi angka */
+function pphTemplateLain($unit, $per, $sistem)
+{
+	pphCekPpp($unit);
+	if (!pphTabelLainAda()) {
+		exit('Error, Tabel penghasilan lain belum dibuat di database.');
+	}
+	$jenis = pphJenisTemplate();
+	if (count($jenis) == 0) {
+		exit('Error, Belum ada jenis penghasilan lain yang aktif.');
+	}
+	$karyawan = pphKaryawanScope($per, $unit, $sistem);
+	if (count($karyawan) == 0) {
+		exit('Error, Tidak ada karyawan sistem gaji ' . $sistem . ' pada unit dan periode ini.');
+	}
+	$tersimpan = pphLainTersimpan($unit, $per, array_keys($karyawan));
+
+	require_once('lib/xlsxwriter.class.php');
+	$tipe = array('ID Karyawan' => 'string', 'NIK' => 'string', 'Nama Karyawan' => 'string');
+	$lebar = array(14, 22, 38);
+	foreach ($jenis as $kode => $nama) {
+		$tipe[$nama . ' [' . $kode . ']'] = '#,##0';
+		$lebar[] = 22;
+	}
+	$w = new XLSXWriter();
+	$w->setTitle('Template Penghasilan Lain PPh 21');
+	$w->writeSheetHeader('Template', $tipe, array('widths' => $lebar, 'freeze_rows' => 1, 'font-style' => 'bold', 'fill' => '#DDEBF7'));
+	foreach ($karyawan as $kid => $k) {
+		$baris = array((string) $kid, (string) $k['nik'], (string) $k['namakaryawan']);
+		foreach ($jenis as $kode => $nama) {
+			$baris[] = isset($tersimpan[$kid][$kode]) ? (float) $tersimpan[$kid][$kode] : '';
+		}
+		$w->writeSheetRow('Template', $baris);
+	}
+	$w->writeSheetHeader('Petunjuk', array('Petunjuk pengisian' => 'string'), array('widths' => array(110), 'font-style' => 'bold'));
+	$petunjuk = array(
+		'Template ini untuk unit ' . $unit . ', periode ' . $per . ', sistem gaji ' . $sistem . '.',
+		'Isi angka (rupiah, tanpa teks) pada kolom jenis penghasilan di sheet Template. Kosongkan bila karyawan tidak menerima.',
+		'Jangan mengubah kolom ID Karyawan, NIK, Nama Karyawan, dan judul kolom (kode di dalam tanda [ ] dipakai sistem).',
+		'Angka tidak boleh negatif. Karyawan yang tidak ada di daftar tidak bisa ditambahkan; hubungi HRD bila ada yang kurang.',
+		'Simpan sebagai .xlsx lalu Upload di halaman PPh 21. Upload ulang mengganti angka karyawan yang ada di file.',
+		'Jasa Produksi dan Dana Motivasi masuk total pendapatan PPh 21 pada kolom tersendiri (Januari-November: bulan ini, Desember: total Januari-Desember).',
+		'PPh 21 Manual adalah PPh 21 yang sudah dilaporkan secara manual (bukan penghasilan). Saat proses, PPh 21 hitungan sistem dikurangi angka ini dan selisihnya menjadi potongan yang diproses (minimal 0). Bila manual melebihi hitungan sistem, kelebihannya tidak dipotong dan dicatat sebagai lebih bayar di snapshot. Untuk Desember, PPh 21 Manual bulan Januari-November ikut dihitung sebagai PPh 21 yang sudah dibayar.',
+	);
+	foreach ($petunjuk as $teks) {
+		$w->writeSheetRow('Petunjuk', array($teks));
+	}
+
+	$nama = 'Template_PenghasilanLain_' . $unit . '_' . $per . '_' . $sistem . '.xlsx';
+	header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+	header('Content-Disposition: attachment; filename="' . $nama . '"');
+	header('Cache-Control: max-age=0');
+	$w->writeToStdOut();
+	exit;
+}
+
+/** Teks dari file/isian untuk pesan: hanya huruf, angka, spasi, dan tanda baca sederhana, maksimal 60 karakter */
+function pphBersih($teks)
+{
+	return preg_replace('/[^A-Za-z0-9 _.\-\[\]]/', '', substr((string) $teks, 0, 60));
+}
+
+/** Nomor kolom (0 = A) dari referensi sel seperti D12 */
+function pphIndeksKolom($ref)
+{
+	$n = 0;
+	if (preg_match('/^([A-Z]+)/', strtoupper($ref), $m)) {
+		foreach (str_split($m[1]) as $ch) {
+			$n = $n * 26 + (ord($ch) - 64);
+		}
+	}
+	return $n - 1;
+}
+
+/**
+ * Baca sheet pertama file .xlsx (tanpa library luar, hanya ZipArchive + SimpleXML).
+ * Mengembalikan [nomorBaris][indeksKolom] => teks. Keluar dengan pesan Error bila file tidak wajar.
+ */
+function pphBacaXlsx($file)
+{
+	if (!class_exists('ZipArchive')) {
+		exit('Error, Server belum mendukung pembacaan file Excel (ekstensi zip).');
+	}
+	$zip = new ZipArchive();
+	if ($zip->open($file) !== true) {
+		exit('Error, File bukan Excel (.xlsx) yang valid.');
+	}
+	if (PHP_VERSION_ID < 80000) {
+		libxml_disable_entity_loader(true);
+	}
+	$bacaXml = function ($nama) use ($zip) {
+		$st = $zip->statName($nama);
+		if ($st === false) {
+			return null;
+		}
+		if ($st['size'] > 20 * 1024 * 1024) {
+			exit('Error, Isi file Excel terlalu besar.');
+		}
+		$xml = $zip->getFromName($nama);
+		if ($xml === false || stripos($xml, '<!DOCTYPE') !== false || stripos($xml, '<!ENTITY') !== false) {
+			exit('Error, Isi file Excel tidak dikenali.');
+		}
+		return preg_replace('/xmlns="[^"]*"/', '', $xml, 1);   # hilangkan namespace bawaan agar xpath sederhana
+	};
+
+	## sheet pertama = nomor terkecil
+	$sheet = null;
+	$nomorTerkecil = null;
+	for ($i = 0; $i < $zip->numFiles; $i++) {
+		$nama = $zip->getNameIndex($i);
+		if (preg_match('#^xl/worksheets/sheet(\d+)\.xml$#', $nama, $m) && ($nomorTerkecil === null || (int) $m[1] < $nomorTerkecil)) {
+			$nomorTerkecil = (int) $m[1];
+			$sheet = $nama;
+		}
+	}
+	if ($sheet === null) {
+		exit('Error, Sheet data tidak ditemukan di file Excel.');
+	}
+
+	$teksBersama = array();
+	$xmlTeks = $bacaXml('xl/sharedStrings.xml');
+	if ($xmlTeks !== null) {
+		$sx = simplexml_load_string($xmlTeks, 'SimpleXMLElement', LIBXML_NONET);
+		if ($sx === false) {
+			exit('Error, Isi file Excel tidak dikenali.');
+		}
+		foreach ($sx->si as $si) {
+			$t = '';
+			foreach ($si->xpath('.//t') as $bagian) {
+				$t .= (string) $bagian;
+			}
+			$teksBersama[] = $t;
+		}
+	}
+
+	$xmlSheet = $bacaXml($sheet);
+	$sx = simplexml_load_string($xmlSheet, 'SimpleXMLElement', LIBXML_NONET);
+	if ($sx === false || !isset($sx->sheetData)) {
+		exit('Error, Isi sheet Excel tidak dikenali.');
+	}
+	$hasil = array();
+	$jumlahBaris = 0;
+	foreach ($sx->sheetData->row as $row) {
+		if (++$jumlahBaris > 6000) {
+			exit('Error, Jumlah baris di file terlalu banyak (maksimal 6000).');
+		}
+		$no = (int) $row['r'];
+		foreach ($row->c as $c) {
+			$indeks = pphIndeksKolom((string) $c['r']);
+			if ($indeks < 0 || $indeks > 60) {
+				continue;
+			}
+			$tipe = (string) $c['t'];
+			if ($tipe == 's') {
+				$nilai = isset($teksBersama[(int) $c->v]) ? $teksBersama[(int) $c->v] : '';
+			} elseif ($tipe == 'inlineStr') {
+				$nilai = '';
+				foreach ($c->xpath('.//t') as $bagian) {
+					$nilai .= (string) $bagian;
+				}
+			} else {
+				$nilai = (string) $c->v;
+			}
+			$hasil[$no][$indeks] = trim($nilai);
+		}
+	}
+	$zip->close();
+	return $hasil;
+}
+
+/** Angka dari sel Excel (angka murni atau teks seperti 1.500.000 / 1,500,000 / Rp 1500000). false = tidak valid, '' = kosong */
+function pphAngkaExcel($teks)
+{
+	$teks = trim(str_ireplace(array('Rp', ' ', "\xC2\xA0"), '', $teks));
+	if ($teks === '') {
+		return '';
+	}
+	if (preg_match('/^\d{1,3}(\.\d{3})+(,\d+)?$/', $teks)) {
+		$teks = str_replace(',', '.', str_replace('.', '', $teks));
+	} elseif (preg_match('/^\d{1,3}(,\d{3})+(\.\d+)?$/', $teks)) {
+		$teks = str_replace(',', '', $teks);
+	}
+	if (!preg_match('/^-?\d+(\.\d+)?([eE][-+]?\d+)?$/', $teks)) {
+		return false;
+	}
+	return (float) $teks;
+}
+
+/** Upload Excel penghasilan lain: semua baris divalidasi dulu; ada satu salah = tidak ada yang disimpan */
+function pphUploadLain($per, $unit, $sistem)
+{
+	global $owlPDO, $dbname;
+
+	pphCekPpp($unit);
+	if (!pphTabelLainAda()) {
+		exit('Error, Tabel penghasilan lain belum dibuat di database.');
+	}
+	$status = pphStatusPeriode($per, $unit);
+	if ($status['akunTutup']) {
+		exit('Error, Periode akuntansi ' . $per . ' SUDAH ditutup, data tidak bisa diubah.');
+	}
+	if (!isset($_FILES['file']) || $_FILES['file']['error'] !== UPLOAD_ERR_OK) {
+		exit('Error, File belum dipilih atau gagal diunggah.');
+	}
+	$tmp = $_FILES['file']['tmp_name'];
+	if (!is_uploaded_file($tmp)) {
+		exit('Error, File tidak valid.');
+	}
+	if (strtolower(pathinfo($_FILES['file']['name'], PATHINFO_EXTENSION)) !== 'xlsx') {
+		exit('Error, Format file harus .xlsx (pakai template dari tombol Unduh Template).');
+	}
+	if ($_FILES['file']['size'] > 2 * 1024 * 1024) {
+		exit('Error, Ukuran file maksimal 2 MB.');
+	}
+	if (file_get_contents($tmp, false, null, 0, 4) !== "PK\x03\x04") {
+		exit('Error, File bukan Excel (.xlsx) yang valid.');
+	}
+
+	$baris = pphBacaXlsx($tmp);
+	if (count($baris) < 2) {
+		exit('Error, File kosong atau tidak berisi data.');
+	}
+	ksort($baris);
+	$nomorKepala = key($baris);
+	$kepala = $baris[$nomorKepala];
+	unset($baris[$nomorKepala]);
+
+	## Judul kolom: kolom A = ID Karyawan, kolom jenis berformat "Nama [KODE]"
+	if (!isset($kepala[0]) || stripos($kepala[0], 'ID Karyawan') === false) {
+		exit('Error, Format file tidak sesuai: kolom pertama harus ID Karyawan. Gunakan template dari tombol Unduh Template.');
+	}
+	$jenisAktif = pphJenisTemplate();
+	$kolomJenis = array();   # indeks kolom => kode jenis
+	foreach ($kepala as $indeks => $judul) {
+		if ($indeks < 3) {
+			continue;
+		}
+		if ($judul === '') {
+			continue;
+		}
+		if (!preg_match('/\[([A-Za-z0-9_\-]{1,10})\]\s*$/', $judul, $m) || !isset($jenisAktif[$m[1]])) {
+			exit('Error, Judul kolom "' . pphBersih($judul) . '" tidak dikenali. Gunakan template terbaru dan jangan ubah judul kolom.');
+		}
+		if (in_array($m[1], $kolomJenis, true)) {
+			exit('Error, Jenis ' . pphBersih($m[1]) . ' muncul lebih dari satu kali di judul kolom.');
+		}
+		$kolomJenis[$indeks] = $m[1];
+	}
+	if (count($kolomJenis) == 0) {
+		exit('Error, Tidak ada kolom jenis penghasilan di file.');
+	}
+
+	$scope = pphKaryawanScope($per, $unit, $sistem);
+	$scopeInt = array();
+	foreach ($scope as $kid => $k) {
+		$scopeInt[(int) $kid] = $kid;
+	}
+
+	$salah = array();
+	$data = array();   # [karyawanid][kode] => jumlah
+	foreach ($baris as $no => $sel) {
+		$idTeks = isset($sel[0]) ? $sel[0] : '';
+		$adaIsi = false;
+		foreach ($kolomJenis as $indeks => $kode) {
+			if (isset($sel[$indeks]) && $sel[$indeks] !== '') {
+				$adaIsi = true;
+			}
+		}
+		if ($idTeks === '' && !$adaIsi) {
+			continue;   # baris kosong
+		}
+		if (!preg_match('/^\d{1,10}$/', $idTeks) || !isset($scopeInt[(int) $idTeks])) {
+			$salah[] = 'Baris ' . $no . ': ID Karyawan "' . pphBersih($idTeks) . '" tidak termasuk karyawan unit ' . $unit . ' sistem gaji ' . $sistem . '.';
+			continue;
+		}
+		$kid = $scopeInt[(int) $idTeks];
+		if (isset($data[$kid])) {
+			$salah[] = 'Baris ' . $no . ': karyawan ' . pphBersih($idTeks) . ' muncul lebih dari satu kali.';
+			continue;
+		}
+		$data[$kid] = array();
+		foreach ($kolomJenis as $indeks => $kode) {
+			$nilai = pphAngkaExcel(isset($sel[$indeks]) ? $sel[$indeks] : '');
+			if ($nilai === false) {
+				$salah[] = 'Baris ' . $no . ' kolom ' . pphBersih($kode) . ': angka tidak valid.';
+			} elseif ($nilai !== '' && ($nilai < 0 || $nilai > 1000000000000)) {
+				$salah[] = 'Baris ' . $no . ' kolom ' . pphBersih($kode) . ': angka harus 0 atau lebih dan wajar.';
+			} else {
+				$data[$kid][$kode] = ($nilai === '') ? 0 : $nilai;
+			}
+		}
+	}
+	if (count($salah) > 0) {
+		$tampil = array_slice($salah, 0, 12);
+		if (count($salah) > 12) {
+			$tampil[] = '... dan ' . (count($salah) - 12) . ' kesalahan lain.';
+		}
+		exit('Error, File tidak disimpan karena ada kesalahan:' . "\n" . implode("\n", $tampil));
+	}
+	if (count($data) == 0) {
+		exit('Error, Tidak ada baris karyawan yang bisa dibaca di file.');
+	}
+
+	$totalJenis = array();
+	$jumlahNilai = 0;
+	try {
+		$owlPDO->beginTransaction();
+		$idHitung = array();
+		foreach (array_keys($data) as $kid) {
+			$idHitung[] = $owlPDO->quote((string) $kid);
+		}
+		$kodeIn = array();
+		foreach ($kolomJenis as $kode) {
+			$kodeIn[] = $owlPDO->quote($kode);
+		}
+		foreach (array_chunk($idHitung, 200) as $potong) {
+			$owlPDO->exec("delete from " . $dbname . ".sdm_pph21_penghasilanlain where kodeorg='" . $unit . "' and periode='" . $per . "' and kodejenis in (" . implode(',', $kodeIn) . ") and karyawanid in (" . implode(',', $potong) . ")");
+		}
+		$stmt = $owlPDO->prepare("insert into " . $dbname . ".sdm_pph21_penghasilanlain (`kodeorg`,`periode`,`karyawanid`,`kodejenis`,`jumlah`,`diinputoleh`,`diinputpada`) values (?, ?, ?, ?, ?, ?, now())");
+		foreach ($data as $kid => $perJenis) {
+			foreach ($perJenis as $kode => $jml) {
+				if ($jml > 0) {
+					$stmt->execute(array($unit, $per, (string) $kid, $kode, $jml, $_SESSION['standard']['userid']));
+					$totalJenis[$kode] = (isset($totalJenis[$kode]) ? $totalJenis[$kode] : 0) + $jml;
+					$jumlahNilai++;
+				}
+			}
+		}
+		$owlPDO->commit();
+	} catch (PDOException $e) {
+		if ($owlPDO->inTransaction()) {
+			$owlPDO->rollBack();
+		}
+		error_log('sdm_slave_3pph21_v3 upload lain: ' . $e->getMessage());
+		exit('Error, Data tidak dapat disimpan; tidak ada data yang berubah.');
+	}
+
+	$rincian = array();
+	foreach ($totalJenis as $kode => $jml) {
+		$rincian[] = $jenisAktif[$kode] . ' Rp ' . number_format($jml, 0);
+	}
+	echo 'Berhasil, ' . count($data) . ' karyawan dibaca, ' . $jumlahNilai . ' angka disimpan' . (count($rincian) > 0 ? ' (' . implode(', ', $rincian) . ')' : '') . '.';
+}
+
+/** Hapus seluruh angka upload unit & periode ini untuk karyawan pada sistem gaji terpilih */
+function pphHapusLain($per, $unit, $sistem)
+{
+	global $owlPDO, $dbname;
+
+	pphCekPpp($unit);
+	if (!pphTabelLainAda()) {
+		exit('Error, Tabel penghasilan lain belum dibuat di database.');
+	}
+	$status = pphStatusPeriode($per, $unit);
+	if ($status['akunTutup']) {
+		exit('Error, Periode akuntansi ' . $per . ' SUDAH ditutup, data tidak bisa dihapus.');
+	}
+	$scope = pphKaryawanScope($per, $unit, $sistem);
+	$terhapus = 0;
+	try {
+		$owlPDO->beginTransaction();
+		$idHitung = array();
+		foreach (array_keys($scope) as $kid) {
+			$idHitung[] = $owlPDO->quote((string) $kid);
+		}
+		foreach (array_chunk($idHitung, 200) as $potong) {
+			$terhapus += $owlPDO->exec("delete from " . $dbname . ".sdm_pph21_penghasilanlain where kodeorg='" . $unit . "' and periode='" . $per . "' and karyawanid in (" . implode(',', $potong) . ")");
+		}
+		$owlPDO->commit();
+	} catch (PDOException $e) {
+		if ($owlPDO->inTransaction()) {
+			$owlPDO->rollBack();
+		}
+		error_log('sdm_slave_3pph21_v3 hapus lain: ' . $e->getMessage());
+		exit('Error, Data tidak dapat dihapus; tidak ada data yang berubah.');
+	}
+	echo 'Berhasil, ' . $terhapus . ' angka upload dihapus.';
+}
+
+/** SQL daftar karyawan yang ikut perhitungan (histori bulanan bila ada, selain itu data karyawan saat ini); tanpa filter sistem gaji */
+function pphSqlKaryawan($per, $unit)
+{
+	global $dbname;
+
+	$adaHistori = pphAmbilSemua("select karyawanid from " . $dbname . ".datakaryawan_hist where approval_status='8' and version_type='B' and lokasitugas='" . $unit . "' and periodegaji='" . $per . "' and statuspajak <> '' and tipekaryawan !=0 ");
+	if (count($adaHistori) > 0) {
+		return "select * from " . $dbname . ".datakaryawan_hist where approval_status='8' and version_type='B' and lokasitugas='" . $unit . "' and periodegaji='" . $per . "' and statuspajak <> ''  and (periodeakhirgaji>='" . $per . "' or periodeakhirgaji='') and ( tanggalmasuk<='" . $per . "-31' or tanggalmasuk='0000-00-00' or tanggalmasuk is null) and tipekaryawan !=0";
+	}
+	return "select * from " . $dbname . ".datakaryawan where lokasitugas='" . $unit . "' and statuspajak <> '' and (periodeakhirgaji>='" . $per . "' or periodeakhirgaji='') and ( tanggalmasuk<='" . $per . "-31' or tanggalmasuk='0000-00-00' or tanggalmasuk is null) and tipekaryawan !=0 ";
 }
 
 
 #=== Tampilan / Excel perhitungan PPh 21 ===
+/**
+ * Tampilan, Excel, dan PDF hanya memuat karyawan yang kena PPh 21 (hasil hitungan tidak nol) atau yang masih punya
+ * hasil tersimpan tidak nol (supaya selisihnya terlihat). Dihitung dua kali: pertama tanpa filter untuk tahu siapa
+ * yang kena PPh 21, lalu tampilan dengan filter. Mode 'proses' (simpan) menghitung semua karyawan tanpa filter.
+ */
 function pphPreview($per, $unit, $tipe)
 {
-	global $dbname;
+	global $dbname, $pphHasil, $pphFilterId, $pphRincian;
+
+	$pphFilterId = null;
+	if ($tipe == 'proses') {
+		pphPreviewInti($per, $unit, $tipe);
+		return;
+	}
+
+	ob_start();
+	pphPreviewInti($per, $unit, 'proses');
+	ob_end_clean();
+	$filter = array();
+	foreach ($pphHasil as $kid => $hasil) {
+		if ($hasil[0] != 0 || $hasil[1] != 0 || (isset($pphRincian[$kid]) && ($pphRincian[$kid]['sistem21'] != 0 || $pphRincian[$kid]['manual'] != 0 || $pphRincian[$kid]['lebih'] != 0))) {
+			$filter[$kid] = true;
+		}
+	}
+	foreach (pphAmbilSemua("select distinct karyawanid from " . $dbname . ".sdm_gaji where kodeorg='" . $unit . "' and idkomponen='42' and periodegaji='" . $per . "' and jumlah <> 0") as $b) {
+		$filter[$b['karyawanid']] = true;
+	}
+	$pphFilterId = $filter;
+	pphPreviewInti($per, $unit, $tipe);
+}
+
+/** Perhitungan PPh 21 per karyawan + tampilan; dipanggil lewat pphPreview */
+function pphPreviewInti($per, $unit, $tipe)
+{
+	global $dbname, $pphHasil, $sistem, $pphFilterId, $pphRincian;
+	$pphHasil = array();   # [karyawanid] => array(PPh 21, tunjangan PPh 21) dibulatkan; dipakai pphProsesSemua
+	$pphRincian = array(); # [karyawanid] => rincian pendapatan yang dipakai (snapshot); dipakai pphProsesSemua
 
 	#--- 1. Pastikan gaji periode ini sudah diproses
 	$cek = pphAmbilSemua("select count(*) as jmlhrow from " . $dbname . ".sdm_gaji where periodegaji = '" . $per . "' and kodeorg = '" . $unit . "'");
@@ -245,12 +1083,17 @@ function pphPreview($per, $unit, $tipe)
 	}
 
 	#--- 3. Daftar karyawan (histori bulanan bila ada, selain itu data karyawan saat ini)
-	$adaHistori = pphAmbilSemua("select karyawanid from " . $dbname . ".datakaryawan_hist where approval_status='8' and version_type='B' and lokasitugas='" . $unit . "' and periodegaji='" . $per . "' and statuspajak <> '' and tipekaryawan !=0 ");
-	if (count($adaHistori) > 0) {
-		$sqlKaryawan = "select * from " . $dbname . ".datakaryawan_hist where approval_status='8' and version_type='B' and lokasitugas='" . $unit . "' and periodegaji='" . $per . "' and statuspajak <> ''  and (periodeakhirgaji>='" . $per . "' or periodeakhirgaji='') and ( tanggalmasuk<='" . $per . "-31' or tanggalmasuk='0000-00-00' or tanggalmasuk is null) and tipekaryawan !=0";
-	} else {
-		$sqlKaryawan = "select * from " . $dbname . ".datakaryawan where lokasitugas='" . $unit . "' and statuspajak <> '' and (periodeakhirgaji>='" . $per . "' or periodeakhirgaji='') and ( tanggalmasuk<='" . $per . "-31' or tanggalmasuk='0000-00-00' or tanggalmasuk is null) and tipekaryawan !=0 ";
+	$sqlKaryawan = pphSqlKaryawan($per, $unit);
+
+	## Karyawan yang sistem gajinya belum diisi (tidak masuk Bulanan maupun Harian): hanya dihitung untuk peringatan
+	$jmlKosong = 0;
+	$hitungKosong = pphAmbilSemua(preg_replace('/^select \*/', 'select count(*) as n', $sqlKaryawan) . " and sistemgaji not in ('Bulanan','Harian')");
+	if (count($hitungKosong) > 0) {
+		$jmlKosong = (int) $hitungKosong[0]['n'];
 	}
+
+	## Hanya karyawan dengan sistem gaji terpilih (Bulanan / Harian) menurut data karyawan
+	$sqlKaryawan .= " and sistemgaji='" . $sistem . "'";
 
 	#--- 4. Komponen gaji: yang tidak masuk perhitungan PPh 21 dikeluarkan
 	$daftarKecuali = array();
@@ -294,7 +1137,7 @@ function pphPreview($per, $unit, $tipe)
 	if ($bulan == '12') {
 		## PPh 21 yang sudah dipotong Jan-Nov (komponen 42)
 		$sqlJanNov = "select a.*,plus from " . $dbname . ".sdm_gaji a left join " . $dbname . ".sdm_ho_component b on a.idkomponen=b.id
-			where 1=1 and idkomponen = '42' and (periodegaji <= '" . $tahunberjalan . "-11" . "' and periodegaji >= '" . $tahunberjalan . "-01" . "') and kodeorg='" . $unit . "' and jumlah > 0 ";
+			where 1=1 and idkomponen = '42' and (periodegaji <= '" . $tahunberjalan . "-11" . "' and periodegaji >= '" . $tahunberjalan . "-01" . "') and kodeorg='" . $unit . "' and jumlah <> 0 ";
 		foreach (pphAmbilSemua($sqlJanNov) as $bar) {
 			if (!isset($pph21_jan_nov[$bar['karyawanid']])) {
 				$pph21_jan_nov[$bar['karyawanid']] = 0;
@@ -307,6 +1150,27 @@ function pphPreview($per, $unit, $tipe)
 	$nmgolongan    = makeOption($dbname, 'sdm_5golongan', 'kodegolongan,namagolongan');
 	$nmjabatan     = makeOption($dbname, 'sdm_5jabatan', 'kodejabatan,namajabatan');
 	$optNmKomponen = makeOption($dbname, 'sdm_ho_component', 'id,name');
+
+	#--- Penghasilan perjalanan dinas (khusus PT PPP): PJD yang klaimnya sudah dibayar di kas bank (diposting) pada periode ini.
+	#    Dihitung langsung dari data PJD dan kas bank, tidak lewat sdm_gaji, jadi tidak masuk slip gaji dan aktual rekap gaji.
+	#    Jan-Nov: klaim dibayar di bulan periode; Desember: seluruh tahun (Jan-Des), sehingga yang belum terhitung bulanan ikut.
+	$pjdKaryawan = array();   # penghasilan PJD per karyawan (kolom sendiri, ikut total pendapatan)
+	$adaPjd = false;
+	if (getindukPT($unit) == 'PPP') {
+		$pjdPerKaryawan = array();
+		foreach (pphPjdPeriode($unit, $per) as $barisPjd) {
+			if (!isset($pjdPerKaryawan[$barisPjd['karyawanid']])) {
+				$pjdPerKaryawan[$barisPjd['karyawanid']] = 0;
+			}
+			$pjdPerKaryawan[$barisPjd['karyawanid']] += $barisPjd['jumlah'];
+		}
+		foreach ($pjdPerKaryawan as $kidPjd => $jmlPjd) {
+			if ($jmlPjd > 0) {
+				$adaPjd = true;
+				$pjdKaryawan[$kidPjd] = $jmlPjd;
+			}
+		}
+			}
 	$optKategori   = makeOption($dbname, 'sdm_5tarifpph21', 'status,kategori');
 
 	$dtkarid = array();
@@ -318,8 +1182,10 @@ function pphPreview($per, $unit, $tipe)
 	$jabatan = array();
 	$ptkpnya = array();
 	$punyaNpwp = array();
+	$sistemKar = array();
 	foreach (pphAmbilSemua($sqlKaryawan) as $bar) {
 		$id = $bar['karyawanid'];
+		$sistemKar[$id]   = $bar['sistemgaji'];
 		$dtkarid[$id]      = $id;
 		$nik[$id]          = $bar['nik'];
 		$nmkar[$id]        = $bar['namakaryawan'];
@@ -331,10 +1197,61 @@ function pphPreview($per, $unit, $tipe)
 		$punyaNpwp[$id]    = pphPunyaNpwp(@$bar['npwp'], @$bar['noktp']);
 	}
 
+	## Penghasilan lain dari upload Excel (khusus PT PPP): satu kolom per jenis yang ada nilainya, masuk total pendapatan
+	$kolLain = array();        # kodejenis => nama kolom
+	$lainKaryawan = array();   # [karyawanid][kodejenis] => jumlah
+	$gtLain = array();
+	if (getindukPT($unit) == 'PPP' && pphTabelLainAda()) {
+		$namaLain = pphJenisLain(true);
+		foreach (pphLainPeriode($unit, $per) as $kidLain => $perJenisLain) {
+			if (isset($dtkarid[$kidLain])) {
+				$lainKaryawan[$kidLain] = $perJenisLain;
+			}
+		}
+		foreach ($namaLain as $kodeLain => $nmLain) {
+			foreach ($lainKaryawan as $perJenisLain) {
+				if (isset($perJenisLain[$kodeLain]) && $perJenisLain[$kodeLain] > 0) {
+					$kolLain[$kodeLain] = $nmLain;
+					$gtLain[$kodeLain] = 0;
+					break;
+				}
+			}
+		}
+	}
+
+	## PPh 21 manual (khusus PT PPP): PPh 21 yang sudah dilaporkan manual. Dikurangkan dari hitungan sistem (hasil bisa plus atau minus);
+	## untuk Desember, manual Jan-Nov dihitung sebagai PPh 21 yang sudah dibayar.
+	$manualPeriode = array();   # [karyawanid] => PPh 21 manual periode ini
+	$manualJanNov = array();    # [karyawanid] => PPh 21 manual Januari-November (Desember)
+	if (getindukPT($unit) == 'PPP' && pphTabelLainAda()) {
+		$dataManual = pphManualPeriode($unit, $per);
+		$manualPeriode = $dataManual['ini'];
+		$manualJanNov = $dataManual['jannov'];
+	}
+	$adaManual = (count(array_intersect_key($manualPeriode, $dtkarid)) > 0);
+
+	## Karyawan tanpa pendapatan periode ini (komponen pendapatan, PJD, penghasilan lain semuanya 0) tidak dihitung;
+	## pada tampilan / Excel / PDF karyawan yang tidak kena PPh 21 juga disembunyikan (lihat pphPreview)
+	$jmlTanpaPendapatan = 0;
+	foreach ($dtkarid as $kidCek) {
+		$pendapatanCek = isset($pjdKaryawan[$kidCek]) ? $pjdKaryawan[$kidCek] : 0;
+		foreach ($dtkomplus as $komCek) {
+			$pendapatanCek += isset($rupiah[$kidCek][$komCek]) ? $rupiah[$kidCek][$komCek] : 0;
+		}
+		if (isset($lainKaryawan[$kidCek])) {
+			$pendapatanCek += array_sum($lainKaryawan[$kidCek]);
+		}
+		if ($pendapatanCek <= 0 || ($pphFilterId !== null && !isset($pphFilterId[$kidCek]))) {
+			unset($dtkarid[$kidCek]);
+			$jmlTanpaPendapatan++;
+		}
+	}
+
 	$jmlKomplus = count($dtkomplus);
 	$jmlKomin   = count($dtkomin);
 	$styleUpper = "style='text-transform: uppercase;'";
 	$adaExcel   = ($tipe == 'excel' || $tipe == 'pdf');   # tanpa elemen khusus layar
+	$kelasRinci = $adaExcel ? '' : " class='kolRinci'";   # kolom rincian komponen bisa dilipat di layar
 
 	#--- 6. Huruf kolom hasil hitung (dipakai di judul & rumus), urut sesuai tampilan
 	$urutHuruf = 0;
@@ -382,6 +1299,18 @@ function pphPreview($per, $unit, $tipe)
 			#tabelpph21 tbody tr:hover td {background-color:#FFF7CC}
 			#tabelpph21 .rumus {display:block;font-weight:normal;font-size:11px;text-transform:none;color:#FFE699}
 			#tabelpph21 td {white-space:nowrap}
+				#tabelpph21.sembunyiRinci .kolRinci {display:none}
+				#ringkasPph {display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;align-items:stretch}
+				#ringkasPph .kartu {display:flex;flex-direction:column;justify-content:flex-start;gap:2px;padding:8px 14px;border:1px solid #c9d6e2;border-radius:6px;background:#F7FAFD;box-sizing:border-box}
+				#ringkasPph .kartu span {display:block;font-size:11px;color:#555}
+				#ringkasPph .kartu b {font-size:16px;line-height:1.3}
+				#barPph {display:flex;align-items:center;gap:18px;flex-wrap:wrap;margin:0 2px 10px 2px;padding:8px 14px;background:#fff;border:1px solid #c9d6e2;border-radius:6px;font-size:13px}
+				#barPph button {height:30px;margin:0}
+				#barPph label {display:flex;align-items:center;gap:6px;cursor:pointer;color:#333}
+				#barPph input[type=checkbox] {margin:0;width:16px;height:16px;cursor:pointer}
+				#barPph .cari {margin-left:auto;display:flex;align-items:center;gap:10px}
+				#barPph .cari input {width:250px;height:30px;padding:0 10px;border:1px solid #b9c7d6;border-radius:5px;box-sizing:border-box;font-size:13px}
+				#barPph #jmlTampil {font-size:12px;color:#555}
 		</style>";
 		if ($bulan == '12') {
 			$caraHitung = "Cara hitung Desember: PPh 21 setahun (neto - PTKP, tarif Pasal 17) dikurangi PPh 21 Januari-November.";
@@ -389,7 +1318,7 @@ function pphPreview($per, $unit, $tipe)
 			$caraHitung = "Cara hitung Januari-November: PPh 21 = bruto bulan ini x tarif efektif rata-rata (TER) kategori A/B/C.";
 		}
 		$stream .= "<div style='margin:0 2px 6px 2px;font-size:11px;color:#555'>" . $caraHitung . " Kolom berhuruf dihitung dengan rumus di bawah judulnya.</div>";
-		$stream .= "<div class='table-scroll' style='height:900px; overflow-y:auto;'><table id=tabelpph21 class=sortable cellspacing=1 cellpadding=5 style='width:100%;'>";
+		$stream .= "<div class='table-scroll' style='height:900px; overflow-y:auto;'><table id=tabelpph21 class='sortable sembunyiRinci' cellspacing=1 cellpadding=5 style='width:100%;'>";
 	}
 
 	# th bentuk 1: <th align=center style rowspan/colspan>
@@ -402,8 +1331,8 @@ function pphPreview($per, $unit, $tipe)
 		return "<th align=center " . $styleUpper . " " . $atribut . ">(" . $hrf . ") " . $judul . $rumusHtml . "</th>";
 	};
 	# th bentuk 2 (nama komponen): <th style align=center rowspan=2>
-	$thKomponen = function ($teks) use ($styleUpper) {
-		return "<th " . $styleUpper . " align=center rowspan=2>" . $teks . "</th>";
+	$thKomponen = function ($teks) use ($styleUpper, $kelasRinci) {
+		return "<th " . $styleUpper . " align=center rowspan=2" . $kelasRinci . ">" . $teks . "</th>";
 	};
 
 	$stream .= "<thead>";
@@ -415,19 +1344,29 @@ function pphPreview($per, $unit, $tipe)
 	$stream .= $th($_SESSION['lang']['statuspajak'], 'rowspan=3');
 	$stream .= $th($_SESSION['lang']['bagian'], 'rowspan=3');
 	$stream .= $th($_SESSION['lang']['jabatan'], 'rowspan=3');
-	$stream .= $th('PENDAPATAN', 'colspan=' . $jmlKomplus);
+	$stream .= $th('PENDAPATAN', 'colspan=' . $jmlKomplus . $kelasRinci);
+	if ($adaPjd) {
+		$stream .= $th('PERJALANAN DINAS', 'rowspan=3');
+	}
+	foreach ($kolLain as $nmLain) {
+		$stream .= $th(strtoupper(htmlspecialchars($nmLain, ENT_QUOTES)), 'rowspan=3 title="Upload Excel (penghasilan lain), masuk total pendapatan"');
+	}
+	$ketPjd = $adaPjd ? ' + Perjalanan Dinas' : '';
+	if (count($kolLain) > 0) {
+		$ketPjd .= ' + ' . implode(' + ', $kolLain);
+	}
 
 	if ($bulan == '12') {
-		$stream .= $thRumus('GAJI BRUTO SETAHUN', $hBruto, 'Jumlah pendapatan Jan-Des', 'rowspan=3');
+		$stream .= $thRumus('GAJI BRUTO SETAHUN', $hBruto, 'Jumlah pendapatan Jan-Des' . $ketPjd, 'rowspan=3');
 		$stream .= $thRumus('TJ PPh 21', $hTj, 'Tunjangan pajak', 'rowspan=3');
 		$stream .= $thRumus('BIAYA JABATAN', $hBiaya, number_format($persenjabatan) . '% x (' . $hBruto . ' + ' . $hTj . '), maks ' . number_format($maxjabatan * 12) . '/th', 'rowspan=3');
 	} else {
-		$stream .= $thRumus('TOTAL PENDAPATAN', $hPend, 'Jumlah pendapatan bulan ini', 'rowspan=3');
+		$stream .= $thRumus('TOTAL PENDAPATAN', $hPend, 'Jumlah pendapatan bulan ini' . $ketPjd, 'rowspan=3');
 		$stream .= $thRumus('TJ PAJAK', $hTj, 'Tunjangan pajak', 'rowspan=3');
 	}
 
 	if ($jmlKomin > 0) {
-		$stream .= $th($bulan == '12' ? 'PENGURANG PAJAK' : 'PENGURANG', 'colspan=' . $jmlKomin);
+		$stream .= $th($bulan == '12' ? 'PENGURANG PAJAK' : 'PENGURANG', 'colspan=' . $jmlKomin . $kelasRinci);
 		$stream .= $thRumus('TOTAL PENGURANG', $hPeng, 'Jumlah pengurang', 'rowspan=3');
 		if ($bulan == '12') {
 			$stream .= $thRumus('PENGHASILAN NETO', $hNeto, $rumusNeto, 'rowspan=3');
@@ -445,10 +1384,27 @@ function pphPreview($per, $unit, $tipe)
 		$stream .= $thRumus('TAMBAHAN 20% TANPA NPWP', $hTambah, '20% x ' . $hPphSetahun . ' (bila tanpa NPWP/NIK)', 'rowspan=3');
 		$stream .= $thRumus('PPH 21 TERHUTANG', $hTerhutang, $hPphSetahun . ' + ' . $hTambah, 'rowspan=3');
 		$stream .= $th('PERBANDINGAN PPH 21', 'colspan=2');
-		$stream .= $thRumus('PPH 21 DESEMBER', $hFinal, $hTahunan . ' - ' . $hJanNov, 'rowspan=3');
+		if ($adaManual) {
+			$stream .= $th('PPH 21 SISTEM', 'rowspan=3 title="PPh 21 hitungan sistem (terhutang setahun dikurangi Jan-Nov), sebelum dikurangi PPh 21 manual"');
+			$stream .= $th('PPH 21 MANUAL', 'rowspan=3 title="PPh 21 yang sudah dilaporkan secara manual (upload Excel, kolom PPh 21 Manual)"');
+			$stream .= $thRumus('SELISIH PPH 21 DIPROSES', $hFinal, 'Sistem - Manual (min. 0)', 'rowspan=3');
+			$stream .= $th('LEBIH BAYAR', 'rowspan=3 title="PPh 21 manual yang melebihi hitungan sistem: tidak dipotong, perlu dikembalikan atau dikoreksi"');
+		} else {
+			$stream .= $thRumus('PPH 21 DESEMBER', $hFinal, $hTahunan . ' - ' . $hJanNov, 'rowspan=3');
+		}
 	} else {
 		$stream .= $th('PERHITUNGAN PPH 21 (TER)', 'colspan=3');
-		$stream .= $thRumus('PPH 21 BULAN INI', $hFinal, $hBruto . ' x ' . $hTer . ' (+20% bila tanpa NPWP/NIK)', 'rowspan=3');
+		if ($adaManual) {
+			$stream .= $th('PPH 21 SISTEM', 'rowspan=3 title="PPh 21 hitungan sistem (bruto x TER), sebelum dikurangi PPh 21 manual"');
+			$stream .= $th('PPH 21 MANUAL', 'rowspan=3 title="PPh 21 yang sudah dilaporkan secara manual (upload Excel, kolom PPh 21 Manual)"');
+			$stream .= $thRumus('SELISIH PPH 21 DIPROSES', $hFinal, 'Sistem - Manual (min. 0)', 'rowspan=3');
+			$stream .= $th('LEBIH BAYAR', 'rowspan=3 title="PPh 21 manual yang melebihi hitungan sistem: tidak dipotong, perlu dikembalikan atau dikoreksi"');
+		} else {
+			$stream .= $thRumus('PPH 21 BULAN INI', $hFinal, $hBruto . ' x ' . $hTer . ' (+20% bila tanpa NPWP/NIK)', 'rowspan=3');
+		}
+	}
+	if (!$adaExcel) {
+		$stream .= $th('TERSIMPAN', 'rowspan=3 title="Hasil proses sebelumnya yang tersimpan (komponen PPh 21 di gaji)"');
 	}
 	$stream .= "</tr>";
 
@@ -480,6 +1436,7 @@ function pphPreview($per, $unit, $tipe)
 
 	# total
 	$gttdtkompus = 0;
+	$gtPjdKolom = 0;
 	$gttdtkommin = 0;
 	$gtTjpajak = 0;
 	$gtbiayajabatan = 0;
@@ -488,6 +1445,18 @@ function pphPreview($per, $unit, $tipe)
 	$gtpph21terutanghitung = 0;
 	$gtpph21_jan_nov = 0;
 	$gtPph21 = 0;
+	$gtSistem21 = 0;
+	$gtManual21 = 0;
+	$gtLebih = 0;
+	$gtTersimpan = 0;
+
+	## PPh 21 yang sudah tersimpan dari proses sebelumnya (pembanding di layar)
+	$tersimpan = array();
+	if (!$adaExcel) {
+		foreach (pphAmbilSemua("select karyawanid, sum(jumlah) as jumlah from " . $dbname . ".sdm_gaji where kodeorg='" . $unit . "' and idkomponen='42' and periodegaji='" . $per . "' group by karyawanid") as $bar) {
+			$tersimpan[$bar['karyawanid']] = $bar['jumlah'];
+		}
+	}
 
 	foreach ($dtkarid as $karid) {
 		$no++;
@@ -520,9 +1489,26 @@ function pphPreview($per, $unit, $tipe)
 		$totalPendapatan = 0;
 		foreach ($dtkomplus as $komplus) {
 			$nilai = isset($rupiah[$karid][$komplus]) ? $rupiah[$karid][$komplus] : 0;
-			$stream .= "<td align=right >" . number_format($nilai, 0) . "</td>";
+			$stream .= "<td align=right" . $kelasRinci . " >" . number_format($nilai, 0) . "</td>";
 			$totalPendapatan += $nilai;
 			$gttdtkompus += $nilai;
+		}
+		$pendapatanGaji = $totalPendapatan;   # jumlah komponen pendapatan dari gaji (untuk snapshot)
+		## Perjalanan Dinas (PT PPP): kolom sendiri di luar grup PENDAPATAN, tetapi masuk total pendapatan
+		if ($adaPjd) {
+			$pjdKar = isset($pjdKaryawan[$karid]) ? $pjdKaryawan[$karid] : 0;
+			$stream .= "<td align=right >" . number_format($pjdKar, 0) . "</td>";
+			$totalPendapatan += $pjdKar;
+			$gttdtkompus += $pjdKar;
+			$gtPjdKolom += $pjdKar;
+		}
+		## Penghasilan lain (upload Excel): kolom sendiri, masuk total pendapatan
+		foreach ($kolLain as $kodeLain => $nmLain) {
+			$nilaiLain = isset($lainKaryawan[$karid][$kodeLain]) ? $lainKaryawan[$karid][$kodeLain] : 0;
+			$stream .= "<td align=right >" . number_format($nilaiLain, 0) . "</td>";
+			$totalPendapatan += $nilaiLain;
+			$gttdtkompus += $nilaiLain;
+			$gtLain[$kodeLain] += $nilaiLain;
 		}
 		$stream .= "<td align=right>" . number_format($totalPendapatan) . "</td>";
 
@@ -552,7 +1538,7 @@ function pphPreview($per, $unit, $tipe)
 			if ($jmlKomin > 0) {
 				foreach ($dtkomin as $kommin) {
 					$nilai = isset($rupiah[$karid][$kommin]) ? $rupiah[$karid][$kommin] : 0;
-					$stream .= "<td align=right >" . number_format($nilai, 0) . "</td>";
+					$stream .= "<td align=right" . $kelasRinci . " >" . number_format($nilai, 0) . "</td>";
 					$gttdtkommin += $nilai;
 				}
 				$stream .= "<td align=right >" . number_format($totalPengurang, 0) . "</td>";
@@ -591,17 +1577,35 @@ function pphPreview($per, $unit, $tipe)
 			$gtpph21terutanghitung += $pph21Terhutang;
 
 			$stream .= "<td align=right >" . number_format($pph21Terhutang, 0) . " </td>";
-			$janNov = isset($pph21_jan_nov[$karid]) ? $pph21_jan_nov[$karid] : 0;
+			$janNov = (isset($pph21_jan_nov[$karid]) ? $pph21_jan_nov[$karid] : 0) + (isset($manualJanNov[$karid]) ? $manualJanNov[$karid] : 0);   # hasil proses Jan-Nov + PPh 21 manual Jan-Nov
 			$stream .= "<td align=right >" . number_format($janNov, 0) . " </td>";
 			$gtpph21_jan_nov += $janNov;
 
 			## PPh 21 Desember = terhutang setahun - yang sudah dipotong Jan-Nov
 			$pph21 = $pph21Terhutang - $janNov;
+			$lebihAwal = ($pph21 < 0) ? -$pph21 : 0;   # sudah dibayar Jan-Nov melebihi terhutang setahun
 			if ($pph21 < 0) {
 				$pph21 = 0;
 			}
+			## PPh 21 manual (sudah dilaporkan) dikurangkan dari hitungan sistem; hasil bisa plus atau minus
+			$pph21Sistem = $pph21;
+			$manualKar = isset($manualPeriode[$karid]) ? $manualPeriode[$karid] : 0;
+			$selisihMentah = $pph21Sistem - $manualKar;
+			$pph21 = max(0, $selisihMentah);                          # potongan di slip tidak pernah minus
+			$lebihBayar = $lebihAwal + max(0, -$selisihMentah);       # kelebihan bayar: tidak dipotong, dicatat di snapshot
+			$gtLebih += round($lebihBayar);
+			$gtSistem21 += round($pph21Sistem);
+			$gtManual21 += $manualKar;
+			if ($adaManual) {
+				$stream .= "<td align=right >" . number_format($pph21Sistem, 0) . "</td>";
+				$stream .= "<td align=right >" . number_format($manualKar, 0) . "</td>";
+			}
 			$stream .= "<td align=right id='pph21x" . $no . "' style='font-weight:bold;background-color:#FFF2CC'>" . number_format($pph21, 0) . "</td>";
-			$gtPph21 += $pph21;
+			if ($adaManual) {
+				$stream .= "<td align=right" . ($lebihBayar > 0 ? " style='color:#b42318;font-weight:bold'" : "") . ">" . number_format($lebihBayar, 0) . "</td>";
+			}
+			$gtPph21 += round($pph21);   # dijumlah per karyawan dalam rupiah bulat, sama dengan yang disimpan
+			$pphHasil[$karid] = array(round($pph21), round($tunjangan));
 			$dataPdf[] = array($no, $nik[$karid], $nmkar[$karid], $statuspajak[$karid], $totalPendapatan + $tunjangan, $biayaJabatan, $totalPengurang, $gajiNetto, $ptkpnya[$karid], $pkpHitung, $pph21Setahun + $denda, $janNov, $pph21);
 		} else {
 			#### JAN-NOV: tarif efektif rata-rata (TER) ####
@@ -625,7 +1629,7 @@ function pphPreview($per, $unit, $tipe)
 			if ($jmlKomin > 0) {
 				foreach ($dtkomin as $kommin) {
 					$nilai = isset($rupiah[$karid][$kommin]) ? $rupiah[$karid][$kommin] : 0;
-					$stream .= "<td align=right >" . number_format($nilai, 0) . "</td>";
+					$stream .= "<td align=right" . $kelasRinci . " >" . number_format($nilai, 0) . "</td>";
 					$gttdtkommin += $nilai;
 				}
 				$stream .= "<td align=right >" . number_format($totalPengurang, 0) . "</td>";
@@ -639,33 +1643,93 @@ function pphPreview($per, $unit, $tipe)
 			$tambahanNpwp = $punyaNpwp[$karid] ? '' : ' (+20%)';
 			$stream .= "<td align=center>" . number_format($tarifTer, 2) . $tambahanNpwp . "</td>";
 
+			$lebihAwal = 0;
 			$pph21 = $gajiBruto * $tarifTer / 100;
 			if (!$punyaNpwp[$karid]) {
 				$pph21 = $pph21 * 1.2;
 			}
+			## PPh 21 manual (sudah dilaporkan) dikurangkan dari hitungan sistem; hasil bisa plus atau minus
+			$pph21Sistem = $pph21;
+			$manualKar = isset($manualPeriode[$karid]) ? $manualPeriode[$karid] : 0;
+			$selisihMentah = $pph21Sistem - $manualKar;
+			$pph21 = max(0, $selisihMentah);                          # potongan di slip tidak pernah minus
+			$lebihBayar = $lebihAwal + max(0, -$selisihMentah);       # kelebihan bayar: tidak dipotong, dicatat di snapshot
+			$gtLebih += round($lebihBayar);
+			$gtSistem21 += round($pph21Sistem);
+			$gtManual21 += $manualKar;
+			if ($adaManual) {
+				$stream .= "<td align=right >" . number_format($pph21Sistem, 0) . "</td>";
+				$stream .= "<td align=right >" . number_format($manualKar, 0) . "</td>";
+			}
 			$stream .= "<td align=right id='pph21x" . $no . "' style='font-weight:bold;background-color:#FFF2CC'>" . number_format($pph21, 0) . "</td>";
-			$gtPph21 += $pph21;
+			if ($adaManual) {
+				$stream .= "<td align=right" . ($lebihBayar > 0 ? " style='color:#b42318;font-weight:bold'" : "") . ">" . number_format($lebihBayar, 0) . "</td>";
+			}
+			$gtPph21 += round($pph21);   # dijumlah per karyawan dalam rupiah bulat, sama dengan yang disimpan
+			$pphHasil[$karid] = array(round($pph21), round($tunjangan));
 			$dataPdf[] = array($no, $nik[$karid], $nmkar[$karid], $statuspajak[$karid], @$optKategori[$statuspajak[$karid]], $totalPendapatan, $tunjangan, $gajiBruto, $tarifTer, $pph21);
 		}
 
+		## Rincian yang dipakai pada hitungan ini (disimpan sebagai snapshot saat Proses PPh 21)
+		$pjdSnap = isset($pjdKaryawan[$karid]) ? $pjdKaryawan[$karid] : 0;
+		$lainSnap = array();
+		if (isset($lainKaryawan[$karid])) {
+			foreach ($lainKaryawan[$karid] as $kodeSnap => $jmlSnap) {
+				if ($jmlSnap > 0) {
+					$lainSnap[$kodeSnap] = $jmlSnap;
+				}
+			}
+		}
+		$pphRincian[$karid] = array(
+			'sistem' => isset($sistemKar[$karid]) ? $sistemKar[$karid] : $sistem,
+			'metode' => ($bulan == '12') ? 'TAHUNAN' : 'TER',
+			'gaji' => $pendapatanGaji,
+			'pjd' => $pjdSnap,
+			'lain' => $lainSnap,
+			'total' => $totalPendapatan,
+			'tunjangan' => $tunjangan,
+			'pengurang' => $totalPengurang,
+			'tarif' => ($bulan == '12') ? null : $tarifTer,
+			'npwp' => $punyaNpwp[$karid] ? 1 : 0,
+			'terhutang' => ($bulan == '12') ? $pph21Terhutang : $pph21,
+			'jannov' => ($bulan == '12') ? $janNov : 0,
+			'sistem21' => round($pph21Sistem),
+			'manual' => $manualKar,
+			'lebih' => round($lebihBayar),
+			'pph21' => round($pph21),
+		);
+
+		if (!$adaExcel) {
+			$nilaiSimpan = isset($tersimpan[$karid]) ? $tersimpan[$karid] : 0;
+			$gtTersimpan += $nilaiSimpan;
+			$beda = (count($tersimpan) > 0 && round($pph21) != round($nilaiSimpan));
+			$stream .= "<td align=right" . ($beda ? " style='background-color:#FCE8E6' title='Beda dengan hasil proses sebelumnya, perlu diproses ulang'" : "") . ">" . ($nilaiSimpan > 0 ? number_format($nilaiSimpan, 0) : '-') . "</td>";
+		}
 		$stream .= "</tr>";
 	}
 
 	#--- 9. Baris total
 	$stream .= "<tr class=rowcontent>";
-	$colspanplus = $jmlKomplus + 7;
-
-	$stream .= "<td align=center colspan=" . $colspanplus . "><b>TOTAL</b></td>";
+	$stream .= "<td align=center colspan=7><b>TOTAL</b></td>";
+	if ($jmlKomplus > 0) {
+		$stream .= "<td align=center colspan=" . $jmlKomplus . "" . $kelasRinci . "></td>";
+	}
 	$selTotal = function ($nilai) {
 		return "<td align=center><b>" . $nilai . "</b></td>";
 	};
 
 	if ($bulan == '12') {
+		if ($adaPjd) {
+			$stream .= $selTotal(number_format($gtPjdKolom));
+		}
+		foreach ($kolLain as $kodeLain => $nmLain) {
+			$stream .= $selTotal(number_format($gtLain[$kodeLain]));
+		}
 		$stream .= $selTotal(number_format($gttdtkompus));
 		$stream .= $selTotal(number_format($gtTjpajak));
 		$stream .= $selTotal(number_format($gtbiayajabatan));
 		if ($jmlKomin > 0) {
-			$stream .= "<td align=center colspan=" . $jmlKomin . "><b></b></td>";
+			$stream .= "<td align=center colspan=" . $jmlKomin . "" . $kelasRinci . "><b></b></td>";
 			$stream .= $selTotal(number_format($gttdtkommin));
 			$stream .= $selTotal(number_format($gtnetto));
 		}
@@ -676,19 +1740,42 @@ function pphPreview($per, $unit, $tipe)
 		$stream .= $selTotal(number_format($gtpph21terutanghitung));
 		$stream .= $selTotal(number_format($gtpph21terutanghitung));
 		$stream .= $selTotal(number_format($gtpph21_jan_nov));
+		if ($adaManual) {
+			$stream .= $selTotal(number_format($gtSistem21));
+			$stream .= $selTotal(number_format($gtManual21));
+		}
 		$stream .= $selTotal(number_format($gtPph21));
+		if ($adaManual) {
+			$stream .= $selTotal(number_format($gtLebih));
+		}
 	} else {
+		if ($adaPjd) {
+			$stream .= $selTotal(number_format($gtPjdKolom));
+		}
+		foreach ($kolLain as $kodeLain => $nmLain) {
+			$stream .= $selTotal(number_format($gtLain[$kodeLain]));
+		}
 		$stream .= $selTotal(number_format($gttdtkompus));
 		$stream .= $selTotal(number_format($gtTjpajak));
 		if ($jmlKomin > 0) {
-			$stream .= "<td align=center colspan=" . $jmlKomin . "><b></b></td>";
+			$stream .= "<td align=center colspan=" . $jmlKomin . "" . $kelasRinci . "><b></b></td>";
 			$stream .= $selTotal(number_format($gttdtkommin));
 			$stream .= $selTotal(number_format($gtnetto));
 		}
 		$stream .= $selTotal(number_format($gtgajiBruto));
 		$stream .= $selTotal('');
 		$stream .= $selTotal('');
+		if ($adaManual) {
+			$stream .= $selTotal(number_format($gtSistem21));
+			$stream .= $selTotal(number_format($gtManual21));
+		}
 		$stream .= $selTotal(number_format($gtPph21));
+		if ($adaManual) {
+			$stream .= $selTotal(number_format($gtLebih));
+		}
+	}
+	if (!$adaExcel) {
+		$stream .= $selTotal(number_format($gtTersimpan));
 	}
 	$stream .= "</tr>";
 	$stream .= "</table></div>";
@@ -703,37 +1790,97 @@ function pphPreview($per, $unit, $tipe)
 		return;
 	}
 
-	## Tampilan layar: status tutup buku di atas tabel, tombol Proses hanya jika periode boleh diproses
+	## Tampilan layar: status tutup buku, ringkasan angka, dan bilah aksi (Proses, rincian komponen, cari) di atas tabel
 	$statusPeriode = pphStatusPeriode($per, $unit);
-	$stream = pphBannerStatus($statusPeriode, $per, $unit, $bulan) . $stream;
-	if ($statusPeriode['boleh']) {
-		$stream .= "<button class=mybutton onclick=prosespph(" . $no . ");>" . $_SESSION['lang']['proses'] . "</button>";
+	$kartu = function ($judul, $nilai, $catatan = '') {
+		return "<div class=kartu><span>" . $judul . "</span><b>" . $nilai . "</b>" . ($catatan != '' ? "<span>" . $catatan . "</span>" : "") . "</div>";
+	};
+	$ringkas = "<div id=ringkasPph style='margin:8px 2px 10px 2px'>";
+	$ketSistem = 'Sistem gaji ' . $sistem . ($jmlTanpaPendapatan > 0 ? ' | ' . number_format($jmlTanpaPendapatan) . ' tanpa PPh 21 tidak ditampilkan' : '');
+	$ringkas .= $kartu('Karyawan', number_format($no), $ketSistem);
+	$ringkas .= $kartu($bulan == '12' ? 'Bruto setahun' : 'Total pendapatan', number_format($gttdtkompus), 'hanya karyawan yang tampil');
+	if ($adaPjd) {
+		$ringkas .= $kartu('Perjalanan Dinas', number_format($gtPjdKolom), 'sudah termasuk total pendapatan');
 	}
-	echo $stream . "####" . $no;
+	foreach ($kolLain as $kodeLain => $nmLain) {
+		$ringkas .= $kartu(htmlspecialchars($nmLain, ENT_QUOTES), number_format($gtLain[$kodeLain]), 'upload Excel, sudah termasuk total pendapatan');
+	}
+	if ($adaManual) {
+		$ringkas .= $kartu('PPh 21 sistem', number_format($gtSistem21), 'hitungan penuh dari sistem');
+		$ringkas .= $kartu('PPh 21 manual', number_format($gtManual21), 'sudah dilaporkan, dikurangkan');
+		$ringkas .= $kartu('Selisih diproses', number_format($gtPph21), 'sistem - manual, minimal 0');
+	} else {
+		$ringkas .= $kartu($bulan == '12' ? 'PPh 21 Desember (hitungan)' : 'PPh 21 bulan ini (hitungan)', number_format($gtPph21));
+	}
+	if ($gtLebih > 0) {
+		$ringkas .= $kartu('Lebih bayar', number_format($gtLebih), 'tidak dipotong, perlu dikembalikan / dikoreksi');
+	}
+	$sudahProses = (count(array_intersect_key($tersimpan, $dtkarid)) > 0);
+	$selisih = round($gtPph21) - round($gtTersimpan);
+	$ringkas .= $kartu('PPh 21 tersimpan', $sudahProses ? number_format($gtTersimpan) : 'belum diproses', $sudahProses ? ($selisih == 0 ? 'sama dengan hitungan' : 'selisih ' . number_format($selisih) . ' dari hitungan') : 'periode ini belum pernah diproses');
+	$ringkas .= "</div>";
+
+	$bar = "<div id=barPph>";
+	if ($statusPeriode['boleh']) {
+		$bar .= "<button class=mybutton id=btnProsesPph onclick=prosesPph(" . $no . ")>" . $_SESSION['lang']['proses'] . " PPh 21 (" . $no . " karyawan)</button>";
+	}
+	$bar .= "<label title='Tampilkan kolom rincian pendapatan dan pengurang per komponen'><input type=checkbox id=chkRinci onclick='toggleRinci(this.checked)'> Tampilkan rincian komponen</label>";
+	$bar .= "<div class=cari><span id=jmlTampil></span><input type=text id=cariKaryawan placeholder='Cari NIK / nama karyawan' onkeyup='cariKaryawan()'></div>";
+	$bar .= "</div>";
+
+	$catatanSistem = array();
+	if ($sistem == 'Harian') {
+		$catatanSistem[] = array('Sistem gaji Harian', 'Perhitungan khusus karyawan harian belum dibedakan: sementara memakai rumus yang sama dengan Bulanan.');
+	}
+	if ($jmlKosong > 0) {
+		$catatanSistem[] = array(number_format($jmlKosong) . ' karyawan belum diisi sistem gajinya', 'Karyawan ini tidak ikut Bulanan maupun Harian. Lengkapi sistem gajinya di data karyawan agar ikut diproses.');
+	}
+
+	echo pphBannerStatus($statusPeriode, $per, $unit, $bulan, $catatanSistem) . "@@VALIDASI@@" . $ringkas . $bar . $stream . "####" . $no;
 }
 
 
 /** Status tutup buku ringkas (satu baris lencana) di atas hasil perhitungan; tanpa kata Error/Warning/Gagal agar tidak dianggap respons gagal */
-function pphBannerStatus($status, $per, $unit, $bulan)
+function pphBannerStatus($status, $per, $unit, $bulan, $catatanLain = array())
 {
-	$lencana = function ($teks, $jenis, $judul = '') {
-		$gaya = array(
-			'ok' => 'background:#E3F4E8;color:#1a7f37;border:1px solid #b7dfc3',
-			'salah' => 'background:#FCE8E6;color:#b42318;border:1px solid #f1b8b2',
-			'catatan' => 'background:#FFF4D6;color:#8a5a00;border:1px solid #f0d99a',
-		);
-		return "<span title='" . htmlspecialchars($judul, ENT_QUOTES) . "' style='display:inline-block;padding:2px 9px;margin:0 6px 4px 0;border-radius:10px;font-size:12px;" . $gaya[$jenis] . "'>" . $teks . "</span>";
+	$h = function ($teks) {
+		return htmlspecialchars($teks, ENT_QUOTES);
+	};
+	$gaya = array(
+		'ok' => array('#1a7f37', '&#10003;', '#E3F4E8'),
+		'salah' => array('#b42318', '&#10007;', '#FCE8E6'),
+		'catatan' => array('#8a5a00', '!', '#FFF4D6'),
+	);
+	$baris = function ($jenis, $judul, $keterangan) use ($gaya, $h) {
+		$g = $gaya[$jenis];
+		return "<div style='display:flex;align-items:flex-start;gap:10px;padding:6px 0;border-top:1px solid #eef1f5'>"
+			. "<span style='flex:0 0 22px;height:22px;line-height:22px;text-align:center;border-radius:50%;font-weight:bold;font-size:13px;background:" . $g[2] . ";color:" . $g[0] . "'>" . $g[1] . "</span>"
+			. "<div><div style='font-weight:bold;color:#222'>" . $h($judul) . "</div><div style='font-size:12px;color:#555'>" . $h($keterangan) . "</div></div></div>";
 	};
 
-	$html = "<div style='margin:6px 2px 2px 2px'>";
-	$html .= $lencana('Periode gaji: ' . ($status['gajiTutup'] ? 'sudah ditutup' : ($status['gajiAda'] ? 'belum ditutup' : 'belum ada')), $status['gajiTutup'] ? 'ok' : 'salah', $status['pesan'][0][1]);
-	$html .= $lencana('Periode akuntansi: ' . ($status['akunTutup'] ? 'sudah ditutup' : 'belum ditutup'), $status['akunTutup'] ? 'salah' : 'ok', $status['pesan'][1][1]);
-	$html .= $lencana($status['boleh'] ? 'Bisa diproses' : 'Tidak bisa diproses', $status['boleh'] ? 'ok' : 'salah', $status['boleh'] ? 'Syarat tutup buku terpenuhi' : 'Tombol Proses disembunyikan sampai syarat tutup buku terpenuhi');
+	$boleh = $status['boleh'];
+	$warna = $boleh ? '#1a7f37' : '#b42318';
+	$html = "<div style='margin:8px 2px 10px 2px;padding:10px 16px 6px 16px;background:#fff;border:1px solid #c9d6e2;border-left:5px solid " . $warna . ";border-radius:6px;font-size:13px'>";
+	$html .= "<div style='display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding-bottom:6px'>"
+		. "<div style='font-weight:bold;font-size:14px;color:#222'>Validasi Proses PPh 21 &middot; " . $h($unit) . " &middot; " . $h($per) . "</div>"
+		. "<span style='padding:3px 12px;border-radius:12px;font-size:12px;font-weight:bold;background:" . ($boleh ? '#E3F4E8' : '#FCE8E6') . ";color:" . $warna . "'>"
+		. ($boleh ? 'Siap diproses' : 'Belum bisa diproses') . "</span></div>";
+
+	$html .= $baris($status['gajiTutup'] ? 'ok' : 'salah', 'Periode gaji ' . ($status['gajiTutup'] ? 'sudah ditutup' : ($status['gajiAda'] ? 'belum ditutup' : 'belum ada')), $status['pesan'][0][1]);
+	$html .= $baris($status['akunTutup'] ? 'salah' : 'ok', 'Periode akuntansi ' . ($status['akunTutup'] ? 'sudah ditutup' : 'masih terbuka'), $status['pesan'][1][1]);
 	if ($bulan == '12') {
 		$kosong = pphBulanBelumDiproses($per, $unit);
 		if (count($kosong) > 0) {
-			$html .= $lencana('PPh 21 Jan-Nov belum lengkap (' . count($kosong) . ' bulan)', 'catatan', 'PPh 21 belum ada di periode: ' . implode(', ', $kosong) . '. Hitungan Desember memakai PPh Januari-November yang tersedia.');
+			$html .= $baris('catatan', 'PPh 21 Januari-November belum lengkap (' . count($kosong) . ' bulan)', 'Belum ada di periode: ' . implode(', ', $kosong) . '. Hitungan Desember memakai PPh 21 Januari-November yang tersedia.');
+		} else {
+			$html .= $baris('ok', 'PPh 21 Januari-November lengkap', 'Dipakai sebagai pengurang pada hitungan Desember.');
 		}
+	}
+	foreach ($catatanLain as $cat) {
+		$html .= $baris('catatan', $cat[0], $cat[1]);
+	}
+	if (!$boleh) {
+		$html .= "<div style='padding:6px 0 4px 32px;font-size:12px;color:#b42318;border-top:1px solid #eef1f5'>Tombol Proses PPh 21 disembunyikan sampai syarat tutup buku terpenuhi. Hitungan di bawah tetap bisa dilihat dan ditarik ke Excel / PDF.</div>";
 	}
 	return $html . "</div>";
 }
@@ -741,7 +1888,7 @@ function pphBannerStatus($status, $per, $unit, $bulan)
 #=== Kop laporan (nama PT dari induk unit) untuk Excel dan PDF ===
 function pphKop($unit, $per, $bulan)
 {
-	global $dbname;
+	global $dbname, $sistem;
 
 	$induk = makeOption($dbname, 'organisasi', 'kodeorganisasi,induk', "kodeorganisasi='" . $unit . "'");
 	$pt = isset($induk[$unit]) ? $induk[$unit] : $_SESSION['empl']['kodeorganisasi'];
@@ -751,7 +1898,7 @@ function pphKop($unit, $per, $bulan)
 		'nama' => $hdpt['nama'],
 		'logo' => isset($hdpt['logo']) ? $hdpt['logo'] : '',
 		'judul' => 'PERHITUNGAN PPH PASAL 21 - PERIODE ' . $per,
-		'info' => 'Unit: ' . $unit . ' - ' . getNamaOrg($unit) . ' | Periode: ' . $per . ' | Metode: ' . ($bulan == '12' ? 'Perhitungan setahun (Desember)' : 'TER bulanan'),
+		'info' => 'Unit: ' . $unit . ' - ' . getNamaOrg($unit) . ' | Periode: ' . $per . ' | Sistem gaji: ' . $sistem . ' | Metode: ' . ($bulan == '12' ? 'Perhitungan setahun (Desember)' : 'TER bulanan'),
 		'tarik' => 'Ditarik oleh ' . $_SESSION['empl']['name'] . ' (' . $_SESSION['standard']['username'] . ') pada ' . date('d-m-Y H:i:s'),
 	);
 }
