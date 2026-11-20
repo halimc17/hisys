@@ -191,6 +191,10 @@ function prosesGudang(row) {
 
 //= HO
 function prosesGajiho(row) {
+    //Batal pada konfirmasi (baris pertama) menghentikan proses, tidak ada jurnal yang dihapus atau dibuat
+    if (row == 1 && !confirm('Anda yakin melakukan proses pengalokasian gaji head office?')) {
+        return;
+    }
     document.getElementById('btnproses').disabled = true;
 
     if (document.getElementById('karyawanid' + row) == undefined) {
@@ -218,10 +222,7 @@ function prosesGajiho(row) {
         // '&subbagian='+subbagian+'&mesin='+mesin+'&jumlah='+jumlah+
         '&tipeorganisasi=' + tipeorganisasi + '&periode=' + periode + '&row=' + row;
     tujuan = tujuanProses('keu_slave_prosesAlokasiGajiAkhirbulanho.php');
-    if (row == 1 && confirm('Anda yakin melakukan proses pengalokasian gaji head office?'))
-        post_response_text(tujuan, param, respon);
-    else
-        post_response_text(tujuan, param, respon);
+    post_response_text(tujuan, param, respon);
 
     document.getElementById('row' + row).style.backgroundColor = 'orange';
     function respon() {
@@ -256,6 +257,10 @@ function prosesGajiho(row) {
 
 
 function prosesGaji(row) {
+    //Batal pada konfirmasi (baris pertama) menghentikan proses, tidak ada jurnal yang dihapus atau dibuat
+    if (row == 1 && !confirm('Anda yakin melakukan proses pengalokasian gaji?')) {
+        return;
+    }
     document.getElementById('btnproses').disabled = true;
 
     if (document.getElementById('karyawanid' + row) == undefined) {
@@ -284,10 +289,7 @@ function prosesGaji(row) {
         // '&subbagian='+subbagian+'&mesin='+mesin+'&jumlah='+jumlah+
         '&tipeorganisasi=' + tipeorganisasi + '&periode=' + periode + '&row=' + row;
     tujuan = tujuanProses('keu_slave_prosesAlokasiGajiAkhirbulan.php');
-    if (row == 1 && confirm('Anda yakin melakukan proses pengalokasian gaji?'))
-        post_response_text(tujuan, param, respon);
-    else
-        post_response_text(tujuan, param, respon);
+    post_response_text(tujuan, param, respon);
 
     document.getElementById('row' + row).style.backgroundColor = 'orange';
     function respon() {
@@ -328,6 +330,10 @@ function aturBarisTerkaitTrk(row, gaya, nilai) {
     }
 }
 function prosesGajiTrk(row) {
+    //Batal pada konfirmasi (baris pertama) menghentikan proses, tidak ada jurnal yang dihapus atau dibuat
+    if (row == 1 && !confirm('Anda yakin melakukan proses pengalokasian gaji?')) {
+        return;
+    }
     document.getElementById('btnproses').disabled = true;
 
     if (document.getElementById('karyawanid' + row) == undefined) {
@@ -358,10 +364,7 @@ function prosesGajiTrk(row) {
         param+= '&jumlah'+datakomp[i]+'=' + document.getElementById('jumlah' + row+'-'+datakomp[i]).innerHTML ;
     }
     tujuan = tujuanProses('keu_slave_prosesAlokasiGajiAkhirbulantrk.php');
-    if (row == 1 && confirm('Anda yakin melakukan proses pengalokasian gaji?'))
-        post_response_text(tujuan, param, respon);
-    else
-        post_response_text(tujuan, param, respon);
+    post_response_text(tujuan, param, respon);
 
     document.getElementById('row' + row).style.backgroundColor = 'orange';
     aturBarisTerkaitTrk(row, 'backgroundColor', 'orange');
