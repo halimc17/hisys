@@ -21,7 +21,8 @@ $per = checkPostGet('per', '');
 $kom = checkPostGet('kom', '');
 $kar = checkPostGet('kar', '');
 $jum = checkPostGet('jum', '');
-$ket = checkPostGet('ket', '');
+$ketMentah = checkPostGet('ket', '');
+$ket = is_array($ketMentah) ? '' : addslashes(substr(trim((string)$ketMentah), 0, 100));
 $org = checkPostGet('org', '');
 $namafile         = checkPostGet('namafile', '');
 $jabatan        = checkPostGet('jabatan', '');
@@ -31,6 +32,36 @@ $perSch = checkPostGet('perSch', '');
 $komSch = checkPostGet('komSch', '');
 $orgSch = checkPostGet('orgSch', '');
 $postSch = checkPostGet('postSch', '');
+
+#semua parameter yang masuk ke query/nama file harus berformat sah; kar, jum, ket boleh array (simpan Buat Baru) dan divalidasi per baris di savedt
+function val3plParameter()
+{
+    global $org, $orgSch, $per, $perSch, $kom, $komSch, $kar, $postSch, $jabatan, $tipekar, $namafile;
+    $aturan = array(
+        'org' => array($org, '/^[A-Za-z0-9]{1,10}$/'),
+        'orgSch' => array($orgSch, '/^[A-Za-z0-9]{1,10}$/'),
+        'per' => array($per, '/^[0-9]{4}-[0-9]{2}$/'),
+        'perSch' => array($perSch, '/^[0-9-]{1,7}$/'),
+        'kom' => array($kom, '/^[0-9]{1,10}$/'),
+        'komSch' => array($komSch, '/^[0-9]{1,10}$/'),
+        'postSch' => array($postSch, '/^[01]$/'),
+        'jabatan' => array($jabatan, '/^(undefined|[A-Za-z0-9_ -]{1,20})$/'),
+        'tipekar' => array($tipekar, '/^(undefined|[0-9]{1,3})$/'),
+        'namafile' => array($namafile, '/^[A-Za-z0-9_]+\.[A-Za-z0-9]{2,5}$/'),
+    );
+    if (!is_array($kar) && $kar !== '' && !preg_match('/^[0-9]{1,10}$/', (string)$kar)) {
+        exit("Warning : Parameter kar tidak valid.");
+    }
+    foreach ($aturan as $nama => $a) {
+        if ($a[0] === '' || $a[0] === null) {
+            continue;
+        }
+        if (!is_string($a[0]) || !preg_match($a[1], $a[0])) {
+            exit("Warning : Parameter " . $nama . " tidak valid.");
+        }
+    }
+}
+val3plParameter();
 
 $nmKom = makeOption($dbname, 'sdm_ho_component', 'id,name');
 $nmKar = makeOption($dbname, 'datakaryawan', 'karyawanid,namakaryawan');
@@ -103,25 +134,116 @@ function val3plJumlah($jum, $ket = '')
     return $jum;
 }
 
+#teks untuk dipakai di dalam string JS ('...') pada atribut onclick: escape \ dan ', buang baris baru, lalu escape HTML
+function js3plString($teks)
+{
+    $teks = str_replace(array("\\", "'", "\r", "\n"), array("\\\\", "\'", ' ', ' '), (string)$teks);
+    return htmlspecialchars($teks, ENT_QUOTES);
+}
+
+#filter karyawan sesuai form (Kode Organisasi, Tipe Karyawan, Jabatan); dipakai mode Buat Baru (detail) dan mode Edit (loadKar)
+function where3plKaryawan($org, $jabatan, $tipekar)
+{
+    $where = " lokasitugas='" . addslashes($org) . "' and (tanggalkeluar>='" . addslashes($_SESSION['org']['period']['start']) . "' or tanggalkeluar='0000-00-00')";
+    if ($tipekar != '') {
+        $where .= " and tipekaryawan='" . addslashes($tipekar) . "' ";
+    }
+    if ($jabatan != '') {
+        $where .= " and kodejabatan='" . addslashes($jabatan) . "' ";
+    }
+    if ($tipekar == '') {
+        $where .= " and tipekaryawan not in ('0')";
+    }
+    return $where;
+}
+
+#unit milik PT PPP (induk = PPP) punya isian No Akun (tidak wajib)
+function is3plPPP($org)
+{
+    global $nmOrg;
+    $org = substr(trim($org), 0, 4);
+    return ($org != '' && isset($nmOrg[$org]) && getindukPT($org) == 'PPP');
+}
+
+#kolom noakun baru ada setelah SQL migrasi (sql_pendapatanlain_noakun.sql) dijalankan
+function ada3plKolomNoakun()
+{
+    global $dbname;
+    $res = fetchData("show columns from " . $dbname . ".sdm_pendapatanlaindt like 'noakun'");
+    return count($res) > 0;
+}
+
+#Excel sering menyimpan No Akun sebagai angka (7110101 atau 7110101.0), jadikan teks biasa
+function norm3plNoAkunExcel($v)
+{
+    $v = trim((string)$v);
+    if (preg_match('/^[0-9]+\.0+$/', $v)) {
+        $v = substr($v, 0, strpos($v, '.'));
+    }
+    return $v;
+}
+
+#keluar dengan pesan peringatan; kalau validasi dipanggil saat upload (sedang transaksi), batalkan transaksinya dulu
+function keluar3plAkun($pesan)
+{
+    global $owlPDO;
+    if ($owlPDO->inTransaction()) {
+        $owlPDO->rollBack();
+    }
+    exit($pesan);
+}
+
+#No Akun khusus PPP: tidak wajib diisi, tetapi kalau diisi harus berawalan 7, dan harus ada di master akun (keu_5akun, akun detail)
+#unit non-PPP: tidak ada validasi dan tidak disimpan (kembalian kosong)
+function val3plNoAkun($org, $noakun, $ket = '')
+{
+    global $dbname, $owlPDO;
+    if (!is3plPPP($org)) {
+        return '';
+    }
+    if (!ada3plKolomNoakun()) {
+        keluar3plAkun("Warning : Kolom No Akun belum ada di database. Jalankan sql_pendapatanlain_noakun.sql terlebih dahulu.");
+    }
+    $noakun = trim((string)$noakun);
+    if ($noakun == '') {
+        return '';
+    }
+    if (substr($noakun, 0, 1) != '7') {
+        keluar3plAkun("Warning : No Akun " . htmlspecialchars($noakun) . " tidak valid" . $ket . ". No Akun harus berawalan 7.");
+    }
+    $stm = $owlPDO->prepare("select noakun, detail from " . $dbname . ".keu_5akun where noakun = ?");
+    $stm->execute(array($noakun));
+    $row = $stm->fetch(PDO::FETCH_ASSOC);
+    if (!$row) {
+        keluar3plAkun("Warning : No Akun " . htmlspecialchars($noakun) . " tidak ditemukan di master akun" . $ket . ".");
+    }
+    if ($row['detail'] != 1) {
+        keluar3plAkun("Warning : No Akun " . htmlspecialchars($noakun) . " bukan akun detail" . $ket . ".");
+    }
+    return trim($row['noakun']);
+}
+
 switch ($method) {
     case 'loadKar':
-
-        $where = "";
-        $where = " lokasitugas='" . $org . "' and (tanggalkeluar>='" . $_SESSION['org']['period']['start'] . "' or tanggalkeluar='0000-00-00')";
-
-
-        $iKar = "select namakaryawan,karyawanid,nik,subbagian,lokasitugas from " . $dbname . ".datakaryawan where  " . $where . " and alokasi='0' and tipekaryawan not in ('0')  order by namakaryawan";
-        $nKar = $owlPDO->query($iKar) or die(print " Gagal: " . PDOException::getMessage());
-        $nKar->setFetchMode(PDO::FETCH_ASSOC);
-        $optKar = "<option value=''></option>";
-        while ($dKar = $nKar->fetch()) {
-            $optKar .= "<option value='" . $dKar['karyawanid'] . "'>" . $dKar['namakaryawan'] . " [ " . $dKar['nik'] . " ] " . $dKar['subbagian'] . "</option>";
+        #pilihan karyawan untuk dropdown Nama Karyawan (mode Edit / setelah simpan Buat Baru):
+        #filter sama dengan mode Buat Baru, ditambah karyawan yang sudah ada di rincian supaya baris yang diedit tetap muncul
+        $jabatanKar = ($jabatan == 'undefined') ? '' : $jabatan;
+        $tipekarKar = ($tipekar == 'undefined') ? '' : $tipekar;
+        $where = where3plKaryawan($org, $jabatanKar, $tipekarKar);
+        $iKar = "select namakaryawan,karyawanid,nik from " . $dbname . ".datakaryawan where ((" . $where . ")
+            or karyawanid in (select karyawanid from " . $dbname . ".sdm_pendapatanlaindt
+                where kodeorg='" . addslashes($org) . "' and periodegaji='" . addslashes($per) . "' and idkomponen='" . addslashes($kom) . "'))
+            order by namakaryawan";
+        $optKar = "<option value=''>" . $_SESSION['lang']['pilihdata'] . "</option>";
+        foreach (fetchData($iKar) as $dKar) {
+            $optKar .= "<option value='" . $dKar['karyawanid'] . "'>" . htmlspecialchars($dKar['nik'] . " - " . $dKar['namakaryawan']) . "</option>";
         }
 
         echo $optKar;
         break;
 
     case 'getPrd':
+        $optPrd = '';
         $optPrd .= "<option value=''>" . $_SESSION['lang']['pilihdata'] . "</option>";
         $sGet = "select distinct periode from " . $dbname . ".sdm_5periodegaji where kodeorg='" . $org . "' and sudahproses=0 order by periode desc";
         $qGet = $owlPDO->query($sGet) or die(print " Gagal: " . PDOException::getMessage());
@@ -133,6 +255,7 @@ switch ($method) {
         break;
 
     case 'getPrd2':
+        $optPrd = '';
         $optPrd .= "<option value=''>" . $_SESSION['lang']['pilihdata'] . "</option>";
         $sGet = "select distinct periode from " . $dbname . ".sdm_5periodegaji where kodeorg='" . $org . "' and sudahproses=0 order by periode desc";
         $qGet = $owlPDO->query($sGet) or die(print " Gagal: " . PDOException::getMessage());
@@ -169,21 +292,9 @@ switch ($method) {
 
     case 'detail':
 
-        $where = "";
-        $where = " lokasitugas='" . $org . "' and (tanggalkeluar>='" . $_SESSION['org']['period']['start'] . "' or tanggalkeluar='0000-00-00')";
-
-
-        if ($tipekar != '') {
-            $where .= " and tipekaryawan='" . $tipekar . "' ";
-        }
-
-        if ($jabatan != '') {
-            $where .= " and kodejabatan='" . $jabatan . "' ";
-        }
-
-        if ($tipekar == '') {
-            $where .= " and tipekaryawan not in ('0')";
-        }
+        $where = where3plKaryawan($org, $jabatan, $tipekar);
+        $pppDetail = is3plPPP($org);
+        $kolomDetail = $pppDetail ? 10 : 9;
 
         $iKar = "select namakaryawan,karyawanid,nik,subbagian,lokasitugas from " . $dbname . ".datakaryawan where  " . $where . "   order by namakaryawan";
         // exit('warning : '.$iKar);
@@ -213,17 +324,18 @@ switch ($method) {
                     <td align=center>" . $_SESSION['lang']['jabatan'] . "</td>
                     <td align=center>" . $_SESSION['lang']['bagian'] . "</td>
                     <td align=center>" . $_SESSION['lang']['jumlah'] . "</td>
+                    " . ($pppDetail ? "<td align=center>No Akun</td>" : "") . "
                     <td align=center>" . $_SESSION['lang']['keterangan'] . "</td>
                 </tr></thead>";
 
             $nmgolongan = makeOption($dbname, 'sdm_5golongan', 'kodegolongan,namagolongan');
             $nmjabatan = makeOption($dbname, 'sdm_5jabatan', 'kodejabatan,namajabatan');
 
-            $no2 += 0;
+            $no2 = 0;
             $iKar = "select namakaryawan,karyawanid,nik,kodegolongan,kodejabatan,bagian,lokasitugas,subbagian from " . $dbname . ".datakaryawan where  " . $where . "  order by namakaryawan";
             $nKar = $owlPDO->query($iKar) or die(print " Gagal: " . PDOException::getMessage());
             $nKar->setFetchMode(PDO::FETCH_ASSOC);
-            $no = '';
+            $no = 0;
             while ($dKar = $nKar->fetch()) {
                 if ($dKar['subbagian'] == '') {
                     $subag = "KANTOR";
@@ -240,11 +352,12 @@ switch ($method) {
                     <td>" . $nmjabatan[$dKar['kodejabatan']] . "</td>
                     <td align=center>" . $dKar['bagian'] . "</td>
                     <td align=center><input type=text maxlength=20 id=jum_" . $no2 . " onkeypress=\"return angka_doang(event);\" onkeyup=\"if(this.value!=''){z.numberFormat(this.id,2);}\"   class=myinputtextnumber style=\"width:150px;\"></td>
+                    " . ($pppDetail ? "<td align=center><input type=text maxlength=16 id=akun_" . $no2 . " list=listakun7 autocomplete=off class=myinputtext style=\"width:110px;\" onkeypress=\"return angka_doang(event);\"></td>" : "") . "
 					<td align=center><input type=text maxlength=50 id=ket_" . $no2 . " class=myinputtext style=\"width:100%;\"></td>
                 </tr>";
                 $no2 += 1;
             }
-            echo "<tr class=rowcontent><td colspan=9 align=center>
+            echo "<tr class=rowcontent><td colspan=" . $kolomDetail . " align=center>
                         <button class=mybutton onclick=savedt()>" . $_SESSION['lang']['save'] . "</button></td>
                   </tr>
                   <input type=hidden id=totrows value='" . $no2 . "' />
@@ -278,7 +391,8 @@ switch ($method) {
             if (isset($baris[$karRow])) {
                 exit("Warning : Karyawan " . @$nmKar[$karRow] . " terisi lebih dari satu kali" . $ketRow . ".");
             }
-            $baris[$karRow] = array($jumRow, substr(trim($_POST['ket'][$arDt]), 0, 100));
+            $akunRow = val3plNoAkun($org, isset($_POST['akun'][$arDt]) ? $_POST['akun'][$arDt] : '', $ketRow . " (" . @$nmKar[$karRow] . ")");
+            $baris[$karRow] = array($jumRow, substr(trim($_POST['ket'][$arDt]), 0, 100), $akunRow);
         }
         if (count($baris) == 0) {
             exit("Warning : Isi Jumlah minimal untuk satu karyawan.");
@@ -289,10 +403,12 @@ switch ($method) {
             $str = "INSERT INTO " . $dbname . ".`sdm_pendapatanlainht` (`kodeorg`,`periodegaji`, `idkomponen`, `updateby`) values ('" . addslashes($org) . "','" . addslashes($per) . "','" . addslashes($kom) . "','" . $_SESSION['standard']['userid'] . "')";
             $owlPDO->exec($str);
 
-            $sDet = "insert into " . $dbname . ".sdm_pendapatanlaindt (`kodeorg`, `periodegaji`, `karyawanid`, `idkomponen`, `jumlah`, `pengali`,`keterangan`, `updateby`) values ";
+            #kolom No Akun hanya diikutkan untuk unit PPP; unit lain query-nya tetap seperti semula
+            $pppSimpan = is3plPPP($org);
+            $sDet = "insert into " . $dbname . ".sdm_pendapatanlaindt (`kodeorg`, `periodegaji`, `karyawanid`, `idkomponen`, `jumlah`, `pengali`,`keterangan`," . ($pppSimpan ? " `noakun`," : "") . " `updateby`) values ";
             $awl = 0;
             foreach ($baris as $karId => $v) {
-                $sDet .= ($awl == 0 ? " " : ",") . "('" . addslashes($org) . "','" . addslashes($per) . "','" . $karId . "','" . addslashes($kom) . "','" . $v[0] . "','1','" . addslashes($v[1]) . "','" . $_SESSION['standard']['userid'] . "')";
+                $sDet .= ($awl == 0 ? " " : ",") . "('" . addslashes($org) . "','" . addslashes($per) . "','" . $karId . "','" . addslashes($kom) . "','" . $v[0] . "','1','" . addslashes($v[1]) . "'," . ($pppSimpan ? "'" . addslashes($v[2]) . "'," : "") . "'" . $_SESSION['standard']['userid'] . "')";
                 $awl = 1;
             }
             $owlPDO->exec($sDet);
@@ -307,6 +423,7 @@ switch ($method) {
         val3plWajib($org, $per, $kom);
         val3plKaryawan($kar);
         $jum = val3plJumlah($jum);
+        $noakun = val3plNoAkun($org, checkPostGet('noakun', ''));
         val3plPeriodeBuka($org, $per);
         val3plHeaderBisaDiubah($org, $per, $kom);
 
@@ -320,8 +437,13 @@ switch ($method) {
         if ($jlh > 0) {
             exit("Warning : Karyawan sudah pernah diinput.");
         } else {
-            $str = "INSERT INTO " . $dbname . ".`sdm_pendapatanlaindt` (`kodeorg`, `periodegaji`, `karyawanid`, `idkomponen`, `jumlah`, `pengali`,`keterangan`, `updateby`)
-            values ('" . $org . "','" . $per . "','" . $kar . "','" . $kom . "','" . $jum . "','1','" . $ket . "','" . $_SESSION['standard']['userid'] . "')";
+            if (is3plPPP($org)) {
+                $str = "INSERT INTO " . $dbname . ".`sdm_pendapatanlaindt` (`kodeorg`, `periodegaji`, `karyawanid`, `idkomponen`, `jumlah`, `pengali`,`keterangan`,`noakun`, `updateby`)
+                values ('" . $org . "','" . $per . "','" . $kar . "','" . $kom . "','" . $jum . "','1','" . $ket . "','" . addslashes($noakun) . "','" . $_SESSION['standard']['userid'] . "')";
+            } else {
+                $str = "INSERT INTO " . $dbname . ".`sdm_pendapatanlaindt` (`kodeorg`, `periodegaji`, `karyawanid`, `idkomponen`, `jumlah`, `pengali`,`keterangan`, `updateby`)
+                values ('" . $org . "','" . $per . "','" . $kar . "','" . $kom . "','" . $jum . "','1','" . $ket . "','" . $_SESSION['standard']['userid'] . "')";
+            }
             //exit("Error:$i"); 
             try {
                 $owlPDO->exec($str);
@@ -337,13 +459,15 @@ switch ($method) {
         val3plWajib($org, $per, $kom);
         val3plKaryawan($kar);
         $jum = val3plJumlah($jum);
+        $noakun = val3plNoAkun($org, checkPostGet('noakun', ''));
         val3plPeriodeBuka($org, $per);
         val3plHeaderBisaDiubah($org, $per, $kom);
         $resAda = fetchData("select karyawanid from " . $dbname . ".sdm_pendapatanlaindt where periodegaji='" . addslashes($per) . "' and idkomponen='" . addslashes($kom) . "' and kodeorg='" . addslashes($org) . "' and karyawanid='" . $kar . "'");
         if (count($resAda) == 0) {
             exit("Warning : Data karyawan ini tidak ditemukan pada detail, tidak bisa diubah.");
         }
-        $str = "update " . $dbname . ".sdm_pendapatanlaindt set jumlah='" . $jum . "', keterangan='" . $ket . "', updateby ='" . $_SESSION['standard']['userid'] . "' where periodegaji='" . $per . "' and idkomponen ='" . $kom . "' and kodeorg = '" . $org . "' and karyawanid = '" . $kar . "'";
+        $setAkun = is3plPPP($org) ? ", noakun='" . addslashes($noakun) . "'" : "";
+        $str = "update " . $dbname . ".sdm_pendapatanlaindt set jumlah='" . $jum . "', keterangan='" . $ket . "'" . $setAkun . ", updateby ='" . $_SESSION['standard']['userid'] . "' where periodegaji='" . $per . "' and idkomponen ='" . $kom . "' and kodeorg = '" . $org . "' and karyawanid = '" . $kar . "'";
         try {
             $owlPDO->exec($str);
         } catch (PDOException $e) {
@@ -354,6 +478,7 @@ switch ($method) {
 
     #####LOAD DETAIL DATA	
     case 'loadDetail';
+        $pppLoad = is3plPPP($org);
         echo "<fieldset><legend>List Data</legend><table class=sortable cellspacing=1 cellpadding =5 border=0 style='width:100%;'> 
          <thead>
                  <tr class=rowcontent>
@@ -365,6 +490,7 @@ switch ($method) {
                         <td align=center>" . $_SESSION['lang']['bagian'] . "</td>
                         <td align=center>" . $_SESSION['lang']['jenis'] . "</td>
                         <th align=center >" . $_SESSION['lang']['jumlah'] . "</th>
+                        " . ($pppLoad ? "<th align=center>No Akun</th>" : "") . "
                         <th align=center >" . $_SESSION['lang']['keterangan'] . "</th>
                         <th align=center colspan=2>" . $_SESSION['lang']['action'] . "</th>
                  </tr>
@@ -397,9 +523,10 @@ switch ($method) {
                         <td align=center>" . $bagian[$c['karyawanid']] . "</td>
                         <td align=center>" . $optNmKomponen[$c['idkomponen']] . "</td>
                         <td align=right>" . number_format($c['jumlah']) . "</td>
-                        <td align=left>" . $c['keterangan'] . "</td>
+                        " . ($pppLoad ? "<td align=center>" . htmlspecialchars(isset($c['noakun']) ? $c['noakun'] : '') . "</td>" : "") . "
+                        <td align=left>" . htmlspecialchars($c['keterangan']) . "</td>
                         <td align=center width=25px>
-                                <img src=images/application/application_edit.png class=zImgBtn  title='Edit' onclick=\"editdetail('" . $c['karyawanid'] . "','" . $c['jumlah'] . "','" . $c['keterangan'] . "');\" >					
+                                <img src=images/application/application_edit.png class=zImgBtn  title='Edit' onclick=\"editdetail('" . $c['karyawanid'] . "','" . $c['jumlah'] . "','" . js3plString($c['keterangan']) . "','" . ($pppLoad && isset($c['noakun']) ? preg_replace('/[^0-9A-Za-z.\-]/', '', $c['noakun']) : '') . "');\" >					
                         </td>
                         <td align=center width=25px>
                                 <img src=images/application/application_delete.png class=zImgBtn  title='Delete' onclick=\"DelDetail('" . $c['periodegaji'] . "','" . $c['karyawanid'] . "','" . $c['idkomponen'] . "');\" >					
@@ -411,10 +538,11 @@ switch ($method) {
                 <tr class=rowcontent>
                         <td colspan=7><b>" . $_SESSION['lang']['total'] . "</b></td>
                         <td align=right><b>" . @number_format($tot) . "</b></td>
+                        " . ($pppLoad ? "<td></td>" : "") . "
                         <td></td><td></td><td></td>
                 </tr>
                 <tr>
-                        <td colspan=12 align=center>
+                        <td colspan=" . ($pppLoad ? 13 : 12) . " align=center>
                             <button class=mybutton id=cancelDetail onclick=cancel()>" . $_SESSION['lang']['selesai'] . "</button>
                         </td>
                  </tr>";
@@ -428,6 +556,7 @@ switch ($method) {
         $optOrg = "<option value=''>" . $_SESSION['lang']['pilihdata'] . "</option>";
 
 
+        $n = '';
         $arrUnit = getOrgDetail(1);
         foreach ($arrUnit as $key => $val) {
             $induk = makeOption($dbname, 'organisasi', 'kodeorganisasi,induk', "kodeorganisasi='" . $key . "'");
@@ -437,7 +566,7 @@ switch ($method) {
             }
 
 
-            $optOrg .= "<option value='" . $key . "'> " . $val . "</option>";
+            $optOrg .= "<option value='" . $key . "'" . ($d == 'PPP' ? " data-ppp='1'" : "") . "> " . $val . "</option>";
 
             $n = $d;
             if ($d != $n) {
@@ -501,10 +630,13 @@ switch ($method) {
                     <td><button class=mybutton style=\"width:235px;\" onclick=getkaryawanid()>Get Karyawan </button></td>
                 </tr> 
                 <tr>
-                    <td>File (.xls / .xlsx)</td> 
+                    <td>File (.xls / .xlsx)</td>
                     <td>:</td>
                     <td><input name='filex' type='file' id='filex' size='25' class='mybutton'></td>
-                </tr> 
+                </tr>
+                <tr>
+                    <td colspan=3><i style='font-size:11px'>Unit PT PPP: template memiliki kolom No Akun (kolom H, boleh dikosongkan; kalau diisi harus berawalan 7 dan ada di daftar pada sheet No Akun).<br>No Akun dipakai untuk alokasi biaya sesuai No Akun yang dipilih. Jika dikosongkan, mengikuti default pada parameter jurnal (umumnya masuk ke Tunjangan Lain pada proses akhir bulan).</i></td>
+                </tr>
                 <tr>
                     <td> </td>
                     <td> </td>
@@ -528,12 +660,18 @@ switch ($method) {
         if ($per == '') {
             exit("Warning : Periode Wajib Diisi ");
         }
-
+        #org dipakai untuk nama file dan per masuk query: hanya format yang sah yang diterima
+        if (!preg_match('/^[A-Za-z0-9]{1,10}$/', $org)) {
+            exit("Warning : Kode Organisasi tidak valid.");
+        }
+        if (!preg_match('/^[0-9]{4}-[0-9]{2}$/', $per)) {
+            exit("Warning : Periode tidak valid.");
+        }
 
         $strdkar = "select karyawanid from " . $dbname . ".datakaryawan_hist a where approval_status='8' and version_type='B' and periodegaji='" . $per . "' and  lokasitugas = '" . $org . "'";
         $resdkar = fetchdata($strdkar);
         if (count($resdkar) > 0) {
-            $str = "select namakaryawan,nik,karyawanid,lokasitugas,tipekaryawan from " . $dbname . ".datakaryawan_hist where approval_status='8' and lokasitugas = '" . $org . "' and version_type='B' and periodegaji='" . $per . "' and (tanggalkeluar >= '" . $per . "-01' or tanggalkeluar = '0000-00-00') order by namakaryawan";
+            $str = "select namakaryawan,nik,karyawanid,lokasitugas,tipekaryawan,subbagian from " . $dbname . ".datakaryawan_hist where approval_status='8' and lokasitugas = '" . $org . "' and version_type='B' and periodegaji='" . $per . "' and (tanggalkeluar >= '" . $per . "-01' or tanggalkeluar = '0000-00-00') order by namakaryawan";
         } else {
             $str = "select * from " . $dbname . ".datakaryawan
             where (tanggalkeluar='0000-00-00' or tanggalkeluar>'" . date('Y-m-d') . "') and lokasitugas = '" . $org . "' and tipekaryawan != 0 order by namakaryawan";
@@ -550,6 +688,11 @@ switch ($method) {
         $sheet->setCellValue('E1', $_SESSION['lang']['divisi']);
         $sheet->setCellValue('F1', $_SESSION['lang']['jumlah']);
         $sheet->setCellValue('G1', $_SESSION['lang']['keterangan']);
+        #unit PT PPP: tambah kolom No Akun (tidak wajib; kalau diisi berawalan 7)
+        $pppTemplate = is3plPPP($org);
+        if ($pppTemplate) {
+            $sheet->setCellValue('H1', 'No Akun');
+        }
 
         $row = 2;
         foreach ($res as $bar) {
@@ -565,13 +708,54 @@ switch ($method) {
             $sheet->setCellValue('C' . $row, getJabatanKaryawan($bar['karyawanid']));
             $sheet->setCellValueExplicit('D' . $row, $bar['lokasitugas'], PHPExcel_Cell_DataType::TYPE_STRING);
             $sheet->setCellValue('E' . $row, $text);
+            if ($pppTemplate) {
+                #format teks supaya No Akun tidak berubah jadi angka/format lain saat diisi
+                $sheet->getStyle('H' . $row)->getNumberFormat()->setFormatCode('@');
+            }
             $row++;
+        }
+
+        #unit PT PPP: sheet kedua berisi daftar No Akun yang boleh dipakai (akun 7 detail di master akun),
+        #dan kolom H hanya menerima nilai dari daftar itu (kosong tetap boleh)
+        if ($pppTemplate) {
+            $sheetAkun = $objPHPExcel->createSheet();
+            $sheetAkun->setTitle('No Akun');
+            $sheetAkun->setCellValue('A1', 'No Akun');
+            $sheetAkun->setCellValue('B1', 'Nama Akun');
+            $rowAkun = 2;
+            foreach (fetchData("select noakun,namaakun from " . $dbname . ".keu_5akun where noakun like '7%' and detail=1 order by noakun") as $barAkun) {
+                $sheetAkun->setCellValueExplicit('A' . $rowAkun, $barAkun['noakun'], PHPExcel_Cell_DataType::TYPE_STRING);
+                $sheetAkun->setCellValue('B' . $rowAkun, $barAkun['namaakun']);
+                $rowAkun++;
+            }
+            $sheetAkun->getColumnDimension('A')->setWidth(14);
+            $sheetAkun->getColumnDimension('B')->setWidth(60);
+            $sheetAkun->getStyle('A1:B1')->getFont()->setBold(true);
+            $objPHPExcel->setActiveSheetIndex(0);
+            $sheet->getColumnDimension('H')->setWidth(14);
+            if ($rowAkun > 2 && $row > 2) {
+                for ($r = 2; $r < $row; $r++) {
+                    $valAkun = $sheet->getCell('H' . $r)->getDataValidation();
+                    $valAkun->setType(PHPExcel_Cell_DataValidation::TYPE_LIST);
+                    $valAkun->setErrorStyle(PHPExcel_Cell_DataValidation::STYLE_STOP);
+                    $valAkun->setAllowBlank(true);
+                    $valAkun->setShowInputMessage(true);
+                    $valAkun->setShowErrorMessage(true);
+                    $valAkun->setShowDropDown(true);
+                    $valAkun->setErrorTitle('No Akun tidak valid');
+                    $valAkun->setError('No Akun harus berawalan 7 dan ada di daftar pada sheet "No Akun".');
+                    $valAkun->setPromptTitle('No Akun');
+                    $valAkun->setPrompt('Pilih dari daftar (berawalan 7), boleh dikosongkan.');
+                    $valAkun->setFormula1("'No Akun'!\$A\$2:\$A\$" . ($rowAkun - 1));
+                }
+            }
         }
 
         $nop_ = "Daftar_Karyawan_" . $org;
         if ($handle = opendir('tempExcel')) {
             while (false !== ($file = readdir($handle))) {
-                if ($file != "." && $file != ".." && $file != "index.html") {
+                #hanya bersihkan template buatan menu ini (Daftar_Karyawan_*.xls/.xlsx), file lain di tempExcel jangan disentuh
+                if (preg_match('/^Daftar_Karyawan_[A-Za-z0-9]+\.xlsx?$/', $file)) {
                     @unlink('tempExcel/' . $file);
                 }
             }
@@ -579,10 +763,12 @@ switch ($method) {
         }
 
         try {
-            $objWriter = PHPExcel_IOFactory::createWriter($objPHPExcel, 'Excel5');
-            $objWriter->save("tempExcel/" . $nop_ . ".xls");
+            #PPP: .xlsx supaya validasi daftar ke sheet "No Akun" jalan; unit lain tetap .xls seperti semula
+            $extTemplate = $pppTemplate ? 'xlsx' : 'xls';
+            $objWriter = PHPExcel_IOFactory::createWriter($objPHPExcel, $pppTemplate ? 'Excel2007' : 'Excel5');
+            $objWriter->save("tempExcel/" . $nop_ . "." . $extTemplate);
             echo "<script language=javascript>
-					window.location='tempExcel/" . $nop_ . ".xls';
+					window.location='tempExcel/" . $nop_ . "." . $extTemplate . "';
 					</script>";
         } catch (Exception $e) {
             echo "<script language=javascript>
@@ -629,6 +815,8 @@ switch ($method) {
 
                 $previewOnly = (checkPostGet('previewonly', '') == '1');
                 $i = 1;
+                #unit PT PPP: kolom H = No Akun, boleh kosong; kalau diisi harus berawalan 7 dan ada di master akun
+                $pppUpload = is3plPPP($org);
 
                 try {
                     $owlPDO->beginTransaction();
@@ -639,13 +827,13 @@ switch ($method) {
                             continue;
                         }
 
-                        if ($sheet['F'] == null || trim((string)$sheet['F']) == '') {
+                        if ($sheet['F'] === null || trim((string)$sheet['F']) == '') {
                             $i++;
                             continue;
                         }
 
                         $jumlah = normalizeNumberExcel($sheet['F']);
-                        if ($jumlah == null) {
+                        if ($jumlah === null) {
                             throw new Exception("Format jumlah tidak valid pada baris " . $i . ". Nilai: " . $sheet['F']);
                         }
 
@@ -673,6 +861,11 @@ switch ($method) {
 
                             $i++;
                             continue;
+                        }
+
+                        $noakunUp = '';
+                        if ($pppUpload) {
+                            $noakunUp = val3plNoAkun($org, norm3plNoAkunExcel(isset($sheet['H']) ? $sheet['H'] : ''), " pada baris Excel " . $i . " (NIK " . $nikExcel . ")");
                         }
 
                         $jumlahSql = number_format($jumlah, 10, '.', '');
@@ -707,10 +900,12 @@ switch ($method) {
                         $resx = fetchdata($strx);
 
                         if (count($resx) > 0) {
+                            $setAkunUp = ($pppUpload && $noakunUp != '') ? "noakun='" . addslashes($noakunUp) . "'," : "";
                             $str = "update " . $dbname . ".sdm_pendapatanlaindt set
                                 jumlah='" . $jumlahSql . "',
                                 pengali='1',
                                 keterangan='" . $keterangan . "',
+                                " . $setAkunUp . "
                                 updateby='" . $_SESSION['standard']['userid'] . "'
                                 where kodeorg='" . $kodeorgExcel . "'
                                 and periodegaji='" . $per . "'
@@ -719,8 +914,8 @@ switch ($method) {
                             $owlPDO->exec($str);
                         } else {
                             $str = "insert into " . $dbname . ".sdm_pendapatanlaindt
-                                (kodeorg,periodegaji,karyawanid,idkomponen,jumlah,pengali,keterangan,updateby)
-                                values ('" . $kodeorgExcel . "','" . $per . "','" . $karyawanid . "','" . $kom . "','" . $jumlahSql . "','1','" . $keterangan . "','" . $_SESSION['standard']['userid'] . "')";
+                                (kodeorg,periodegaji,karyawanid,idkomponen,jumlah,pengali,keterangan," . ($pppUpload ? "noakun," : "") . "updateby)
+                                values ('" . $kodeorgExcel . "','" . $per . "','" . $karyawanid . "','" . $kom . "','" . $jumlahSql . "','1','" . $keterangan . "'," . ($pppUpload ? "'" . addslashes($noakunUp) . "'," : "") . "'" . $_SESSION['standard']['userid'] . "')";
                             $owlPDO->exec($str);
                         }
 
@@ -728,7 +923,7 @@ switch ($method) {
                     }
 
                     if ($previewOnly) {
-                        $strPrev = "select karyawanid, jumlah, keterangan from " . $dbname . ".sdm_pendapatanlaindt
+                        $strPrev = "select * from " . $dbname . ".sdm_pendapatanlaindt
                             where kodeorg='" . $org . "' and periodegaji='" . $per . "' and idkomponen='" . $kom . "'
                             order by karyawanid";
                         $resPrev = fetchdata($strPrev);
@@ -754,6 +949,7 @@ switch ($method) {
                                 <th align=center>NIK</th>
                                 <th align=center>Nama Karyawan</th>
                                 <th align=center>Jumlah</th>
+                                " . ($pppUpload ? "<th align=center>No Akun</th>" : "") . "
                                 <th align=center>Keterangan</th>
                             </tr></thead><tbody>";
                         $noPrev = 0;
@@ -765,12 +961,14 @@ switch ($method) {
                                 <td align=center>" . $nikKar[$pr['karyawanid']] . "</td>
                                 <td>" . $nmKar[$pr['karyawanid']] . "</td>
                                 <td align=right>" . number_format($pr['jumlah'], 0) . "</td>
-                                <td>" . $pr['keterangan'] . "</td>
+                                " . ($pppUpload ? "<td align=center>" . htmlspecialchars(isset($pr['noakun']) ? $pr['noakun'] : '') . "</td>" : "") . "
+                                <td>" . htmlspecialchars($pr['keterangan']) . "</td>
                             </tr>";
                         }
                         $streamPrev .= "<tr class=rowcontent style='font-weight:bold;background-color:#F5F5F5;'>
                             <td colspan=3 align=center>Total</td>
                             <td align=right>" . number_format($totPrev, 0) . "</td>
+                            " . ($pppUpload ? "<td></td>" : "") . "
                             <td></td>
                         </tr>";
                         $streamPrev .= "</tbody></table>";
@@ -815,7 +1013,7 @@ switch ($method) {
         $limit = 20;
         $page = 0;
         if (isset($_POST['page'])) {
-            $page = $_POST['page'];
+            $page = (int)$_POST['page'];
             if ($page < 0)
                 $page = 0;
         }
@@ -909,7 +1107,7 @@ switch ($method) {
         }
         $footd .= "</td></tr>";
 
-        echo $tab . "####" . $footd;
+        echo "####" . $footd;
         break;
     case 'excellist':
         #filter sama persis dengan loadData, supaya tarikan Excel ikut filter yang lagi aktif di form Cari
@@ -1069,6 +1267,7 @@ switch ($method) {
         $tab .= "<tbody>";
 
         $no = 0;
+        $ttl = 0;
         $str = "select * from " . $dbname . ".sdm_pendapatanlaindt where kodeorg = '" . $org . "' and periodegaji = '" . $per . "' and idkomponen= '" . $kom . "'";
         $res = fetchdata($str);
         foreach ($res as $bar) {
@@ -1088,7 +1287,7 @@ switch ($method) {
                         <td>" . getJabatanKaryawan($bar['karyawanid']) . "</td>
                         <td>" . $text . "</td>
                         <td align=right>" . number_format($bar['jumlah']) . "</td>
-                        <td>" . $bar['keterangan'] . "</td>
+                        <td>" . htmlspecialchars($bar['keterangan']) . "</td>
                     </tr>";
             $ttl += $bar['jumlah'];
         }

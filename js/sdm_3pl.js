@@ -1,3 +1,38 @@
+//unit PT PPP (induk = PPP) ditandai atribut data-ppp pada opsi Kode Organisasi
+function isOrgPPP(selId, kode) {
+  var el = document.getElementById(selId);
+  if (!el || !kode) {
+    return false;
+  }
+  for (var i = 0; i < el.options.length; i++) {
+    if (el.options[i].value == kode) {
+      return el.options[i].getAttribute("data-ppp") == "1";
+    }
+  }
+  return false;
+}
+
+//kolom No Akun pada rincian hanya tampil untuk unit PPP
+function tampilKolomAkun(ppp) {
+  var els = document.getElementsByClassName("kolomakun");
+  for (var i = 0; i < els.length; i++) {
+    els[i].style.display = ppp ? "" : "none";
+  }
+}
+
+//validasi sisi klien No Akun PPP: tidak wajib, tetapi kalau diisi harus berawalan 7 (cek ke master akun dilakukan di server)
+function cekNoAkunPPP(noakun, ketBaris) {
+  noakun = (noakun || "").replace(/^\s+|\s+$/g, "");
+  if (noakun == "") {
+    return true;
+  }
+  if (noakun.charAt(0) != "7") {
+    alert("Warning : No Akun " + noakun + " tidak valid" + ketBaris + ". No Akun harus berawalan 7.");
+    return false;
+  }
+  return true;
+}
+
 function add_new_data() {
   document.getElementById("detail").style.display = "block";
   document.getElementById("listData").style.display = "none";
@@ -246,6 +281,7 @@ function bataldetail() {
   document.getElementById("kar").disabled = false;
   document.getElementById("jum").value = "";
   document.getElementById("ket").value = "";
+  setValue2("noakun", "");
   document.getElementById("saveDetail").value = "saveDetail";
 }
 
@@ -314,6 +350,13 @@ function saveDetail() {
     alert("Warning : Jumlah wajib diisi dengan angka lebih dari 0.");
     return;
   }
+  noakun = "";
+  if (isOrgPPP("org", org)) {
+    noakun = document.getElementById("noakun").value;
+    if (!cekNoAkunPPP(noakun, "")) {
+      return;
+    }
+  }
 
   param =
     "method=" +
@@ -329,7 +372,10 @@ function saveDetail() {
     "&org=" +
     org +
     "&ket=" +
-    ket;
+    encodeURIComponent(ket);
+  if (noakun != "") {
+    param += "&noakun=" + encodeURIComponent(noakun);
+  }
   tujuan = "sdm_slave_3pl.php";
   post_response_text(tujuan, param, respog);
   function respog() {
@@ -397,7 +443,7 @@ function cancel() {
   document.getElementById("jabatan").value = "";
   document.getElementById("tipekar").value = "";
 }
-function editdetail(kar, jum, ket) {
+function editdetail(kar, jum, ket, noakun) {
   setValue2("kar", kar);
   document.getElementById("kar").disabled = true;
   document.getElementById("jum").value = jum;
@@ -405,6 +451,7 @@ function editdetail(kar, jum, ket) {
     z.numberFormat("jum", 2);
   }
   document.getElementById("ket").value = ket;
+  setValue2("noakun", noakun || "");
   document.getElementById("saveDetail").value = "updatedetail";
 }
 
@@ -424,6 +471,7 @@ function edit(per, kom, org) {
   elOrg.onchange = null;
   setValue2("org", org);
   elOrg.onchange = handlerOrg;
+  tampilKolomAkun(isOrgPPP("org", org));
   // document.getElementById('displayall').style.display = 'block';
   // document.getElementById('detailForm').style.display='block';
   lockHeader(org, "", "");
@@ -512,6 +560,7 @@ function savedt() {
   per = document.getElementById("per").value;
   kom = document.getElementById("kom").value;
   totRow = document.getElementById("totrows").value;
+  var ppp = isOrgPPP("org", org);
   var adaIsi = false;
   for (dwc = 0; dwc < totRow; dwc++) {
     nilai = remove_comma_var(document.getElementById("jum_" + dwc).value);
@@ -524,6 +573,9 @@ function savedt() {
     }
     if (parseFloat(nilai) > 0) {
       adaIsi = true;
+      if (ppp && !cekNoAkunPPP(document.getElementById("akun_" + dwc).value, " pada baris ke-" + (dwc + 1))) {
+        return;
+      }
     }
   }
   if (!adaIsi) {
@@ -537,7 +589,11 @@ function savedt() {
     allData +=
       "&jum[" + dwc + "]=" + remove_comma_var(document.getElementById("jum_" + dwc).value);
     allData +=
-      "&ket[" + dwc + "]=" + document.getElementById("ket_" + dwc).value;
+      "&ket[" + dwc + "]=" + encodeURIComponent(document.getElementById("ket_" + dwc).value);
+    if (ppp) {
+      allData +=
+        "&akun[" + dwc + "]=" + encodeURIComponent(document.getElementById("akun_" + dwc).value);
+    }
   }
 
   param =
@@ -563,7 +619,7 @@ function savedt() {
           document.getElementById("inputdetail").style.display = "block";
           document.getElementById("displayinsert").style.display = "none";
           document.getElementById("displayinsert").innerHTML = "";
-          loadDataDetail();
+          loadKar(org);
         }
       } else {
         busy_off();
@@ -691,15 +747,14 @@ function loadData(page) {
 }
 
 function lockHeader(org, jabatan, tipekar) {
+  tampilKolomAkun(isOrgPPP("org", org));
   document.getElementById("saveHeader").disabled = true;
   document.getElementById("tipekar").disabled = true;
   document.getElementById("jabatan").disabled = true;
   document.getElementById("per").disabled = true;
   document.getElementById("kom").disabled = true;
   document.getElementById("org").disabled = true;
-  if (jabatan == "" || tipekar == "") {
-    loadKar(org);
-  }
+  loadKar(org);
 }
 
 function cancelHeader(org) {
@@ -712,7 +767,14 @@ function cancelHeader(org) {
 }
 
 //load kary
+//isi dropdown Nama Karyawan sesuai filter form (Kode Organisasi, Tipe Karyawan, Jabatan) dan rincian yang sudah ada
 function loadKar(org, jabatan, tipekar) {
+  if (typeof jabatan === "undefined") {
+    jabatan = document.getElementById("jabatan").value;
+  }
+  if (typeof tipekar === "undefined") {
+    tipekar = document.getElementById("tipekar").value;
+  }
   param =
     "method=loadKar" +
     "&org=" +
@@ -720,7 +782,11 @@ function loadKar(org, jabatan, tipekar) {
     "&jabatan=" +
     jabatan +
     "&tipekar=" +
-    tipekar;
+    tipekar +
+    "&per=" +
+    document.getElementById("per").value +
+    "&kom=" +
+    document.getElementById("kom").value;
   tujuan = "sdm_slave_3pl.php";
   post_response_text(tujuan, param, respog);
   function respog() {
@@ -730,7 +796,8 @@ function loadKar(org, jabatan, tipekar) {
         if (!isSaveResponse(con.responseText)) {
           alert(con.responseText);
         } else {
-          // document.getElementById('kar').innerHTML = con.responseText;
+          document.getElementById("kar").innerHTML = con.responseText;
+          $("#kar").trigger("change.select2");
           loadDataDetail();
         }
       } else {
