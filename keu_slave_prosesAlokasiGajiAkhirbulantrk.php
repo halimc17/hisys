@@ -1332,7 +1332,12 @@ function prosesGajiTraksi()
 				// echo "CEK : ".count($arrvhc);
 
 				if(count($arrvhc) <= 0) {
+					# BPJS tidak ikut diproses Traksi Umum: BPJS dijurnalkan sekali oleh cabang BPJS di bawah ("By.Traksi", satu jurnal tanpa kendaraan).
+					# Kalau ikut di sini, BPJS terjurnal dobel (By.Traksi Umum + By.Traksi).
+					$arrkomponenSemua = $arrkomponen;
+					$arrkomponen = array_values(array_diff($arrkomponen, array('70', '71', '72', '73', '80')));
 					prosesGajiTraksiUmum();
+					$arrkomponen = $arrkomponenSemua;
 				}
 		# Endd cek
 
