@@ -4982,27 +4982,35 @@ function prosesGajiAfdeling()
 	}
 
 	$totalluas = 0;
-	$str = "select distinct b.kodekegiatan,a.tipetransaksi,b.kodeorg,b.kodesegment,c.luasareaproduktif from " . $dbname . ".kebun_aktifitas a 
+	$str = "select distinct b.kodekegiatan,a.tipetransaksi,b.kodeorg,b.kodesegment,c.luasareaproduktif,c.statusblok,case when a.tipetransaksi in ('TM','TBM','TB') and c.statusblok='TB' then c.lc+c.luasbloking else c.luasareaproduktif end as luasalokasi from " . $dbname . ".kebun_aktifitas a 
           left join " . $dbname . ".kebun_prestasi_detail b on a.notransaksi=b.notransaksi 
           left join " . $dbname . ".setup_blok c on b.kodeorg=c.kodeorg 
-          where (nikmandor='" . $param['karyawanid'] . "' or nikmandor1='" . $param['karyawanid'] . "' or keranimuat='" . $param['karyawanid'] . "' or nikasisten='" . $param['karyawanid'] . "') " . $wherekegx . " and a.kodeorg='" . $param['kodeorg'] . "' and a.tanggal >='" . $tanggalmulai . "' and tanggal <='" . $tanggalsampai . "' having kodeorg is not null";
+          where (nikmandor='" . $param['karyawanid'] . "' or nikmandor1='" . $param['karyawanid'] . "' or keranimuat='" . $param['karyawanid'] . "' or nikasisten='" . $param['karyawanid'] . "') " . $wherekegx . " and a.kodeorg='" . $param['kodeorg'] . "' and a.tanggal >='" . $tanggalmulai . "' and tanggal <='" . $tanggalsampai . "' having kodeorg is not null and luasalokasi > 0";
 	$res = $owlPDO->query($str) or die(print " Gagal: " . PDOException::getMessage());
 	$res->setFetchMode(PDO::FETCH_OBJ);
 
 	$rowdt  = fetchData($str);
+	#PPP: luasan dasar pembagian = luas areal produktif blok; untuk blok berstatus TB = LC + Luas Bloking (kolom luasalokasi di query).
+	# Blok dengan luasan kosong (blok tidak aktif) tidak diikutkan di query; bila semua blok yang diawasi kosong, gaji masuk biaya umum.
+	#PPP: luas tiap blok dihitung sekali. Blok yang punya beberapa kegiatan (beberapa baris) membagi luasnya sama rata ke baris-barisnya,
+	# supaya proporsi antar blok mengikuti luasan blok dan tidak membesar karena jumlah kegiatannya.
+	$barisperblok = array();
 	foreach ($rowdt as $bar) {
-		$totalluas += $bar['luasareaproduktif'];
+		$barisperblok[$bar['kodeorg']] = (isset($barisperblok[$bar['kodeorg']]) ? $barisperblok[$bar['kodeorg']] : 0) + 1;
+	}
+	foreach ($rowdt as $bar) {
+		$totalluas += $bar['luasalokasi'] / $barisperblok[$bar['kodeorg']];
 	}
 	$numrows = count($rowdt);
 	$numblk = $numrows;
-	$porsi = $no = $sisapembulatan = 0;
+	$porsi = $no = $sisapembulatan = $tporsi = 0;
 	// exit("Error:$numblk");
 	if ($numblk > 0) {
 		$noUrut = 0;
 		while ($bar = $res->fetch()) {
 
 
-			$porsi = floor($bar->luasareaproduktif / $totalluas * $param['jumlah']);
+			$porsi = floor(($bar->luasalokasi / $barisperblok[$bar->kodeorg]) / $totalluas * $param['jumlah']);
 			$tporsi += $porsi;
 
 			$no++;
@@ -5020,28 +5028,34 @@ function prosesGajiAfdeling()
 			$dataRes['header'] = array();
 			$dataRes['detail'] = array();
 			//buat header
-			if ($bar->tipetransaksi == 'BBT') {
+			#PPP: untuk BKM perawatan (TM/TBM/TB), jenis biaya pengawasan ditentukan dari status blok yang diawasi (setup_blok.statusblok), bukan dari jenis BKM.
+			# Bila status blok kosong/tidak dikenal, tetap memakai jenis BKM. BKM panen (PNN) tetap KBNL3.
+			$tipeAlok = $bar->tipetransaksi;
+			if (in_array($tipeAlok, array('TM', 'TBM', 'TB')) && in_array($bar->statusblok, array('TM', 'TBM', 'TB', 'BBT'))) {
+				$tipeAlok = ($bar->statusblok == 'TB') ? 'TBM' : $bar->statusblok;
+			}
+			if ($tipeAlok == 'BBT') {
 				$group = 'KBNL0';
 				if ($param['komponen'] == 71) {
 					$group = 'KBNL4';
 				} else if ($param['komponen'] == 70 or $param['komponen'] == 72 or $param['komponen'] == 73 or $param['komponen'] == 80) {
 					$group = 'KBNL5';
 				}
-			} else if ($bar->tipetransaksi == 'TBM' or $bar->tipetransaksi == 'TB') {
+			} else if ($tipeAlok == 'TBM' or $tipeAlok == 'TB') {
 				$group = 'KBNL1';
 				if ($param['komponen'] == 71) {
 					$group = 'KBNL4';
 				} else if ($param['komponen'] == 70 or $param['komponen'] == 72 or $param['komponen'] == 73 or $param['komponen'] == 80) {
 					$group = 'KBNL5';
 				}
-			} else if ($bar->tipetransaksi == 'TM') {
+			} else if ($tipeAlok == 'TM') {
 				$group = 'KBNL2';
 				if ($param['komponen'] == 71) {
 					$group = 'KBNL4';
 				} else if ($param['komponen'] == 70 or $param['komponen'] == 72 or $param['komponen'] == 73 or $param['komponen'] == 80) {
 					$group = 'KBNL5';
 				}
-			} else if ($bar->tipetransaksi == 'PNN') {
+			} else if ($tipeAlok == 'PNN') {
 				$group = 'KBNL3';
 				if ($param['komponen'] == 71) {
 					$group = 'KBNL4';
@@ -5074,11 +5088,17 @@ function prosesGajiAfdeling()
 				$kdkegiatan = $bar1->noakundebet . "01";
 			}
 
-			#jika bukan panen ambil akun kegiatannya 
+			#jika bukan panen ambil akun kegiatannya
+			#PPP: mandor perawatan TM (KBNL2) dan TBM (KBNL1) memakai akun parameter jurnal (6211101 Biaya Pengawasan TM, 1261601 Biaya Pengawasan TBM),
+			# bukan akun kegiatan. BBT (KBNL0) tetap memakai akun kegiatan. Kegiatan panen/angkut (akun 611...) pada BKM TM tetap memakai akun kegiatannya.
 			if ($group != 'KBNL3') {
 				if ($bar->tipetransaksi != 'PNN') {
 					$nmakun = makeOption($dbname, 'setup_kegiatan', 'kodekegiatan,noakun', "kodekegiatan='" . $bar->kodekegiatan . "'");
-					$akundebet = $nmakun[$bar->kodekegiatan];
+					$akunkegiatan = isset($nmakun[$bar->kodekegiatan]) ? $nmakun[$bar->kodekegiatan] : '';
+					$pakaiAkunParameter = in_array($group, array('KBNL1', 'KBNL2')) && $akundebet != '' && substr($akunkegiatan, 0, 3) != '611';
+					if (!$pakaiAkunParameter) {
+						$akundebet = $akunkegiatan;
+					}
 					$kdkegiatan = $bar->kodekegiatan;
 				}
 			}
