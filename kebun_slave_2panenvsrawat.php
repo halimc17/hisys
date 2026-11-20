@@ -1299,7 +1299,7 @@ switch ($proses) {
 			$optnmkeg[$bar['kodekegiatan']]=$bar['namakegiatan'];
 		}
 		
-		$optposisi=['0'=>'Operator','1'=>'Helper','2'=>'Sopir'];
+		$optposisi=['0'=>'Operator','1'=>'Helper','2'=>'Sopir','3'=>'Wakar','4'=>'Mandor'];
 		
 		$str = "select a.*,b.satuan  from " . $dbnamerpt . ".vhc_rundt_vw a  
 		left join ".$dbnamerpt.".vhc_kegiatan b on a.jenispekerjaan=b.kodekegiatan

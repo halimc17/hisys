@@ -48,7 +48,7 @@ switch ($proses) {
         $qry = $owlPDO->query($sql) or die(print " Gagal: " . PDOException::getMessage());
         $row = owlBaris($qry);
 
-		$jab=array('1'=>'Helper','2'=>'Operator','0'=>'Driver');
+		$jab=array('1'=>'Helper','2'=>'Operator','0'=>'Driver','3'=>'Wakar');
         if ($row >= 1) {
             $qry->setFetchMode(PDO::FETCH_ASSOC);
             while ($res = $qry->fetch()) {

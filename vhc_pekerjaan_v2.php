@@ -40,7 +40,8 @@
     $sOrg="select kodeorganisasi,namaorganisasi from ".$dbname.".organisasi where kodeorganisasi in (".getOrgDetail(2).") and kodeorganisasi in (select distinct induk from organisasi where tipe='TRAKSI') order by kodeorganisasi asc";
     $rOrg=fetchData($sOrg);
     foreach ($rOrg as $val) {
-        $optkodeorg.="<option value=".$val['kodeorganisasi'].">".$val['kodeorganisasi']." - ".$val['namaorganisasi']."</option>";
+        #PPP: data-ppp=1 menandai unit milik PT PPP (induk = PPP): ada isian Wakar dan premi wakar/mandor
+        $optkodeorg.="<option value=".$val['kodeorganisasi'].(getindukPT($val['kodeorganisasi'])=='PPP' ? " data-ppp='1'" : "").">".$val['kodeorganisasi']." - ".$val['namaorganisasi']."</option>";
     }
 
     #=Ambil kode kode traksi
@@ -127,6 +128,18 @@
 	$sPer="select left(tanggal,7) as periode from ".$dbname.".vhc_runht where substr(kodeorg,1,4) regexp '".$regexOrg."' group by left(tanggal,7) order by periode desc";
 	foreach(fetchData($sPer) as $val){
 		$optperiode_cari.="<option value='".$val['periode']."'>".$val['periode']."</option>";
+	}
+
+	#filter Tahun: bawaan tahun berjalan, ada pilihan Semua Tahun
+	$thnSekarang=date('Y');
+	$optTahun_cari="<option value=''>Semua Tahun</option>";
+	$daftarTahun=array($thnSekarang=>$thnSekarang);
+	foreach(fetchData("select left(tanggal,4) as tahun from ".$dbname.".vhc_runht where substr(kodeorg,1,4) regexp '".$regexOrg."' group by left(tanggal,4)") as $val){
+		$daftarTahun[$val['tahun']]=$val['tahun'];
+	}
+	krsort($daftarTahun);
+	foreach($daftarTahun as $thn){
+		$optTahun_cari.="<option value='".$thn."'".($thn==$thnSekarang ? " selected" : "").">".$thn."</option>";
 	}
 
 	$optoperator_cari="<option value=''>".$_SESSION['lang']['all']."</option>";
@@ -220,6 +233,9 @@
                                         <td nowrap>Kontanan</td>
                                         <td>:</td>
                                         <td><select id=kontanan_cari class=select2 onchange='loaddata(0)' style=width:180px;>".$optkontanan."</select></td>
+                                        <td nowrap>Tahun</td>
+                                        <td>:</td>
+                                        <td><select id=tahun_cari class=select2 onchange='loaddata(0)' style=width:180px;>".$optTahun_cari."</select></td>
                                     </tr>
                                     <tr>
                                         <td colspan=12>
@@ -252,7 +268,8 @@
                             <th align=center>".$_SESSION['lang']['kodevhc']."</th>
                             <th align=center>".$_SESSION['lang']['nopol']."</th>
                             <th align=center>".$_SESSION['lang']['detail']."</th>
-                            <th align=center>".$_SESSION['lang']['mandor']."</th>
+                            <th align=center>".$_SESSION['lang']['mandor']."</th>".((isset($_SESSION['empl']['kodeorganisasi']) && $_SESSION['empl']['kodeorganisasi']=='PPP') ? "
+                            <th align=center>Wakar</th>" : "")."
                             <th align=center>".$_SESSION['lang']['operator']."</th>
                             <th align=center>".$_SESSION['lang']['helper']." 1</th>
                             <th align=center style='".$hiddenHelperExtra."'>".$_SESSION['lang']['helper']." 2</th>
@@ -304,7 +321,7 @@
                     <td><input type=text class=myinputtext id=tglpekerjaan name=tglpekerjaan onmousemove=\"setCalendar(this.id)\" onkeypress=\"return false\";   maxlength=10  style=width:140px; readonly/></td>
                     
                     <td>".$_SESSION['lang']['kodevhc']."&nbsp;<font style='font-size:10px;color:blue;'>(6)</font></td><td>:</td>
-                    <td><select id=kodevhc class=select2 name=kodevhc style=width:220px;></select></td>
+                    <td><select id=kodevhc class=select2 name=kodevhc style=width:220px; onchange=\"getwakar()\"></select></td>
                     
                     <td>".$_SESSION['lang']['vhc_jenis_bbm']."&nbsp;<font style='font-size:10px;color:blue;'>(7)</font></td><td>:</td>
                     <td><select id=jenisbbm class=select2 name=jenisbbm style=width:130px;>".$optjenisbbm."</select></td>
@@ -316,11 +333,22 @@
                     <td><input type='checkbox' id='kontanan' style='vertical-align:middle'/></td>
                     
                 </tr>                
+                <tr id=barisWakarPPP style='display:none'>
+                    <td>Wakar&nbsp;<font style='font-size:10px;color:blue;'>(10)</font></td><td>:</td>
+                    <td><select id=wakar class=select2 name=wakar style=width:140px;><option value=''>".$_SESSION['lang']['pilihdata']."</option></select></td>
+
+                    <td>Premi Wakar&nbsp;<font style='font-size:10px;color:blue;'>(11)</font></td><td>:</td>
+                    <td><input type=text class=myinputtextnumber id=premiwakar name=premiwakar maxlength=12 value=0 onkeypress=\"return angka_doang(event);\" style=width:208px; /></td>
+
+                    <td>Premi Mandor&nbsp;<font style='font-size:10px;color:blue;'>(12)</font></td><td>:</td>
+                    <td><input type=text class=myinputtextnumber id=premimandor name=premimandor maxlength=12 value=0 onkeypress=\"return angka_doang(event);\" style=width:118px; /></td>
+                </tr>
                 <tr>
                     <td><td>
                     <td>
                         <button class=mybutton id=save_kepala name=save_kepala onclick=save_header()  disabled >".$_SESSION['lang']['save']."</button>
                         <button class=mybutton id=cancel_kepala name=cancel_kepala onclick=cancel_kepala_form() disabled >".$_SESSION['lang']['cancel']."</button>
+                        <button class=mybutton id=simpan_wm name=simpan_wm onclick=simpan_wakarmandor() style='display:none'>Simpan Wakar/Mandor</button>
                         <input type=hidden id=proses name=proses value=insert_header >	
                     </td>
                 </tr>

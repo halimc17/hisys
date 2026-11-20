@@ -71,6 +71,8 @@ function checkPTHelper() {
       "prmiHelp3",
       "prmiOprtTambahan",
       "pnltyOprt",
+      "premiwakar",
+      "premimandor",
       "jmlh_bbm",
       "brt_muatan",
       "kmhm_awal",
@@ -87,9 +89,131 @@ function checkPTHelper() {
   }
 })();
 
+//PPP: isian Wakar dan premi wakar/mandor hanya tampil untuk unit milik PT PPP; unit lain tidak berubah
+function tampilBarisWakarPPP(tampil) {
+  var baris = document.getElementById("barisWakarPPP");
+  if (baris) {
+    baris.style.display = tampil ? "" : "none";
+  }
+}
+
+function unitPPPDipilih() {
+  var sel = document.getElementById("kodeorg");
+  if (!sel || sel.selectedIndex < 0) {
+    return false;
+  }
+  return sel.options[sel.selectedIndex].getAttribute("data-ppp") == "1";
+}
+
+//PPP: pilihan wakar = operator berjabatan Wakar pada kendaraan terpilih
+function getwakar() {
+  if (!unitPPPDipilih()) {
+    return;
+  }
+  param =
+    "proses=getwakar&kodeorg=" +
+    encodeURIComponent(getValue("kodeorg")) +
+    "&kodevhc=" +
+    encodeURIComponent(getValue("kodevhc")) +
+    "&tglpekerjaan=" +
+    encodeURIComponent(getValue("tglpekerjaan"));
+  tujuan = "vhc_slave_pekerjaan_v2.php";
+  post_response_text(tujuan, param, respog);
+
+  function respog() {
+    if (con.readyState == 4) {
+      if (con.status == 200) {
+        busy_off();
+        if (!isSaveResponse(con.responseText)) {
+          alert(con.responseText);
+        } else {
+          document.getElementById("wakar").innerHTML = con.responseText;
+        }
+      } else {
+        busy_off();
+        error_catch(con.status);
+      }
+    }
+  }
+}
+
+//PPP: pada mode edit, wakar/mandor/premi tetap bisa diubah dan disimpan lewat tombol Simpan Wakar/Mandor
+function bukaEditWakarMandorPPP(ppp, optWakar, optMandor) {
+  var tombol = document.getElementById("simpan_wm");
+  if (!ppp) {
+    if (tombol) tombol.style.display = "none";
+    return;
+  }
+  if (optWakar !== undefined) {
+    document.getElementById("wakar").innerHTML = optWakar;
+  }
+  if (optMandor !== undefined) {
+    document.getElementById("mandor").innerHTML = optMandor;
+  }
+  document.getElementById("wakar").disabled = false;
+  document.getElementById("mandor").disabled = false;
+  document.getElementById("premiwakar").disabled = false;
+  document.getElementById("premimandor").disabled = false;
+  if (tombol) tombol.style.display = "";
+}
+
+function simpan_wakarmandor() {
+  if (!unitPPPDipilih()) {
+    return;
+  }
+  var wakar = getValue("wakar");
+  var mandor = getValue("mandor");
+  var premiwakar = getValue("premiwakar");
+  var premimandor = getValue("premimandor");
+  if (wakar == "" && parseFloat(premiwakar || 0) > 0) {
+    alertify.alert("Informasi ", "Premi wakar diisi, tetapi wakar belum dipilih.");
+    return false;
+  }
+  if (mandor == "" && parseFloat(premimandor || 0) > 0) {
+    alertify.alert("Informasi ", "Premi mandor diisi, tetapi mandor belum dipilih.");
+    return false;
+  }
+  if (wakar != "" && wakar == mandor) {
+    alertify.alert("Informasi ", "Wakar dan mandor tidak boleh orang yang sama.");
+    return false;
+  }
+  param =
+    "proses=update_wakarmandor&no_trans=" +
+    encodeURIComponent(getValue("no_trans")) +
+    "&wakar=" +
+    encodeURIComponent(wakar) +
+    "&mandor=" +
+    encodeURIComponent(mandor) +
+    "&premiwakar=" +
+    encodeURIComponent(premiwakar) +
+    "&premimandor=" +
+    encodeURIComponent(premimandor) +
+    "&jns_kerja=";
+  tujuan = "vhc_slave_pekerjaan_v2.php";
+  post_response_text(tujuan, param, respog);
+
+  function respog() {
+    if (con.readyState == 4) {
+      if (con.status == 200) {
+        busy_off();
+        if (!isSaveResponse(con.responseText)) {
+          alert(con.responseText);
+        } else {
+          alertify.alert("Informasi ", trim(con.responseText));
+          loaddetail();
+        }
+      } else {
+        busy_off();
+        error_catch(con.status);
+      }
+    }
+  }
+}
+
 function getsubunit() {
   checkPTHelper();
   kodeorg = document.getElementById("kodeorg").value;
+  tampilBarisWakarPPP(unitPPPDipilih());
 
   param = "proses=getsubunit&kodeorg=" + kodeorg;
   tujuan = "vhc_slave_pekerjaan_v2.php";
@@ -145,6 +269,9 @@ function unlock_header_form() {
   document.getElementById("save_kepala").disabled = false;
   document.getElementById("cancel_kepala").disabled = false;
   document.getElementById("mandor").disabled = false;
+  document.getElementById("wakar").disabled = false;
+  document.getElementById("premiwakar").disabled = false;
+  document.getElementById("premimandor").disabled = false;
   document.getElementById("save_kepala").style.visibility = "visible";
   document.getElementById("cancel_kepala").style.visibility = "visible";
 }
@@ -161,6 +288,9 @@ function lock_header_form() {
   document.getElementById("save_kepala").disabled = true;
   document.getElementById("cancel_kepala").disabled = true;
   document.getElementById("mandor").disabled = true;
+  document.getElementById("wakar").disabled = true;
+  document.getElementById("premiwakar").disabled = true;
+  document.getElementById("premimandor").disabled = true;
   document.getElementById("save_kepala").style.visibility = "hidden";
   document.getElementById("cancel_kepala").style.visibility = "hidden";
 }
@@ -178,6 +308,14 @@ function clear_form() {
     "<option value=''>Pilih Data</option>";
   document.getElementById("kodevhc").innerHTML =
     "<option value=''>Pilih Data</option>";
+  document.getElementById("wakar").innerHTML =
+    "<option value=''>Pilih Data</option>";
+  document.getElementById("premiwakar").value = "0";
+  document.getElementById("premimandor").value = "0";
+  tampilBarisWakarPPP(false);
+  if (document.getElementById("simpan_wm")) {
+    document.getElementById("simpan_wm").style.display = "none";
+  }
 }
 
 function clear_operator() {
@@ -202,6 +340,12 @@ function batalcariDataTransaksi() {
   setValue2("posting_cari", "");
   setValue2("periode_cari", "");
   setValue2("operator_cari", "");
+  //tahun kembali ke tahun berjalan (bawaan)
+  var thnIni = String(new Date().getFullYear());
+  setValue2(
+    "tahun_cari",
+    document.querySelector('#tahun_cari option[value="' + thnIni + '"]') ? thnIni : "",
+  );
   loaddata(0);
 }
 
@@ -214,6 +358,7 @@ function getFilterParamPekerjaan() {
   p += "&kontanan_cari=" + encodeURIComponent(document.getElementById("kontanan_cari").value);
   p += "&posting_cari=" + document.getElementById("posting_cari").value;
   p += "&periode_cari=" + document.getElementById("periode_cari").value;
+  p += "&tahun_cari=" + document.getElementById("tahun_cari").value;
   p += "&operator_cari=" + document.getElementById("operator_cari").value;
   return p;
 }
@@ -1004,6 +1149,10 @@ function fillField(noTrans, Thn) {
           checkPTHelper();
           document.getElementById("tglpekerjaan").value = ar[4];
           document.getElementById("mandor").innerHTML = ar[10];
+          tampilBarisWakarPPP(trim(ar[15]) == "1");
+          document.getElementById("wakar").innerHTML = ar[12];
+          document.getElementById("premiwakar").value = ar[13];
+          document.getElementById("premimandor").value = ar[14];
           document.getElementById("kode_karyawan").innerHTML = ar[5];
           document.getElementById("kode_helper").innerHTML = ar[11];
           document.getElementById("kode_helper2").innerHTML = ar[11];
@@ -1024,6 +1173,7 @@ function fillField(noTrans, Thn) {
           document.getElementById("jenisvhc").innerHTML = ar[3];
 
           lock_header_form();
+          bukaEditWakarMandorPPP(trim(ar[15]) == "1", ar[12], ar[10]);
           document.getElementById("kodevhc").innerHTML = await optkodevhc(
             ar[0],
           );
@@ -1061,6 +1211,9 @@ function save_header() {
   kdVhc = getValue("kodevhc");
   pro = getValue("proses");
   mandor = getValue("mandor");
+  wakar = getValue("wakar");
+  premiwakar = getValue("premiwakar");
+  premimandor = getValue("premimandor");
 
   if (kdOrg == "") {
     alertify.alert("Informasi ", "Kode organisasi harus dipilih.");
@@ -1077,6 +1230,22 @@ function save_header() {
   } else if (kdVhc == "") {
     alertify.alert("Informasi ", "Kode kendaraan harus dipilih.");
     return false;
+  }
+
+  //PPP: premi wakar/mandor hanya boleh diisi bila wakar/mandornya dipilih
+  if (unitPPPDipilih()) {
+    if (wakar == "" && parseFloat(premiwakar || 0) > 0) {
+      alertify.alert("Informasi ", "Premi wakar diisi, tetapi wakar belum dipilih.");
+      return false;
+    }
+    if (mandor == "" && parseFloat(premimandor || 0) > 0) {
+      alertify.alert("Informasi ", "Premi mandor diisi, tetapi mandor belum dipilih.");
+      return false;
+    }
+    if (wakar != "" && wakar == mandor) {
+      alertify.alert("Informasi ", "Wakar dan mandor tidak boleh orang yang sama.");
+      return false;
+    }
   }
 
   if (document.getElementById("kontanan").checked == true) {
@@ -1106,6 +1275,15 @@ function save_header() {
     kontanan +
     "&mandor=" +
     mandor;
+  if (unitPPPDipilih()) {
+    param +=
+      "&wakar=" +
+      encodeURIComponent(wakar) +
+      "&premiwakar=" +
+      encodeURIComponent(premiwakar) +
+      "&premimandor=" +
+      encodeURIComponent(premimandor);
+  }
   tujuan = "vhc_slave_pekerjaan_v2.php";
 
   post_response_text(tujuan, param, respog);
@@ -1131,6 +1309,7 @@ function save_header() {
           }
           document.getElementById("detail").style.display = "block";
           lock_header_form();
+          bukaEditWakarMandorPPP(unitPPPDipilih());
           loaddetail();
         }
       } else {
@@ -1156,6 +1335,7 @@ function loaddata(num) {
   kontan_cari = document.getElementById("kontanan_cari").value;
   posting_cari = document.getElementById("posting_cari").value;
   periode_cari = document.getElementById("periode_cari").value;
+  tahun_cari = document.getElementById("tahun_cari").value;
   operator_cari = document.getElementById("operator_cari").value;
   param = "proses=loaddata&page=" + num;
   param +=
@@ -1173,6 +1353,8 @@ function loaddata(num) {
     encodeURIComponent(posting_cari) +
     "&periode_cari=" +
     encodeURIComponent(periode_cari) +
+    "&tahun_cari=" +
+    encodeURIComponent(tahun_cari) +
     "&operator_cari=" +
     encodeURIComponent(operator_cari);
   tujuan = "vhc_slave_pekerjaan_v2.php";
