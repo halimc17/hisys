@@ -298,7 +298,7 @@
     OPEN_BOX();
     echo"<fieldset style='float:left;'><legend>".$_SESSION['lang']['header']."</legend>
             <table cellspacing=1 border=0>
-                <tr>
+                <tr id=barisHeader1>
                     <td>".$_SESSION['lang']['notransaksi']."</td><td>:</td>
                     <td><input type=text id=no_trans name=no_trans disabled=disabled class=myinputtext style=width:140px; /></td>
 
@@ -311,44 +311,47 @@
                     <td>".$_SESSION['lang']['jenis']." ".$_SESSION['lang']['kendaraan']."&nbsp;<font style='font-size:10px;color:blue;'>(3)</font></td><td>:</td>
                     <td><select id=jenisvhc class=select2 name=jenisvhc style=width:110px; onchange=\"getKodeVhc()\">".$optjnsvhc."</select></td>
 
-                    <td>".$_SESSION['lang']['mandor']."&nbsp;<font style='font-size:10px;color:blue;'>(4)</font></td><td>:</td>
-                    <td><select id=mandor class=select2 name=mandor style=width:130px;>".$optMandor."</select></td>
+                    <td id=tdMandorLbl>".$_SESSION['lang']['mandor']."&nbsp;<font id=nomorHdr4 style='font-size:10px;color:blue;'>(4)</font></td><td id=tdMandorSep>:</td>
+                    <td id=tdMandorSel><select id=mandor class=select2 name=mandor style=width:130px;>".$optMandor."</select></td>
 
                 </tr>
-                <tr>
+                <tr id=barisHeader2>
                 
-                    <td>".$_SESSION['lang']['tanggal']."&nbsp;<font style='font-size:10px;color:blue;'>(5)</font></td><td>:</td>
+                    <td>".$_SESSION['lang']['tanggal']."&nbsp;<font id=nomorHdr5 style='font-size:10px;color:blue;'>(5)</font></td><td>:</td>
                     <td><input type=text class=myinputtext id=tglpekerjaan name=tglpekerjaan onmousemove=\"setCalendar(this.id)\" onkeypress=\"return false\";   maxlength=10  style=width:140px; readonly/></td>
                     
-                    <td>".$_SESSION['lang']['kodevhc']."&nbsp;<font style='font-size:10px;color:blue;'>(6)</font></td><td>:</td>
+                    <td>".$_SESSION['lang']['kodevhc']."&nbsp;<font id=nomorHdr6 style='font-size:10px;color:blue;'>(6)</font></td><td>:</td>
                     <td><select id=kodevhc class=select2 name=kodevhc style=width:220px; onchange=\"getwakar()\"></select></td>
                     
-                    <td>".$_SESSION['lang']['vhc_jenis_bbm']."&nbsp;<font style='font-size:10px;color:blue;'>(7)</font></td><td>:</td>
+                    <td>".$_SESSION['lang']['vhc_jenis_bbm']."&nbsp;<font id=nomorHdr7 style='font-size:10px;color:blue;'>(7)</font></td><td>:</td>
                     <td><select id=jenisbbm class=select2 name=jenisbbm style=width:130px;>".$optjenisbbm."</select></td>
 
-                    <td>".$_SESSION['lang']['vhc_jumlah_bbm']."&nbsp;<font style='font-size:10px;color:blue;'>(8)</font></td><td>:</td>
+                    <td>".$_SESSION['lang']['vhc_jumlah_bbm']."&nbsp;<font id=nomorHdr8 style='font-size:10px;color:blue;'>(8)</font></td><td>:</td>
                     <td><input type=text class=myinputtextnumber id=jmlh_bbm name=jmlh_bbm maxlength=10 value=0 onkeypress=\"return angka_doang(event);\" style=width:108px; /></td>
 
-                    <td>".$_SESSION['lang']['kontanan']."&nbsp;<font style='font-size:10px;color:blue;'>(9)</font></td><td>:</td>
-                    <td><input type='checkbox' id='kontanan' style='vertical-align:middle'/></td>
+                    <td id=tdKontananLbl>".$_SESSION['lang']['kontanan']."&nbsp;<font id=nomorHdr9 style='font-size:10px;color:blue;'>(9)</font></td><td id=tdKontananSep>:</td>
+                    <td id=tdKontananSel><input type='checkbox' id='kontanan' style='vertical-align:middle'/></td>
                     
                 </tr>                
                 <tr id=barisWakarPPP style='display:none'>
-                    <td>Wakar&nbsp;<font style='font-size:10px;color:blue;'>(10)</font></td><td>:</td>
+                    <td>Wakar&nbsp;<font id=nomorHdr10 style='font-size:10px;color:blue;'>(10)</font></td><td>:</td>
                     <td><select id=wakar class=select2 name=wakar style=width:140px;><option value=''>".$_SESSION['lang']['pilihdata']."</option></select></td>
 
-                    <td>Premi Wakar&nbsp;<font style='font-size:10px;color:blue;'>(11)</font></td><td>:</td>
+                    <td>Premi Wakar&nbsp;<font id=nomorHdr11 style='font-size:10px;color:blue;'>(11)</font></td><td>:</td>
                     <td><input type=text class=myinputtextnumber id=premiwakar name=premiwakar maxlength=12 value=0 onkeypress=\"return angka_doang(event);\" style=width:208px; /></td>
 
-                    <td>Premi Mandor&nbsp;<font style='font-size:10px;color:blue;'>(12)</font></td><td>:</td>
-                    <td><input type=text class=myinputtextnumber id=premimandor name=premimandor maxlength=12 value=0 onkeypress=\"return angka_doang(event);\" style=width:118px; /></td>
+                    <td id=slotMandorPPP style='display:none'></td>
+
+                    <td>Premi Mandor&nbsp;<font id=nomorHdr12 style='font-size:10px;color:blue;'>(12)</font></td><td>:</td>
+                    <td><input type=text class=myinputtextnumber id=premimandor name=premimandor maxlength=12 value=0 onkeypress=\"return angka_doang(event);\" style=width:100px; /></td>
+
+                    <td colspan=3><button class=mybutton id=simpan_wm name=simpan_wm onclick=simpan_wakarmandor() style='display:none'>Simpan Wakar/Mandor</button></td>
                 </tr>
                 <tr>
                     <td><td>
                     <td>
                         <button class=mybutton id=save_kepala name=save_kepala onclick=save_header()  disabled >".$_SESSION['lang']['save']."</button>
                         <button class=mybutton id=cancel_kepala name=cancel_kepala onclick=cancel_kepala_form() disabled >".$_SESSION['lang']['cancel']."</button>
-                        <button class=mybutton id=simpan_wm name=simpan_wm onclick=simpan_wakarmandor() style='display:none'>Simpan Wakar/Mandor</button>
                         <input type=hidden id=proses name=proses value=insert_header >	
                     </td>
                 </tr>

@@ -95,6 +95,80 @@ function tampilBarisWakarPPP(tampil) {
   if (baris) {
     baris.style.display = tampil ? "" : "none";
   }
+  pindahMandorPPP(tampil);
+}
+
+//PPP: Mandor pindah ke baris Wakar (di antara Premi Wakar dan Premi Mandor), Kontanan naik ke baris atas, dan nomor label disesuaikan
+//urutannya; unit lain tetap seperti semula
+function pindahMandorPPP(ppp) {
+  var baris = document.getElementById("barisWakarPPP");
+  var barisAtas = document.getElementById("barisHeader1");
+  var barisKedua = document.getElementById("barisHeader2");
+  var penanda = document.getElementById("slotMandorPPP");
+  var ambil = function (ids) {
+    return ids.map(function (id) {
+      return document.getElementById(id);
+    });
+  };
+  var mandor = ambil(["tdMandorLbl", "tdMandorSep", "tdMandorSel"]);
+  var kontan = ambil(["tdKontananLbl", "tdKontananSep", "tdKontananSel"]);
+  if (!baris || !barisAtas || !barisKedua || !penanda || mandor.indexOf(null) >= 0 || kontan.indexOf(null) >= 0) {
+    return;
+  }
+  var mandorDibawah = mandor[0].parentNode === baris;
+  if (ppp && !mandorDibawah) {
+    mandor.forEach(function (el) {
+      baris.insertBefore(el, penanda);
+    });
+    kontan.forEach(function (el) {
+      barisAtas.appendChild(el);
+    });
+  } else if (!ppp && mandorDibawah) {
+    mandor.forEach(function (el) {
+      barisAtas.appendChild(el);
+    });
+    kontan.forEach(function (el) {
+      barisKedua.appendChild(el);
+    });
+  }
+  //nomor label: PPP mengikuti urutan tampil (Kontanan 4, Wakar 9, Premi Wakar 10, Mandor 11, Premi Mandor 12), lainnya bawaan
+  var nomor = ppp
+    ? { 4: 11, 5: 5, 6: 6, 7: 7, 8: 8, 9: 4, 10: 9, 11: 10, 12: 12 }
+    : { 4: 4, 5: 5, 6: 6, 7: 7, 8: 8, 9: 9, 10: 10, 11: 11, 12: 12 };
+  for (var n = 4; n <= 12; n++) {
+    var el = document.getElementById("nomorHdr" + n);
+    if (el) {
+      el.textContent = "(" + nomor[n] + ")";
+    }
+  }
+  if (ppp) {
+    samakanLebarPPP();
+  }
+}
+
+//PPP: lebar isian baris Wakar disamakan dengan isian di kolom yang sama pada baris atasnya supaya sejajar
+function samakanLebarPPP() {
+  var lebarSelect = function (id) {
+    var c = $("#" + id).next(".select2-container")[0];
+    return c ? c.offsetWidth : document.getElementById(id).offsetWidth;
+  };
+  var setSelect = function (id, w) {
+    var c = $("#" + id).next(".select2-container");
+    if (c.length && w > 0) {
+      c.css("width", w + "px");
+    }
+  };
+  var setInput = function (id, w) {
+    var el = document.getElementById(id);
+    if (el && w > 0) {
+      el.style.boxSizing = "border-box";
+      el.style.width = w + "px";
+    }
+  };
+  setSelect("wakar", document.getElementById("tglpekerjaan").offsetWidth);
+  setInput("premiwakar", lebarSelect("kodeorg"));
+  setSelect("mandor", lebarSelect("kodetraksi"));
+  setInput("premimandor", document.getElementById("jmlh_bbm").offsetWidth);
 }
 
 function unitPPPDipilih() {
