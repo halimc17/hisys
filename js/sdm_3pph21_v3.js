@@ -368,6 +368,13 @@ function toggleRinci(tampil) {
     } else if (tabel.className.indexOf('sembunyiRinci') < 0) {
         tabel.className += ' sembunyiRinci';
     }
+    // grup PENGURANG PAJAK (Desember): selebar biaya jabatan saja, atau ditambah kolom rincian iuran bila rincian dibuka
+    var grup = tabel.querySelectorAll('th.grupPengurang');
+    for (var g = 0; g < grup.length; g++) {
+        var dasar = parseInt(grup[g].getAttribute('data-dasar'), 10) || 1;
+        var rinci = parseInt(grup[g].getAttribute('data-rinci'), 10) || 0;
+        grup[g].colSpan = tampil ? dasar + rinci : dasar;
+    }
     leftFixedTable();
 }
 
