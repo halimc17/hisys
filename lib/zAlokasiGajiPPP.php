@@ -356,6 +356,32 @@ function validasiParamGajiBlmPPP($p)
 #Sisa gaji yang belum teralokasi per karyawan (gaji plus dikurangi jurnal gaji yang sudah terbentuk selain ALK_GAJI_LBR).
 #Dipakai bersama oleh list dan proses simpan supaya angka jurnal dihitung server, bukan dipercaya dari browser.
 #$karyawanid kosong = semua karyawan unit itu. Hasil: karyawanid => array(gaji, gajibpjs, gajibpjskes, sudah, sudahbpjs, sudahkes, sisa, sisabpjs, sisakes)
+#kehadiran wakar/mandor (vhc_runhk posisi 3 dan 4) di Pekerjaan Traksi pada satu periode, untuk dibebankan ke kendaraan oleh Proses Akhir Bulan.
+#Hasil: satu baris per transaksi (tanggal, kodevhc, premi) dengan bobotgaji = gaji pokok / 25, dibagi rata bila pada hari itu ada lebih dari satu kendaraan.
+function kehadiranWakarMandorPPP($kodeorg, $periode, $karyawanid)
+{
+	global $dbname;
+	$kodeorg = addslashes($kodeorg);
+	$periode = addslashes($periode);
+	$karyawanid = addslashes($karyawanid);
+	$rows = fetchData("select h.tanggal,h.kodevhc,k.premi from " . $dbname . ".vhc_runhk k inner join " . $dbname . ".vhc_runht h on h.notransaksi=k.notransaksi
+		where k.idkaryawan='" . $karyawanid . "' and k.posisi in (3,4) and h.kodeorg='" . $kodeorg . "' and h.tanggal like '" . $periode . "%' and h.kodevhc<>''
+		order by h.tanggal,h.kodevhc");
+	if (count($rows) == 0) {
+		return array();
+	}
+	$gp = fetchData("select jumlah from " . $dbname . ".sdm_5gajipokok where karyawanid='" . $karyawanid . "' and tahun='" . $periode . "' and idkomponen='1'");
+	$harian = (count($gp) > 0 && $gp[0]['jumlah'] > 0) ? $gp[0]['jumlah'] / 25 : 0;
+	$perHari = array();
+	foreach ($rows as $r) {
+		$perHari[$r['tanggal']] = (isset($perHari[$r['tanggal']]) ? $perHari[$r['tanggal']] : 0) + 1;
+	}
+	foreach ($rows as $i => $r) {
+		$rows[$i]['bobotgaji'] = $harian / $perHari[$r['tanggal']];
+	}
+	return $rows;
+}
+
 function hitungSisaGajiBlmAlokasiPPP($kodeorg, $periode, $karyawanid = '')
 {
 	global $dbname;

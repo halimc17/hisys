@@ -5631,6 +5631,25 @@ function prosesGajiKebun()
 			}
 		}
 	}
+	#PPP: wakar/mandor yang tercatat di Pekerjaan Traksi (vhc_runhk posisi 3/4): gaji dan premi pada hari itu dibebankan ke akun transit kendaraan
+	# (parameter jurnal VHCG0 untuk gaji, VHCG1 untuk premi) dengan kode kendaraan, lalu dibagi ke pekerjaan oleh proses traksi (ALKJAM).
+	# Gaji dibagi menurut bobot hari (gaji pokok / 25) bersama baris absensi; premi hanya untuk komponen Premi (32).
+	if ($pakaiAbsensiPPP && ($group == 'KBNB0' || ($group == 'KBNB1' && (int)$param['komponen'] == 32))) {
+		$akunVhcRes = fetchData("select noakundebet from " . $dbname . ".keu_5parameterjurnal where jurnalid='" . ($group == 'KBNB0' ? 'VHCG0' : 'VHCG1') . "' limit 1");
+		$akunVhc = count($akunVhcRes) > 0 ? $akunVhcRes[0]['noakundebet'] : '';
+		if (strlen($akunVhc) == 7) {
+			foreach (kehadiranWakarMandorPPP($param['kodeorg'], $param['periode'], $param['karyawanid']) as $hkv) {
+				$nilaiv = ($group == 'KBNB0') ? $hkv['bobotgaji'] : $hkv['premi'];
+				if ($nilaiv > 0) {
+					if (!isset($data[$akunVhc]['VHC:' . $hkv['kodevhc']])) {
+						$data[$akunVhc]['VHC:' . $hkv['kodevhc']] = 0;
+					}
+					$data[$akunVhc]['VHC:' . $hkv['kodevhc']] += $nilaiv;
+					$ttldata += $nilaiv;
+				}
+			}
+		}
+	}
 	$kodeJurnal = $group;
 
 	#proses data
@@ -5672,8 +5691,15 @@ function prosesGajiKebun()
 	if (($group == 'KBNB0' or $group == 'KBNB1') and !empty($data)) {
 		# Data Detail
 		# Debet
+		$kodevhcDt = '';
 		foreach ($data as $akun => $valokasi) {
 			foreach ($valokasi as $blok => $rupiah) {
+				$kodevhcDt = '';
+				if (strpos((string)$blok, 'VHC:') === 0) {
+					#PPP: baris kendaraan (wakar/mandor di Pekerjaan Traksi)
+					$kodevhcDt = substr($blok, 4);
+					$blok = $param['subbagian'];
+				}
 				if (strlen($akun) > 7) {
 					$kegiatan = $akun;
 					$akundebet = substr($akun, 0, 7);
@@ -5710,7 +5736,7 @@ function prosesGajiKebun()
 					'kodesupplier' => '',
 					'noreferensi' => 'ALK_GAJI',
 					'noaruskas'   => '',
-					'kodevhc'     => '',
+					'kodevhc'     => $kodevhcDt,
 					'nodok'       => '',
 					'kodeblok'    => $blok,
 					'revisi'      => '0',
@@ -5739,7 +5765,7 @@ function prosesGajiKebun()
 				'kodesupplier' => '',
 				'noreferensi' => 'ALK_GAJI',
 				'noaruskas'   => '',
-				'kodevhc'     => '',
+				'kodevhc'     => $kodevhcDt,
 				'nodok'       => '',
 				'kodeblok'    => $blok,
 				'revisi'      => '0',
