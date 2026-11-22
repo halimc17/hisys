@@ -17,22 +17,35 @@ require_once('lib/zAlokasiGajiPPP.php');
 <script language=javascript1.2 src='js/keu_5alokasikomponen.js?v=<?php echo time(); ?>'></script>
 <link rel=stylesheet type=text/css href=style/zTable.css>
 <?
-#Setup Alokasi Komponen Gaji per PT (PT = PT pengguna yang login); satu setup untuk semua kebutuhan alokasi
-$optKomponen = "<option value=''>" . $_SESSION['lang']['pilihdata'] . "</option><option value='0'>Semua komponen (kecuali BPJS) - khusus per jabatan</option>";
-foreach (fetchData("select id,name from " . $dbname . ".sdm_ho_component where plus=1 order by trim(name), id") as $bar) {
+#Setup Alokasi Komponen Gaji per PT (PT = PT pengguna yang login). Dua tab:
+#  1. Komponen Upah (Setup Upah, tipe basic): satu akun debet per jabatan untuk semua komponen upah jabatan itu
+#  2. Pendapatan Lain (komponen tambahan): jenis biaya + akun debet (opsional) per komponen, semua jabatan atau jabatan tertentu
+$pilih = "<option value=''>" . $_SESSION['lang']['pilihdata'] . "</option>";
+
+$namaUpah = array();
+foreach (fetchData("select id,name from " . $dbname . ".sdm_ho_component where type='basic' and plus=1 order by id") as $bar) {
+	$namaUpah[] = htmlspecialchars(trim($bar['name']));
+}
+$optKomponen = $pilih;
+foreach (fetchData("select id,name from " . $dbname . ".sdm_ho_component where plus=1 and type<>'basic' order by trim(name), id") as $bar) {
 	$optKomponen .= "<option value='" . $bar['id'] . "'>" . htmlspecialchars(trim($bar['name'])) . " (" . $bar['id'] . ")</option>";
 }
-$optJabatan = "<option value='0'>Semua jabatan</option>";
+$optJabatan = $pilih;
+$optJabatanLain = "<option value='0'>Semua jabatan</option>";
 foreach (fetchData("select kodejabatan,namajabatan from " . $dbname . ".sdm_5jabatan order by namajabatan") as $bar) {
 	$optJabatan .= "<option value='" . $bar['kodejabatan'] . "'>" . htmlspecialchars($bar['namajabatan']) . "</option>";
+	$optJabatanLain .= "<option value='" . $bar['kodejabatan'] . "'>" . htmlspecialchars($bar['namajabatan']) . "</option>";
 }
-$optJenis = "<option value=''>(ikut aturan semua jabatan)</option>";
+$optJenis = $pilih;
 foreach (jenisBiayaPPP() as $kd => $nm) {
 	$optJenis .= "<option value='" . $kd . "'>" . $nm . "</option>";
 }
-$optAkun = "<option value=''>Default parameter jurnal</option>";
+$optAkunWajib = $pilih;
+$optAkunOpsi = "<option value=''>Ikut akun bawaan jenis biaya</option>";
 foreach (fetchData("select noakun,namaakun from " . $dbname . ".keu_5akun where noakun like '7%' and detail=1 order by noakun") as $bar) {
-	$optAkun .= "<option value='" . $bar['noakun'] . "'>" . htmlspecialchars($bar['noakun'] . " - " . $bar['namaakun']) . "</option>";
+	$o = "<option value='" . $bar['noakun'] . "'>" . htmlspecialchars($bar['noakun'] . " - " . $bar['namaakun']) . "</option>";
+	$optAkunWajib .= $o;
+	$optAkunOpsi .= $o;
 }
 
 #akun default tiap jenis biaya per bagian, dibaca dari parameter jurnal (supaya tidak perlu membuka menu Parameter Jurnal)
@@ -55,94 +68,100 @@ foreach (jenisBiayaPPP() as $kdJenis => $nmJenis) {
 }
 
 OPEN_BOX('', '<span class=judul>' . getMenu('keu_5alokasikomponen') . '</span>');
-echo "<script>var defaultJenis5 = " . json_encode($defJenisPage) . ";</script>";echo "<fieldset style='width:520px;float:left'><legend><b>Form</b></legend>
-	<table border=0 cellpadding=3>
-		<tr><td>PT</td><td>:</td><td><b>" . htmlspecialchars($_SESSION['empl']['kodeorganisasi']) . "</b></td></tr>
-		<tr>
-			<td>Komponen</td><td>:</td>
-			<td><select id=idkomponen class=select2 style='width:340px'>" . $optKomponen . "</select></td>
-		</tr>
-		<tr>
-			<td>Jabatan</td><td>:</td>
-			<td><select id=kodejabatan class=select2 style='width:340px'>" . $optJabatan . "</select></td>
-		</tr>
-		<tr>
-			<td>Jenis Biaya</td><td>:</td>
-			<td><select id=jenisbiaya class=select2 style='width:340px' onchange=tampilDefault5alokasi()>" . $optJenis . "</select></td>
-		</tr>
-		<tr>
-			<td></td><td></td>
-			<td><div id=infoDefault style='font-size:11px;color:#333;max-width:380px'></div></td>
-		</tr>
-		<tr>
-			<td>Akun Debet</td><td>:</td>
-			<td><select id=noakundebet class=select2 style='width:340px'>" . $optAkun . "</select></td>
-		</tr>
-		<tr>
-			<td>Aktif</td><td>:</td>
-			<td><select id=aktif class=select2 style='width:100px'><option value='1'>Ya</option><option value='0'>Tidak</option></select></td>
-		</tr>
+echo "<script>var defaultJenis5 = " . json_encode($defJenisPage) . ";</script>";
+echo "<style>
+	#tabBar5 {margin:4px 0 6px 0}
+	#tabBar5 button {margin-right:6px;padding:6px 18px;font-weight:bold}
+	#tabBar5 button.aktif5 {background:#1F4E78;color:#fff}
+	.info5 {font-size:12px;line-height:1.5;margin:4px 0 8px 0;max-width:900px}
+	#formUpah5 td, #formLain5 td {padding:3px 4px;vertical-align:middle}
+	#formUpah5 td.lbl, #formLain5 td.lbl {white-space:nowrap;width:90px}
+	#formUpah5 td.sep, #formLain5 td.sep {width:10px;text-align:center}
+</style>
+<div class=info5>Menentukan ke akun mana biaya gaji dibebankan saat <b>Proses Akhir Bulan &gt; Gaji Karyawan Tidak Langsung</b> (PT <b>" . htmlspecialchars($_SESSION['empl']['kodeorganisasi']) . "</b>). Pilih tab sesuai jenis komponen. Yang tidak diatur di sini memakai akun bawaan.</div>
+<div id=tabBar5>
+	<button class='mybutton aktif5' id=btnTabUpah5 onclick=tampilTab5('upah')>1. Komponen Upah</button>
+	<button class=mybutton id=btnTabLain5 onclick=tampilTab5('lain')>2. Pendapatan Lain</button>
+</div>";
+CLOSE_BOX();
+
+#================ Tab 1: Komponen Upah ================
+echo "<div id=tabUpah5>";
+OPEN_BOX();
+echo "<div class=info5>Berlaku untuk <b>komponen dari Setup Upah</b>: " . implode(', ', $namaUpah) . ". Semua komponen upah satu jabatan dibebankan ke <b>satu akun</b> sebagai satu kesatuan (jenis biaya Gaji). Jabatan yang tidak diatur memakai akun bawaan.</div>
+<fieldset style='width:520px;float:left;margin-right:12px'><legend><b>Atur per Jabatan</b></legend>
+	<table id=formUpah5 border=0 cellpadding=3>
+		<tr><td class=lbl>Jabatan</td><td class=sep>:</td><td><select id=jabatanUpah5 class=select2 style='width:340px'>" . $optJabatan . "</select></td></tr>
+		<tr><td class=lbl>Akun Debet</td><td class=sep>:</td><td><select id=akunUpah5 class=select2 style='width:340px'>" . $optAkunWajib . "</select></td></tr>
+		<tr><td class=lbl>Aktif</td><td class=sep>:</td><td><select id=aktifUpah5 class=select2 style='width:100px'><option value='1'>Ya</option><option value='0'>Tidak</option></select></td></tr>
 		<tr><td></td><td></td><td>
-			<button class=mybutton onclick=simpan5alokasi()>" . $_SESSION['lang']['save'] . "</button>
-			<button class=mybutton onclick=batal5alokasi()>" . $_SESSION['lang']['cancel'] . "</button>
+			<button class=mybutton onclick=simpanUpah5()>" . $_SESSION['lang']['save'] . "</button>
+			<button class=mybutton onclick=batalUpah5()>" . $_SESSION['lang']['cancel'] . "</button>
 		</td></tr>
 	</table>
 </fieldset>
-<fieldset style='width:700px'><legend><b>Cara Kerja</b></legend>
-	<div style='font-size:12px;line-height:1.5'>
-		Dipakai <b>Proses Akhir Bulan &gt; Gaji Karyawan Tidak Langsung</b> untuk unit PT ini. <b>Isi hanya yang berbeda dari Setup Bawaan</b> (tabel di bawah); komponen yang tidak diisi memakai Setup Bawaan.
-		<table class=sortable cellspacing=1 cellpadding=4 border=0 style='margin:6px 0'>
-			<thead><tr class=rowheader><td align=center>Komponen</td><td align=center>Jabatan</td><td align=center>Hasil</td></tr></thead>
-			<tbody>
-				<tr class=rowcontent><td>Komponen tertentu</td><td>Semua jabatan</td><td>Ubah jenis biaya / akun komponen itu untuk semua jabatan</td></tr>
-				<tr class=rowcontent><td>Komponen tertentu</td><td>Jabatan tertentu</td><td>Ubah jenis biaya / akun komponen itu khusus jabatan itu</td></tr>
-				<tr class=rowcontent><td>Semua komponen</td><td>Jabatan tertentu</td><td>Ubah akun debet seluruh komponen jabatan itu sekaligus (BPJS tidak ikut)</td></tr>
-			</tbody>
-		</table>
-		<b>Isian:</b> <i>Jenis Biaya</i> menentukan kelompok jurnal (kosong = ikut aturan semua jabatan / Setup Bawaan). <i>Akun Debet</i> kosong = akun default Parameter Jurnal; kalau diisi harus akun detail berawalan 7.<br>
-		<b>Urutan yang menang:</b> 1) No Akun karyawan di <i>Pendapatan Lain</i> &rarr; 2) komponen + jabatan &rarr; 3) semua komponen + jabatan &rarr; 4) komponen semua jabatan &rarr; 5) Setup Bawaan.<br>
-		<b>Catatan:</b> gaji pokok (1, 14) dan premi/lembur (16, 32, 33) karyawan yang punya data absensi/lembur SDM <b>didahulukan</b> mengikuti akun absensi, tidak diubah setup ini. Akun Debet hanya berlaku untuk karyawan kebun dan HO; bengkel dan traksi tetap memakai akun transit.
-	</div>
-</fieldset>";
-CLOSE_BOX();
-
-OPEN_BOX();
-echo "<fieldset style='clear:both'><legend><b>Setup Pengecualian</b> <span style='font-weight:normal'>(hanya yang berbeda dari Setup Bawaan)</span></legend>
-	<table class=sortable cellspacing=1 cellpadding=5 border=0>
-		<thead>
-			<tr class=rowheader>
-				<td align=center>No</td>
-				<td align=center>ID Komponen</td>
-				<td align=center>Nama Komponen</td>
-				<td align=center>Jabatan</td>
-				<td align=center>Jenis Biaya</td>
-				<td align=center>Kelompok Jurnal (Kebun)</td>
-				<td align=center>Akun Debet</td>
-				<td align=center>Akun Kredit</td>
-				<td align=center>Aktif</td>
-				<td align=center>Dibuat Oleh</td>
-				<td align=center>Waktu Dibuat</td>
-				<td align=center>Diubah Oleh</td>
-				<td align=center>Waktu Diubah</td>
-				<td align=center colspan=2>" . $_SESSION['lang']['action'] . "</td>
-			</tr>
-		</thead>
-		<tbody id=container></tbody>
+<fieldset style='min-width:520px'><legend><b>Aturan Komponen Upah</b></legend>
+	<table class=sortable cellspacing=1 cellpadding=5 border=0 style='width:100%'>
+		<thead><tr class=rowheader>
+			<td align=center style='width:40px'>No</td>
+			<td align=center>Jabatan</td>
+			<td align=center>Akun Debet</td>
+			<td align=center style='width:60px'>Aktif</td>
+			<td align=center style='width:60px' colspan=2>" . $_SESSION['lang']['action'] . "</td>
+		</tr></thead>
+		<tbody id=containUpah5></tbody>
 	</table>
 </fieldset>";
-echo "<script>loadData5alokasi()</script>";
 CLOSE_BOX();
+echo "</div>";
 
-#Setup Bawaan (read-only): berlaku untuk semua komponen yang tidak ada di Setup Pengecualian
+#================ Tab 2: Pendapatan Lain ================
+echo "<div id=tabLain5 style='display:none'>";
+OPEN_BOX();
+echo "<div class=info5>Berlaku untuk <b>komponen tambahan dari Pendapatan Lain</b> (Premi Tetap, Uang Makan, THR, dan seterusnya). Pilih komponen, lalu jabatannya (<b>Semua jabatan</b> atau jabatan tertentu) dan jenis biayanya. Aturan untuk jabatan tertentu didahulukan dari aturan semua jabatan; jenis biayanya boleh dikosongkan (ikut aturan semua jabatan) asalkan akunnya diisi. Akun Debet kosong = ikut akun bawaan jenis biaya. No Akun yang diisi per karyawan di input Pendapatan Lain tetap <b>didahulukan</b>.</div>
+<fieldset style='width:520px;float:left;margin-right:12px'><legend><b>Atur per Komponen dan Jabatan</b></legend>
+	<table id=formLain5 border=0 cellpadding=3>
+		<tr><td class=lbl>Komponen</td><td class=sep>:</td><td><select id=komponenLain5 class=select2 style='width:340px'>" . $optKomponen . "</select></td></tr>
+		<tr><td class=lbl>Jabatan</td><td class=sep>:</td><td><select id=jabatanLain5 class=select2 style='width:340px'>" . $optJabatanLain . "</select></td></tr>
+		<tr><td class=lbl>Jenis Biaya</td><td class=sep>:</td><td><select id=jenisLain5 class=select2 style='width:340px' onchange=tampilDefault5alokasi()>" . $optJenis . "</select></td></tr>
+		<tr><td></td><td></td><td><div id=infoDefault style='font-size:11px;color:#333;max-width:380px'></div></td></tr>
+		<tr><td class=lbl>Akun Debet</td><td class=sep>:</td><td><select id=akunLain5 class=select2 style='width:340px'>" . $optAkunOpsi . "</select></td></tr>
+		<tr><td class=lbl>Aktif</td><td class=sep>:</td><td><select id=aktifLain5 class=select2 style='width:100px'><option value='1'>Ya</option><option value='0'>Tidak</option></select></td></tr>
+		<tr><td></td><td></td><td>
+			<button class=mybutton onclick=simpanLain5()>" . $_SESSION['lang']['save'] . "</button>
+			<button class=mybutton onclick=batalLain5()>" . $_SESSION['lang']['cancel'] . "</button>
+		</td></tr>
+	</table>
+</fieldset>
+<fieldset style='min-width:560px'><legend><b>Aturan Pendapatan Lain</b></legend>
+	<table class=sortable cellspacing=1 cellpadding=5 border=0 style='width:100%'>
+		<thead><tr class=rowheader>
+			<td align=center style='width:40px'>No</td>
+			<td align=center>Komponen</td>
+			<td align=center>Jabatan</td>
+			<td align=center>Jenis Biaya</td>
+			<td align=center>Akun Debet</td>
+			<td align=center style='width:60px'>Aktif</td>
+			<td align=center style='width:60px' colspan=2>" . $_SESSION['lang']['action'] . "</td>
+		</tr></thead>
+		<tbody id=containLain5></tbody>
+	</table>
+</fieldset>";
+CLOSE_BOX();
+echo "</div>";
+echo "<script>muatSemua5()</script>";
+
+#================ Akun Bawaan (hanya dilihat, dilipat) ================
 OPEN_BOX();
 $nmKomponenPage = makeOption($dbname, 'sdm_ho_component', 'id,name');
 $teksAkunPage = function ($noakun) use ($nmAkunPage) {
 	return $noakun == '' ? '(belum diatur)' : $noakun . ' - ' . (isset($nmAkunPage[$noakun]) ? $nmAkunPage[$noakun] : '');
 };
 $barisBawaan = '';
-$daftarBawaan = array(1, 14, 16, 32, 33, 28, 26, 21, 70, 72, 73, 80, 71, 0);
+#0 = komponen upah (satu kesatuan, jenis Gaji); 999999 = komponen lain yang tidak disebut
+$daftarBawaan = array('upah', 14, 16, 32, 33, 28, 26, 21, 70, 72, 73, 80, 71, 0);
 foreach ($daftarBawaan as $idBw) {
-	$jenisBw = jenisBiayaBawaanPPP($idBw == 0 ? 999999 : $idBw);
+	$jenisBw = ($idBw === 'upah') ? 'GAJI' : jenisBiayaBawaanPPP($idBw == 0 ? 999999 : $idBw);
 	$ptKebun = jurnalidBagianPPP('KBNB');
 	$gidBw = $ptKebun[$jenisBw];
 	$pjBw = isset($paramJurnalPage[$gidBw]) ? $paramJurnalPage[$gidBw] : array('noakundebet' => '', 'noakunkredit' => '');
@@ -153,29 +172,32 @@ foreach ($daftarBawaan as $idBw) {
 		$pj = isset($paramJurnalPage[$gid]) ? $paramJurnalPage[$gid] : array('noakundebet' => '', 'noakunkredit' => '');
 		$bagianBw[] = $nmBagian . ' ' . $gid . ': D ' . $teksAkunPage($pj['noakundebet']) . ' / K ' . $teksAkunPage($pj['noakunkredit']);
 	}
+	if ($idBw === 'upah') {
+		$namaBw = "<b>Semua komponen upah</b> (" . implode(', ', $namaUpah) . ")";
+	} elseif ($idBw == 0) {
+		$namaBw = "<i>Komponen Pendapatan Lain lain (termasuk komponen baru)</i>";
+	} else {
+		$namaBw = htmlspecialchars((string)@$nmKomponenPage[$idBw]);
+	}
 	$barisBawaan .= "<tr class=rowcontent title=\"" . htmlspecialchars(implode("\n", $bagianBw), ENT_QUOTES) . "\">
-		<td align=center>" . ($idBw == 0 ? '-' : $idBw) . "</td>
-		<td>" . ($idBw == 0 ? "<i>Semua komponen lain (termasuk komponen baru)</i>" : htmlspecialchars((string)@$nmKomponenPage[$idBw])) . "</td>
+		<td>" . $namaBw . "</td>
 		<td>" . htmlspecialchars(jenisBiayaPPP()[$jenisBw]) . "</td>
-		<td align=center>" . htmlspecialchars($gidBw) . "</td>
 		<td>" . htmlspecialchars($teksAkunPage($pjBw['noakundebet'])) . "</td>
 		<td>" . htmlspecialchars($teksAkunPage($pjBw['noakunkredit'])) . "</td>
 	</tr>";
 }
-echo "<fieldset><legend><b>Setup Bawaan</b> <span style='font-weight:normal'>(tidak perlu disetup, hanya untuk dilihat)</span></legend>
-	<div style='font-size:11px;margin-bottom:4px'>Berlaku untuk komponen yang tidak ada di Setup Pengecualian di atas. Arahkan kursor ke baris untuk melihat akun default bagian lain (HO, Bengkel, Traksi). Akun dibaca dari Parameter Jurnal.</div>
+echo "<details><summary style='cursor:pointer;font-weight:bold'>Lihat akun bawaan (tidak perlu diisi, hanya untuk dilihat)</summary>
+	<div style='font-size:11px;margin:4px 0'>Dipakai bila komponen tidak diatur di atas. Arahkan kursor ke baris untuk melihat akun bagian lain (HO, Bengkel, Traksi). Akun dibaca dari Parameter Jurnal bagian Kebun.</div>
 	<table class=sortable cellspacing=1 cellpadding=5 border=0>
 		<thead><tr class=rowheader>
-			<td align=center>ID Komponen</td>
-			<td align=center>Nama Komponen</td>
+			<td align=center>Komponen</td>
 			<td align=center>Jenis Biaya</td>
-			<td align=center>Kelompok Jurnal (Kebun)</td>
 			<td align=center>Akun Debet</td>
 			<td align=center>Akun Kredit</td>
 		</tr></thead>
 		<tbody>" . $barisBawaan . "</tbody>
 	</table>
-</fieldset>";
+</details>";
 CLOSE_BOX();
 echo close_body();
 ?>

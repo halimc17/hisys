@@ -212,17 +212,40 @@ function alokasiKomponenPPP($bagian, $kodept, $kodeorg, $periode, $karyawanid, $
 	}
 }
 
+#komponen upah = komponen dari Setup Upah (tipe basic: gaji pokok, tunjangan jabatan, dst.). Komponen upah dialokasikan sebagai satu kesatuan per jabatan
+#(jenis biaya Gaji, satu akun debet per jabatan); komponen lain (Pendapatan Lain) diatur per komponen.
+function komponenUpahPPP($komponen)
+{
+	global $dbname, $owlPDO;
+	static $peta = null;
+	if ($peta === null) {
+		$peta = array();
+		try {
+			$stm = $owlPDO->query("select id,type from " . $dbname . ".sdm_ho_component");
+			if ($stm) {
+				foreach ($stm->fetchAll(PDO::FETCH_ASSOC) as $r) {
+					$peta[(int)$r['id']] = ($r['type'] == 'basic');
+				}
+			}
+		} catch (Exception $e) {
+			$peta = array();
+		}
+	}
+	return !empty($peta[(int)$komponen]);
+}
+
 function alokasiKomponenPPPInti($bagian, $kodept, $kodeorg, $periode, $karyawanid, $komponen, $bolehAkun)
 {
 	$setup = setupAlokasiPPP($kodept);
 	$komponen = (int)$komponen;
+	$upah = komponenUpahPPP($komponen);
 	$jabatan = empty($setup) ? 0 : jabatanKaryawanPPP($karyawanid, $kodeorg, $periode);
-	$aturanSemua = isset($setup['0|' . $komponen]) ? $setup['0|' . $komponen] : null;
-	$aturanJabatan = ($jabatan > 0 && isset($setup[$jabatan . '|' . $komponen])) ? $setup[$jabatan . '|' . $komponen] : null;
-	#aturan "semua komponen" untuk jabatan itu (idkomponen 0): hanya akun debet, tidak berlaku untuk komponen BPJS
-	$aturanJabatanSemua = ($jabatan > 0 && !in_array($komponen, array(70, 71, 72, 73, 80)) && isset($setup[$jabatan . '|0'])) ? $setup[$jabatan . '|0'] : null;
+	#komponen upah: hanya aturan per jabatan (idkomponen 0, akun debet saja); aturan per komponen lama tidak dipakai
+	$aturanSemua = (!$upah && isset($setup['0|' . $komponen])) ? $setup['0|' . $komponen] : null;
+	$aturanJabatan = (!$upah && $jabatan > 0 && isset($setup[$jabatan . '|' . $komponen])) ? $setup[$jabatan . '|' . $komponen] : null;
+	$aturanJabatanSemua = ($upah && $jabatan > 0 && isset($setup[$jabatan . '|0'])) ? $setup[$jabatan . '|0'] : null;
 
-	$jenis = jenisBiayaBawaanPPP($komponen);
+	$jenis = $upah ? 'GAJI' : jenisBiayaBawaanPPP($komponen);
 	if ($aturanSemua !== null && $aturanSemua[0] != '') {
 		$jenis = $aturanSemua[0];
 	}
