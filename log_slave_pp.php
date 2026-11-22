@@ -452,6 +452,16 @@ if (!function_exists('ppFit')) {
 }
 
 
+#unit PT PPP (Palma) bebas dari aturan SDT minimal 7 hari; unit diambil dari isian unit, atau dari akhiran nomor PR/SR (mis. 657/11/2026/PR/PPPE)
+function sdtBebasPPP($unit, $nopp)
+{
+	$unitCek = trim((string)$unit);
+	if ($unitCek == '' && strpos((string)$nopp, '/') !== false) {
+		$unitCek = substr((string)$nopp, strrpos((string)$nopp, '/') + 1);
+	}
+	return preg_match('/^[A-Za-z0-9]{1,10}$/', $unitCek) && getindukPT($unitCek) == 'PPP';
+}
+
 switch ($method) {
 	case 'get_isi':
 		if (isset($kdorg)) {
@@ -2498,7 +2508,15 @@ switch ($method) {
 
 		$days = selisitgl($tglsdt, $tglpp);
 
-		if ($days < 7) {
+		if (sdtBebasPPP($unit, $nopp)) {
+			#PT PPP (Palma): SDT wajib diisi dan tidak boleh lebih kecil dari tanggal PR/SR (tanggal yang sama atau lebih besar boleh); PT lain tetap minimal 7 hari
+			if ($tglsdt == '' || $tglsdt == '0000-00-00') {
+				exit("Gagal, Tanggal SDT wajib diisi.");
+			}
+			if ($days < 0) {
+				exit("Gagal, Tanggal SDT(" . tanggalnormal($tglsdt) . ") tidak boleh lebih kecil dari tanggal PR/SR(" . tanggalnormal($tglpp) . ")");
+			}
+		} elseif ($days < 7) {
 			exit("Gagal, Tanggal SDT(" . tanggalnormal($tglsdt) . ") harus lebih besar 7 hari dari tanggal PR/SR(" . tanggalnormal($tglpp) . ")");
 		}
 
@@ -2522,7 +2540,7 @@ switch ($method) {
 		// echo"---kode nya".$kd_project;
 
 		$data = $_POST;
-		$tglsdt = tanggalsystem($tglsdt);
+		#$tglsdt sudah diubah ke format sistem (YYYYmmdd) di atas; jangan diubah lagi (diubah dua kali hasilnya rusak dan tersimpan 0000-00-00)
 		$tglpp = tanggalsystem($tglheader);
 
 		## GET VALIDASI BUDGET
@@ -2643,7 +2661,15 @@ switch ($method) {
 
 		$days = selisitgl($tglsdt, $tglpp);
 
-		if ($days < 7) {
+		if (sdtBebasPPP($unit, $nopp)) {
+			#PT PPP (Palma): SDT wajib diisi dan tidak boleh lebih kecil dari tanggal PR/SR (tanggal yang sama atau lebih besar boleh); PT lain tetap minimal 7 hari
+			if ($tglsdt == '' || $tglsdt == '0000-00-00') {
+				exit("Gagal, Tanggal SDT wajib diisi.");
+			}
+			if ($days < 0) {
+				exit("Gagal, Tanggal SDT(" . tanggalnormal($tglsdt) . ") tidak boleh lebih kecil dari tanggal PR/SR(" . tanggalnormal($tglpp) . ")");
+			}
+		} elseif ($days < 7) {
 			exit("Gagal, Tanggal SDT(" . tanggalnormal($tglsdt) . ") harus lebih besar 7 hari dari tanggal PR/SR(" . tanggalnormal($tglpp) . ")");
 		}
 

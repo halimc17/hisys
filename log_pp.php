@@ -241,6 +241,14 @@ foreach($res as $val){
 if($sendiri==false){
 	$optkar.="<option value='".$_SESSION['standard']['userid']."' selected>".ppNamaRequester(getKary($_SESSION['standard']['userid']),getKary($_SESSION['standard']['userid'],'bagian'),$nmdeptAll)."</option>";
 }
+#PPP (Palma): form isian dan List Data dibuat satu tepi kiri dan sama lebar (mengikuti tabel terlebar); PT lain tampilannya tidak diubah
+$palmaTampilan=(getindukPT($_SESSION['empl']['lokasitugas'])=='PPP');
+$tbLebarPPP=$palmaTampilan?"style='width:100%'":"";
+$fsListPPP=$palmaTampilan?"style='border:0;padding:0;margin:8px 0 0 0'":"";
+$lgListPPP=$palmaTampilan?"style='padding-left:0;font-weight:bold'":"";
+#pembungkus selebar tabel terlebar (bukan selebar layar): form isian dan List Data sama lebar
+$wrapAwalPPP=$palmaTampilan?"<div style='display:inline-block;vertical-align:top'>":"";
+$wrapAkhirPPP=$palmaTampilan?"</div>":"";
 echo"<fieldset>
 		<legend>".$_SESSION['lang']['header']."</legend>
 		<table cellspacing='1' cellpadding='3' border='0' id='opl' class='urutaninputan'>
@@ -306,8 +314,8 @@ echo"<fieldset>
 </div>
 
 <div id='tmbl_all'>
-<b>No. PR/SR : <label id=detail_kode></label></b><p />
-<table class='sortable' cellspacing='1' border='0' >
+".$wrapAwalPPP."<b>No. PR/SR : <label id=detail_kode></label></b><p />
+<table class='sortable' cellspacing='1' border='0' ".$tbLebarPPP.">
 	<thead>
 	<tr class=rowheader>
 		<th align='center' colspan=2 class='bintang'>".$_SESSION['lang']['kodebarang']."</th>
@@ -429,9 +437,9 @@ echo"<fieldset>
 	</tr>
 </table>
 
-<fieldset>
-	<legend>".$_SESSION['lang']['list']."</legend>
-				<table class='sortable' cellspacing='1' cellpadding='3' border='0'>
+<fieldset ".$fsListPPP.">
+	<legend ".$lgListPPP.">".$_SESSION['lang']['list']."</legend>
+				<table class='sortable' cellspacing='1' cellpadding='3' border='0' ".$tbLebarPPP.">
 					<thead>
 					<tr class=rowheader>
 						<th align='center'>No.</th>
@@ -455,8 +463,8 @@ echo"<fieldset>
 					<tbody id='listprsr'>
 					</tbody>
 				</table>
-			</fieldset><fieldset><legend>".$_SESSION['lang']['list']." File Upload</legend>
-				<table class='sortable' cellspacing='1' border='0' cellpadding=5>
+			</fieldset><fieldset ".$fsListPPP."><legend ".$lgListPPP.">".$_SESSION['lang']['list']." File Upload</legend>
+				<table class='sortable' cellspacing='1' border='0' cellpadding=5 ".$tbLebarPPP.">
 					<thead>
 					<tr class=rowheader>
 						<th align='center' width=50px>No.</th>
@@ -470,7 +478,7 @@ echo"<fieldset>
 					</tbody>
 				</table>
 </fieldset> 
-
+".$wrapAkhirPPP."
 </div>
 
 </fieldset>";
