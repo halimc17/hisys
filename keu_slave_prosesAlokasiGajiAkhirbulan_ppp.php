@@ -183,7 +183,12 @@ try {
 	$defSegment = colDefaultValue($dbname, 'keu_5segment', 'kodesegment');
 
 
-	if ($tip == 'PABRIK') {
+	#PPP: komponen yang disetup di Setup Premi Tetap per Komponen: bila karyawan tercatat di Pekerjaan Traksi bulan ini pada kendaraan genset (jenis di
+	#parameter TRGENSET), komponen itu dibebankan ke genset tempat ia tercatat, dibagi menurut hari tercatat; kalau tidak tercatat di genset, beban normal
+	$hariVhcPremiPPP = premiTetapSetupPPP($param['kodeorg'], $param['karyawanid'], $param['komponen']) ? hariTraksiVhcPPP($param['kodeorg'], $param['periode'], $param['karyawanid']) : array();
+	if (count($hariVhcPremiPPP) > 0) {
+		prosesGajiVhcPremiPPP($hariVhcPremiPPP);
+	} else if ($tip == 'PABRIK') {
 		if ($param['tipeorganisasi'] == 'TRAKSI') {
 			if ($param['mesin'] == '') {
 				prosesGajiWs();
@@ -5550,6 +5555,106 @@ function prosesbulking()
 			"' and kodekelompok='" . $kodeJurnal . "' and kodeunit='" . $param['kodeorg'] . "' and periode='" . $param['periode'] . "' "
 	);
 	$owlPDO->exec($updJurnal);
+}
+
+#PPP: jurnal komponen tetap (pendapatan) operator genset yang dibebankan ke kendaraan (VRA). Debet = akun transit kendaraan menurut jenis biaya komponen itu di
+#Setup Alokasi Komponen Gaji (sama seperti karyawan traksi lain) per kendaraan dengan kode kendaraan, dibagi menurut hari karyawan tercatat di Pekerjaan Traksi; kredit = akun kredit jurnal yang sama.
+#Biaya lalu dibagi ke pemakaian kendaraan oleh proses traksi (ALKJAM).
+function prosesGajiVhcPremiPPP($hari)
+{
+	global $tanggal;
+	global $param;
+	global $dbname;
+	global $defSegment;
+	global $owlPDO;
+	global $orgpt;
+
+	if ($param['jumlah'] == 0) {
+		return;
+	}
+	#sama seperti karyawan traksi lain: kelompok jurnal mengikuti Setup Alokasi Komponen Gaji (jenis biaya per komponen), akun debet tetap akun transit kendaraan
+	$alokasiPPP = alokasiKomponenPPP('VHCG', $orgpt, $param['kodeorg'], $param['periode'], $param['karyawanid'], $param['komponen'], false);
+	$kodeJurnal = $alokasiPPP['jurnalid'];
+	$res = fetchData("select noakundebet,noakunkredit from " . $dbname . ".keu_5parameterjurnal where jurnalid='" . $kodeJurnal . "' limit 1");
+	if (count($res) < 1 || strlen($res[0]['noakundebet']) != 7 || $res[0]['noakunkredit'] == '') {
+		throw new PDOException("No.Akun pada parameterjurnal " . $kodeJurnal . " belum ada untuk " . $param['namakomponen']);
+	}
+	$akundebet = $res[0]['noakundebet'];
+	$akunkredit = $res[0]['noakunkredit'];
+
+	$totalHari = array_sum($hari);
+	$jumlah = (float)$param['jumlah'];
+	$bagian = array();
+	$sisa = $jumlah;
+	foreach ($hari as $kodevhc => $hr) {
+		$bagian[$kodevhc] = floor($jumlah * $hr / $totalHari);
+		$sisa -= $bagian[$kodevhc];
+	}
+	$kunci = array_keys($bagian);
+	$bagian[$kunci[0]] += $sisa;   # sisa pembulatan ke genset pertama
+
+	$tmpKonter = fetchData("select nokounter from " . $dbname . ".keu_5kelompokjurnal where kodeorg='" . $orgpt . "' and kodekelompok='" . $kodeJurnal . "' and kodeunit='" . $param['kodeorg'] . "' and periode='" . $param['periode'] . "' ");
+	$konter = addZero((isset($tmpKonter[0]['nokounter']) ? $tmpKonter[0]['nokounter'] : 0) + 1, 3);
+	$nojurnal = str_replace("-", "", $tanggal) . "/" . $param['kodeorg'] . "/" . $kodeJurnal . "/" . $konter;
+
+	$header = array(
+		'nojurnal'     => $nojurnal,
+		'kodejurnal'   => $kodeJurnal,
+		'tanggal'      => $tanggal,
+		'tanggalentry' => date('Ymd'),
+		'posting'      => 1,
+		'totaldebet'   => $param['jumlah'],
+		'totalkredit'  => -1 * $param['jumlah'],
+		'amountkoreksi' => '0',
+		'noreferensi'  => 'ALK_GAJI',
+		'autojurnal'   => '1',
+		'matauang'     => 'IDR',
+		'kurs'         => '1',
+		'revisi'       => '0'
+	);
+	$detail = array();
+	$noUrut = 1;
+	$baris = function ($akun, $nilai, $kodevhc) use (&$noUrut, $nojurnal, $tanggal, $defSegment) {
+		global $param;
+		$r = array(
+			'nojurnal'    => $nojurnal,
+			'tanggal'     => $tanggal,
+			'nourut'      => $noUrut,
+			'noakun'      => $akun,
+			'keterangan'  => $param['namakomponen'] . ' ' . $param['periode'],
+			'jumlah'      => $nilai,
+			'matauang'    => 'IDR',
+			'kurs'        => '1',
+			'kodeorg'     => $param['kodeorg'],
+			'kodekegiatan' => '',
+			'kodeasset'   => '',
+			'kodebarang'  => '',
+			'nik'         => $param['karyawanid'],
+			'kodecustomer' => '',
+			'kodesupplier' => '',
+			'noreferensi' => 'ALK_GAJI',
+			'noaruskas'   => '',
+			'kodevhc'     => $kodevhc,
+			'nodok'       => '',
+			'kodeblok'    => $param['subbagian'],
+			'revisi'      => '0',
+			'kodesegment' => $defSegment
+		);
+		$noUrut++;
+		return $r;
+	};
+	foreach ($bagian as $kodevhc => $nilai) {
+		if ($nilai > 0) {
+			$detail[] = $baris($akundebet, $nilai, $kodevhc);
+		}
+	}
+	$detail[] = $baris($akunkredit, -1 * $param['jumlah'], '');
+
+	$owlPDO->exec(insertQuery($dbname, 'keu_jurnalht', $header));
+	foreach ($detail as $row) {
+		$owlPDO->exec(insertQuery($dbname, 'keu_jurnaldt', $row, array_keys($row)));
+	}
+	$owlPDO->exec(updateQuery($dbname, 'keu_5kelompokjurnal', array('nokounter' => $konter), "kodeorg='" . $orgpt . "' and kodekelompok='" . $kodeJurnal . "' and kodeunit='" . $param['kodeorg'] . "' and periode='" . $param['periode'] . "' "));
 }
 
 function prosesGajiKebun()

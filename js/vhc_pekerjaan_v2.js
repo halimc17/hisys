@@ -179,6 +179,269 @@ function unitPPPDipilih() {
   return sel.options[sel.selectedIndex].getAttribute("data-ppp") == "1";
 }
 
+//PPP: kendaraan genset = jenis kendaraan di parameter TRGENSET pada unit PPP; operator hanya dicatat namanya (tanpa upah, premi, helper, denda, rit, prestasi)
+function gensetPPPDipilih() {
+  return unitPPPDipilih() && typeof jenisGensetPPP !== "undefined" && jenisGensetPPP.indexOf(getValue("jenisvhc")) >= 0;
+}
+
+// sembunyikan/tampilkan satu isian beserta label dan titik dua di sebelah kirinya (mengembalikan tampilan semula, termasuk yang memang disembunyikan halaman)
+function sembunyikanIsianGenset(id, sembunyi) {
+  var el = document.getElementById(id);
+  var td = el ? el.closest("td") : null;
+  if (!td) {
+    return;
+  }
+  var sel = [td];
+  var titik = td.previousElementSibling;
+  if (titik && trim(titik.textContent) == ":") {
+    sel.push(titik);
+    if (titik.previousElementSibling) {
+      sel.push(titik.previousElementSibling);
+    }
+  }
+  for (var i = 0; i < sel.length; i++) {
+    if (sel[i].getAttribute("data-disp0") === null) {
+      sel[i].setAttribute("data-disp0", sel[i].style.display);
+    }
+    sel[i].style.display = sembunyi ? "none" : sel[i].getAttribute("data-disp0");
+  }
+}
+
+var modeGensetAktif = false;
+var posisiAsliKetGenset = null;
+
+// tampilkan/sembunyikan sel; tampilan semula (termasuk yang memang disembunyikan halaman) disimpan lalu dikembalikan
+function aturTampilSelGenset(sel, sembunyi) {
+  if (!sel) {
+    return;
+  }
+  if (sel.getAttribute("data-disp0") === null) {
+    sel.setAttribute("data-disp0", sel.style.display);
+  }
+  sel.style.display = sembunyi ? "none" : sel.getAttribute("data-disp0");
+}
+
+// Keterangan pindah ke baris Lokasi (sebelah kanan) dan dipendekkan, supaya tidak ada ruang kosong di bawah Operator
+function susunKeteranganGenset(genset) {
+  var ta = document.getElementById("ket");
+  var td = ta ? ta.closest("td") : null;
+  var baris = document.getElementById("lokasi_kerja") ? document.getElementById("lokasi_kerja").closest("tr") : null;
+  var titik = td ? td.previousElementSibling : null;
+  var label = titik ? titik.previousElementSibling : null;
+  if (!td || !titik || !label || !baris) {
+    return;
+  }
+  if (genset) {
+    if (!posisiAsliKetGenset) {
+      posisiAsliKetGenset = {
+        parent: td.parentNode,
+        next: td.nextSibling,
+        rs: [label.rowSpan, titik.rowSpan, td.rowSpan],
+        tinggi: ta.style.height,
+        baris: ta.rows
+      };
+    }
+    if (td.parentNode !== baris) {
+      baris.appendChild(label);
+      baris.appendChild(titik);
+      baris.appendChild(td);
+    }
+    label.rowSpan = 1;
+    titik.rowSpan = 1;
+    td.rowSpan = 1;
+    ta.style.height = "30px";
+    ta.rows = 1;
+  } else if (posisiAsliKetGenset) {
+    var a = posisiAsliKetGenset;
+    a.parent.insertBefore(label, a.next);
+    a.parent.insertBefore(titik, a.next);
+    a.parent.insertBefore(td, a.next);
+    label.rowSpan = a.rs[0];
+    titik.rowSpan = a.rs[1];
+    td.rowSpan = a.rs[2];
+    ta.style.height = a.tinggi;
+    ta.rows = a.baris;
+    posisiAsliKetGenset = null;
+  }
+}
+
+// kolom Data Tersimpan yang tidak dipakai genset (rit, prestasi, upah, premi, denda, helper) disembunyikan; dipanggil lagi setiap data dimuat.
+// Urutan sel di judul, baris data, dan baris total berbeda, jadi tiap jenis baris punya daftar kolomnya sendiri.
+function aturKolomDetailGenset() {
+  var isi = document.getElementById("containdetail");
+  var tabel = isi ? isi.closest("table") : null;
+  if (!tabel || !tabel.tHead) {
+    return;
+  }
+  var genset = gensetPPPDipilih();
+  var seri = function (dari, sampai) {
+    var a = [];
+    for (var n = dari; n <= sampai; n++) {
+      a.push(n);
+    }
+    return a;
+  };
+  var kolomJudul = [6, 7].concat(seri(13, 28));
+  var kolomData = [5, 6].concat(seri(12, 27));
+  var kolomTotal = [1, 2].concat(seri(6, 21));
+  var terap = function (sel, kolom) {
+    for (var k = 0; k < kolom.length; k++) {
+      aturTampilSelGenset(sel[kolom[k]], genset);
+    }
+  };
+  var judul = tabel.tHead.rows[0].cells;
+  if (judul.length >= 30) {
+    terap(judul, kolomJudul);
+    ubahTeksGenset(judul[8], "HM/Jam Awal", genset);
+    ubahTeksGenset(judul[9], "HM/Jam Akhir", genset);
+    ubahTeksGenset(judul[10], "Jumlah (Jam)", genset);
+  }
+  for (var i = 0; i < isi.rows.length; i++) {
+    var sel = isi.rows[i].cells;
+    if (sel.length >= 28) {
+      terap(sel, kolomData);
+    } else if (sel.length >= 20 && sel[0].colSpan == 4) {
+      terap(sel, kolomTotal);
+    }
+  }
+}
+
+// teks sel disimpan lalu dikembalikan; hanya mengganti teks tampilan, tidak mengubah nilai atau perhitungan apa pun
+function ubahTeksGenset(node, teksBaru, genset) {
+  if (!node) {
+    return;
+  }
+  if (node.nodeType == 1 && node.getAttribute("data-teks0") === null) {
+    node.setAttribute("data-teks0", node.textContent);
+  }
+  if (node.nodeType == 1) {
+    node.textContent = genset ? teksBaru : node.getAttribute("data-teks0");
+  }
+}
+
+// label KM/HM menjadi jam, dan nomor urut label (1), (2), ... dibuat berurutan untuk isian yang tampil
+function aturLabelGenset(genset) {
+  var urutan = ["jns_kerja", "lokasi_kerja", "blok", "kmhm_awal", "kmhm_akhir", "kode_karyawan", "ket"];
+  var nama = { kmhm_awal: "HM/Jam Awal", kmhm_akhir: "HM/Jam Akhir", jlhhm: "Jumlah (Jam)" };
+  for (var i = 0; i < urutan.length + 1; i++) {
+    var id = i < urutan.length ? urutan[i] : "jlhhm";
+    var el = document.getElementById(id);
+    var td = el ? el.closest("td") : null;
+    var titik = td ? td.previousElementSibling : null;
+    var label = titik ? titik.previousElementSibling : null;
+    if (!label) {
+      continue;
+    }
+    var no = label.querySelector("font");
+    if (no && i < urutan.length) {
+      ubahTeksGenset(no, "(" + (i + 1) + ")", genset);
+    }
+    if (nama[id]) {
+      // teks label di depan nomor: simpan teks aslinya (node teks pertama)
+      var teks = label.firstChild;
+      if (teks && teks.nodeType == 3) {
+        if (label.getAttribute("data-label0") === null) {
+          label.setAttribute("data-label0", teks.nodeValue);
+        }
+        teks.nodeValue = genset ? nama[id] + "\u00a0" : label.getAttribute("data-label0");
+      }
+    }
+  }
+  // satuan bawaan genset = HM (jam); hanya mengisi pilihan, pengguna tetap bisa mengganti
+  var stn = document.getElementById("stn");
+  if (genset && stn && stn.value != "HM") {
+    for (var o = 0; o < stn.options.length; o++) {
+      if (stn.options[o].value == "HM") {
+        setValue2("stn", "HM");
+        break;
+      }
+    }
+  }
+}
+
+function aturModeGenset() {
+  var genset = gensetPPPDipilih();
+  var pernahGenset = modeGensetAktif; // bila belum pernah mode genset (mis. PT lain), isian upah/premi tidak disentuh sama sekali
+  // yang tetap tampil di mode genset: Upah Operator dan Premi Operator (premi tambahan); sisanya disembunyikan
+  var ids = [
+    "uphHelp", "uphHelp2", "uphHelp3", "uphHelp4",
+    "prmiOprt", "prmiHelp", "prmiHelp2", "prmiHelp3", "prmiHelp4",
+    "kode_helper", "kode_helper2", "kode_helper3", "kode_helper4",
+    "pnltyOprt", "jmlh_rit", "brt_muatan"
+  ];
+  for (var i = 0; i < ids.length; i++) {
+    sembunyikanIsianGenset(ids[i], genset);
+  }
+  susunKeteranganGenset(genset);
+  aturLabelGenset(genset);
+  aturKolomDetailGenset();
+  if (genset) {
+    // genset tidak memakai wakar/mandor: baris Wakar dan tombol Simpan Wakar/Mandor disembunyikan
+    tampilBarisWakarPPP(false);
+    bukaEditWakarMandorPPP(false);
+    modeGensetAktif = true;
+  } else if (modeGensetAktif) {
+    modeGensetAktif = false;
+    tampilBarisWakarPPP(unitPPPDipilih());
+  }
+  var premiTambahan = document.getElementById("prmiOprtTambahan");
+  var tdPremi = premiTambahan ? premiTambahan.closest("td") : null;
+  var labelPremi = tdPremi && tdPremi.previousElementSibling ? tdPremi.previousElementSibling.previousElementSibling : null;
+  var info = document.getElementById("infoUpah");
+  if (!genset && !pernahGenset) {
+    return;
+  }
+  ubahTeksGenset(labelPremi, "Premi (Rp) Operator", genset);
+  if (genset) {
+    kunciUpahPremiGenset(operatorKhususGensetDipilih);
+  } else {
+    // keluar dari mode genset: isian upah/premi dikembalikan seperti semula
+    var upah = document.getElementById("uphOprt");
+    if (upah && upah.getAttribute("data-disabled0") !== null) {
+      upah.disabled = upah.getAttribute("data-disabled0") == "1";
+    }
+    if (upah) {
+      upah.readOnly = false;
+    }
+    if (premiTambahan) {
+      premiTambahan.readOnly = false;
+    }
+    if (info && info.innerHTML.indexOf("Genset") == 0) {
+      info.innerHTML = "";
+    }
+  }
+}
+
+// operator terpilih di mode genset: khusus genset (punya setup pendapatan) = upah dan premi dikunci 0; selain itu boleh diisi
+var operatorKhususGensetDipilih = false;
+function kunciUpahPremiGenset(khusus) {
+  operatorKhususGensetDipilih = khusus;
+  var upah = document.getElementById("uphOprt");
+  var premi = document.getElementById("prmiOprtTambahan");
+  if (upah && upah.getAttribute("data-disabled0") === null) {
+    upah.setAttribute("data-disabled0", upah.disabled ? "1" : "0");
+  }
+  if (upah) {
+    upah.disabled = false;
+    upah.readOnly = khusus;
+    if (khusus) {
+      upah.value = 0;
+    }
+  }
+  if (premi) {
+    premi.readOnly = khusus;
+    if (khusus) {
+      premi.value = 0;
+    }
+  }
+  var info = document.getElementById("infoUpah");
+  if (info) {
+    info.innerHTML = khusus
+      ? "Genset - operator khusus genset: upah dari absensi, premi dari Setup Komponen Tetap, jadi tidak diisi di sini."
+      : "Genset: isi upah dan/atau premi bila ada (upah tidak boleh melebihi 1 HK per hari, premi boleh); kosongkan bila hanya mencatat pemakaian mesin.";
+  }
+}
+
 //PPP: pilihan wakar = operator berjabatan Wakar pada kendaraan terpilih
 function getwakar() {
   if (!unitPPPDipilih()) {
@@ -663,6 +926,7 @@ function getjumlah(sumber) {
 
 async function getKodeVhc() {
   document.getElementById("kodevhc").innerHTML = await optkodevhc();
+  aturModeGenset();
 }
 
 function getPremi() {
@@ -856,6 +1120,12 @@ function getUmr() {
           alert(con.responseText);
         } else {
           data = con.responseText.split("####");
+
+          // genset: upah/premi tidak dihitung; hanya dikunci bila operator khusus genset, selain itu nilai yang diketik dipertahankan
+          if (gensetPPPDipilih()) {
+            kunciUpahPremiGenset(trim(data[14]) == "1");
+            return;
+          }
 
           //catatan dari server (mis. upah sudah dibayar di transaksi lain) ditampilkan di bawah isian
           var catatanUpah = trim(data[8]) != "0" ? trim(data[8]) : "";
@@ -1247,6 +1517,7 @@ function fillField(noTrans, Thn) {
           document.getElementById("jenisvhc").innerHTML = ar[3];
 
           lock_header_form();
+          aturModeGenset();
           bukaEditWakarMandorPPP(trim(ar[15]) == "1", ar[12], ar[10]);
           document.getElementById("kodevhc").innerHTML = await optkodevhc(
             ar[0],
@@ -1383,6 +1654,7 @@ function save_header() {
           }
           document.getElementById("detail").style.display = "block";
           lock_header_form();
+          aturModeGenset();
           bukaEditWakarMandorPPP(unitPPPDipilih());
           loaddetail();
         }
@@ -1547,6 +1819,7 @@ function loaddetail() {
           } else {
             document.getElementById("containdetail").innerHTML =
               con.responseText;
+            aturKolomDetailGenset();
             leftFixedTable();
             if (
               document.getElementById("proses_pekerjaan").value !=

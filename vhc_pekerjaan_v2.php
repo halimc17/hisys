@@ -21,6 +21,17 @@
 <script>
     var trdhList = <?php echo json_encode($arrTRDH); ?>;
     var orgPTMap = <?php echo json_encode($optPT); ?>;
+    var jenisGensetPPP = <?php
+        $jenisGensetPage = array();
+        foreach (fetchdata("select nilai from " . $dbname . ".setup_parameterappl where kodeparameter='TRGENSET'") as $rGs) {
+            foreach (explode(',', str_replace("'", "", (string)$rGs['nilai'])) as $jGs) {
+                if (trim($jGs) != '') {
+                    $jenisGensetPage[] = trim($jGs);
+                }
+            }
+        }
+        echo json_encode($jenisGensetPage);
+    ?>;   // parameter TRGENSET: jenis kendaraan yang operatornya hanya dicatat namanya (PPP)
     dataKdvhc="<?php echo $_SESSION['lang']['pilihdata']?>";
     $(document).ready(function() {
         $('.select2').select2({
@@ -65,8 +76,10 @@
     $optjenisbbm="<option value=''>".$_SESSION['lang']['pilihdata']."</option>";
     $sbrg="select kodebarang,namabarang from ".$dbname.".log_5masterbarang where kelompokbarang ='351'";
     $rbrg=fetchData($sbrg);
+    #nama BBM huruf besar hanya untuk pengguna PT PPP; PT lain tetap seperti semula
+    $bbmHurufBesar=(getindukPT($_SESSION['empl']['lokasitugas'])=='PPP');
     foreach ($rbrg as $val) {
-        $optjenisbbm.="<option value=".$val['kodebarang'].">".$val['kodebarang']."-".$val['namabarang']."</option>";
+        $optjenisbbm.="<option value=".$val['kodebarang'].">".$val['kodebarang']."-".($bbmHurufBesar ? strtoupper($val['namabarang']) : $val['namabarang'])."</option>";
     }
 
     #=Ambil Kode kendaraan
@@ -345,11 +358,11 @@
                     <td>Premi Mandor&nbsp;<font id=nomorHdr12 style='font-size:10px;color:blue;'>(12)</font></td><td>:</td>
                     <td><input type=text class=myinputtextnumber id=premimandor name=premimandor maxlength=12 value=0 onkeypress=\"return angka_doang(event);\" style=width:100px; /></td>
 
-                    <td colspan=3><button class=mybutton id=simpan_wm name=simpan_wm onclick=simpan_wakarmandor() style='display:none'>Simpan Wakar/Mandor</button></td>
                 </tr>
                 <tr>
                     <td><td>
                     <td>
+                        <button class=mybutton id=simpan_wm name=simpan_wm onclick=simpan_wakarmandor() style='display:none'>Simpan Wakar/Mandor</button>
                         <button class=mybutton id=save_kepala name=save_kepala onclick=save_header()  disabled >".$_SESSION['lang']['save']."</button>
                         <button class=mybutton id=cancel_kepala name=cancel_kepala onclick=cancel_kepala_form() disabled >".$_SESSION['lang']['cancel']."</button>
                         <input type=hidden id=proses name=proses value=insert_header >	

@@ -1,0 +1,21 @@
+<html>
+<body>
+<p><strong>TRANSAKSI TRAKSI - PEKERJAAN GENSET</strong></p>
+<p>Modul	: Traksi <br />
+  Tentang	: Pekerjaan Traksi untuk genset (khusus PT PPP)<br />
+  Isi	:</p>
+<ol>
+	<li>Fungsi</li>
+	<p>Mencatat pemakaian genset di menu Pekerjaan Traksi yang sama. Bila jenis kendaraan yang dipilih adalah genset, form detail otomatis menjadi sederhana: operator, kegiatan, lokasi, blok (bila perlu), HM awal dan akhir (dalam jam), serta Upah dan Premi operator. Helper, denda, jumlah rit, dan prestasi disembunyikan.</p>
+	<li>Persiapan</li>
+	<p>Daftarkan genset di master kendaraan pada unit PPP. Jenis kendaraan yang diperlakukan sebagai genset diatur di parameter TRGENSET (Setup Parameter, aplikasi TR); isi kode jenis kendaraannya dipisah koma, misalnya GZ untuk Generator Set. Buat juga kegiatan traksi untuk pemakaian genset beserta akunnya di menu kegiatan traksi.</p>
+	<li>Cara mengisi</li>
+	<p>Buka Traksi, Transaksi, Pekerjaan, klik Baru. Isi header seperti biasa (unit, jenis kendaraan Generator Set, kode kendaraan, tanggal, BBM), lalu Simpan. Nomor transaksi dibuat otomatis. Di detail, pilih kegiatan, lokasi, operator (karyawan mana pun di unit), isi HM awal dan HM akhir, lalu Simpan. HM awal terisi otomatis dari HM akhir terakhir genset itu. Satu genset punya satu header per hari dan boleh punya beberapa detail.</p>
+	<li>Upah dan premi</li>
+	<p>Ada dua jenis operator. Operator khusus genset adalah karyawan yang punya setup komponen pendapatan aktif di menu Setup Komponen Tetap (mis. Premi Operator Genset). Untuknya kolom upah dan premi terkunci 0: upah tetap dari absensi, sedangkan premi tetapnya pada Proses Akhir Bulan dibebankan ke genset tempat ia tercatat (dibagi menurut hari bila lebih dari satu genset), dengan jenis biaya menurut Setup Alokasi Komponen Gaji.</p>
+	<p>Operator lain (bukan khusus genset) boleh mengisi Upah dan/atau Premi. Bila diisi, diproses seperti traksi biasa; bila dikosongkan, transaksi hanya mencatat siapa yang memakai genset dan berapa jam. Upah tidak boleh membuat total upah karyawan hari itu melebihi 1 HK (gaji pokok dibagi 25) dan ditolak bila karyawan sudah punya upah di absensi umum, BKM, panen, atau supervisi BKM pada tanggal yang sama. Premi boleh diisi kapan saja.</p>
+	<li>Posting</li>
+	<p>Posting dan hapus sama seperti transaksi Pekerjaan lainnya; jabatan pengguna harus terdaftar di Setup, Posting.</p>
+</ol>
+</body>
+</html>

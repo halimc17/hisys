@@ -1078,11 +1078,14 @@ function pphPreview($per, $unit, $tipe)
  * Tetap = angkanya tidak berfluktuasi (gaji pokok, tunjangan tetap, natura, tunjangan BPJS); Tidak Tetap = sisanya yang berfluktuasi
  * (premi, lembur, tunjangan lain, THR, bonus, perjalanan dinas, jasa produksi, dana motivasi, tunjangan produksi).
  */
-function pphKelompokKomponen($id, $nama, $tipe, $tidakTeratur)
+function pphKelompokKomponen($id, $nama, $tipe, $tidakTeratur, $setupTetap = array())
 {
 	$id = (string) $id;
 	if (in_array($id, $tidakTeratur, true)) {
 		return array('TIDAK', 'THR');   # THR, bonus, dan sejenisnya termasuk pendapatan tidak tetap
+	}
+	if (isset($setupTetap[$id])) {
+		return array('TETAP', 'TUNJ');   # komponen di Setup Premi Tetap per Komponen: nominal tetap tiap bulan
 	}
 	if ($id == '1') {
 		return array('TETAP', 'POKOK');
@@ -1110,6 +1113,27 @@ function pphNamaKolom($kode)
 	$nama = array('POKOK' => 'GAJI POKOK', 'TUNJ' => 'TUNJANGAN TETAP', 'NATURA' => 'NATURA & KENIKMATAN', 'BPJS' => 'TUNJANGAN BPJS',
 		'PREMI' => 'PREMI', 'LEMBUR' => 'LEMBUR', 'LAIN' => 'TUNJANGAN LAINNYA', 'THR' => 'THR / BONUS');
 	return isset($nama[$kode]) ? $nama[$kode] : $kode;
+}
+
+/** Komponen yang disetup di Setup Premi Tetap per Komponen untuk unit itu (nominal tetap tiap bulan): id => true. Kosong bila tabel belum ada. */
+function pphKomponenSetupTetap($unit)
+{
+	global $dbname, $owlPDO;
+	$hasil = array();
+	if (getindukPT($unit) != 'PPP') {
+		return $hasil;   # Setup Komponen Tetap khusus PT PPP
+	}
+	try {
+		$stm = $owlPDO->prepare("select distinct idkomponen from " . $dbname . ".sdm_5premitetapkomp where kodeorg=? and aktif=1");
+		if ($stm && $stm->execute(array($unit))) {
+			foreach ($stm->fetchAll(PDO::FETCH_COLUMN) as $idk) {
+				$hasil[(string) (int) $idk] = true;
+			}
+		}
+	} catch (PDOException $e) {
+		$hasil = array();
+	}
+	return $hasil;
 }
 
 /** Perhitungan PPh 21 per karyawan + tampilan; dipanggil lewat pphPreview */
@@ -1217,6 +1241,7 @@ function pphPreviewInti($per, $unit, $tipe)
 	}
 	$tipeKomp = makeOption($dbname, 'sdm_ho_component', 'id,type');
 	$namaKompAwal = makeOption($dbname, 'sdm_ho_component', 'id,name');
+	$setupTetapPph = pphKomponenSetupTetap($unit);   # komponen di Setup Premi Tetap per Komponen = Pendapatan Tetap
 	$komGrup = array();     # idkomponen => array(kategori, kode kolom)
 	$dtkomTetap = array();
 	$dtkomTidak = array();
@@ -1224,7 +1249,7 @@ function pphPreviewInti($per, $unit, $tipe)
 	$kolGabung = array('TETAP' => array(), 'TIDAK' => array());   # kolom ringkas per kategori
 	$urutKode = array('POKOK', 'TUNJ', 'NATURA', 'BPJS', 'PREMI', 'LEMBUR', 'LAIN', 'THR');
 	foreach ($dtkomplus as $idKomp) {
-		$kk = pphKelompokKomponen($idKomp, isset($namaKompAwal[$idKomp]) ? $namaKompAwal[$idKomp] : '', isset($tipeKomp[$idKomp]) ? $tipeKomp[$idKomp] : '', $tidakTeratur);
+		$kk = pphKelompokKomponen($idKomp, isset($namaKompAwal[$idKomp]) ? $namaKompAwal[$idKomp] : '', isset($tipeKomp[$idKomp]) ? $tipeKomp[$idKomp] : '', $tidakTeratur, $setupTetapPph);
 		$komGrup[$idKomp] = $kk;
 		$kolGabung[$kk[0]][$kk[1]] = $kk[1];
 		if ($kk[0] == 'TETAP') {
@@ -2261,6 +2286,7 @@ function pphPreviewKhl($per, $unit, $tipe)
 	#--- Komponen pendapatan: yang kena PPh 21 dan bertanda penambah; tunjangan BPJS dan natura dikecualikan (sesuai Excel KHL)
 	$kecuali = array('70', '71', '72', '73', '80', '126', '118', '156');
 	$tidakTeratur = array('26', '28');
+	$setupTetapPph = pphKomponenSetupTetap($unit);   # komponen di Setup Premi Tetap per Komponen = Pendapatan Tetap
 	$komp = array();   # id => array(kategori TETAP|TIDAK, kode kolom ringkas)
 	$tipeKomp = makeOption($dbname, 'sdm_ho_component', 'id,type');
 	$namaKompAwal = makeOption($dbname, 'sdm_ho_component', 'id,name');
@@ -2268,7 +2294,7 @@ function pphPreviewKhl($per, $unit, $tipe)
 		if (in_array((string) $bar['id'], $kecuali, true)) {
 			continue;
 		}
-		$komp[$bar['id']] = pphKelompokKomponen($bar['id'], isset($namaKompAwal[$bar['id']]) ? $namaKompAwal[$bar['id']] : '', $bar['type'], $bar['irregular'] == 1 ? array_merge($tidakTeratur, array((string) $bar['id'])) : $tidakTeratur);
+		$komp[$bar['id']] = pphKelompokKomponen($bar['id'], isset($namaKompAwal[$bar['id']]) ? $namaKompAwal[$bar['id']] : '', $bar['type'], $bar['irregular'] == 1 ? array_merge($tidakTeratur, array((string) $bar['id'])) : $tidakTeratur, $setupTetapPph);
 	}
 	$rupKomp = array();       # [karyawanid][idkomponen] => jumlah
 	$adaKomp = array('TETAP' => array(), 'TIDAK' => array());   # komponen yang muncul per kategori

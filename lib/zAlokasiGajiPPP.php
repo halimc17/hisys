@@ -382,6 +382,62 @@ function kehadiranWakarMandorPPP($kodeorg, $periode, $karyawanid)
 	return $rows;
 }
 
+#true bila karyawan + komponen PENDAPATAN ada di Setup Komponen Tetap (aktif); setup mengikuti karyawan walau sudah mutasi ke unit PPP lain.
+#komponen potongan di setup tidak pernah dibebankan ke kendaraan
+function premiTetapSetupPPP($kodeorg, $karyawanid, $komponen)
+{
+	global $dbname, $owlPDO;
+	try {
+		$stm = $owlPDO->prepare("select count(*) from " . $dbname . ".sdm_5premitetapkomp s join " . $dbname . ".sdm_ho_component c on c.id=s.idkomponen where s.idkomponen=? and s.karyawanid=? and s.aktif=1 and c.plus=1");
+		if ($stm && $stm->execute(array((int)$komponen, (int)$karyawanid))) {
+			return $stm->fetchColumn() > 0;
+		}
+	} catch (PDOException $e) {
+		#tabel setup belum ada: beban normal
+	}
+	return false;
+}
+
+#jenis kendaraan genset dari parameter TRGENSET (setup_parameterappl, kode jenis dipisah koma); kosong bila belum diisi
+function jenisGensetListPPP()
+{
+	global $dbname;
+	static $daftar = null;
+	if ($daftar === null) {
+		$daftar = array();
+		foreach (fetchData("select nilai from " . $dbname . ".setup_parameterappl where kodeparameter='TRGENSET'") as $r) {
+			foreach (explode(',', str_replace("'", "", (string)$r['nilai'])) as $j) {
+				$j = trim($j);
+				if ($j != '') {
+					$daftar[] = $j;
+				}
+			}
+		}
+	}
+	return $daftar;
+}
+
+#hari karyawan tercatat per kendaraan GENSET (jenis di parameter TRGENSET) di Pekerjaan Traksi pada periode itu: kodevhc => jumlah hari.
+#Kosong bila tidak tercatat di genset mana pun, sehingga komponennya tetap memakai alur beban biasa.
+function hariTraksiVhcPPP($kodeorg, $periode, $karyawanid)
+{
+	global $dbname;
+	$hasil = array();
+	$jenis = jenisGensetListPPP();
+	if (count($jenis) == 0) {
+		return $hasil;
+	}
+	$jenisSql = "'" . implode("','", array_map('addslashes', $jenis)) . "'";
+	foreach (fetchData("select h.kodevhc, count(distinct h.tanggal) as hari from " . $dbname . ".vhc_runhk k inner join " . $dbname . ".vhc_runht h on h.notransaksi=k.notransaksi
+		where k.idkaryawan='" . addslashes($karyawanid) . "' and h.kodeorg='" . addslashes($kodeorg) . "' and h.jenisvhc in (" . $jenisSql . ") and h.tanggal like '" . addslashes($periode) . "%' and h.kodevhc<>''
+		group by h.kodevhc order by h.kodevhc") as $r) {
+		if ($r['hari'] > 0) {
+			$hasil[$r['kodevhc']] = (int)$r['hari'];
+		}
+	}
+	return $hasil;
+}
+
 function hitungSisaGajiBlmAlokasiPPP($kodeorg, $periode, $karyawanid = '')
 {
 	global $dbname;

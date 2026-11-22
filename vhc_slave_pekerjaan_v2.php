@@ -191,6 +191,11 @@ switch ($proses) {
             $optKary .= "<option value=" . $rkary['karyawanid'] . ">" . $rkary['nama'] . "&nbsp; [" . $arrJab[$rkary['jabatan']] . "] &nbsp;[" . $rkary['nik'] . "]</option>";
         }
 
+        #PPP genset (jenis kendaraan di parameter TRGENSET): operator = semua karyawan aktif unit, hanya dicatat namanya
+        if (gensetPPP($res['kodeorg'], $res['jenisvhc'])) {
+            $optKary = optOperatorGensetPPP($dbname, $res['kodeorg'], $res['tanggal']);
+        }
+
         ## Ambil helper
         $optKary_Help = "<option value=''>" . $_SESSION['lang']['pilihdata'] . "</option>";
         $skary = "select distinct(a.karyawanid),a.nama,b.nik,a.jabatan from " . $dbname . ".vhc_5operator a left join " . $dbname . ".datakaryawan b on a.karyawanid=b.karyawanid where a.aktif='1' and a.vhc = '" . $res['kodevhc'] . "'and a.jabatan in ('1') and (tanggalkeluar = '0000-00-00' or tanggalkeluar>= '" . $res['tanggal'] . "')  order by a.jabatan,a.nama"; //echo $skary;
@@ -448,6 +453,18 @@ switch ($proses) {
         echo $optBlok . "###" . isset($param['blok']);
         break;
     case 'getUmr':
+        #PPP genset: upah tetap dari absensi dan premi dari Setup Premi Tetap per Komponen, jadi tidak ada upah/premi di transaksi ini
+        if (isset($rKode['kodeorg']) && gensetPPP($rKode['kodeorg'], $rKode['jenisvhc'])) {
+            $tipeGenset = 'kosong';
+            if (isset($param['kode_karyawan']) && preg_match('/^[0-9]{1,10}$/', (string)$param['kode_karyawan'])) {
+                foreach (fetchData("select tipekaryawan from " . $dbname . ".datakaryawan where karyawanid='" . $param['kode_karyawan'] . "'") as $barG) {
+                    $tipeGenset = $barG['tipekaryawan'];
+                }
+            }
+            $rConfigG = fetchData("select setuppremi from " . $dbname . ".vhc_5configpremi where pt = '" . getindukPT($rKode['kodeorg']) . "' and aktif = 1");
+            echo "0####0####0####0####0####" . $tipeGenset . "####kosong####kosong####kosong####kosong####0####kerja####0####" . (isset($rConfigG[0]['setuppremi']) ? $rConfigG[0]['setuppremi'] : '') . "####" . (operatorKhususGensetPPP(isset($param['kode_karyawan']) ? $param['kode_karyawan'] : '') ? 1 : 0);
+            break;
+        }
         if ($_POST['tahun'] != '')
             $tahun = $_POST['tahun'];
         else {
@@ -1611,6 +1628,11 @@ switch ($proses) {
                     $optKary .= "<option value=" . $rkary['karyawanid'] . ">" . $rkary['nama'] . "&nbsp; [" . $arrJab[$rkary['jabatan']] . "] &nbsp;[" . $rkary['nik'] . "]</option>";
                 }
 
+                #PPP genset (jenis kendaraan di parameter TRGENSET): operator = semua karyawan aktif unit, hanya dicatat namanya
+                if (gensetPPP($param['kodeorg'], $param['jenisvhc'])) {
+                    $optKary = optOperatorGensetPPP($dbname, $param['kodeorg'], $tgl_kerja);
+                }
+
                 ## Ambil Helper
                 $optKary_Helper = "<option value=''>" . $_SESSION['lang']['pilihdata'] . "</option>";
                 $skary = "select distinct(a.karyawanid),a.nama,b.nik,a.jabatan from " . $dbname . ".vhc_5operator a left join " . $dbname . ".datakaryawan b on a.karyawanid=b.karyawanid where a.aktif='1' and a.vhc = '" . $param['kodevhc'] . "'and a.jabatan in ('1') and (tanggalkeluar = '0000-00-00' or tanggalkeluar>= '" . $tgl_kerja . "')  order by a.jabatan,a.nama";
@@ -1731,6 +1753,17 @@ switch ($proses) {
 
         #= perhitungan jumlah kmhm
         $jumlah = $param['kmhm_akhir'] - $param['kmhm_awal'];
+
+        #PPP genset: rit dan prestasi tidak perlu diisi (prestasi = jumlah hm); upah/premi hanya untuk operator tanpa setup khusus genset
+        if (gensetPPP($rCekHt[0]['kodeorg'], $rCekHt[0]['jenisvhc'])) {
+            if ($param['jmlh_rit'] == '' || $param['jmlh_rit'] == '0') {
+                $param['jmlh_rit'] = 1;
+            }
+            if ($param['brt_muatan'] == '' || $param['brt_muatan'] == '0') {
+                $param['brt_muatan'] = ($jumlah > 0) ? $jumlah : '';
+            }
+            batasiUpahPremiGensetPPP($param);
+        }
 
         #= ambil tipe kode unit
         $dTip = makeOption($dbname, 'organisasi', 'kodeorganisasi,tipe', "kodeorganisasi='" . $param['lokasi_kerja'] . "'");
@@ -1862,6 +1895,17 @@ switch ($proses) {
         $res = $owlPDO->query($sAlokasi) or die(print " Gagal: " . PDOException::getMessage());
         $res->setFetchMode(PDO::FETCH_ASSOC);
         $rAlokasi = $res->fetch();
+
+        #PPP genset: rit dan prestasi tidak perlu diisi (prestasi = jumlah hm); upah/premi hanya untuk operator tanpa setup khusus genset
+        if (isset($rKode['kodeorg']) && gensetPPP($rKode['kodeorg'], $rKode['jenisvhc'])) {
+            if ($param['jmlh_rit'] == '' || $param['jmlh_rit'] == '0') {
+                $param['jmlh_rit'] = 1;
+            }
+            if ($param['brt_muatan'] == '' || $param['brt_muatan'] == '0') {
+                $param['brt_muatan'] = ($param['kmhm_akhir'] > $param['kmhm_awal']) ? ($param['kmhm_akhir'] - $param['kmhm_awal']) : '';
+            }
+            batasiUpahPremiGensetPPP($param);
+        }
 
         if (($param['brt_muatan'] == '') || ($param['jmlh_rit'] == '')) {
             echo "Warningsystem: Harap lengkapi form inputan !";
@@ -2066,6 +2110,10 @@ switch ($proses) {
         }
         break;
     case 'insert_operator':
+        #PPP genset: operator khusus genset (punya Setup Komponen Tetap pendapatan aktif) hanya dicatat namanya; operator lain boleh diisi upah dan premi
+        if (isset($rKode['kodeorg']) && gensetPPP($rKode['kodeorg'], $rKode['jenisvhc'])) {
+            batasiUpahPremiGensetPPP($param);
+        }
         #= Cek periode gajinya dulu
         $sPeriode   = selectQuery($dbname, 'sdm_5periodegaji', 'periode', "kodeorg='" . substr($rKode['kodeorg'], 0, 4) . "' and periode='" . substr($tgl_kerja, 0, 4) . "-" . substr($tgl_kerja, 4, 2) . "'");
         $rPeriode   = fetchData($sPeriode)[0];
@@ -2109,8 +2157,9 @@ switch ($proses) {
 
         #= Cek absensi umum
         $str        = selectQuery($dbname, 'sdm_absensidt', '*', "karyawanid='" . $param['kode_karyawan'] . "' and tanggal='" . $tgl_kerja . "'");
-        $bar        = isset(fetchData($str)[0]);
-        $jumabs     = $bar['umr'];
+        $rAbs       = fetchData($str);
+        #cek absensi umum hanya berlaku untuk PT PPP (Palma); unit PT lain tidak diubah (sebelumnya pemeriksaan ini memang tidak pernah terpicu)
+        $jumabs     = (isset($rAbs[0]['umr']) && isset($rKode['kodeorg']) && getindukPT($rKode['kodeorg']) == 'PPP') ? $rAbs[0]['umr'] : 0;
 
         if ($jumabs > 0 && $param['uphOprt'] > 0) {
             exit("Warningsystem: Karyawan ditanggal " . tanggalnormal($tgl_kerja) . "  sudah terdaftar di absensi umum, silahkan dihapus dahulu absensi umumnya");
@@ -2165,6 +2214,21 @@ switch ($proses) {
         // if($libur==true and $param['uphOprt']>0){
         // exit("Warningsystem:Jika Hari libur/minggu maka nilai upah harus 0, upah ditambahkan ke premi");
         // }
+
+        #PPP genset: upah yang diketik tidak boleh membuat total upah karyawan hari itu (semua transaksi traksi) melebihi 1 HK
+        if (isset($rKode['kodeorg']) && gensetPPP($rKode['kodeorg'], $rKode['jenisvhc']) && (float)$param['uphOprt'] > 0 && preg_match('/^[0-9]{1,10}$/', (string)$param['kode_karyawan'])) {
+            $tglCekHk = tanggalDbWakarPPP($tgl_kerja);
+            $rGp = fetchData("select jumlah from " . $dbname . ".sdm_5gajipokok where karyawanid='" . $param['kode_karyawan'] . "' and tahun='" . substr($tglCekHk, 0, 7) . "' and idkomponen='1'");
+            $gajiHarian = isset($rGp[0]['jumlah']) ? round($rGp[0]['jumlah'] / 25, 0) : 0;
+            if ($gajiHarian <= 0) {
+                exit("Warningsystem: Gaji pokok karyawan periode " . substr($tglCekHk, 0, 7) . " belum ada, upah tidak bisa diisi.");
+            }
+            $rSudah = fetchData("select coalesce(sum(upah),0) as u from " . $dbname . ".vhc_runhk where idkaryawan='" . $param['kode_karyawan'] . "' and tanggal='" . $tglCekHk . "' and notransaksi<>'" . addslashes($param['no_trans']) . "'");
+            $sudahUpah = isset($rSudah[0]['u']) ? (float)$rSudah[0]['u'] : 0;
+            if ($sudahUpah + (float)$param['uphOprt'] > $gajiHarian + 1) {
+                exit("Warningsystem: Upah karyawan tanggal " . tanggalnormal($tglCekHk) . " melebihi 1 HK (1 HK = Rp " . number_format($gajiHarian, 0) . ", sudah terpakai Rp " . number_format($sudahUpah, 0) . " di transaksi traksi lain). Isi upah lebih kecil atau cukup isi premi.");
+            }
+        }
 
         #======================= cek premi apakah lebih besar dari perhitungan ==================
         $param = $_POST;
@@ -3187,6 +3251,84 @@ function traksiPPP($kodeorg)
         return false;
     }
     return getindukPT($kodeorg) == 'PPP';
+}
+
+#PPP: daftar jenis kendaraan genset dari parameter TRGENSET (setup_parameterappl, kode jenis dipisah koma). Kendaraan berjenis ini di unit PT PPP: operator bisa
+#karyawan mana pun dan hanya dicatat namanya bersama HM; upah tetap dari absensi, premi tetap dari Setup Premi Tetap per Komponen, jadi upah/premi/denda selalu 0.
+function jenisGensetPPP()
+{
+    global $dbname;
+    static $daftar = null;
+    if ($daftar === null) {
+        $daftar = array();
+        foreach (fetchData("select nilai from " . $dbname . ".setup_parameterappl where kodeparameter='TRGENSET'") as $r) {
+            foreach (explode(',', str_replace("'", "", (string)$r['nilai'])) as $j) {
+                $j = trim($j);
+                if ($j != '') {
+                    $daftar[$j] = true;
+                }
+            }
+        }
+    }
+    return $daftar;
+}
+
+function gensetPPP($kodeorg, $jenisvhc)
+{
+    if ($jenisvhc == '' || !traksiPPP($kodeorg)) {
+        return false;
+    }
+    $daftar = jenisGensetPPP();
+    return isset($daftar[$jenisvhc]);
+}
+
+function optOperatorGensetPPP($dbname, $kodeorg, $tanggal)
+{
+    $tanggal = tanggalDbWakarPPP($tanggal);
+    if (!preg_match('/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/', $tanggal)) {
+        $tanggal = date('Y-m-d');
+    }
+    $opt = "<option value=''>" . $_SESSION['lang']['pilihdata'] . "</option>";
+    foreach (fetchData("select karyawanid,namakaryawan,nik from " . $dbname . ".datakaryawan where lokasitugas='" . addslashes($kodeorg) . "' and (tanggalkeluar = '0000-00-00' or tanggalkeluar is null or tanggalkeluar>= '" . $tanggal . "') order by namakaryawan") as $bar) {
+        $opt .= "<option value=" . $bar['karyawanid'] . ">" . htmlspecialchars($bar['namakaryawan']) . "&nbsp; [Operator] &nbsp;[" . htmlspecialchars($bar['nik']) . "]</option>";
+    }
+    return $opt;
+}
+
+#operator khusus genset = karyawan yang punya setup komponen pendapatan aktif di Setup Komponen Tetap (upah dari absensi, premi dari setup)
+function operatorKhususGensetPPP($karyawanid)
+{
+    global $dbname;
+    if (!preg_match('/^[0-9]{1,10}$/', (string)$karyawanid)) {
+        return false;
+    }
+    try {
+        $r = fetchData("select count(*) as jml from " . $dbname . ".sdm_5premitetapkomp s join " . $dbname . ".sdm_ho_component c on c.id=s.idkomponen where s.karyawanid='" . (int)$karyawanid . "' and s.aktif=1 and s.nominal>0 and c.plus=1");
+        return isset($r[0]['jml']) && $r[0]['jml'] > 0;
+    } catch (Exception $e) {
+        return false;
+    }
+}
+
+#PPP genset: yang boleh diisi hanya upah operator (uphOprt) dan premi operator (prmiOprtTambahan), dan hanya untuk operator yang bukan khusus genset.
+#Helper, premi hitungan, dan denda selalu 0; operator khusus genset seluruhnya 0 (upah dari absensi, premi dari setup).
+function batasiUpahPremiGensetPPP(&$param)
+{
+    $khusus = operatorKhususGensetPPP(isset($param['kode_karyawan']) ? $param['kode_karyawan'] : '');
+    foreach (array('uphOprt', 'uphHelp', 'uphHelp2', 'uphHelp3', 'uphHelp4', 'prmiOprt', 'prmiOprtTambahan', 'prmiHelp', 'prmiHelp2', 'prmiHelp3', 'prmiHelp4', 'pnltyOprt') as $k) {
+        $nilai = 0;
+        if (!$khusus && in_array($k, array('uphOprt', 'prmiOprtTambahan'), true) && isset($param[$k])) {
+            $v = str_replace(',', '', trim((string)$param[$k]));
+            if ($v !== '') {
+                if (!is_numeric($v) || $v < 0 || $v > 100000000) {
+                    exit("Warningsystem : Nilai upah/premi harus angka 0 sampai 100.000.000.");
+                }
+                $nilai = $v + 0;
+            }
+        }
+        $param[$k] = $nilai;
+        $_POST[$k] = $nilai;
+    }
 }
 
 #tanggal transaksi pada header bisa berbentuk YYYYMMDD; ubah ke YYYY-MM-DD
