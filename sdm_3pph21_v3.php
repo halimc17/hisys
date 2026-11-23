@@ -11,6 +11,8 @@ require_once('master_mainMenu.php');
 <style>
 /* dropdown select2 di atas dialog (Excel/PDF) */
 body > .select2-container{z-index:2100}
+#panduanPph{overflow:hidden;margin:0 0 0 12px;padding:4px 4px 4px 14px;border-left:3px solid #9db7d6;font-size:12px;color:#444}
+#panduanPph ol{margin:3px 0 0 0;padding-left:18px;line-height:1.55}
 </style>
 <script language=javascript src=js/zTools.js></script>
 <script language=javascript src='js/zReport.js'></script>
@@ -34,7 +36,7 @@ foreach (getOrgDetail(1) as $key => $val) {
 	}
 
 	$terpilih = ($key == $_SESSION['empl']['lokasitugas']) ? " selected" : "";
-	$optunit .= "<option value='" . $key . "'" . $terpilih . ">" . $key . " - " . $val . "</option>";
+	$optunit .= "<option value='" . $key . "'" . $terpilih . ($indukUnit == 'PPP' ? " data-ppp='1'" : "") . ">" . $key . " - " . $val . "</option>";
 }
 if ($indukSebelumnya != '') {
 	$optunit .= "</optgroup>";
@@ -66,6 +68,11 @@ echo "<fieldset style='float:left;'>
                     <td>:</td>
                     <td><select class=select2 id=per style=\"width:200px;\">" . $optPer . "</select></td>
                 </tr>
+                <tr>
+                    <td>Sistem Gaji</td>
+                    <td>:</td>
+                    <td><select class=select2 id=sistem style=\"width:200px;\"><option value='Bulanan'>Bulanan</option><option value='Harian'>Harian</option></select></td>
+                </tr>
                 <tr hidden>
                     <td>Tunjangan Pph21 </td>
                     <td>:</td>
@@ -86,16 +93,20 @@ echo "<fieldset style='float:left;'>
                 </tr>
             </table>
         </fieldset>
-        <span>
-            <ol style='margin-left:20%'>INFO :</ol>
-            <li style='margin-left:25%'>Sebelum melakukan proses PPH21 harap dipastikan :</li>
-            <li style='margin-left:25%'>1. Lakukan proses gaji Harian dan Bulan, melalui SDM - Proses - Penggajian Harian / Bulanan.</li>
-            <li style='margin-left:25%'>2. Tutup periode penggajian unit, melalui menu SDM - Setup - Periode Penggajian Unit.</li>
-            <li style='margin-left:25%'>3. Jalankan proses PPH21</li><br>
-        </span>";
+        <div id='panduanPph'>
+            <b>Panduan</b>
+            <ol>
+                <li>Pastikan gaji sudah diproses dan periode penggajian unit sudah ditutup (periode akuntansi belum ditutup).</li>
+                <li>Pilih Unit, Periode, dan Sistem Gaji, klik <b>Preview</b>, cek hasilnya, lalu klik <b>Proses PPh 21</b>.</li>
+                <li>Khusus PT PPP: PJD masuk otomatis. Penghasilan lain (jasa produksi, dana motivasi) dan PPh 21 yang sudah dilaporkan manual: Unduh Template, isi angka, Upload.</li>
+            </ol>
+</div>";
 CLOSE_BOX();
 
 OPEN_BOX();
+echo "<div id='validasiContainer'></div>";
+echo "<div id='lainContainer'></div>";
+echo "<div id='pjdContainer'></div>";
 echo "<div id='printContainer'></div>";
 CLOSE_BOX();
 

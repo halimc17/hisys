@@ -189,7 +189,7 @@ switch($proses) {
 		}
 			
 		$sql="select a.*,b.*,c.idkaryawan,c.upah,c.posisi from ".$dbname.".vhc_runht a left join ".$dbname.".vhc_rundt b on a.notransaksi=b.notransaksi left join ".$dbname.".vhc_runhk c on b.notransaksi=c.notransaksi ".$where."";
-		$arrPos=array("Sopir","Kondektur");
+		$arrPos=array(0=>"Sopir",1=>"Kondektur",3=>"Wakar",4=>"Mandor");
 		$qRvhc=$owlPDO->query($sql) or die(print " Gagal: ".PDOException::getMessage());
 		$qRvhc->setFetchMode(PDO::FETCH_ASSOC);
 		$no=0;

@@ -1624,6 +1624,33 @@ if ($adaGajiKecil > 0) {
 	}
 }
 
+#PPP: Premi Tetap per Komponen (menu Setup Premi Tetap per Komponen): karyawan yang disetup dan aktif dibayar setiap bulan sebesar nominal setup,
+#tanpa input bulanan. Komponen yang sudah ada untuk karyawan yang sama (mis. dari Pendapatan Lain) tidak digandakan.
+if (getindukPT($param['kodeorg']) == 'PPP' && count(fetchData("show tables from `" . $dbname . "` like 'sdm_5premitetapkomp'")) > 0) {
+	$sudahAdaPtk = array();
+	foreach ($readyData as $itemPtk) {
+		$sudahAdaPtk[(int)$itemPtk['karyawanid'] . '|' . (int)$itemPtk['idkomponen']] = true;
+	}
+	#setup mengikuti karyawan: satu baris per karyawan+komponen. Komponen yang sudah ada dari Pendapatan Lain/Potongan Lain/komponen otomatis tidak digandakan.
+	#Bila karyawan punya setup di lebih dari satu unit PPP (mutasi), dipilih setup di unit kerjanya menurut datakaryawan sekarang; bila tidak ada, setup di unit lama tetap dipakai agar tidak hilang.
+	$idKarPtk = implode(',', array_map('intval', array_keys($id)));
+	$setupPtk = $idKarPtk == '' ? array() : fetchData("select s.karyawanid,s.idkomponen,s.nominal from " . $dbname . ".sdm_5premitetapkomp s left join " . $dbname . ".datakaryawan k on k.karyawanid=s.karyawanid where s.aktif=1 and s.nominal>0 and s.karyawanid in (" . $idKarPtk . ") and s.kodeorg in (select kodeorganisasi from " . $dbname . ".organisasi where induk='PPP') order by (s.kodeorg=k.lokasitugas) desc, (s.kodeorg='" . addslashes($param['kodeorg']) . "') desc, s.updatetime desc");
+	foreach ($setupPtk as $rowPtk) {
+		if (isset($id[$rowPtk['karyawanid']]) && !isset($sudahAdaPtk[(int)$rowPtk['karyawanid'] . '|' . (int)$rowPtk['idkomponen']])) {
+			$sudahAdaPtk[(int)$rowPtk['karyawanid'] . '|' . (int)$rowPtk['idkomponen']] = true;
+			$readyData[] = array(
+				'kodeorg' => $param['kodeorg'],
+				'periodegaji' => $param['periodegaji'],
+				'karyawanid' => $rowPtk['karyawanid'],
+				'idkomponen' => $rowPtk['idkomponen'],
+				'jumlah' => (int)round($rowPtk['nominal']),
+				'pengali' => 1,
+				'hk' => 0
+			);
+		}
+	}
+}
+
 $idkomponen_list = [];
 foreach ($readyData as $item) {
 	$idkomponen_list[] = $item['idkomponen'];

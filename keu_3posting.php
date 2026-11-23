@@ -20,6 +20,19 @@ echo open_body();
 $optOrg1 = array(""=>$_SESSION['lang']['pilihdata']);
 $optOrg2 = getOrgDetail(9);
 $optOrg = array_merge($optOrg1,$optOrg2);
+
+#Cabang PPP: daftar unit milik PT PPP dan daftar file *_ppp.php yang sudah ada.
+#Langkah proses yang punya file *_ppp.php dijalankan lewat file itu untuk unit PPP; unit lain tetap memakai file biasa.
+$orgPPP = array();
+foreach ($optOrg2 as $kdorgPPP => $nmorgPPP) {
+  if (getindukPT($kdorgPPP) == 'PPP') {
+    $orgPPP[] = $kdorgPPP;
+  }
+}
+$filePPP = array();
+foreach (array_merge((array)glob('keu_slave_*_ppp.php'), (array)glob('vhc_slave_*_ppp.php')) as $fPPP) {
+  $filePPP[] = basename($fPPP);
+}
 // print_r($optOrg);
 // $bulantahun = $_SESSION['org']['period']['tahun']."-".$_SESSION['org']['period']['bulan'];
 // // $bulantahun = "2018-06";
@@ -83,15 +96,15 @@ if($_SESSION['language']=='EN'){
 $els = array();
 $els[] = array(
   makeElement('kodeorg','label',$_SESSION['lang']['kodeorg']),
-  makeElement('kodeorg','selectsearch','',array('style'=>'width:200px','onchange'=>'changeperiode(this)'),$optOrg)
+  makeElement('kodeorg','selectsearch','',array('class'=>'select2','style'=>'width:200px','onchange'=>'changeperiode(this)'),$optOrg)
 );
 $els[] = array(
   makeElement('periode','label',$_SESSION['lang']['periode']),
-  makeElement('periode','select','',array('style'=>'width:200px'),$optPeriod)
+  makeElement('periode','select','',array('class'=>'select2','style'=>'width:200px'),$optPeriod)
 );
 $els[] = array(
   makeElement('jenisData','label',$_SESSION['lang']['jenisbiaya']),
-  makeElement('jenisData','select','',array('style'=>'width:200px'),$optJenisData)
+  makeElement('jenisData','select','',array('class'=>'select2','style'=>'width:200px'),$optJenisData)
 );
 
 # Button
@@ -102,11 +115,14 @@ $els['btn'] = array(
 #====== View ======
 # Menu
 include('master_mainMenu.php');
+require_once('lib/zSelect2.php');
 
 # Form
 // OPEN_BOX('','<span class=judul>'.strtoupper($_SESSION['lang']['peosesakhirbulan']).'</span><br>');
 OPEN_BOX('','<span class=judul>'.getMenu('keu_3posting').'</span><br>');
 echo genElTitle($_SESSION['lang']['form'],$els);
+echo "<script>var orgPPP = " . json_encode($orgPPP) . "; var filePPP = " . json_encode($filePPP) . ";
+$(document).ready(function() { $('.select2').select2({ dropdownAutoWidth: true }); });</script>";
 
 // echo"<fieldset style=float:left>
      // <legend><b>".$_SESSION['lang']['form']."</b></legend>

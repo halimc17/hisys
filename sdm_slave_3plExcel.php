@@ -18,6 +18,17 @@ $org = checkPostGet('org', '');
 $per = checkPostGet('per', '');
 $kom = checkPostGet('kom', '');
 
+#org, per, kom masuk ke query: hanya format yang sah yang diterima
+if (!is_string($org) || ($org !== '' && !preg_match('/^[A-Za-z0-9]{1,10}$/', $org))) {
+	exit("Warning : Parameter org tidak valid.");
+}
+if (!is_string($per) || ($per !== '' && !preg_match('/^[0-9]{4}-[0-9]{2}$/', $per))) {
+	exit("Warning : Parameter per tidak valid.");
+}
+if (!is_string($kom) || ($kom !== '' && !preg_match('/^[0-9]{1,10}$/', $kom))) {
+	exit("Warning : Parameter kom tidak valid.");
+}
+
 $nmKom=makeOption($dbname,'sdm_ho_component','id,name');
 $nmKar=makeOption($dbname,'datakaryawan','karyawanid,namakaryawan');
 $nmOrg=makeOption($dbname,'organisasi','kodeorganisasi,namaorganisasi');
@@ -114,7 +125,8 @@ $nop_="Laporan_Pendapatan_Lain";
 if(strlen($stream)>0){
 	if ($handle = opendir('tempExcel')) {
 		while (false !== ($file = readdir($handle))) {
-			if ($file != "." && $file != ".." && $file != "index.html") {
+			#hanya bersihkan file buatan menu ini, file lain di tempExcel jangan disentuh
+			if ($file == $nop_.".xls") {
 				@unlink('tempExcel/'.$file);
 			}
 		}	

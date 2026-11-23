@@ -252,10 +252,13 @@
         $pdf->SetY($ary+5);
         $pdf->Ln();
         $pdf->Cell(240,5,$_SESSION['lang']['vhc_detail_operator'],0,1,'L');	
+        #PPP: lebar tabel disamakan dengan tabel Detail Pekerjaan (193) dan nama karyawan huruf besar semua
+        $pppPrint=(getindukPT($bar->kodeorg)=='PPP');
+        $lebarNama=$pppPrint ? 88 : 80;
         $pdf->SetFont('Arial','B',7);	
         $pdf->SetFillColor(220,220,220);
         $pdf->Cell(5,5,$_SESSION['lang']['nourut'],1,0,'C',1);
-        $pdf->Cell(80,5,$_SESSION['lang']['namakaryawan'],1,0,'C',1);
+        $pdf->Cell($lebarNama,5,$_SESSION['lang']['namakaryawan'],1,0,'C',1);
         $pdf->Cell(20,5,$_SESSION['lang']['vhc_posisi'],1,0,'C',1);
         $pdf->Cell(20,5,$_SESSION['lang']['premi']." ".$_SESSION['lang']['hi'],1,0,'C',1);
         $pdf->Cell(20,5,$_SESSION['lang']['premi']." ".$_SESSION['lang']['sdhi'],1,0,'C',1);
@@ -265,7 +268,7 @@
 
         $pdf->SetFillColor(255,255,255);
         $pdf->SetFont('Arial','',6);
-        $arrPos=array("0"=>"Operator/Driver","1"=>"Helper");
+        $arrPos=array("0"=>"Operator/Driver","1"=>"Helper","3"=>"Wakar","4"=>"Mandor");
         $str="select * from ".$dbname.".vhc_runhk  where notransaksi='".$notransaksi."'";
         if(count(fetchdata($str))>0){
                 $res1=$owlPDO->query($str) or die(print " Gagal: ".PDOException::getMessage());
@@ -284,8 +287,8 @@
                         $res3->setFetchMode(PDO::FETCH_ASSOC); 
                         $rstrd=$res3->fetch();
                         $pdf->Cell(5,5,$no,1,0,'C',1);
-                        $pdf->Cell(80,5,$res5->namakaryawan,1,0,'L',1);
-                        $pdf->Cell(20,5,$arrPos[$res['posisi']],1,0,'C',1);	
+                        $pdf->Cell($lebarNama,5,($pppPrint ? strtoupper($res5->namakaryawan) : $res5->namakaryawan),1,0,'L',1);
+                        $pdf->Cell(20,5,(isset($arrPos[$res['posisi']]) ? $arrPos[$res['posisi']] : ''),1,0,'C',1);	
                         $pdf->Cell(20,5,number_format($res['premi'],0),1,0,'R',1);
                         $pdf->Cell(20,5,number_format($rstrd['premisdi'],0),1,0,'R',1);
                         $pdf->Cell(20,5,number_format($res['upah'],0),1,0,'R',1);
@@ -293,7 +296,7 @@
 
                 }
         }else{
-                $pdf->Cell(185,5,$_SESSION['lang']['errdatanotexist'],1,0,'C',1);
+                $pdf->Cell(($pppPrint ? 193 : 185),5,$_SESSION['lang']['errdatanotexist'],1,0,'C',1);
         }
         //footer================================
         $pdf->Output();

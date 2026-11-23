@@ -65,9 +65,14 @@
     }
 
 
-    $arrJab=array("0"=>"Operator","1"=>"Helper","2"=>"Driver");
+    #PPP: jabatan Wakar (3) hanya untuk pengguna PT PPP; wakar dipilih pada header Pekerjaan Traksi (vhc_pekerjaan_v2)
+    $arrJab=array("0"=>"Operator","1"=>"Helper","2"=>"Driver","3"=>"Wakar");
+    $arrJabPilih=$arrJab;
+    if(!(isset($_SESSION['empl']['kodeorganisasi']) && $_SESSION['empl']['kodeorganisasi']=='PPP')){
+        unset($arrJabPilih["3"]);
+    }
     $optJabatan="<option value=''>".$_SESSION['lang']['pilihdata']."</option>";
-    foreach($arrJab as $brs1 => $isi1)
+    foreach($arrJabPilih as $brs1 => $isi1)
     {
         $optJabatan.="<option value=".$brs1.">".$isi1."</option>";
     }
@@ -85,7 +90,9 @@
 
     $optKry="<option value=''>".$_SESSION['lang']['pilihdata']."</option>";
     $sDtkry="select namakaryawan,karyawanid,lokasitugas,nik, subbagian from ".$dbname.".datakaryawan where alokasi=0 
-    and lokasitugas = '".$_SESSION['empl']['lokasitugas']."' and (tanggalkeluar = '0000-00-00' or tanggalkeluar > ".$_SESSION['org']['period']['start'].") and tipekaryawan != '0' order by namakaryawan asc ";
+    and lokasitugas = '".$_SESSION['empl']['lokasitugas']."' and (tanggalkeluar = '0000-00-00' or tanggalkeluar > ".$_SESSION['org']['period']['start'].") and tipekaryawan != '0'
+    and (lokasitugas not in (select kodeorganisasi from ".$dbname.".organisasi where induk='PPP') or subbagian in (select kodeorganisasi from ".$dbname.".organisasi where tipe='TRAKSI') or kodejabatan='51') order by namakaryawan asc ";
+    #PPP: karyawan unit PT PPP yang bisa dipilih hanya yang berdivisi (subbagian) traksi, ditambah wakar alat berat (jabatan 51); perusahaan lain tidak dibatasi
     $qDtkry=$owlPDO->query($sDtkry) or die(print " Gagal: ".PDOException::getMessage());
     $qDtkry->setFetchMode(PDO::FETCH_ASSOC);
     while($rDtkry=$qDtkry->fetch())
@@ -161,6 +168,14 @@
                 exit();
             } 
             
+            #PPP: operator unit PT PPP harus karyawan divisi (subbagian) traksi, atau wakar alat berat (jabatan 51)
+            if (ctype_digit((string)$kdKry)) {
+                $cekPPP = fetchData("select d.lokasitugas,d.kodejabatan,o.tipe from " . $dbname . ".datakaryawan d left join " . $dbname . ".organisasi o on o.kodeorganisasi=d.subbagian where d.karyawanid='" . $kdKry . "'");
+                if (count($cekPPP) > 0 && preg_match('/^[A-Za-z0-9]{1,10}$/', $cekPPP[0]['lokasitugas']) && getindukPT($cekPPP[0]['lokasitugas']) == 'PPP' && $cekPPP[0]['tipe'] != 'TRAKSI' && $cekPPP[0]['kodejabatan'] != '51') {
+                    exit("Warningsistem: Operator PPP harus karyawan divisi traksi (atau wakar alat berat). " . getNamaKaryawan($kdKry) . " bukan karyawan divisi traksi.");
+                }
+            }
+
             $sqlCek = "select * from " . $dbname . ".vhc_5operator where karyawanid='" . $kdKry . "' and vhc='".$kdVhc."'";
             $queryCek = $owlPDO->query($sqlCek) or die(print " Gagal: " . PDOException::getMessage());
             $rowCek = owlBaris($queryCek);

@@ -38,6 +38,10 @@ if (in_array($posting_cari, array('0', '1'), true)) {
 if (checkPostGet('periode_cari', '') != '') {
 	$where .= " and left(tanggal,7) = '" . addslashes(checkPostGet('periode_cari', '')) . "'";
 }
+#filter Tahun (4 digit); bila Periode dipilih, Periode yang dipakai
+if (checkPostGet('periode_cari', '') == '' && preg_match('/^[0-9]{4}$/', checkPostGet('tahun_cari', ''))) {
+	$where .= " and left(tanggal,4) = '" . checkPostGet('tahun_cari', '') . "'";
+}
 if (checkPostGet('operator_cari', '') != '') {
 	$where .= " and notransaksi in (select notransaksi from " . $dbname . ".vhc_rundt where operator = '" . addslashes(checkPostGet('operator_cari', '')) . "')";
 }

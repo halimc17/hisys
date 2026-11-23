@@ -1,3 +1,25 @@
+//Cabang PPP: unit milik PT PPP memakai file *_ppp.php untuk langkah proses yang punya file itu; unit lain tetap file biasa.
+//orgPPP dan filePPP diisi oleh keu_3posting.php. Untuk membuat cabang PPP suatu langkah: salin file-nya menjadi nama_ppp.php.
+var orgProsesAktif = '';
+function tujuanProses(file) {
+    var q = '';
+    var p = file.indexOf('?');
+    if (p > -1) {
+        q = file.substring(p);
+        file = file.substring(0, p);
+    }
+    var org = orgProsesAktif;
+    if (org == '' && document.getElementById('kodeorg')) {
+        org = document.getElementById('kodeorg').value;
+    }
+    if (typeof orgPPP !== 'undefined' && typeof filePPP !== 'undefined' && org != '' && orgPPP.indexOf(org) > -1) {
+        var filePpp = file.replace(/\.php$/, '_ppp.php');
+        if (filePPP.indexOf(filePpp) > -1) {
+            return filePpp + q;
+        }
+    }
+    return file + q;
+}
 
 function exportTableToExcel(tableID, filename = ''){
 	param  = '';
@@ -6,7 +28,12 @@ function exportTableToExcel(tableID, filename = ''){
 	var dataType = 'application/vnd.ms-excel';
 	var tableSelect = document.getElementById(tableID);
 		//tableSelect.border='1';
-	var tableHTML = tableSelect.outerHTML.replace(/ /g, '%20');
+	var tabelKlon = tableSelect.cloneNode(true);
+	var sembunyiEx = tabelKlon.querySelectorAll('.kolom-sembunyi');
+	for (var ix = 0; ix < sembunyiEx.length; ix++) {
+		sembunyiEx[ix].parentNode.removeChild(sembunyiEx[ix]);
+	}
+	var tableHTML = tabelKlon.outerHTML.replace(/ /g, '%20');
 
 	
 	var tableHTML = tableHTML;
@@ -33,6 +60,7 @@ function exportTableToExcel(tableID, filename = ''){
  * Fungsi untuk men-generate list dari transaksi yang dapat di posting
  */
 function listPosting(tipe) {
+    orgProsesAktif = getValue('kodeorg');
     var listPost = document.getElementById('listPosting');
     var param = "kodeorg="+getValue('kodeorg')+"&periode="+getValue('periode')+"&jenisdata="+getValue('jenisData')+"&tipe="+tipe;
 
@@ -45,6 +73,7 @@ function listPosting(tipe) {
                 } else {
                     //=== Success Response
                     listPost.innerHTML = con.responseText;
+                    listPost.style.height = '60vh';
                 }
             } else {
                 busy_off();
@@ -57,46 +86,46 @@ function listPosting(tipe) {
 	
     x=getValue('jenisData');
     if(x=='gudang')
-        post_response_text('keu_slave_3posting.php', param, respon);
+        post_response_text(tujuanProses('keu_slave_3posting.php'), param, respon);
     else if(x=='gaji')
-        post_response_text(filealokasi, param, respon);
+        post_response_text(tujuanProses(filealokasi), param, respon);
     else if(x=='gajitrk')
-        post_response_text('keu_slave_3gajikaryawantrk.php', param, respon);
+        post_response_text(tujuanProses('keu_slave_3gajikaryawantrk.php'), param, respon);
     else if(x=='depresiasi') 
         // post_response_text('keu_slave_3depresiasi.php', param, respon);
-        post_response_text('keu_slave_3depresiasiv2.php', param, respon);
+        post_response_text(tujuanProses('keu_slave_3depresiasiv2.php'), param, respon);
     else if(x=='alokasi') 
-        post_response_text('keu_slave_3traksi.php', param, respon);
+        post_response_text(tujuanProses('keu_slave_3traksi.php'), param, respon);
     else if(x=='alokasi_idle') 
-        post_response_text('keu_slave_3traksi_idle.php?method=list', param, respon);   
+        post_response_text(tujuanProses('keu_slave_3traksi_idle.php?method=list'), param, respon);   
     else if(x=='sipilalokasi') 
-        post_response_text('keu_slave_3sipil.php', param, respon);   
+        post_response_text(tujuanProses('keu_slave_3sipil.php'), param, respon);   
     else if(x=='gajiharilibur') 
         // post_response_text('keu_slave_3gajiharilibur.php', param, respon); 
-		post_response_text('keu_slave_3gajibelumalokasi.php?method=list', param, respon);	
+		post_response_text(tujuanProses('keu_slave_3gajibelumalokasi.php?method=list'), param, respon);	
     else if(x=='potongan')
-        post_response_text('keu_slave_3pengakuanPotongan.php', param, respon);
+        post_response_text(tujuanProses('keu_slave_3pengakuanPotongan.php'), param, respon);
     else if(x=='kurs')
-        post_response_text('keu_slave_3selisihKurs.php?proses=list', param, respon);
+        post_response_text(tujuanProses('keu_slave_3selisihKurs.php?proses=list'), param, respon);
     else if(x=='mutasi')
-        post_response_text('keu_slave_3mutasiKary.php?proses=list', param, respon);
+        post_response_text(tujuanProses('keu_slave_3mutasiKary.php?proses=list'), param, respon);
     else if(x=='tbsramp')
-        post_response_text('keu_slave_3tbsramp.php?proses=list', param, respon);
+        post_response_text(tujuanProses('keu_slave_3tbsramp.php?proses=list'), param, respon);
     else if(x=='hppolah')
-          post_response_text('keu_slave_3hppolah.php?proses=list', param, respon);
+          post_response_text(tujuanProses('keu_slave_3hppolah.php?proses=list'), param, respon);
     else if(x=='asuransi')
-        post_response_text('keu_slave_3asuransi.php?proses=list', param, respon);
+        post_response_text(tujuanProses('keu_slave_3asuransi.php?proses=list'), param, respon);
 	else if(x=='gajiho')
-        post_response_text('keu_slave_3gajikaryawanho.php?proses=list', param, respon);
+        post_response_text(tujuanProses('keu_slave_3gajikaryawanho.php?proses=list'), param, respon);
 	else if(x=='millmaintenance')
-	    post_response_text('keu_slave_3gajikaryawanho.php?proses=list', param, respon);
+	    post_response_text(tujuanProses('keu_slave_3gajikaryawanho.php?proses=list'), param, respon);
 	else if(x=='bibit')
-        post_response_text('keu_slave_3bibitpnkemn.php?proses=list', param, respon);
+        post_response_text(tujuanProses('keu_slave_3bibitpnkemn.php?proses=list'), param, respon);
 	else if(x=='alkbibit')
-        post_response_text('keu_slave_3bibitalokasi.php?proses=list', param, respon);
+        post_response_text(tujuanProses('keu_slave_3bibitalokasi.php?proses=list'), param, respon);
     else if(x=='fixtrans'){
         if(confirm("Ini akan memakan waktu, anda yakin?")){
-          post_response_text('keu_slave_3updateTransaksi.php', param, respon);         
+          post_response_text(tujuanProses('keu_slave_3updateTransaksi.php'), param, respon);         
         }
     }     
 }
@@ -127,7 +156,7 @@ function prosesGudang(row) {
         '&kodemesin=' + kodemesin + '&kodekegiatan=' + kodekegiatan +
         '&hartot=' + hartot + '&nopo=' + nopo + '&kodegudang=' + kodegudang + '&tanggal=' + tanggal +
         '&keterangan=' + keterangan;
-    tujuan = 'keu_slave_prosesGudangAkhirbulan.php';
+    tujuan = tujuanProses('keu_slave_prosesGudangAkhirbulan.php');
     post_response_text(tujuan, param, respon);
     document.getElementById('row' + row).style.backgroundColor = 'orange';
     function respon() {
@@ -162,6 +191,10 @@ function prosesGudang(row) {
 
 //= HO
 function prosesGajiho(row) {
+    //Batal pada konfirmasi (baris pertama) menghentikan proses, tidak ada jurnal yang dihapus atau dibuat
+    if (row == 1 && !confirm('Anda yakin melakukan proses pengalokasian gaji head office?')) {
+        return;
+    }
     document.getElementById('btnproses').disabled = true;
 
     if (document.getElementById('karyawanid' + row) == undefined) {
@@ -188,11 +221,8 @@ function prosesGajiho(row) {
         '&mesin=' + mesin + '&jumlah=' + jumlah +
         // '&subbagian='+subbagian+'&mesin='+mesin+'&jumlah='+jumlah+
         '&tipeorganisasi=' + tipeorganisasi + '&periode=' + periode + '&row=' + row;
-    tujuan = 'keu_slave_prosesAlokasiGajiAkhirbulanho.php';
-    if (row == 1 && confirm('Anda yakin melakukan proses pengalokasian gaji head office?'))
-        post_response_text(tujuan, param, respon);
-    else
-        post_response_text(tujuan, param, respon);
+    tujuan = tujuanProses('keu_slave_prosesAlokasiGajiAkhirbulanho.php');
+    post_response_text(tujuan, param, respon);
 
     document.getElementById('row' + row).style.backgroundColor = 'orange';
     function respon() {
@@ -227,6 +257,10 @@ function prosesGajiho(row) {
 
 
 function prosesGaji(row) {
+    //Batal pada konfirmasi (baris pertama) menghentikan proses, tidak ada jurnal yang dihapus atau dibuat
+    if (row == 1 && !confirm('Anda yakin melakukan proses pengalokasian gaji?')) {
+        return;
+    }
     document.getElementById('btnproses').disabled = true;
 
     if (document.getElementById('karyawanid' + row) == undefined) {
@@ -254,11 +288,8 @@ function prosesGaji(row) {
         '&mesin=' + mesin + '&jumlah=' + jumlah + '&subbagian=' + subbagian +
         // '&subbagian='+subbagian+'&mesin='+mesin+'&jumlah='+jumlah+
         '&tipeorganisasi=' + tipeorganisasi + '&periode=' + periode + '&row=' + row;
-    tujuan = 'keu_slave_prosesAlokasiGajiAkhirbulan.php';
-    if (row == 1 && confirm('Anda yakin melakukan proses pengalokasian gaji?'))
-        post_response_text(tujuan, param, respon);
-    else
-        post_response_text(tujuan, param, respon);
+    tujuan = tujuanProses('keu_slave_prosesAlokasiGajiAkhirbulan.php');
+    post_response_text(tujuan, param, respon);
 
     document.getElementById('row' + row).style.backgroundColor = 'orange';
     function respon() {
@@ -290,7 +321,19 @@ function prosesGaji(row) {
     }
 }
 
+//Cabang PPP (langkah 3): baris komponen lanjutan milik satu karyawan (atribut data-induk="rowN") ikut berubah bersama baris rowN.
+//Pada unit non-PPP tidak ada baris seperti itu sehingga tidak berpengaruh.
+function aturBarisTerkaitTrk(row, gaya, nilai) {
+    var el = document.querySelectorAll('[data-induk="row' + row + '"]');
+    for (var i = 0; i < el.length; i++) {
+        el[i].style[gaya] = nilai;
+    }
+}
 function prosesGajiTrk(row) {
+    //Batal pada konfirmasi (baris pertama) menghentikan proses, tidak ada jurnal yang dihapus atau dibuat
+    if (row == 1 && !confirm('Anda yakin melakukan proses pengalokasian gaji?')) {
+        return;
+    }
     document.getElementById('btnproses').disabled = true;
 
     if (document.getElementById('karyawanid' + row) == undefined) {
@@ -320,13 +363,11 @@ function prosesGajiTrk(row) {
     for (var i = 0; i < datakomp.length; i++) {
         param+= '&jumlah'+datakomp[i]+'=' + document.getElementById('jumlah' + row+'-'+datakomp[i]).innerHTML ;
     }
-    tujuan = 'keu_slave_prosesAlokasiGajiAkhirbulantrk.php';
-    if (row == 1 && confirm('Anda yakin melakukan proses pengalokasian gaji?'))
-        post_response_text(tujuan, param, respon);
-    else
-        post_response_text(tujuan, param, respon);
+    tujuan = tujuanProses('keu_slave_prosesAlokasiGajiAkhirbulantrk.php');
+    post_response_text(tujuan, param, respon);
 
     document.getElementById('row' + row).style.backgroundColor = 'orange';
+    aturBarisTerkaitTrk(row, 'backgroundColor', 'orange');
     function respon() {
         if (con.readyState == 4) {
             if (con.status == 200) {
@@ -334,8 +375,10 @@ function prosesGajiTrk(row) {
                 if (!isSaveResponse(con.responseText)) {
                     alertify.alert(con.responseText);
                     document.getElementById('row' + row).style.backgroundColor = 'red';
+                    aturBarisTerkaitTrk(row, 'backgroundColor', 'red');
                 } else {
                     document.getElementById('row' + row).style.display = 'none';
+                    aturBarisTerkaitTrk(row, 'display', 'none');
                     try {
                         x = row + 1;
                         if (document.getElementById('row' + x)) {
@@ -359,7 +402,7 @@ function prosesGajiTrk(row) {
 function prosesAlokasi(row) {
     periode = document.getElementById('periode' + row).innerHTML;
     param = 'periode=' + periode;
-    tujuan = 'vhc_slave_updateFlag.php';
+    tujuan = tujuanProses('vhc_slave_updateFlag.php');
     if (confirm('Anda yakin melakukan proses pengalokasian biaya Kendaraan?'))
         post_response_text(tujuan, param, respon);
 
@@ -380,7 +423,56 @@ function prosesAlokasi(row) {
     }
 }
 
+//Cabang PPP (langkah 8): baris bernilai nol sudah tidak ditampilkan, parameter dikirim bersih (jumlah dihitung ulang di server),
+//tombol dikunci selama proses dan aktif lagi bila gagal.
+function doProsesAlokasiPPP(row) {
+    var btn = document.getElementById('btnproses');
+    if (btn) {
+        btn.disabled = true;
+    }
+    var kodeorgP = trim(document.getElementById('kodeorg').value);
+    var periodeP = trim(document.getElementById('periode' + row).innerHTML);
+    var kodevhcP = trim(document.getElementById('kodevhc' + row).innerHTML);
+    var jenisP = trim(document.getElementById('jenis' + row).innerHTML);
+    var nourutP = trim(document.getElementById('nourut' + row).innerHTML);
+    var paramP = 'periode=' + encodeURIComponent(periodeP) + '&kodeorg=' + encodeURIComponent(kodeorgP) + '&kodevhc=' + encodeURIComponent(kodevhcP) +
+        '&jenis=' + encodeURIComponent(jenisP) + '&nourut=' + encodeURIComponent(nourutP);
+    var tujuanP = tujuanProses('keu_slave_prosesAlokasiTraksi.php');
+    document.getElementById('row' + row).style.backgroundColor = 'orange';
+    post_response_text(tujuanP, paramP, responP);
+
+    function responP() {
+        if (con.readyState == 4) {
+            if (con.status == 200) {
+                busy_off();
+                if (!isSaveResponse(con.responseText)) {
+                    document.getElementById('row' + row).style.backgroundColor = 'red';
+                    if (btn) {
+                        btn.disabled = false;
+                    }
+                    alertify.alert(con.responseText);
+                } else {
+                    document.getElementById('row' + row).style.display = 'none';
+                    if (document.getElementById('row' + (row + 1))) {
+                        doProsesAlokasiPPP(row + 1);
+                    } else {
+                        alertify.alert('Done');
+                    }
+                }
+            } else {
+                busy_off();
+                if (btn) {
+                    btn.disabled = false;
+                }
+                error_catch(con.status);
+            }
+        }
+    }
+}
 function doProsesAlokasi(row) {
+    if (typeof orgPPP !== 'undefined' && orgPPP.indexOf(orgProsesAktif) > -1) {
+        return doProsesAlokasiPPP(row);
+    }
     document.getElementById('btnproses').disabled = true;
     kodeorg = document.getElementById('kodeorg').value;
     periode = document.getElementById('periode' + row).innerHTML;
@@ -392,7 +484,7 @@ function doProsesAlokasi(row) {
     jumlahbiayakendaraan = document.getElementById('jumlahbiayakendaraan' + row).innerHTML;
 
     param = 'periode=' + periode + '&kodeorg=' + kodeorg + '+&kodevhc=' + kodevhc + '&jumlah=' + jumlah + '&jenis=' + jenis + '&nourut=' + nourut + '&jumlahbiayakendaraan=' + jumlahbiayakendaraan+ '&jumlahpembulatan=' + jumlahpembulatan;
-    tujuan = 'keu_slave_prosesAlokasiTraksi.php';
+    tujuan = tujuanProses('keu_slave_prosesAlokasiTraksi.php');
     if (jumlah != '0') {
         post_response_text(tujuan, param, respon);
     } else {
@@ -434,9 +526,18 @@ function doProsesAlokasi(row) {
 
 maxf=0
 sekarang=1;
-function savedep(maxRow){     
-	maxf=maxRow;
-	loopsave(1,maxRow);
+function savedep(maxRow) {
+    //Cabang PPP: konfirmasi dulu (Process ulang menghapus jurnal penyusutan unit ini pada periode itu) dan kunci tombol
+    if (typeof orgPPP !== 'undefined' && orgPPP.indexOf(orgProsesAktif) > -1) {
+        if (!confirm('Process akan menghapus jurnal penyusutan unit ini pada periode ini lalu membuatnya lagi. Lanjutkan?')) {
+            return;
+        }
+        if (document.getElementById('btnproses')) {
+            document.getElementById('btnproses').disabled = true;
+        }
+    }
+    maxf = maxRow;
+    loopsave(1, maxRow);
 }
 
 
@@ -458,7 +559,7 @@ function loopsave(currRow, maxRow) {
     param += '&keterangan=' + keterangan + '&kodeasset=' + kodeasset + '&namaaset=' + namaaset + '&kodejurnal=' + kodejurnal;
     param += '&jumlah=' + jumlah + '&debet=' + debet + '&kredit=' + kredit + '&currRow=' + currRow;
 
-    tujuan = 'keu_slave_prosesDepresiasiAkhirbulanv2.php';
+    tujuan = tujuanProses('keu_slave_prosesDepresiasiAkhirbulanv2.php');
     post_response_text(tujuan, param, respog);
     document.getElementById('row' + currRow).style.backgroundColor = '';
     document.getElementById('row' + currRow).style.backgroundColor = 'cyan';
@@ -471,7 +572,14 @@ function loopsave(currRow, maxRow) {
                     alertify.alert(con.responseText);
                     document.getElementById('row' + currRow).style.backgroundColor = 'red';
                     unlockScreen();
+                    if (document.getElementById('btnproses')) {
+                        document.getElementById('btnproses').disabled = false;
+                    }
                 } else {
+                    //Cabang PPP: baris yang sudah selesai hilang (seperti langkah lain)
+                    if (typeof orgPPP !== 'undefined' && orgPPP.indexOf(orgProsesAktif) > -1) {
+                        document.getElementById('row' + currRow).style.display = 'none';
+                    }
                     currRow += 1;
                     sekarang = currRow;
                     if (currRow > maxRow) {
@@ -521,7 +629,7 @@ function prosesPenyusutan(row) {
     }
     param = 'periode=' + periode + '&kodeorg=' + kodeorg;
     param += strdt;
-    tujuan = 'keu_slave_prosesDepresiasiAkhirbulanv2.php';
+    tujuan = tujuanProses('keu_slave_prosesDepresiasiAkhirbulanv2.php');
     function respon() {
         if (con.readyState == 4) {
             if (con.status == 200) {
@@ -619,7 +727,7 @@ function prosesGajiLangsung(row) {
     sampai = document.getElementById('sampai').value;
     param = 'karyawanid=' + karyawanid + '&kodeorg=' + kodeorg + '&periode=' + periode + '&jumlah=' + jumlah +
         '&dari=' + dari + '&sampai=' + sampai + '&row=' + row;
-    tujuan = 'keu_slave_prosesAlokasiGajiKetinggalan.php';
+    tujuan = tujuanProses('keu_slave_prosesAlokasiGajiKetinggalan.php');
     if (confirm('Anda yakin melakukan proses pengalokasian gaji?'))
         post_response_text(tujuan, param, respon);
 
@@ -658,17 +766,41 @@ function prosesGajiLangsung(row) {
 function prosesPotongan(periode) {
     kodeorg = document.getElementById('kodeorg').value;
     param = 'periode=' + periode + '&kodeorg=' + kodeorg + '&method=post';
-    tujuan = 'keu_slave_3pengakuanPotongan.php';
-    if (confirm('Anda yakin melakukan proses ini?'))
+    tujuan = tujuanProses('keu_slave_3pengakuanPotongan.php');
+    //Cabang PPP: baris list punya id row1, row2, ... (seperti langkah lain). Selama proses oranye, berhasil -> hilang, gagal -> merah.
+    //Pada unit non-PPP baris tidak punya id sehingga perilaku lama tetap.
+    var barisPot = [];
+    var i = 1;
+    while (document.getElementById('row' + i)) {
+        barisPot.push(document.getElementById('row' + i));
+        i++;
+    }
+    if (confirm('Anda yakin melakukan proses ini?')) {
+        for (i = 0; i < barisPot.length; i++) {
+            barisPot[i].style.backgroundColor = 'orange';
+        }
+        if (barisPot.length > 0 && document.getElementById('btnproses')) {
+            document.getElementById('btnproses').disabled = true;
+        }
         post_response_text(tujuan, param, respon);
+    }
 
     function respon() {
         if (con.readyState == 4) {
             if (con.status == 200) {
                 busy_off();
                 if (!isSaveResponse(con.responseText)) {
+                    for (var k = 0; k < barisPot.length; k++) {
+                        barisPot[k].style.backgroundColor = 'red';
+                    }
+                    if (barisPot.length > 0 && document.getElementById('btnproses')) {
+                        document.getElementById('btnproses').disabled = false;
+                    }
                     alertify.alert(' Error:,\n' + con.responseText);
                 } else {
+                    for (var m = 0; m < barisPot.length; m++) {
+                        barisPot[m].style.display = 'none';
+                    }
                     alertify.alert('Done');
                 }
             } else {
@@ -678,20 +810,27 @@ function prosesPotongan(periode) {
         }
     }
 }
-
 function postKurs() {
     var param = "kodeorg=" + getValue('kodeorgKurs')
          + "&periode=" + getValue('periodeKurs'),
-    tujuan = "keu_slave_3selisihKurs.php?proses=post";
+    tujuan = tujuanProses("keu_slave_3selisihKurs.php?proses=post");
 
-    if (confirm('Anda yakin akan melakukan proses selisih kurs?'))
+    if (confirm('Anda yakin akan melakukan proses selisih kurs?')) {
+        //Cabang PPP: tombol dikunci selama proses berjalan
+        if (typeof orgPPP !== 'undefined' && orgPPP.indexOf(orgProsesAktif) > -1 && document.getElementById('btnproses')) {
+            document.getElementById('btnproses').disabled = true;
+        }
         post_response_text(tujuan, param, respon);
+    }
 
     function respon() {
         if (con.readyState == 4) {
             if (con.status == 200) {
                 busy_off();
                 if (!isSaveResponse(con.responseText)) {
+                    if (document.getElementById('btnproses')) {
+                        document.getElementById('btnproses').disabled = false;
+                    }
                     alertify.alert(con.responseText);
                 } else {
                     //=== Success Response
@@ -707,7 +846,7 @@ function postKurs() {
 
 function postMutasi() {
     var param = "kodeorg=" + getValue('kodeorg') + "&periode=" + getValue('periode'),
-    tujuan = "keu_slave_3mutasiKary.php?proses=post";
+    tujuan = tujuanProses("keu_slave_3mutasiKary.php?proses=post");
 
     if (confirm("Anda yakin akan melakukan proses update Mutasi / Promosi / " +
             "Demosi Karyawan ?"))
@@ -733,16 +872,42 @@ function postMutasi() {
 
 function prosesAlokasiTraksiIdle(method, kodeorg, periode) {
     param = 'periode=' + periode + '&kodeorg=' + kodeorg + '&method=' + method;
-    tujuan = 'keu_slave_3traksi_idle.php';
-    if (confirm('Anda yakin melakukan proses pengalokasian biaya Traksi Idle?'))
+    tujuan = tujuanProses('keu_slave_3traksi_idle.php');
+    //Cabang PPP: baris list punya id row1, row2, ... (sama seperti langkah 1). Selama proses baris berwarna oranye,
+    //berhasil -> baris hilang, gagal -> baris merah. Jurnal tetap dibuat sekaligus dalam satu transaksi.
+    var barisIdle = [];
+    var i = 1;
+    while (document.getElementById('row' + i)) {
+        barisIdle.push(document.getElementById('row' + i));
+        i++;
+    }
+    if (confirm('Anda yakin melakukan proses pengalokasian biaya Traksi Idle?')) {
+        for (i = 0; i < barisIdle.length; i++) {
+            barisIdle[i].style.backgroundColor = 'orange';
+        }
+        if (barisIdle.length > 0 && document.getElementById('btnproses')) {
+            document.getElementById('btnproses').disabled = true;
+        }
         post_response_text(tujuan, param, respon);
+    }
 
     function respon() {
         if (con.readyState == 4) {
             if (con.status == 200) {
                 busy_off();
                 if (!isSaveResponse(con.responseText)) {
+                    for (var k = 0; k < barisIdle.length; k++) {
+                        barisIdle[k].style.backgroundColor = 'red';
+                    }
+                    if (barisIdle.length > 0 && document.getElementById('btnproses')) {
+                        document.getElementById('btnproses').disabled = false;
+                    }
                     alertify.alert(' Error:,\n' + con.responseText);
+                } else if (barisIdle.length > 0) {
+                    for (var m = 0; m < barisIdle.length; m++) {
+                        barisIdle[m].style.display = 'none';
+                    }
+                    alertify.alert('Done');
                 } else {
                     alertify.alert('Proses berhasil');
                     document.getElementById('listPosting').innerHTML = '';
@@ -754,12 +919,11 @@ function prosesAlokasiTraksiIdle(method, kodeorg, periode) {
         }
     }
 }
-
 function prosesAlokasiSipil(row) {
     periode = document.getElementById('periode' + row).innerHTML;
     kdsipil = document.getElementById('kdsipil' + row).innerHTML;
     param = 'periode=' + periode + '&kdTraksi=' + kdsipil;
-    tujuan = 'vhc_slave_updateFlag.php';
+    tujuan = tujuanProses('vhc_slave_updateFlag.php');
     if (confirm('Anda yakin melakukan proses pengalokasian biaya Sipil?'))
         post_response_text(tujuan, param, respon);
 
@@ -792,7 +956,7 @@ function doProsesAlokasiSipil(row) {
 
     param = 'periode=' + periode + '&kodeorg=' + kodeorg + '&kdrumah=' + kodevhc + '&jumlah=' + jumlah + '&jenis=' + jenis + '&kdsipil=' + kdsipil;
     param += '&jmlhhk=' + jmlhhk + '&row=' + row;
-    tujuan = 'keu_slave_prosesAlokasiSipil.php';
+    tujuan = tujuanProses('keu_slave_prosesAlokasiSipil.php');
     if (jumlah != '0') {
         post_response_text(tujuan, param, respon);
     } else { //next
@@ -841,7 +1005,7 @@ function postSelisihRamp(rowdt) {
         }
     }
     param += strdt;
-    tujuan = "keu_slave_3tbsramp.php?proses=post";
+    tujuan = tujuanProses("keu_slave_3tbsramp.php?proses=post");
     post_response_text(tujuan, param, respon);
 
     function respon() {
@@ -872,7 +1036,7 @@ function postHppOlah(row) {
     var param = "kodeorg=" + getValue('kodeorg') + "&periode=" + getValue('periode');
     param += '&tanggalDt=' + tglDt + '&kgOlah=' + kgOlah + '&rpOlah=' + rpOlah + '&row=' + row + '&maxRow=' + maxRow;
     param += '&dtTbsAkhir=' + dtTbsAkhir;
-    tujuan = 'keu_slave_3hppolah.php?proses=post';
+    tujuan = tujuanProses('keu_slave_3hppolah.php?proses=post');
     if (row == 1 && confirm('Anda yakin melakukan proses ini?')) {
         document.getElementById('btnproses').disabled = true;
         post_response_text(tujuan, param, respon);
@@ -914,17 +1078,44 @@ function postHppOlah(row) {
 
 function postasuransi() {
     var param = "kodeorg=" + getValue('kodeorg') + "&periode=" + getValue('periode'),
-    tujuan = "keu_slave_3asuransi.php?proses=post";
+    tujuan = tujuanProses("keu_slave_3asuransi.php?proses=post");
 
-    if (confirm("Anda yakin akan melakukan proses ini ?"))
+    //Cabang PPP: baris list punya id row1, row2, ... (seperti langkah lain). Selama proses oranye, berhasil -> hilang, gagal -> merah.
+    //Pada unit non-PPP baris tidak punya id sehingga perilaku lama tetap.
+    var barisRutin = [];
+    var i = 1;
+    while (document.getElementById('row' + i)) {
+        barisRutin.push(document.getElementById('row' + i));
+        i++;
+    }
+
+    if (confirm("Anda yakin akan melakukan proses ini ?")) {
+        for (i = 0; i < barisRutin.length; i++) {
+            barisRutin[i].style.backgroundColor = 'orange';
+        }
+        if (barisRutin.length > 0 && document.getElementById('btnproses')) {
+            document.getElementById('btnproses').disabled = true;
+        }
         post_response_text(tujuan, param, respon);
+    }
 
     function respon() {
         if (con.readyState == 4) {
             if (con.status == 200) {
                 busy_off();
                 if (!isSaveResponse(con.responseText)) {
+                    for (var k = 0; k < barisRutin.length; k++) {
+                        barisRutin[k].style.backgroundColor = 'red';
+                    }
+                    if (barisRutin.length > 0 && document.getElementById('btnproses')) {
+                        document.getElementById('btnproses').disabled = false;
+                    }
                     alertify.alert(con.responseText);
+                } else if (barisRutin.length > 0) {
+                    for (var m = 0; m < barisRutin.length; m++) {
+                        barisRutin[m].style.display = 'none';
+                    }
+                    alertify.alert('Done');
                 } else {
                     alertify.alert('Proses berhasil');
                     document.getElementById('listPosting').innerHTML = '';
@@ -937,6 +1128,7 @@ function postasuransi() {
     }
 }
 function changeperiode(kodeorg) {
+    orgProsesAktif = kodeorg.value;
     param = 'kodeorg=' + kodeorg.value;
     function respon() {
         if (con.readyState == 4) {
@@ -946,6 +1138,7 @@ function changeperiode(kodeorg) {
                     alertify.alert(con.responseText);
                 } else {
                     document.getElementById('periode').innerHTML = con.responseText;
+                    if (window.jQuery) { $('#periode').trigger('change.select2'); }
                     document.getElementById('listPosting').innerHTML = "";
                 }
             } else {
@@ -954,7 +1147,7 @@ function changeperiode(kodeorg) {
             }
         }
     }
-    post_response_text('keu_slave_3posting.php?proses=changeperiode', param, respon);
+    post_response_text(tujuanProses('keu_slave_3posting.php?proses=changeperiode'), param, respon);
 }
 
 /*save maintenance*/
@@ -970,7 +1163,7 @@ function savemaintenance(maxRow) {
 
     param += '&method=deletemaintenance' + '&kodeorg=' + kodeorg + '&periode=' + periode;
     // alertify.alert(param);return;
-    tujuan = 'keu_slave_3millmaintenance.php';
+    tujuan = tujuanProses('keu_slave_3millmaintenance.php');
     post_response_text(tujuan, param, respog);
 
     function respog() {
@@ -1004,7 +1197,7 @@ function loopsavemaintenance(currRow, maxRow) {
 
     param += '&method=savemaintenance' + '&kodeorg=' + kodeorg + '&periode=' + periode + '&station=' + station + '&jumlah=' + jumlah;
     // alertify.alert(param);return;
-    tujuan = 'keu_slave_3millmaintenance.php';
+    tujuan = tujuanProses('keu_slave_3millmaintenance.php');
     post_response_text(tujuan, param, respog);
     document.getElementById('row' + currRow).style.backgroundColor = 'cyan';
 
@@ -1041,13 +1234,20 @@ maxf = 0
 
 function savegajibelumalokasi(maxRow) {
 
+    //Cabang PPP: minta konfirmasi (Process ulang menghapus jurnal periode ini) dan kunci tombol selama proses berjalan
+    if (typeof orgPPP !== 'undefined' && orgPPP.indexOf(orgProsesAktif) > -1) {
+        if (!confirm('Process akan menghapus jurnal gaji belum teralokasi periode ini lalu membuatnya lagi. Lanjutkan?')) {
+            return;
+        }
+        document.getElementById('btnproses').disabled = true;
+    }
     param = "";
     kodeorg = trim(document.getElementById('kodeorg').value);
     periode = trim(document.getElementById('periode').value);
 
     param += '&method=delete' + '&kodeorg=' + kodeorg + '&periode=' + periode;
     // alertify.alert(param);return;
-    tujuan = 'keu_slave_3gajibelumalokasi.php';
+    tujuan = tujuanProses('keu_slave_3gajibelumalokasi.php');
     post_response_text(tujuan, param, respog);
 
     function respog() {
@@ -1056,6 +1256,9 @@ function savegajibelumalokasi(maxRow) {
                 busy_off();
                 if (!isSaveResponse(con.responseText)) {
                     alertify.alert('ERROR TRANSACTION,\n' + con.responseText);
+                    if (document.getElementById('btnproses')) {
+                        document.getElementById('btnproses').disabled = false;
+                    }
                 } else {
                     maxf = maxRow;
                     loopgajibelumalokasi(1, maxRow);
@@ -1080,7 +1283,7 @@ function loopgajibelumalokasi(currRow, maxRow) {
     gajisisabpjskes=trim(document.getElementById('gajisisabpjskes'+currRow).innerHTML);
     param += '&method=save' + '&kodeorg=' + kodeorg + '&periode=' + periode + '&subbagian=' + subbagian + '&karyawanid=' + karyawanid + '&gajisisa=' + gajisisa+'&gajisisabpjs='+gajisisabpjs+'&gajisisabpjskes='+gajisisabpjskes;
     // alertify.alert(param);return;
-    tujuan = 'keu_slave_3gajibelumalokasi.php';
+    tujuan = tujuanProses('keu_slave_3gajibelumalokasi.php');
     post_response_text(tujuan, param, respog);
     document.getElementById('row' + currRow).style.backgroundColor = 'cyan';
 
@@ -1090,6 +1293,9 @@ function loopgajibelumalokasi(currRow, maxRow) {
                 busy_off();
                 if (!isSaveResponse(con.responseText)) {
                     alertify.alert('ERROR TRANSACTION,\n' + con.responseText);
+                    if (document.getElementById('btnproses')) {
+                        document.getElementById('btnproses').disabled = false;
+                    }
                     document.getElementById('row' + currRow).style.backgroundColor = 'red';
                     unlockScreen();
                 } else {
@@ -1113,6 +1319,15 @@ function loopgajibelumalokasi(currRow, maxRow) {
 maxf = 0
     sekarang = 1;
 function savedep(maxRow) {
+    //Cabang PPP: konfirmasi dulu (Process ulang menghapus jurnal penyusutan unit ini pada periode itu) dan kunci tombol
+    if (typeof orgPPP !== 'undefined' && orgPPP.indexOf(orgProsesAktif) > -1) {
+        if (!confirm('Process akan menghapus jurnal penyusutan unit ini pada periode ini lalu membuatnya lagi. Lanjutkan?')) {
+            return;
+        }
+        if (document.getElementById('btnproses')) {
+            document.getElementById('btnproses').disabled = true;
+        }
+    }
     maxf = maxRow;
     loopsave(1, maxRow);
 }
@@ -1134,7 +1349,7 @@ function loopsave(currRow, maxRow) {
     param += '&keterangan=' + keterangan + '&kodeasset=' + kodeasset + '&namaaset=' + namaaset + '&kodejurnal=' + kodejurnal;
     param += '&jumlah=' + jumlah + '&debet=' + debet + '&kredit=' + kredit + '&currRow=' + currRow;
 
-    tujuan = 'keu_slave_prosesDepresiasiAkhirbulanv2.php';
+    tujuan = tujuanProses('keu_slave_prosesDepresiasiAkhirbulanv2.php');
     post_response_text(tujuan, param, respog);
     document.getElementById('row' + currRow).style.backgroundColor = '';
     document.getElementById('row' + currRow).style.backgroundColor = 'cyan';
@@ -1147,7 +1362,14 @@ function loopsave(currRow, maxRow) {
                     alertify.alert(con.responseText);
                     document.getElementById('row' + currRow).style.backgroundColor = 'red';
                     unlockScreen();
+                    if (document.getElementById('btnproses')) {
+                        document.getElementById('btnproses').disabled = false;
+                    }
                 } else {
+                    //Cabang PPP: baris yang sudah selesai hilang (seperti langkah lain)
+                    if (typeof orgPPP !== 'undefined' && orgPPP.indexOf(orgProsesAktif) > -1) {
+                        document.getElementById('row' + currRow).style.display = 'none';
+                    }
                     currRow += 1;
                     sekarang = currRow;
                     if (currRow > maxRow) {
@@ -1174,7 +1396,7 @@ function getdetcaco(kodevhc,unitsumber,unitkirim,periode,jenis,tipe) {
     showDialog1(title, content, width, height, ev);
 
     param = 'method=alokasikelain&kodevhc=' + kodevhc + '&unitsumber=' + unitsumber + '&unitkirim=' + unitkirim + '&periode=' + periode+ '&jenis=' + jenis+ '&tipe=' + tipe;
-    tujuan = 'vhc_slave_alokasiunitlain.php';
+    tujuan = tujuanProses('vhc_slave_alokasiunitlain.php');
     post_response_text(tujuan, param, respog);
     function respog() {
         if (con.readyState == 4) {
@@ -1201,7 +1423,16 @@ function savemutasibibit(currRow, maxRow) {
     param += '&kodeorg=' + kodeorg + '&periode=' + periode;
     param += '&proses=prosesjurnal';
 
-    tujuan = 'keu_slave_3bibitpnkemn.php';
+    tujuan = tujuanProses('keu_slave_3bibitpnkemn.php');
+    //Cabang PPP: konfirmasi dulu (Process ulang menghapus jurnal TPB unit ini pada periode itu) dan kunci tombol selama proses
+    if (typeof orgPPP !== 'undefined' && orgPPP.indexOf(orgProsesAktif) > -1) {
+        if (!confirm('Process akan menghapus jurnal TPB unit ini pada periode ini lalu membuatnya lagi. Lanjutkan?')) {
+            return;
+        }
+        if (document.getElementById('btnproses')) {
+            document.getElementById('btnproses').disabled = true;
+        }
+    }
     post_response_text(tujuan, param, respog);
     function respog() {
         if (con.readyState == 4) {
@@ -1210,6 +1441,9 @@ function savemutasibibit(currRow, maxRow) {
                 if (!isSaveResponse(con.responseText)) {
                     alertify.alert(con.responseText);
                     unlockScreen();
+                    if (document.getElementById('btnproses')) {
+                        document.getElementById('btnproses').disabled = false;
+                    }
                 } else {
 					alertify.alert("Jurnal berhasil, berikut adalah nojurnalnya: "+con.responseText);
 					document.getElementById('listPosting').innerHTML='';
@@ -1221,7 +1455,78 @@ function savemutasibibit(currRow, maxRow) {
         }
     }
 }
+//Cabang PPP (langkah 10): hanya blok asal, blok tujuan, jenis tanam dan kegiatan yang dikirim (rupiah dan akun dihitung server);
+//konfirmasi di baris pertama, tombol terkunci selama proses; baris berhasil berwarna hijau dan menampilkan nomor jurnalnya.
+function savemutasibibittanamPPP(currRow, maxRow) {
+    var btn = document.getElementById('btnproses');
+    if (currRow == 1 || currRow == '1') {
+        for (var i = 1; i <= maxRow; i++) {
+            if (document.getElementById('kegiatan' + i) && trim(document.getElementById('kegiatan' + i).value) == '') {
+                document.getElementById('baris' + i).style.backgroundColor = 'red';
+                alertify.alert('Pilih kegiatan pada baris ' + i + ' dulu (semua baris harus punya kegiatan sebelum Process).');
+                return;
+            }
+        }
+        if (!confirm('Process akan menghapus jurnal alokasi bibit unit ini pada periode ini lalu membuatnya lagi. Lanjutkan?')) {
+            return;
+        }
+    }
+    var kegiatanP = trim(document.getElementById('kegiatan' + currRow).value);
+    if (kegiatanP == '') {
+        alertify.alert('Pilih kegiatan pada baris ' + currRow + ' dulu.');
+        document.getElementById('baris' + currRow).style.backgroundColor = 'red';
+        if (btn) {
+            btn.disabled = false;
+        }
+        return;
+    }
+    if (btn) {
+        btn.disabled = true;
+    }
+    var paramP = '&kodeorg=' + encodeURIComponent(trim(document.getElementById('kodeorg').value)) +
+        '&periode=' + encodeURIComponent(trim(document.getElementById('periode').value)) +
+        '&blokbbt=' + encodeURIComponent(trim(document.getElementById('kodeorg' + currRow).innerHTML)) +
+        '&bloktnm=' + encodeURIComponent(trim(document.getElementById('tujuan' + currRow).innerHTML)) +
+        '&jenis=' + encodeURIComponent(trim(document.getElementById('jenis' + currRow).innerHTML)) +
+        '&kegiatan=' + encodeURIComponent(kegiatanP) + '&currRow=' + encodeURIComponent(currRow) + '&proses=prosesjurnal';
+    var tujuanP = tujuanProses('keu_slave_3bibitalokasi.php');
+    document.getElementById('baris' + currRow).style.backgroundColor = 'orange';
+    post_response_text(tujuanP, paramP, responP);
+
+    function responP() {
+        if (con.readyState == 4) {
+            if (con.status == 200) {
+                busy_off();
+                if (!isSaveResponse(con.responseText)) {
+                    document.getElementById('baris' + currRow).style.backgroundColor = 'red';
+                    if (btn) {
+                        btn.disabled = false;
+                    }
+                    alertify.alert(con.responseText);
+                } else {
+                    document.getElementById('baris' + currRow).style.backgroundColor = '#c8e6c9';
+                    document.getElementById('jurnal' + currRow).innerHTML = con.responseText;
+                    var berikut = parseFloat(currRow) + 1;
+                    if (berikut > maxRow) {
+                        alertify.alert('Jurnal berhasil');
+                    } else {
+                        savemutasibibittanamPPP(berikut, maxRow);
+                    }
+                }
+            } else {
+                busy_off();
+                if (btn) {
+                    btn.disabled = false;
+                }
+                error_catch(con.status);
+            }
+        }
+    }
+}
 function savemutasibibittanam(currRow, maxRow) {
+    if (typeof orgPPP !== 'undefined' && orgPPP.indexOf(orgProsesAktif) > -1) {
+        return savemutasibibittanamPPP(currRow, maxRow);
+    }
 	param     = "";
 	kodeorg   = trim(document.getElementById('kodeorg').value);
 	periode   = trim(document.getElementById('periode').value);
@@ -1244,7 +1549,7 @@ function savemutasibibittanam(currRow, maxRow) {
     param += '&kegiatan=' + kegiatan + '&currRow=' + currRow;
     param += '&proses=prosesjurnal';
 
-    tujuan = 'keu_slave_3bibitalokasi.php';
+    tujuan = tujuanProses('keu_slave_3bibitalokasi.php');
     post_response_text(tujuan, param, respog);
     function respog() {
         if (con.readyState == 4) {
@@ -1279,7 +1584,7 @@ function getnoakun(no) {
     param += '&kegiatan=' + kegiatan;
     param += '&proses=getnoakun';
 
-    tujuan = 'keu_slave_3bibitalokasi.php';
+    tujuan = tujuanProses('keu_slave_3bibitalokasi.php');
     post_response_text(tujuan, param, respog);
     function respog() {
         if (con.readyState == 4) {

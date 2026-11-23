@@ -26,7 +26,9 @@
     }
 
     $optKary="<option value=''>".$_SESSION['lang']['pilihdata']."</option>";
-    $sDtkry="select namakaryawan,karyawanid,lokasitugas,nik, subbagian from ".$dbname.".datakaryawan where lokasitugas in (".getOrgDetail(2).") and (tanggalkeluar = '0000-00-00' or tanggalkeluar > ".$_SESSION['org']['period']['start'].") and tipekaryawan != '0' order by namakaryawan asc ";
+    $sDtkry="select namakaryawan,karyawanid,lokasitugas,nik, subbagian from ".$dbname.".datakaryawan where lokasitugas in (".getOrgDetail(2).") and (tanggalkeluar = '0000-00-00' or tanggalkeluar > ".$_SESSION['org']['period']['start'].") and tipekaryawan != '0'
+        and (lokasitugas not in (select kodeorganisasi from ".$dbname.".organisasi where induk='PPP') or subbagian in (select kodeorganisasi from ".$dbname.".organisasi where tipe='TRAKSI')) order by namakaryawan asc ";
+    #PPP: karyawan unit PT PPP yang bisa dipilih hanya yang berdivisi (subbagian) traksi; karyawan perusahaan lain tidak dibatasi
     $qDtkry=$owlPDO->query($sDtkry) or die(print " Gagal: ".PDOException::getMessage());
     $qDtkry->setFetchMode(PDO::FETCH_ASSOC);
     while($rDtkry=$qDtkry->fetch()){
@@ -72,6 +74,14 @@
             if ($idkaryawan == '') {
                exit("warning : Karyawan wajib diisi" );
             } 
+
+            #PPP: mandor traksi unit PT PPP harus karyawan berdivisi (subbagian) traksi
+            if (preg_match('/^[A-Za-z0-9]{1,10}$/', $kodetraksi) && getindukPT(getindukPT($kodetraksi)) == 'PPP') {
+                $cekDivisi = fetchData("select count(*) as n from " . $dbname . ".datakaryawan d inner join " . $dbname . ".organisasi o on o.kodeorganisasi=d.subbagian where d.karyawanid='" . addslashes($idkaryawan) . "' and o.tipe='TRAKSI'");
+                if ($cekDivisi[0]['n'] < 1) {
+                    exit("Warning : Mandor traksi PPP harus karyawan divisi traksi. " . getNamaKaryawan($idkaryawan) . " bukan karyawan divisi traksi.");
+                }
+            }
 
             $sqlCek = "select * from " . $dbname . ".vhc_5mandortraksi where kodetraksi='".$kodetraksi."' and karyawanid='" . $idkaryawan . "'";
             $queryCek = $owlPDO->query($sqlCek) or die(print " Gagal: " . PDOException::getMessage());

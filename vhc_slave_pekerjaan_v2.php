@@ -27,6 +27,7 @@ $optkelvhc      = makeOption($dbname, 'vhc_5jenisvhc', 'jenisvhc,kelompokvhc');
 $optpt          = makeOption($dbname, 'organisasi', 'kodeorganisasi,induk');
 $nmpek          = makeOption($dbname, 'vhc_kegiatan', 'kodekegiatan,namakegiatan');
 $arrJab         = array("0" => "Operator", "1" => "Helper", "2" => "Driver");
+$kolWakarPPP    = (isset($_SESSION['empl']['kodeorganisasi']) && $_SESSION['empl']['kodeorganisasi'] == 'PPP'); #PPP: kolom Wakar pada list
 
 if (isset($param['no_trans'])) {
     $optKdVhc       = makeOption($dbname, 'vhc_runht', 'notransaksi,kodevhc,kodeorg', "notransaksi = '" . $param['no_trans'] . "'");
@@ -190,6 +191,11 @@ switch ($proses) {
             $optKary .= "<option value=" . $rkary['karyawanid'] . ">" . $rkary['nama'] . "&nbsp; [" . $arrJab[$rkary['jabatan']] . "] &nbsp;[" . $rkary['nik'] . "]</option>";
         }
 
+        #PPP genset (jenis kendaraan di parameter TRGENSET): operator = semua karyawan aktif unit, hanya dicatat namanya
+        if (gensetPPP($res['kodeorg'], $res['jenisvhc'])) {
+            $optKary = optOperatorGensetPPP($dbname, $res['kodeorg'], $res['tanggal']);
+        }
+
         ## Ambil helper
         $optKary_Help = "<option value=''>" . $_SESSION['lang']['pilihdata'] . "</option>";
         $skary = "select distinct(a.karyawanid),a.nama,b.nik,a.jabatan from " . $dbname . ".vhc_5operator a left join " . $dbname . ".datakaryawan b on a.karyawanid=b.karyawanid where a.aktif='1' and a.vhc = '" . $res['kodevhc'] . "'and a.jabatan in ('1') and (tanggalkeluar = '0000-00-00' or tanggalkeluar>= '" . $res['tanggal'] . "')  order by a.jabatan,a.nama"; //echo $skary;
@@ -219,8 +225,89 @@ switch ($proses) {
             $optJnsVhc .= "<option value=" . $val['jenisvhc'] . ">" . $val['jenisvhc'] . " - " . $val['namajenisvhc'] . "</option>";
         }
 
-        echo $res['notransaksi'] . "####" . $res['kodeorg'] . "####" . $rTraksi['kodetraksi'] . "####" . $optJnsVhc . "####" . tanggalnormal($res['tanggal']) . "####" . $optKary . "####" . $res['jenisbbm'] . "####" . $res['jlhbbm'] . "####" . $res['kontanan'] . "####" . $res['kodevhc'] . "####" . $optMandor . "####" . $optKary_Help;
+        #PPP: wakar dan premi wakar/mandor pada header; saat edit, pilihan mandor dan wakar lengkap dengan yang tersimpan terpilih
+        $flagPPPWM = traksiPPP($res['kodeorg']) ? '1' : '0';
+        $optWakarWM = "<option value=''>" . $_SESSION['lang']['pilihdata'] . "</option>";
+        if ($flagPPPWM == '1') {
+            $optMandor = "<option value=''>" . $_SESSION['lang']['pilihdata'] . "</option>";
+            $kdTrakWM = preg_replace('/[^A-Za-z0-9]/', '', (string)$rTraksi['kodetraksi']);
+            foreach (fetchData("select karyawanid from " . $dbname . ".vhc_5mandortraksi where kodetraksi='" . $kdTrakWM . "' or karyawanid='" . (int)$res['mandor'] . "' group by karyawanid") as $val) {
+                $optMandor .= "<option value=" . $val['karyawanid'] . ((int)$val['karyawanid'] == (int)$res['mandor'] ? " selected" : "") . ">[" . getNik($val['karyawanid']) . "] - " . getNamaKaryawan($val['karyawanid']) . "</option>";
+            }
+            $kdVhcWM = preg_replace('/[^A-Za-z0-9_\\-]/', '', (string)$res['kodevhc']);
+            $wakarTersimpan = isset($res['wakar']) ? (int)$res['wakar'] : 0;
+            foreach (fetchData("select distinct(karyawanid) as karyawanid from " . $dbname . ".vhc_5operator where jabatan='3' and ((aktif='1' and vhc='" . $kdVhcWM . "') or karyawanid='" . $wakarTersimpan . "')") as $val) {
+                $optWakarWM .= "<option value=" . $val['karyawanid'] . ((int)$val['karyawanid'] == $wakarTersimpan ? " selected" : "") . ">[" . getNik($val['karyawanid']) . "] - " . getNamaKaryawan($val['karyawanid']) . "</option>";
+            }
+        }
+        echo $res['notransaksi'] . "####" . $res['kodeorg'] . "####" . $rTraksi['kodetraksi'] . "####" . $optJnsVhc . "####" . tanggalnormal($res['tanggal']) . "####" . $optKary . "####" . $res['jenisbbm'] . "####" . $res['jlhbbm'] . "####" . $res['kontanan'] . "####" . $res['kodevhc'] . "####" . $optMandor . "####" . $optKary_Help . "####" . $optWakarWM . "####" . (isset($res['premiwakar']) ? $res['premiwakar'] : 0) . "####" . (isset($res['premimandor']) ? $res['premimandor'] : 0) . "####" . $flagPPPWM;
 
+        break;
+    case 'update_wakarmandor':
+        #PPP: ubah wakar, mandor, dan premi harian pada header yang sudah tersimpan (belum diposting)
+        $hWM = fetchData("select * from " . $dbname . ".vhc_runht where notransaksi='" . addslashes($param['no_trans']) . "'");
+        if (count($hWM) == 0) {
+            exit("Warningsystem : Transaksi tidak ditemukan.");
+        }
+        $hWM = $hWM[0];
+        if (!traksiPPP($hWM['kodeorg'])) {
+            exit("Warningsystem : Wakar dan mandor hanya untuk unit PPP.");
+        }
+        if ($hWM['posting'] == 1) {
+            exit("Warningsystem : Transaksi sudah diposting, wakar dan mandor tidak bisa diubah.");
+        }
+        $tglWM = tanggalDbWakarPPP($hWM['tanggal']);
+        if (str_replace('-', '', $tglWM) < $_SESSION['org']['period']['start']) {
+            exit("Warningsystem : Periode akuntansi " . substr($tglWM, 0, 7) . " sudah ditutup.");
+        }
+        $cekTutup = fetchData("select count(*) as n from " . $dbname . ".setup_periodeakuntansi where periode='" . substr($tglWM, 0, 7) . "' and kodeorg='" . $hWM['kodeorg'] . "' and tutupbuku='1'");
+        if ($cekTutup[0]['n'] > 0) {
+            exit("Warningsystem : Periode sudah tutup buku.");
+        }
+        $paramWM = $param;
+        $paramWM['kodevhc'] = $hWM['kodevhc'];
+        $errWM = validasiWakarMandorPPP($dbname, $paramWM, $tglWM, $hWM['notransaksi'], $hkWM);
+        if ($errWM != '') {
+            exit($errWM);
+        }
+        #wakar/mandor tidak boleh menjadi operator/helper pada transaksi yang sama
+        $arrKaryWM = array();
+        foreach (fetchData("select operator,helper,helper2,helper3,helper4 from " . $dbname . ".vhc_rundt where notransaksi='" . $hWM['notransaksi'] . "'") as $dWM) {
+            foreach ($dWM as $idWM) {
+                if ($idWM != '' && (int)$idWM > 0) {
+                    $arrKaryWM[(int)$idWM] = $idWM;
+                }
+            }
+        }
+        foreach ($hkWM['baris'] as $bWM) {
+            if (isset($arrKaryWM[(int)$bWM['id']])) {
+                exit("Warningsystem : " . ($bWM['posisi'] == 3 ? 'Wakar' : 'Mandor') . " sudah menjadi operator atau helper pada transaksi ini.");
+            }
+        }
+        try {
+            $owlPDO->beginTransaction();
+            $owlPDO->exec("update " . $dbname . ".vhc_runht set mandor='" . (int)$param['mandor'] . "',wakar='" . $hkWM['wakar'] . "',premiwakar='" . $hkWM['premiwakar'] . "',premimandor='" . $hkWM['premimandor'] . "' where notransaksi='" . $hWM['notransaksi'] . "'");
+            simpanHkWakarMandorPPP($dbname, $owlPDO, $hWM['notransaksi'], $tglWM, $hkWM);
+            $owlPDO->commit();
+        } catch (PDOException $e) {
+            $owlPDO->rollback();
+            exit("Error, " . addslashes($e->getMessage()));
+        }
+        echo "Wakar, mandor, dan premi tersimpan.";
+        break;
+    case 'getwakar':
+        #PPP: wakar = operator berjabatan Wakar (3) yang aktif pada kendaraan terpilih
+        $optWakarWM = "<option value=''>" . $_SESSION['lang']['pilihdata'] . "</option>";
+        $kdVhcWM = preg_replace('/[^A-Za-z0-9_\\-]/', '', isset($param['kodevhc']) ? $param['kodevhc'] : '');
+        if (isset($param['kodeorg']) && traksiPPP($param['kodeorg']) && $kdVhcWM != '') {
+            $tglWM = tanggalDbWakarPPP(isset($tgl_kerja) ? $tgl_kerja : date('Y-m-d'));
+            $sWM = "select distinct(a.karyawanid),a.nama,b.nik from " . $dbname . ".vhc_5operator a left join " . $dbname . ".datakaryawan b on a.karyawanid=b.karyawanid
+                where a.aktif='1' and a.jabatan='3' and a.vhc='" . $kdVhcWM . "' and (b.tanggalkeluar = '0000-00-00' or b.tanggalkeluar >= '" . $tglWM . "') order by a.nama";
+            foreach (fetchData($sWM) as $rWM) {
+                $optWakarWM .= "<option value=" . $rWM['karyawanid'] . ">" . $rWM['nama'] . "&nbsp; [Wakar] &nbsp;[" . $rWM['nik'] . "]</option>";
+            }
+        }
+        echo $optWakarWM;
         break;
     case 'getKmAkhir':
         // Get Data
@@ -366,6 +453,18 @@ switch ($proses) {
         echo $optBlok . "###" . isset($param['blok']);
         break;
     case 'getUmr':
+        #PPP genset: upah tetap dari absensi dan premi dari Setup Premi Tetap per Komponen, jadi tidak ada upah/premi di transaksi ini
+        if (isset($rKode['kodeorg']) && gensetPPP($rKode['kodeorg'], $rKode['jenisvhc'])) {
+            $tipeGenset = 'kosong';
+            if (isset($param['kode_karyawan']) && preg_match('/^[0-9]{1,10}$/', (string)$param['kode_karyawan'])) {
+                foreach (fetchData("select tipekaryawan from " . $dbname . ".datakaryawan where karyawanid='" . $param['kode_karyawan'] . "'") as $barG) {
+                    $tipeGenset = $barG['tipekaryawan'];
+                }
+            }
+            $rConfigG = fetchData("select setuppremi from " . $dbname . ".vhc_5configpremi where pt = '" . getindukPT($rKode['kodeorg']) . "' and aktif = 1");
+            echo "0####0####0####0####0####" . $tipeGenset . "####kosong####kosong####kosong####kosong####0####kerja####0####" . (isset($rConfigG[0]['setuppremi']) ? $rConfigG[0]['setuppremi'] : '') . "####" . (operatorKhususGensetPPP(isset($param['kode_karyawan']) ? $param['kode_karyawan'] : '') ? 1 : 0);
+            break;
+        }
         if ($_POST['tahun'] != '')
             $tahun = $_POST['tahun'];
         else {
@@ -830,7 +929,7 @@ switch ($proses) {
         $hiddenHelperExtraStyle = $isTRDH ? "style='display:none;'" : "";
 
         $limit      = 15;
-        $colspan    = $isTRDH ? 19 : 22;
+        $colspan    = ($isTRDH ? 19 : 22) + ($kolWakarPPP ? 1 : 0);
         $page       = 0;
         $tgl_carisd = tanggalsystemn(checkPostGet('tgl_carisd', ''));
         if (isset($_POST['page'])) {
@@ -868,6 +967,10 @@ switch ($proses) {
         }
         if (checkPostGet('periode_cari', '') != '') {
             $where .= " and left(tanggal,7) = '" . addslashes(checkPostGet('periode_cari', '')) . "'";
+        }
+        #filter Tahun (4 digit); bila Periode dipilih, Periode yang dipakai
+        if (checkPostGet('periode_cari', '') == '' && preg_match('/^[0-9]{4}$/', checkPostGet('tahun_cari', ''))) {
+            $where .= " and left(tanggal,4) = '" . checkPostGet('tahun_cari', '') . "'";
         }
         if (checkPostGet('operator_cari', '') != '') {
             $where .= " and notransaksi in (select notransaksi from " . $dbname . ".vhc_rundt where operator = '" . addslashes(checkPostGet('operator_cari', '')) . "')";
@@ -921,14 +1024,17 @@ switch ($proses) {
                 $tab .= "<td align=center>" . $res['kodevhc'] . "</td>";
                 $tab .= "<td align=center>" . $rvhc['nopol'] . "</td>";
                 $tab .= "<td align=center>" . $rvhc['detailvhc'] . "</td>";
-                $tab .= "<td align=center>" . getNamaKaryawan($res['mandor']) . "</td>";
+                $tab .= "<td align=center" . ($kolWakarPPP ? " style='white-space:nowrap'" : "") . ">" . nmListPPP(getNamaKaryawan($res['mandor']), $kolWakarPPP) . "</td>";
+                if ($kolWakarPPP) {
+                    $tab .= "<td align=center style='white-space:nowrap'>" . (!empty($res['wakar']) ? nmListPPP(getNamaKaryawan($res['wakar']), $kolWakarPPP) : '') . "</td>";
+                }
                 $datasupirarr = explode(',', $rdtx['aroperator']);
                 $datasupir = array();
-                $tab .= "<td align=center>";
+                $tab .= "<td align=center" . ($kolWakarPPP ? " style='white-space:nowrap'" : "") . ">";
                 for ($i = 0; $i < count($datasupirarr); $i++) {
                     if ($datasupirarr[$i] != '0000000000') {
                         if (!isset($datasupir[$datasupirarr[$i]])) {
-                            $tab .= getNamaKaryawan($datasupirarr[$i]) . "</br>";
+                            $tab .= nmListPPP(getNamaKaryawan($datasupirarr[$i]), $kolWakarPPP) . "</br>";
                             $datasupir[$datasupirarr[$i]] = 1;
                         }
                     }
@@ -936,11 +1042,11 @@ switch ($proses) {
                 $tab .= "</td>";
                 $datasupirarr = explode(',', $rdtx['arhelper']);
                 $datasupir = array();
-                $tab .= "<td align=center>";
+                $tab .= "<td align=center" . ($kolWakarPPP ? " style='white-space:nowrap'" : "") . ">";
                 for ($i = 0; $i < count($datasupirarr); $i++) {
                     if ($datasupirarr[$i] != '0000000000') {
                         if (!isset($datasupir[$datasupirarr[$i]])) {
-                            $tab .= getNamaKaryawan($datasupirarr[$i]) . "</br>";
+                            $tab .= nmListPPP(getNamaKaryawan($datasupirarr[$i]), $kolWakarPPP) . "</br>";
                             $datasupir[$datasupirarr[$i]] = 1;
                         }
                     }
@@ -948,11 +1054,11 @@ switch ($proses) {
                 $tab .= "</td>";
                 $datasupirarr = explode(',', $rdtx['arhelper2']);
                 $datasupir = array();
-                $tab .= "<td align=center " . $hiddenHelperExtraStyle . ">";
+                $tab .= "<td align=center " . ($kolWakarPPP && $hiddenHelperExtraStyle == "" ? "style='white-space:nowrap'" : $hiddenHelperExtraStyle) . ">";
                 for ($i = 0; $i < count($datasupirarr); $i++) {
                     if ($datasupirarr[$i] != '0000000000') {
                         if (!isset($datasupir[$datasupirarr[$i]])) {
-                            $tab .= getNamaKaryawan($datasupirarr[$i]) . "</br>";
+                            $tab .= nmListPPP(getNamaKaryawan($datasupirarr[$i]), $kolWakarPPP) . "</br>";
                             $datasupir[$datasupirarr[$i]] = 1;
                         }
                     }
@@ -960,11 +1066,11 @@ switch ($proses) {
                 $tab .= "</td>";
                 $datasupirarr = explode(',', $rdtx['arhelper3']);
                 $datasupir = array();
-                $tab .= "<td align=center " . $hiddenHelperExtraStyle . ">";
+                $tab .= "<td align=center " . ($kolWakarPPP && $hiddenHelperExtraStyle == "" ? "style='white-space:nowrap'" : $hiddenHelperExtraStyle) . ">";
                 for ($i = 0; $i < count($datasupirarr); $i++) {
                     if ($datasupirarr[$i] != '0000000000') {
                         if (!isset($datasupir[$datasupirarr[$i]])) {
-                            $tab .= getNamaKaryawan($datasupirarr[$i]) . "</br>";
+                            $tab .= nmListPPP(getNamaKaryawan($datasupirarr[$i]), $kolWakarPPP) . "</br>";
                             $datasupir[$datasupirarr[$i]] = 1;
                         }
                     }
@@ -972,11 +1078,11 @@ switch ($proses) {
                 $tab .= "</td>";
                 $datasupirarr = explode(',', $rdtx['arhelper4']);
                 $datasupir = array();
-                $tab .= "<td align=center " . $hiddenHelperExtraStyle . ">";
+                $tab .= "<td align=center " . ($kolWakarPPP && $hiddenHelperExtraStyle == "" ? "style='white-space:nowrap'" : $hiddenHelperExtraStyle) . ">";
                 for ($i = 0; $i < count($datasupirarr); $i++) {
                     if ($datasupirarr[$i] != '0000000000') {
                         if (!isset($datasupir[$datasupirarr[$i]])) {
-                            $tab .= getNamaKaryawan($datasupirarr[$i]) . "</br>";
+                            $tab .= nmListPPP(getNamaKaryawan($datasupirarr[$i]), $kolWakarPPP) . "</br>";
                             $datasupir[$datasupirarr[$i]] = 1;
                         }
                     }
@@ -986,7 +1092,7 @@ switch ($proses) {
                 $tab .= "<td align=center>" . $rbrg['namabarang'] . "</td>";
                 $tab .= "<td align=center>" . $res['jlhbbm'] . "</td>";
                 $tab .= "<td align=center>" . ($res['kontanan'] != '' ? 'YA' : 'TIDAK') . "</td>";
-                $tab .= "<td align=center>" . getNamaKaryawan($res['updateby']) . "</td>";
+                $tab .= "<td align=center" . ($kolWakarPPP ? " style='white-space:nowrap'" : "") . ">" . nmListPPP(getNamaKaryawan($res['updateby']), $kolWakarPPP) . "</td>";
                 $tab .= "<td align=center>" . $res['createdtime'] . "</td>";
                 if ($res['posting'] == 1) {
                     $tab .= "<td></td>";
@@ -1050,6 +1156,10 @@ switch ($proses) {
         if (checkPostGet('periode_cari', '') != '') {
             $where .= " and left(tanggal,7) = '" . addslashes(checkPostGet('periode_cari', '')) . "'";
         }
+        #filter Tahun (4 digit); bila Periode dipilih, Periode yang dipakai
+        if (checkPostGet('periode_cari', '') == '' && preg_match('/^[0-9]{4}$/', checkPostGet('tahun_cari', ''))) {
+            $where .= " and left(tanggal,4) = '" . checkPostGet('tahun_cari', '') . "'";
+        }
         if (checkPostGet('operator_cari', '') != '') {
             $where .= " and notransaksi in (select notransaksi from " . $dbname . ".vhc_rundt where operator = '" . addslashes(checkPostGet('operator_cari', '')) . "')";
         }
@@ -1092,7 +1202,8 @@ switch ($proses) {
                 <th align=center>" . $_SESSION['lang']['kodevhc'] . "</th>
                 <th align=center>" . $_SESSION['lang']['nopol'] . "</th>
                 <th align=center>" . $_SESSION['lang']['detail'] . "</th>
-                <th align=center>" . $_SESSION['lang']['mandor'] . "</th>
+                <th align=center>" . $_SESSION['lang']['mandor'] . "</th>" . ($kolWakarPPP ? "
+                <th align=center>Wakar</th>" : "") . "
                 <th align=center>" . $_SESSION['lang']['operator'] . "</th>
                 <th align=center>" . $_SESSION['lang']['helper'] . " 1</th>
                 <th align=center>" . $_SESSION['lang']['helper'] . " 2</th>
@@ -1129,7 +1240,8 @@ switch ($proses) {
                 <td>" . $r['kodevhc'] . "</td>
                 <td>" . @$nmVhc[$r['kodevhc']] . "</td>
                 <td>" . @$nmDet[$r['kodevhc']] . "</td>
-                <td>" . @$nmKar[$r['mandor']] . "</td>
+                <td>" . @$nmKar[$r['mandor']] . "</td>" . ($kolWakarPPP ? "
+                <td>" . (!empty($r['wakar']) ? @$nmKar[$r['wakar']] : '') . "</td>" : "") . "
                 <td>" . implode(', ', $nm['operator']) . "</td>
                 <td>" . implode(', ', $nm['helper']) . "</td>
                 <td>" . implode(', ', $nm['helper2']) . "</td>
@@ -1448,9 +1560,30 @@ switch ($proses) {
                 'createdtime' => $createdtime
             );
 
+            #PPP: wakar dan mandor pada header menjadi kehadiran (vhc_runhk), premi harian disimpan di header; unit lain tidak berubah
+            $pppWM = traksiPPP($param['kodeorg']);
+            $hkWM = array();
+            if ($pppWM) {
+                $errWM = validasiWakarMandorPPP($dbname, $param, $tgl_kerja, $notrans_new, $hkWM);
+                if ($errWM != '') {
+                    exit($errWM);
+                }
+                $data['wakar'] = $hkWM['wakar'];
+                $data['premiwakar'] = $hkWM['premiwakar'];
+                $data['premimandor'] = $hkWM['premimandor'];
+            }
+
             try {
                 $sql = insertQuery($dbname, 'vhc_runht', $data, array_keys($data));
                 $owlPDO->exec($sql);
+                if ($pppWM) {
+                    try {
+                        simpanHkWakarMandorPPP($dbname, $owlPDO, $notrans_new, $tgl_kerja, $hkWM);
+                    } catch (PDOException $eWM) {
+                        $owlPDO->exec("delete from " . $dbname . ".vhc_runht where notransaksi='" . $notrans_new . "'");
+                        throw $eWM;
+                    }
+                }
 
                 $optkode = makeOption($dbname, 'vhc_5master', 'kodevhc,kelompokvhc');
                 $kelvhc = $optkode[$param['kodevhc']];
@@ -1493,6 +1626,11 @@ switch ($proses) {
                 $res1->setFetchMode(PDO::FETCH_ASSOC);
                 while ($rkary = $res1->fetch()) {
                     $optKary .= "<option value=" . $rkary['karyawanid'] . ">" . $rkary['nama'] . "&nbsp; [" . $arrJab[$rkary['jabatan']] . "] &nbsp;[" . $rkary['nik'] . "]</option>";
+                }
+
+                #PPP genset (jenis kendaraan di parameter TRGENSET): operator = semua karyawan aktif unit, hanya dicatat namanya
+                if (gensetPPP($param['kodeorg'], $param['jenisvhc'])) {
+                    $optKary = optOperatorGensetPPP($dbname, $param['kodeorg'], $tgl_kerja);
                 }
 
                 ## Ambil Helper
@@ -1616,6 +1754,17 @@ switch ($proses) {
         #= perhitungan jumlah kmhm
         $jumlah = $param['kmhm_akhir'] - $param['kmhm_awal'];
 
+        #PPP genset: rit dan prestasi tidak perlu diisi (prestasi = jumlah hm); upah/premi hanya untuk operator tanpa setup khusus genset
+        if (gensetPPP($rCekHt[0]['kodeorg'], $rCekHt[0]['jenisvhc'])) {
+            if ($param['jmlh_rit'] == '' || $param['jmlh_rit'] == '0') {
+                $param['jmlh_rit'] = 1;
+            }
+            if ($param['brt_muatan'] == '' || $param['brt_muatan'] == '0') {
+                $param['brt_muatan'] = ($jumlah > 0) ? $jumlah : '';
+            }
+            batasiUpahPremiGensetPPP($param);
+        }
+
         #= ambil tipe kode unit
         $dTip = makeOption($dbname, 'organisasi', 'kodeorganisasi,tipe', "kodeorganisasi='" . $param['lokasi_kerja'] . "'");
 
@@ -1689,6 +1838,10 @@ switch ($proses) {
             echo "salah";
         } else { // jika data detail belum ada
             $arrKary = array_filter([$param['kode_karyawan'], $param['kode_helper'], $param['kode_helper2'], $param['kode_helper3'], $param['kode_helper4']]);
+            $errWM = cekOperatorBukanWakarMandorPPP($dbname, $param['no_trans'], $arrKary);
+            if ($errWM != '') {
+                exit($errWM);
+            }
             if (count($arrKary) != count(array_unique($arrKary))) { //validasi hanya 1 jabatan di 1 hari
                 exit("Warningsystem : Operator dan Helper tidak boleh sama dalam hari yang sama!.");
             } else {
@@ -1742,6 +1895,17 @@ switch ($proses) {
         $res = $owlPDO->query($sAlokasi) or die(print " Gagal: " . PDOException::getMessage());
         $res->setFetchMode(PDO::FETCH_ASSOC);
         $rAlokasi = $res->fetch();
+
+        #PPP genset: rit dan prestasi tidak perlu diisi (prestasi = jumlah hm); upah/premi hanya untuk operator tanpa setup khusus genset
+        if (isset($rKode['kodeorg']) && gensetPPP($rKode['kodeorg'], $rKode['jenisvhc'])) {
+            if ($param['jmlh_rit'] == '' || $param['jmlh_rit'] == '0') {
+                $param['jmlh_rit'] = 1;
+            }
+            if ($param['brt_muatan'] == '' || $param['brt_muatan'] == '0') {
+                $param['brt_muatan'] = ($param['kmhm_akhir'] > $param['kmhm_awal']) ? ($param['kmhm_akhir'] - $param['kmhm_awal']) : '';
+            }
+            batasiUpahPremiGensetPPP($param);
+        }
 
         if (($param['brt_muatan'] == '') || ($param['jmlh_rit'] == '')) {
             echo "Warningsystem: Harap lengkapi form inputan !";
@@ -1832,6 +1996,10 @@ switch ($proses) {
         $jumlah = $param['kmhm_akhir'] - $param['kmhm_awal'];
 
         $arrKary = array_filter([$param['kode_karyawan'], $param['kode_helper'], $param['kode_helper2'], $param['kode_helper3'], $param['kode_helper4']]);
+        $errWM = cekOperatorBukanWakarMandorPPP($dbname, $param['no_trans'], $arrKary);
+        if ($errWM != '') {
+            exit($errWM);
+        }
         if (count($arrKary) != count(array_unique($arrKary))) {
             exit("Warningsystem : Operator dan Helper tidak boleh orang yang sama!");
         }
@@ -1914,7 +2082,7 @@ switch ($proses) {
 
         break;
     case 'load_data_opt':
-        $arrPos = array("Operator", "Helper", "Driver");
+        $arrPos = array("Operator", "Helper", "Driver", "Wakar", "Mandor"); #PPP: posisi 3 = Wakar, 4 = Mandor
         $sql = "select * from " . $dbname . ".vhc_runhk where substring(notransaksi,1,4)='" . $rKode['kodeorg'] . "' and notransaksi='" . $param['no_trans'] . "' order by notransaksi desc"; //echo "Warningsystem:".$sql;
         $res3 = $owlPDO->query($sql) or die(print " Gagal: " . PDOException::getMessage());
         $res3->setFetchMode(PDO::FETCH_ASSOC);
@@ -1942,6 +2110,10 @@ switch ($proses) {
         }
         break;
     case 'insert_operator':
+        #PPP genset: operator khusus genset (punya Setup Komponen Tetap pendapatan aktif) hanya dicatat namanya; operator lain boleh diisi upah dan premi
+        if (isset($rKode['kodeorg']) && gensetPPP($rKode['kodeorg'], $rKode['jenisvhc'])) {
+            batasiUpahPremiGensetPPP($param);
+        }
         #= Cek periode gajinya dulu
         $sPeriode   = selectQuery($dbname, 'sdm_5periodegaji', 'periode', "kodeorg='" . substr($rKode['kodeorg'], 0, 4) . "' and periode='" . substr($tgl_kerja, 0, 4) . "-" . substr($tgl_kerja, 4, 2) . "'");
         $rPeriode   = fetchData($sPeriode)[0];
@@ -1985,8 +2157,9 @@ switch ($proses) {
 
         #= Cek absensi umum
         $str        = selectQuery($dbname, 'sdm_absensidt', '*', "karyawanid='" . $param['kode_karyawan'] . "' and tanggal='" . $tgl_kerja . "'");
-        $bar        = isset(fetchData($str)[0]);
-        $jumabs     = $bar['umr'];
+        $rAbs       = fetchData($str);
+        #cek absensi umum hanya berlaku untuk PT PPP (Palma); unit PT lain tidak diubah (sebelumnya pemeriksaan ini memang tidak pernah terpicu)
+        $jumabs     = (isset($rAbs[0]['umr']) && isset($rKode['kodeorg']) && getindukPT($rKode['kodeorg']) == 'PPP') ? $rAbs[0]['umr'] : 0;
 
         if ($jumabs > 0 && $param['uphOprt'] > 0) {
             exit("Warningsystem: Karyawan ditanggal " . tanggalnormal($tgl_kerja) . "  sudah terdaftar di absensi umum, silahkan dihapus dahulu absensi umumnya");
@@ -2041,6 +2214,21 @@ switch ($proses) {
         // if($libur==true and $param['uphOprt']>0){
         // exit("Warningsystem:Jika Hari libur/minggu maka nilai upah harus 0, upah ditambahkan ke premi");
         // }
+
+        #PPP genset: upah yang diketik tidak boleh membuat total upah karyawan hari itu (semua transaksi traksi) melebihi 1 HK
+        if (isset($rKode['kodeorg']) && gensetPPP($rKode['kodeorg'], $rKode['jenisvhc']) && (float)$param['uphOprt'] > 0 && preg_match('/^[0-9]{1,10}$/', (string)$param['kode_karyawan'])) {
+            $tglCekHk = tanggalDbWakarPPP($tgl_kerja);
+            $rGp = fetchData("select jumlah from " . $dbname . ".sdm_5gajipokok where karyawanid='" . $param['kode_karyawan'] . "' and tahun='" . substr($tglCekHk, 0, 7) . "' and idkomponen='1'");
+            $gajiHarian = isset($rGp[0]['jumlah']) ? round($rGp[0]['jumlah'] / 25, 0) : 0;
+            if ($gajiHarian <= 0) {
+                exit("Warningsystem: Gaji pokok karyawan periode " . substr($tglCekHk, 0, 7) . " belum ada, upah tidak bisa diisi.");
+            }
+            $rSudah = fetchData("select coalesce(sum(upah),0) as u from " . $dbname . ".vhc_runhk where idkaryawan='" . $param['kode_karyawan'] . "' and tanggal='" . $tglCekHk . "' and notransaksi<>'" . addslashes($param['no_trans']) . "'");
+            $sudahUpah = isset($rSudah[0]['u']) ? (float)$rSudah[0]['u'] : 0;
+            if ($sudahUpah + (float)$param['uphOprt'] > $gajiHarian + 1) {
+                exit("Warningsystem: Upah karyawan tanggal " . tanggalnormal($tglCekHk) . " melebihi 1 HK (1 HK = Rp " . number_format($gajiHarian, 0) . ", sudah terpakai Rp " . number_format($sudahUpah, 0) . " di transaksi traksi lain). Isi upah lebih kecil atau cukup isi premi.");
+            }
+        }
 
         #======================= cek premi apakah lebih besar dari perhitungan ==================
         $param = $_POST;
@@ -3052,4 +3240,255 @@ function perbandingan($a, $b, $operator)
         default:
             return '';
     }
+}
+
+
+#===== PPP: Wakar dan Mandor pada header Pekerjaan Traksi (kehadiran masuk vhc_runhk, premi harian di header) =====
+#Hanya unit yang induknya PPP; unit lain tidak tersentuh. vhc_runhk.posisi: 3 = Wakar, 4 = Mandor.
+function traksiPPP($kodeorg)
+{
+    if (!preg_match('/^[A-Za-z0-9]{1,10}$/', (string)$kodeorg)) {
+        return false;
+    }
+    return getindukPT($kodeorg) == 'PPP';
+}
+
+#PPP: daftar jenis kendaraan genset dari parameter TRGENSET (setup_parameterappl, kode jenis dipisah koma). Kendaraan berjenis ini di unit PT PPP: operator bisa
+#karyawan mana pun dan hanya dicatat namanya bersama HM; upah tetap dari absensi, premi tetap dari Setup Premi Tetap per Komponen, jadi upah/premi/denda selalu 0.
+function jenisGensetPPP()
+{
+    global $dbname;
+    static $daftar = null;
+    if ($daftar === null) {
+        $daftar = array();
+        foreach (fetchData("select nilai from " . $dbname . ".setup_parameterappl where kodeparameter='TRGENSET'") as $r) {
+            foreach (explode(',', str_replace("'", "", (string)$r['nilai'])) as $j) {
+                $j = trim($j);
+                if ($j != '') {
+                    $daftar[$j] = true;
+                }
+            }
+        }
+    }
+    return $daftar;
+}
+
+function gensetPPP($kodeorg, $jenisvhc)
+{
+    if ($jenisvhc == '' || !traksiPPP($kodeorg)) {
+        return false;
+    }
+    $daftar = jenisGensetPPP();
+    return isset($daftar[$jenisvhc]);
+}
+
+function optOperatorGensetPPP($dbname, $kodeorg, $tanggal)
+{
+    $tanggal = tanggalDbWakarPPP($tanggal);
+    if (!preg_match('/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/', $tanggal)) {
+        $tanggal = date('Y-m-d');
+    }
+    $opt = "<option value=''>" . $_SESSION['lang']['pilihdata'] . "</option>";
+    foreach (fetchData("select karyawanid,namakaryawan,nik from " . $dbname . ".datakaryawan where lokasitugas='" . addslashes($kodeorg) . "' and (tanggalkeluar = '0000-00-00' or tanggalkeluar is null or tanggalkeluar>= '" . $tanggal . "') order by namakaryawan") as $bar) {
+        $opt .= "<option value=" . $bar['karyawanid'] . ">" . htmlspecialchars($bar['namakaryawan']) . "&nbsp; [Operator] &nbsp;[" . htmlspecialchars($bar['nik']) . "]</option>";
+    }
+    return $opt;
+}
+
+#operator khusus genset = karyawan yang punya setup komponen pendapatan aktif di Setup Komponen Tetap (upah dari absensi, premi dari setup)
+function operatorKhususGensetPPP($karyawanid)
+{
+    global $dbname;
+    if (!preg_match('/^[0-9]{1,10}$/', (string)$karyawanid)) {
+        return false;
+    }
+    try {
+        $r = fetchData("select count(*) as jml from " . $dbname . ".sdm_5premitetapkomp s join " . $dbname . ".sdm_ho_component c on c.id=s.idkomponen where s.karyawanid='" . (int)$karyawanid . "' and s.aktif=1 and s.nominal>0 and c.plus=1");
+        return isset($r[0]['jml']) && $r[0]['jml'] > 0;
+    } catch (Exception $e) {
+        return false;
+    }
+}
+
+#PPP genset: yang boleh diisi hanya upah operator (uphOprt) dan premi operator (prmiOprtTambahan), dan hanya untuk operator yang bukan khusus genset.
+#Helper, premi hitungan, dan denda selalu 0; operator khusus genset seluruhnya 0 (upah dari absensi, premi dari setup).
+function batasiUpahPremiGensetPPP(&$param)
+{
+    $khusus = operatorKhususGensetPPP(isset($param['kode_karyawan']) ? $param['kode_karyawan'] : '');
+    foreach (array('uphOprt', 'uphHelp', 'uphHelp2', 'uphHelp3', 'uphHelp4', 'prmiOprt', 'prmiOprtTambahan', 'prmiHelp', 'prmiHelp2', 'prmiHelp3', 'prmiHelp4', 'pnltyOprt') as $k) {
+        $nilai = 0;
+        if (!$khusus && in_array($k, array('uphOprt', 'prmiOprtTambahan'), true) && isset($param[$k])) {
+            $v = str_replace(',', '', trim((string)$param[$k]));
+            if ($v !== '') {
+                if (!is_numeric($v) || $v < 0 || $v > 100000000) {
+                    exit("Warningsystem : Nilai upah/premi harus angka 0 sampai 100.000.000.");
+                }
+                $nilai = $v + 0;
+            }
+        }
+        $param[$k] = $nilai;
+        $_POST[$k] = $nilai;
+    }
+}
+
+#tanggal transaksi pada header bisa berbentuk YYYYMMDD; ubah ke YYYY-MM-DD
+function tanggalDbWakarPPP($tgl)
+{
+    $tgl = (string)$tgl;
+    if (preg_match('/^[0-9]{8}$/', $tgl)) {
+        return substr($tgl, 0, 4) . '-' . substr($tgl, 4, 2) . '-' . substr($tgl, 6, 2);
+    }
+    return $tgl;
+}
+
+#Validasi wakar/mandor/premi dan hitung upah. Mengembalikan pesan kesalahan ('' bila lolos); $hasil berisi nilai yang disimpan.
+function validasiWakarMandorPPP($dbname, $param, $tgl_kerja, $notransaksi, &$hasil)
+{
+    $hasil = array('wakar' => 0, 'premiwakar' => 0, 'premimandor' => 0, 'baris' => array());
+    $tgl_kerja = tanggalDbWakarPPP($tgl_kerja);
+    $wakar = trim((string)(isset($param['wakar']) ? $param['wakar'] : ''));
+    $mandor = trim((string)(isset($param['mandor']) ? $param['mandor'] : ''));
+    if (($wakar !== '' && !ctype_digit($wakar)) || ($mandor !== '' && !ctype_digit($mandor))) {
+        return "Warningsystem : Data wakar/mandor tidak valid.";
+    }
+    $w = (int)$wakar;
+    $m = (int)$mandor;
+    $kodevhc = isset($param['kodevhc']) ? (string)$param['kodevhc'] : '';
+    if (!preg_match('/^[A-Za-z0-9_\-]+$/', $kodevhc)) {
+        return "Warningsystem : Kode kendaraan tidak valid.";
+    }
+
+    $premi = array();
+    foreach (array('premiwakar' => 'wakar', 'premimandor' => 'mandor') as $kolom => $nama) {
+        $v = str_replace(',', '', trim((string)(isset($param[$kolom]) ? $param[$kolom] : '')));
+        if ($v === '') {
+            $v = '0';
+        }
+        if (!preg_match('/^[0-9]+(\.[0-9]+)?$/', $v)) {
+            return "Warningsystem : Premi " . $nama . " harus berupa angka (tidak boleh negatif).";
+        }
+        $premi[$nama] = (float)$v;
+    }
+
+    if ($w == 0 && $premi['wakar'] > 0) {
+        return "Warningsystem : Premi wakar diisi, tetapi wakar belum dipilih.";
+    }
+    if ($m == 0 && $premi['mandor'] > 0) {
+        return "Warningsystem : Premi mandor diisi, tetapi mandor belum dipilih.";
+    }
+    if ($w > 0 && $w == $m) {
+        return "Warningsystem : Wakar dan mandor tidak boleh orang yang sama.";
+    }
+    if ($w > 0) {
+        $cek = fetchData("select karyawanid from " . $dbname . ".vhc_5operator where karyawanid='" . $w . "' and jabatan='3' and aktif='1' and vhc='" . $kodevhc . "'");
+        if (count($cek) == 0) {
+            return "Warningsystem : Wakar belum didaftarkan di Setup Operator (jabatan Wakar) untuk kendaraan " . $kodevhc . ".";
+        }
+    }
+    if ($m > 0) {
+        $cek = fetchData("select karyawanid from " . $dbname . ".vhc_5mandortraksi where karyawanid='" . $m . "'");
+        if (count($cek) == 0) {
+            return "Warningsystem : Mandor belum didaftarkan di Setup Mandor Traksi.";
+        }
+    }
+
+    $orang = array();
+    if ($w > 0) {
+        $orang[] = array('id' => $w, 'posisi' => 3, 'premi' => $premi['wakar'], 'peran' => 'Wakar');
+    }
+    if ($m > 0) {
+        $orang[] = array('id' => $m, 'posisi' => 4, 'premi' => $premi['mandor'], 'peran' => 'Mandor');
+    }
+
+    foreach ($orang as $o) {
+        $id = str_pad($o['id'], 10, '0', STR_PAD_LEFT);
+        $kar = fetchData("select namakaryawan,tipekaryawan,tanggalkeluar from " . $dbname . ".datakaryawan where karyawanid='" . $o['id'] . "'");
+        if (count($kar) == 0) {
+            return "Warningsystem : " . $o['peran'] . " tidak ditemukan di data karyawan.";
+        }
+        $nama = $kar[0]['namakaryawan'];
+        $label = $o['peran'] . " " . $nama;
+        if ($kar[0]['tanggalkeluar'] != '' && $kar[0]['tanggalkeluar'] != '0000-00-00' && $kar[0]['tanggalkeluar'] < $tgl_kerja) {
+            return "Warningsystem : " . $label . " sudah keluar sebelum tanggal transaksi.";
+        }
+        $staf = ((string)$kar[0]['tipekaryawan'] === '0');
+        if ($staf && $o['premi'] > 0) {
+            return "Warningsystem : " . $label . " berstatus staf, tidak mendapat premi.";
+        }
+
+        #bentrok kehadiran di hari yang sama
+        $tglN = tanggalnormal($tgl_kerja);
+        $r = fetchData("select count(*) as n from " . $dbname . ".sdm_absensidt where karyawanid='" . $id . "' and tanggal='" . $tgl_kerja . "' and (hk>0 or umr>0)");
+        if ($r[0]['n'] > 0) {
+            return "Warningsystem : " . $label . " pada tanggal " . $tglN . " sudah terdaftar di absensi SDM, hapus dahulu absensinya.";
+        }
+        $r = fetchData("select notransaksi from " . $dbname . ".kebun_kehadiran_vw where karyawanid='" . $id . "' and tanggal='" . $tgl_kerja . "' and (jhk>0 or umr>0) limit 1");
+        if (count($r) > 0) {
+            return "Warningsystem : " . $label . " sudah terdaftar pada kegiatan BKM dengan no transaksi " . $r[0]['notransaksi'] . ".";
+        }
+        $r = fetchData("select notransaksi from " . $dbname . ".kebun_prestasi_vw where karyawanid='" . $id . "' and tanggal='" . $tgl_kerja . "' limit 1");
+        if (count($r) > 0) {
+            return "Warningsystem : " . $label . " sudah terdaftar pada kegiatan panen dengan no transaksi " . $r[0]['notransaksi'] . ".";
+        }
+        $r = fetchData("select notransaksi from " . $dbname . ".kebun_aktifitas where tanggal='" . $tgl_kerja . "' and (nikmandor='" . $id . "' or nikmandor1='" . $id . "' or keranimuat='" . $id . "' or nikasisten='" . $id . "') limit 1");
+        if (count($r) > 0) {
+            return "Warningsystem : " . $label . " sudah terdaftar pada header BKM dengan nomor " . $r[0]['notransaksi'] . ".";
+        }
+
+        #upah: staf tidak mendapat upah; selain staf mengikuti upah global (gaji pokok / 25), sekali per hari
+        $upah = 0;
+        if (!$staf) {
+            $gp = fetchData("select jumlah from " . $dbname . ".sdm_5gajipokok where karyawanid='" . $o['id'] . "' and tahun='" . substr($tgl_kerja, 0, 7) . "' and idkomponen='1'");
+            if (count($gp) == 0 || $gp[0]['jumlah'] <= 0) {
+                return "Warningsystem : Gaji pokok " . $nama . " periode " . substr($tgl_kerja, 0, 7) . " belum ada.";
+            }
+            $lain = fetchData("select count(*) as n from " . $dbname . ".vhc_runhk where idkaryawan='" . $id . "' and tanggal='" . $tgl_kerja . "' and upah>0 and notransaksi<>'" . $notransaksi . "'");
+            if ($lain[0]['n'] == 0) {
+                $upah = $gp[0]['jumlah'] / 25;
+            }
+        }
+        $hasil['baris'][] = array('id' => $o['id'], 'posisi' => $o['posisi'], 'upah' => $upah, 'premi' => $o['premi']);
+    }
+    $hasil['wakar'] = $w;
+    $hasil['premiwakar'] = $premi['wakar'];
+    $hasil['premimandor'] = $premi['mandor'];
+    return '';
+}
+
+#Simpan kehadiran wakar/mandor di vhc_runhk (menggantikan baris posisi 3 dan 4 pada transaksi itu)
+function simpanHkWakarMandorPPP($dbname, $owlPDO, $notransaksi, $tgl_kerja, $hasil)
+{
+    $tgl_kerja = tanggalDbWakarPPP($tgl_kerja);
+    $owlPDO->exec("delete from " . $dbname . ".vhc_runhk where notransaksi='" . $notransaksi . "' and posisi in (3,4)");
+    foreach ($hasil['baris'] as $b) {
+        $ket = ($b['posisi'] == 3) ? 'WAKAR' : 'MANDOR';
+        $owlPDO->exec("INSERT INTO " . $dbname . ".vhc_runhk (`notransaksi`,`idkaryawan`,`posisi`,`tanggal`,`statuskaryawan`,`upah`,`premi`,`penalty`,`keterangan`)
+            VALUES ('" . $notransaksi . "','" . $b['id'] . "','" . $b['posisi'] . "','" . $tgl_kerja . "','','" . floatval($b['upah']) . "','" . floatval($b['premi']) . "','0','" . $ket . "')");
+    }
+}
+
+#Operator/helper tidak boleh orang yang sama dengan wakar/mandor pada header (kunci vhc_runhk per transaksi per karyawan)
+function cekOperatorBukanWakarMandorPPP($dbname, $notransaksi, $arrKary)
+{
+    if ($notransaksi == '') {
+        return '';
+    }
+    $h = fetchData("select kodeorg from " . $dbname . ".vhc_runht where notransaksi='" . addslashes($notransaksi) . "'");
+    if (count($h) == 0 || !traksiPPP($h[0]['kodeorg'])) {
+        return '';
+    }
+    foreach (fetchData("select idkaryawan,posisi from " . $dbname . ".vhc_runhk where notransaksi='" . addslashes($notransaksi) . "' and posisi in (3,4)") as $r) {
+        foreach ($arrKary as $k) {
+            if ((int)$k == (int)$r['idkaryawan']) {
+                return "Warningsystem : " . ($r['posisi'] == 3 ? 'Wakar' : 'Mandor') . " pada header tidak boleh menjadi operator atau helper di transaksi yang sama.";
+            }
+        }
+    }
+    return '';
+}
+
+#PPP: nama pada list Pekerjaan Traksi huruf besar semua; pengguna perusahaan lain tidak berubah
+function nmListPPP($nama, $ppp)
+{
+    return $ppp ? strtoupper((string)$nama) : $nama;
 }

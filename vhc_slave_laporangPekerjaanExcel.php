@@ -139,7 +139,7 @@ while($bar=$res->fetch()){
 		$resx=$owlPDO->query($sql) or die(print " Gagal: ".PDOException::getMessage());
 		$resx->setFetchMode(PDO::FETCH_ASSOC);
 		$no=0;
-		$arrPos=array("Sopir","Kondektur");
+		$arrPos=array(0=>"Sopir",1=>"Kondektur",3=>"Wakar",4=>"Mandor");
 		while($res=$resx->fetch())
 		{
 			$sbrg="select namabarang from ".$dbname.".log_5masterbarang where kodebarang='".$res['jenisbbm']."'";

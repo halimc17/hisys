@@ -1,0 +1,27 @@
+<html>
+<body>
+<p><strong>SETUP KOMPONEN TETAP</strong></p>
+<p>Modul	: SDM <br />
+  Tentang	: Setup Komponen Tetap (khusus PT PPP)<br />
+  Isi	:</p>
+<ol>
+	<li>Fungsi</li>
+	<p>Menentukan karyawan yang mendapat atau dipotong komponen tetap setiap bulan beserta nominalnya. Bisa komponen pendapatan (misalnya Premi Tetap, Premi Operator Genset) maupun potongan (misalnya Iuran Koperasi). Komponen yang diatur di Setup Upah tidak muncul di sini. Karyawan yang disetup dan berstatus Aktif otomatis ditarik oleh Penggajian Bulanan dan Harian setiap bulan, jadi tidak perlu diinput lagi di Pendapatan Lain atau Potongan dan tidak ada proses terpisah.</p>
+	<li>Cara mengisi</li>
+	<p>Buka menu Setup, Absensi dan Penggajian, Pengaturan Penggajian, Setup Komponen Tetap. Halaman awal adalah List Data per organisasi dan per komponen, berisi jumlah karyawan, jumlah yang aktif, dan total nominal aktif per bulan. Kotak Cari Data menyaring menurut organisasi, komponen, status, dan karyawan.</p>
+	<p>Klik Baru, pilih organisasi (unit PPP) dan komponen, lalu Lanjut ke Detail. Detail berupa tabel semua karyawan aktif di organisasi itu. Isi nominal per bulan pada karyawan yang berhak (hilangkan centang Aktif bila perlu), lalu klik Simpan; baris yang nominalnya kosong tidak diproses. Kotak Cari dan pilihan Hanya yang sudah disetup membantu menyaring. Untuk komponen yang sudah ada, klik ikon buka pada baris List Data.</p>
+	<li>Tidak dipakai lagi</li>
+	<p>Di detail, hilangkan centang Aktif lalu Simpan bila dihentikan sementara, atau klik ikon hapus pada baris karyawan bila sudah tidak dipakai.</p>
+	<li>Biaya ke genset</li>
+	<p>Bila karyawan yang disetup tercatat di Pekerjaan Traksi pada bulan itu sebagai operator kendaraan berjenis genset (jenis yang diatur di parameter TRGENSET), pada Proses Akhir Bulan, Gaji Karyawan Tidak Langsung, komponen itu dibebankan ke genset tempat ia tercatat. Bila ia tercatat di beberapa genset, bebannya dibagi menurut jumlah hari. Bila ia tidak tercatat di genset (termasuk bila hanya tercatat di kendaraan lain), bebannya tetap normal. Untuk premi operator genset, gunakan komponen Premi Operator Genset.</p>
+	<li>Pajak</li>
+	<p>Komponen yang disetup di sini dihitung sebagai Pendapatan Tetap pada PPh 21.</p>
+	<li>Penting</li>
+	<p>Karyawan yang sama yang sudah mempunyai komponen itu dari Pendapatan Lain tidak digandakan oleh setup ini. Hapus input bulanan di Pendapatan Lain agar nominalnya hanya bersumber dari setup.</p>
+	<li>Tidak dobel dan karyawan mutasi</li>
+	<p>Satu karyawan hanya dibayar satu kali untuk tiap komponen. Bila komponen yang sama sudah diinput di Pendapatan Lain atau Potongan Lain pada periode itu, setup tidak ikut ditarik. Bila karyawan punya setup di dua unit karena mutasi, yang dipakai setup di unit kerjanya menurut Data Karyawan sekarang; bila di unit kerjanya belum ada setup, setup di unit lamanya tetap dipakai supaya tidak hilang. Di detail setup, karyawan yang sudah pindah diberi catatan merah.</p>
+	<li>Tarikan Excel dan PDF</li>
+	<p>Di List Data, tombol Excel dan PDF menarik daftar karyawan per organisasi dan komponen sesuai filter yang sedang dipilih, lengkap dengan total pendapatan dan total potongan. Tarikan dibatasi 3000 baris.</p>
+</ol>
+</body>
+</html>

@@ -32,7 +32,8 @@ foreach ($optOrg2 as $key => $nmorg) {
 	$rGaji = fetchData($sGaji);
 	if (count($rGaji) > 0) {
 		$lstorg[$key] = $key;
-		$optOrg .= "<option value=" . $key . ">" . $key . "-" . $nmorg . "</option>";
+		//data-ppp=1: unit milik PT PPP (induk = PPP), khusus PPP ada isian No Akun
+		$optOrg .= "<option value=" . $key . (getindukPT($key) == 'PPP' ? " data-ppp='1'" : "") . ">" . $key . "-" . $nmorg . "</option>";
 	}
 }
 
@@ -96,13 +97,15 @@ asort($arrKomSch);
 foreach ($arrKomSch as $idKomSch => $namaKomSch) {
 	$optKomSch .= "<option value='" . $idKomSch . "'>" . $namaKomSch . "</option>";
 }
-##karyawan
-$iKar = "select namakaryawan,karyawanid,nik,subbagian,lokasitugas from " . $dbname . ".datakaryawan where  1=1 and tipekaryawan not in ('0')  order by namakaryawan";
-$nKar = $owlPDO->query($iKar) or die(print " Gagal: " . PDOException::getMessage());
-$nKar->setFetchMode(PDO::FETCH_ASSOC);
+##karyawan: diisi lewat loadKar (sdm_slave_3pl.php) sesuai filter form, bukan semua karyawan
 $optKar = "<option value=''>Pilih Data</option>";
-while ($dKar = $nKar->fetch()) {
-	$optKar .= "<option value='" . $dKar['karyawanid'] . "'>" . $dKar['nik'] . " - " . $dKar['namakaryawan'] . "</option>";
+##akun 7xxxxx khusus PT PPP (pilihan No Akun pada rincian dan daftar saran pada input per karyawan)
+$optAkun7 = "<option value=''>Pilih Data</option>";
+$dtlAkun7 = "";
+$resAkun7 = fetchData("select noakun,namaakun from " . $dbname . ".keu_5akun where noakun like '7%' and detail=1 order by noakun");
+foreach ($resAkun7 as $barAkun7) {
+	$optAkun7 .= "<option value='" . $barAkun7['noakun'] . "'>" . htmlspecialchars($barAkun7['noakun'] . " - " . $barAkun7['namaakun']) . "</option>";
+	$dtlAkun7 .= "<option value='" . $barAkun7['noakun'] . "'>" . htmlspecialchars($barAkun7['namaakun']) . "</option>";
 }
 
 
@@ -231,6 +234,7 @@ echo "<fieldset><legend><b>Form</b></legend>
 echo "</table>";
 echo "</fieldset>";
 
+echo "<datalist id=listakun7>" . $dtlAkun7 . "</datalist>";
 echo "<div id='displayinsert' style=display:none></div>";
 #echo"</div>";
 echo "<div id='inputdetail' style=display:none>
@@ -241,6 +245,7 @@ echo "<div id='inputdetail' style=display:none>
 			<tr class=rowheader>
 				<td align=center>" . $_SESSION['lang']['namakaryawan'] . "</td>
 				<td align=center>" . $_SESSION['lang']['jumlah'] . "</td>
+				<td align=center class=kolomakun style='display:none'>No Akun</td>
                 <td align=center>" . $_SESSION['lang']['keterangan'] . "</td>
 			</tr>
 		</thead>
@@ -252,13 +257,16 @@ echo "<div id='inputdetail' style=display:none>
 			<td align=center>
 				<input type=text maxlength=20 class=myinputtextnumber style='width:100%;' id=jum onkeypress='return angka_doang(event)' onkeyup=\"if(this.value!=''){z.numberFormat(this.id,2);}\">
 			</td>
+			<td align=center class=kolomakun style='display:none'>
+				<select style='width:260px;' id=noakun class=select2>" . $optAkun7 . "</select>
+			</td>
 			<td align=center>
 				<input type=text maxlength=100 class=myinputtext style='width:100%;' id=ket>
 			</td>
 		</tr>	
 		<tr>	
 			<td hidden><input id=saveDetail value='saveDetail' hidden></td>
-			<td align=center colspan=3><button class=mybutton onclick=saveDetail()>" . $_SESSION['lang']['save'] . "</button></td>
+			<td align=center colspan=4><button class=mybutton onclick=saveDetail()>" . $_SESSION['lang']['save'] . "</button></td>
 		</tr> 
 		</table></fieldset>
 	</div>";
