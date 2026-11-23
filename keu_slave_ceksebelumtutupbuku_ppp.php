@@ -1194,6 +1194,12 @@ if($tipeorg[$param['kodeorg']]=='KEBUN'){
 
 
 #================ cek alokasi gaji sudah dilakukan / belum
+#= Pengecekan alokasi gaji hanya berlaku untuk unit di bawah PT PPP (unit PT lain, termasuk RO, tidak diwajibkan dan barisnya disembunyikan).
+#= Untuk PPP, unit tanpa karyawan aktif di periode itu tetap dilewati (lihat $adaKaryawanUnit di bawah).
+$rIndukCek = fetchdata("select induk from ".$dbname.".organisasi where kodeorganisasi='".addslashes($param['kodeorg'])."'");
+$unitPPPCek = (isset($rIndukCek[0]['induk']) && $rIndukCek[0]['induk']=='PPP');
+$adaKaryawanUnit = false;
+if($unitPPPCek){
 $where = "AND a.kodeorg = '".$param['kodeorg']."'";
 $wh = "AND kodeorg = '".$param['kodeorg']."'";
 
@@ -1415,6 +1421,7 @@ if(abs($selisihtotal)>200){//arahan bang ari samakan nilai toleransi dengan yang
 		$datasalah['25'][]="Kami tidak menemukan data penggajian, apakah Proses penggajian sudah dilakukan ?<br>Jika belum silahkan lakukan proses : SDM - Proses - Penggajian Bulanan dan Harian.";
 	}
 }
+}
 
 
 #=========================================================================
@@ -1522,8 +1529,7 @@ function renderCekTutupBuku($datasalah,$param,$tipe,$periodeNormal,$adaKaryawanU
 #================ cek Tutup Buku Bank
 #= Tutup Buku Bank menulis saldo awal bulan berikutnya untuk tiap rekening bank aktif unit
 #= Pengecekan ini hanya berlaku untuk unit di bawah PT PPP; unit PT lain tidak diwajibkan (baris pengecekan ikut disembunyikan).
-$rIndukBank = fetchdata("select induk from ".$dbname.".organisasi where kodeorganisasi='".addslashes($param['kodeorg'])."'");
-$bankBerlaku = (isset($rIndukBank[0]['induk']) && $rIndukBank[0]['induk']=='PPP');
+$bankBerlaku = $unitPPPCek;
 $resBank = array();
 if($bankBerlaku){ $resBank = fetchdata("select noakun from ".$dbname.".keu_5akunbank where pemilik='".addslashes($param['kodeorg'])."' and status='1' order by noakun"); }
 if(count($resBank)>0){
