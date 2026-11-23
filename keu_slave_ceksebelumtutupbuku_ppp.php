@@ -1423,7 +1423,7 @@ if(abs($selisihtotal)>200){//arahan bang ari samakan nilai toleransi dengan yang
 #= lolos beserta tindakannya. Rincian temuan ada di daftar di bawah tabel.
 #= Hanya mengubah tampilan: hasil pengecekan tetap dari $datasalah di atas.
 #=========================================================================
-function renderCekTutupBuku($datasalah,$param,$tipe,$periodeNormal,$adaKaryawanUnit=true){
+function renderCekTutupBuku($datasalah,$param,$tipe,$periodeNormal,$adaKaryawanUnit=true,$cekBankBerlaku=true){
     $h = function($s){ return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); };
     $bukanHO = (substr($param['kodeorg'],2,2)!='HO');
     $HO      = (substr($param['kodeorg'],2,2)=='HO');
@@ -1438,7 +1438,7 @@ function renderCekTutupBuku($datasalah,$param,$tipe,$periodeNormal,$adaKaryawanU
     $cek[] = array(array('6'), 'Periode akuntansi terdaftar dan normal', true, false, 'Periksa setup periode akuntansi', false);
     $cek[] = array(array('7'), 'Tagihan berjenis jurnal sudah diposting', true, true, 'Posting tagihan yang tercantum', true);
     $cek[] = array(array('8'), 'Kas kecil periode ini sudah ditutup', true, true, 'Tutup kas kecil unit', false);
-    $cek[] = array(array('28'), 'Tutup Buku Bank sudah dijalankan', true, false, 'Jalankan Tutup Buku Bank untuk periode ini', true);
+    $cek[] = array(array('28'), 'Tutup Buku Bank sudah dijalankan', $cekBankBerlaku, false, 'Jalankan Tutup Buku Bank untuk periode ini', true);
     $cek[] = array(array('9'), 'Berita Acara SPK sudah diposting', true, true, 'Posting Berita Acara SPK yang tercantum', true);
     $cek[] = array(array('10'), 'Semua jurnal seimbang (debet = kredit)', true, true, 'Perbaiki jurnal yang tidak seimbang', true);
     $cek[] = array(array('11'), 'Transaksi gudang sudah diposting', true, true, 'Posting transaksi gudang yang tercantum', true);
@@ -1521,7 +1521,11 @@ function renderCekTutupBuku($datasalah,$param,$tipe,$periodeNormal,$adaKaryawanU
 
 #================ cek Tutup Buku Bank
 #= Tutup Buku Bank menulis saldo awal bulan berikutnya untuk tiap rekening bank aktif unit
-$resBank = fetchdata("select noakun from ".$dbname.".keu_5akunbank where pemilik='".addslashes($param['kodeorg'])."' and status='1' order by noakun");
+#= Pengecekan ini hanya berlaku untuk unit di bawah PT PPP; unit PT lain tidak diwajibkan (baris pengecekan ikut disembunyikan).
+$rIndukBank = fetchdata("select induk from ".$dbname.".organisasi where kodeorganisasi='".addslashes($param['kodeorg'])."'");
+$bankBerlaku = (isset($rIndukBank[0]['induk']) && $rIndukBank[0]['induk']=='PPP');
+$resBank = array();
+if($bankBerlaku){ $resBank = fetchdata("select noakun from ".$dbname.".keu_5akunbank where pemilik='".addslashes($param['kodeorg'])."' and status='1' order by noakun"); }
 if(count($resBank)>0){
     $sudahTutupBank = array();
     $resSaldo = fetchdata("select norek from ".$dbname.".keu_saldobank where kodeorg='".addslashes($param['kodeorg'])."' and periode='".str_replace("-","",$periodeberikut)."' and ".$awalberikut." is not null");
@@ -1536,5 +1540,5 @@ if(count($resBank)>0){
     }
 }
 
-echo renderCekTutupBuku($datasalah,$param,$tipeorg[$param['kodeorg']],($currstart!='' and $currend!=''),$adaKaryawanUnit);
+echo renderCekTutupBuku($datasalah,$param,$tipeorg[$param['kodeorg']],($currstart!='' and $currend!=''),$adaKaryawanUnit,$bankBerlaku);
 ?>
