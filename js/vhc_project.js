@@ -1,3 +1,21 @@
+// Dropdown memakai select2: nilai yang diisi lewat kode harus menyegarkan tampilan select2 tanpa memicu onchange bawaan
+function refreshSel2(id) {
+	var el = document.getElementById(id);
+	if (el && window.jQuery && jQuery(el).data('select2')) {
+		var h = el.onchange;
+		el.onchange = null;
+		jQuery(el).trigger('change.select2');
+		el.onchange = h;
+	}
+}
+function setSel2(id, nilai) {
+	var el = document.getElementById(id);
+	if (el) {
+		el.value = nilai;
+		refreshSel2(id);
+	}
+}
+
 
 function viewbiaya(kode) {
     param = 'kode='+kode+'&method=viewbiaya';
@@ -15,12 +33,17 @@ function viewbiaya(kode) {
 
 
 function showhide(e){
-	if(e=='asset'){
-		document.getElementById('rowakun').style.display = 'none';
-		document.getElementById('rowkary').style.display = 'none';
-	}else{
-		document.getElementById('rowakun').style.display = '';
-		document.getElementById('rowkary').style.display = '';
+	// naik menjadi aset: tampilkan akun aset (debet) dan akun CIP (kredit) yang akan dipakai; alokasi biaya: pilih akun biaya
+	var asset = (e == 'asset');
+	document.getElementById('rowakun').style.display = asset ? 'none' : '';
+	document.getElementById('rowkary').style.display = asset ? 'none' : '';
+	var a1 = document.getElementById('rowakunasset1');
+	var a2 = document.getElementById('rowakunasset2');
+	if (a1) {
+		a1.style.display = asset ? '' : 'none';
+	}
+	if (a2) {
+		a2.style.display = asset ? '' : 'none';
 	}
 }
 function displayList() {
@@ -95,10 +118,10 @@ function caricapex() {
 function showdetail(kodecapex, kodeorg, aset, subtipeaset, jenisbiaya, tipebg, pekerjaan, nama, tanggalmulai, tanggalselesai) {
 	closeDialog();
 	document.getElementById('kodecapex').value = kodecapex;
-	document.getElementById('unit').value = kodeorg;
-	document.getElementById('aset').value = aset;
-	document.getElementById('tipebg').value = tipebg;
-	document.getElementById('pekerjaan').value = pekerjaan;
+	setSel2('unit', kodeorg);
+	setSel2('aset', aset);
+	setSel2('tipebg', tipebg);
+	setSel2('pekerjaan', pekerjaan);
 	document.getElementById('nama').value = nama;
 	document.getElementById('tanggalmulai').value = tanggalmulai;
 	document.getElementById('tanggalselesai').value = tanggalselesai;
@@ -156,10 +179,8 @@ function getSub(sub, jenisbiaya,aset) {
 
 				} else {
 					//alert(con.responseText);
-					document.getElementById('sub').innerHTML = con.responseText;
-					if (sub != '') {
-						getjbiaya(jenisbiaya,aset);
-					}
+					document.getElementById('sub').innerHTML = con.responseText; refreshSel2('sub');
+					getjbiaya(jenisbiaya,aset);
 
 				}
 			} else {
@@ -188,7 +209,7 @@ function getjbiaya(jenisbiaya,aset) {
 
 				} else {
 					//alert(con.responseText);
-					document.getElementById('jenisbiaya').innerHTML = con.responseText;
+					document.getElementById('jenisbiaya').innerHTML = con.responseText; refreshSel2('jenisbiaya');
 					// if(aset=='KD' || aset=='AB')
 					// {
 					// 	loadDetailAK();
@@ -305,22 +326,28 @@ function simpan() {
 		// return;
 	// }
 
-	param = 'unit=' + unit + '&aset=' + aset + '&jenis=' + jenis + '&jenisbiaya=' + jenisbiaya + '&tipebg=' + tipebg + '&pekerjaan=' + pekerjaan;
-	param += '&nama=' + nama + '&tanggalmulai=' + tanggalmulai + '&tanggalselesai=' + tanggalselesai + '&kode=' + kode + '&sub=' + sub;
-	param += '&kodecapex=' + kodecapex;
-	param += '&satuan=' + satuan;
-	param += '&jumlah=' + jumlah;
-	param += '&posisiasset=' + posisiasset;
-	param += '&tipelokasiasset=' + tipelokasiasset;
-	param += '&nomesin=' + nomesin;
-	param += '&norangka=' + norangka;
-	param += '&tipemodel=' + tipemodel;
-	param += '&keterangan=' + keterangan;
+	// form ini hanya untuk simpan/ubah proyek; saat mode Rincian (insertDetail dst.) simpan dilakukan lewat tombol di bagian Rincian
+	if (method != 'insert' && method != 'update') {
+		alert('Mode Rincian sedang aktif. Simpan rincian lewat ikon simpan di bagian Rincian, lalu tekan Selesai.');
+		return;
+	}
+	var e = encodeURIComponent;
+	param = 'unit=' + e(unit) + '&aset=' + e(aset) + '&jenis=' + e(jenis) + '&jenisbiaya=' + e(jenisbiaya) + '&tipebg=' + e(tipebg) + '&pekerjaan=' + e(pekerjaan);
+	param += '&nama=' + e(nama) + '&tanggalmulai=' + e(tanggalmulai) + '&tanggalselesai=' + e(tanggalselesai) + '&kode=' + e(kode) + '&sub=' + e(sub);
+	param += '&kodecapex=' + e(kodecapex);
+	param += '&satuan=' + e(satuan);
+	param += '&jumlah=' + e(jumlah);
+	param += '&posisiasset=' + e(posisiasset);
+	param += '&tipelokasiasset=' + e(tipelokasiasset);
+	param += '&nomesin=' + e(nomesin);
+	param += '&norangka=' + e(norangka);
+	param += '&tipemodel=' + e(tipemodel);
+	param += '&keterangan=' + e(keterangan);
 	param += '&dgnapprvl=' + dgnapprvl;
-	param += '&aprv1=' + aprv1;
-	param += '&aprv2=' + aprv2;
-	param += '&aprv3=' + aprv3;
-	param += '&aprv4=' + aprv4;
+	param += '&aprv1=' + e(aprv1);
+	param += '&aprv2=' + e(aprv2);
+	param += '&aprv3=' + e(aprv3);
+	param += '&aprv4=' + e(aprv4);
 	//  param+='&kelompok='+kelompok+'&nilai='+nilai;
 	param += '&method=' + method;
 	if (confirm('Save/Simpan?')) {
@@ -372,25 +399,31 @@ function batal() {
 	d1 = curr_date + "-" + curr_month + "-" + curr_year;
 
 	document.getElementById('kodecapex').value = '';
-	document.getElementById('unit').value = '';
-	document.getElementById('aset').value = '';
-	document.getElementById('jenisbiaya').value = '';
-	document.getElementById('jenis').value = 'AK';
+	setSel2('unit', '');
+	setSel2('aset', '');
+	setSel2('jenisbiaya', '');
+	setSel2('jenis', 'AK');
 	document.getElementById('nama').value = '';
 	document.getElementById('tanggalmulai').value = '';
 	document.getElementById('tanggalselesai').value = '';
 	document.getElementById('method').value = 'insert';
 	document.getElementById('kode').value = '';
-	document.getElementById('sub').value = '';
-	document.getElementById('tipebg').value = '';
-	document.getElementById('pekerjaan').value = '';
-	document.getElementById('satuan').value = '';
+	setSel2('sub', '');
+	setSel2('tipebg', '');
+	setSel2('pekerjaan', '');
+	setSel2('satuan', '');
 	document.getElementById('jumlah').value = '';
 	document.getElementById('keterangan').value = '';
-	document.getElementById('posisiasset').value = '';
-	document.getElementById('tipelokasiasset').value = '';
+	setSel2('posisiasset', '');
+	setSel2('tipelokasiasset', '');
 	document.getElementById('nomesin').value = '';
 	document.getElementById('norangka').value = '';
+	document.getElementById('tipemodel').value = '';
+	for (var ap = 1; ap <= 4; ap++) {
+		setSel2('aprv' + ap, '');
+		document.getElementById('aprv' + ap).disabled = false;
+	}
+	document.getElementById('dgnapprvl').disabled = false;
 
 	document.getElementById('unit').disabled = false;
 	document.getElementById('aset').disabled = false;
@@ -419,23 +452,23 @@ function batal() {
 
 function fillField(unit, aset, jenis, nama, tanggalmulai, tanggalselesai, method, kode, sub, jenisbiaya, tipebg, pekerjaan, kodecapex, satuan, jumlah, keterangan, posisiasset, tipelokasiasset, nomesin, norangka, tipemodel,dgnapprvl,statuspersetujuan,kryApr1,kryApr2,kryApr3,kryApr4){
 	document.getElementById('kodecapex').value = kode;
-	document.getElementById('unit').value = unit;
-	document.getElementById('aset').value = aset;
-	document.getElementById('jenis').value = jenis;
-	document.getElementById('jenisbiaya').value = jenisbiaya;
+	setSel2('unit', unit);
+	setSel2('aset', aset);
+	setSel2('jenis', jenis);
+	setSel2('jenisbiaya', jenisbiaya);
 	document.getElementById('nama').value = nama;
 	document.getElementById('tanggalmulai').value = tanggalmulai;
 	document.getElementById('tanggalselesai').value = tanggalselesai;
-	document.getElementById('tipebg').value = tipebg;
-	document.getElementById('pekerjaan').value = pekerjaan;
+	setSel2('tipebg', tipebg);
+	setSel2('pekerjaan', pekerjaan);
 	document.getElementById('tanggalselesai').value = tanggalselesai;
 	document.getElementById('method').value = method;
 	document.getElementById('kode').value = kode;
-	document.getElementById('satuan').value = satuan;
+	setSel2('satuan', satuan);
 	document.getElementById('jumlah').value = jumlah;
 	document.getElementById('keterangan').value = keterangan;
-	document.getElementById('posisiasset').value = posisiasset;
-	document.getElementById('tipelokasiasset').value = tipelokasiasset;
+	setSel2('posisiasset', posisiasset);
+	setSel2('tipelokasiasset', tipelokasiasset);
 	document.getElementById('nomesin').value = nomesin;
 	document.getElementById('norangka').value = norangka;
 	document.getElementById('tipemodel').value = tipemodel;
@@ -451,25 +484,18 @@ function fillField(unit, aset, jenis, nama, tanggalmulai, tanggalselesai, method
 		document.getElementById('dgnapprvl').checked = false;
 	}
 	
-	if (statuspersetujuan == 1){
-		document.getElementById('dgnapprvl').disabled = true;
-		document.getElementById('aprv1').disabled  = true;
-		document.getElementById('aprv2').disabled  = true;
-		document.getElementById('aprv3').disabled  = true;
-		document.getElementById('aprv4').disabled  = true;
-		
-	}else{
-		document.getElementById('formapproval').hidden = false;  
-		document.getElementById('dgnapprvl').disabled = false;
-		document.getElementById('aprv1').disabled  = false;
-		document.getElementById('aprv2').disabled  = false;
-		document.getElementById('aprv3').disabled  = false;
-		document.getElementById('aprv4').disabled  = false;
-	}
-	document.getElementById('aprv1').value = kryApr1;
-	document.getElementById('aprv2').value = kryApr2;
-	document.getElementById('aprv3').value = kryApr3;
-	document.getElementById('aprv4').value = kryApr4;
+	// Persetujuan hanya tampil bila proyek memakai approval; terkunci bila sudah disetujui
+	var aprvKunci = (statuspersetujuan == 1);
+	document.getElementById('formapproval').hidden = (dgnapprvl != '1');
+	document.getElementById('dgnapprvl').disabled = aprvKunci;
+	document.getElementById('aprv1').disabled = aprvKunci;
+	document.getElementById('aprv2').disabled = aprvKunci;
+	document.getElementById('aprv3').disabled = aprvKunci;
+	document.getElementById('aprv4').disabled = aprvKunci;
+	setSel2('aprv1', kryApr1);
+	setSel2('aprv2', kryApr2);
+	setSel2('aprv3', kryApr3);
+	setSel2('aprv4', kryApr4);
 	
 	document.getElementById('jenisbiaya').disabled = true;
 	document.getElementById('unit').disabled = true;
@@ -494,27 +520,29 @@ function fillField(unit, aset, jenis, nama, tanggalmulai, tanggalselesai, method
 	document.getElementById('formdetailinput').style.display = 'none';
 }
 
-function detailForm(unit, aset, jenis, nama, tanggalmulai, tanggalselesai, method, kode, sub, jenisbiaya, tipebg, pekerjaan, kodecapex,satuan,jumlah, keterangan, posisiasset, tipelokasiasset, nomesin, norangka) {
+function detailForm(unit, aset, jenis, nama, tanggalmulai, tanggalselesai, method, kode, sub, jenisbiaya, tipebg, pekerjaan, kodecapex,satuan,jumlah, keterangan, posisiasset, tipelokasiasset, nomesin, norangka, tipemodel) {
 	document.getElementById('kodecapex').value = kode;
-	document.getElementById('unit').value = unit;
-	document.getElementById('aset').value = aset;
-	document.getElementById('jenis').value = jenis;
-	document.getElementById('jenisbiaya').value = jenisbiaya;
+	setSel2('unit', unit);
+	setSel2('aset', aset);
+	setSel2('jenis', jenis);
+	setSel2('jenisbiaya', jenisbiaya);
 	document.getElementById('nama').value = nama;
 	document.getElementById('tanggalmulai').value = tanggalmulai;
 	document.getElementById('tanggalselesai').value = tanggalselesai;
-	document.getElementById('tipebg').value = tipebg;
-	document.getElementById('pekerjaan').value = pekerjaan;
+	setSel2('tipebg', tipebg);
+	setSel2('pekerjaan', pekerjaan);
 	document.getElementById('tanggalselesai').value = tanggalselesai;
 	document.getElementById('method').value = method;
 	document.getElementById('kode').value = kode;
-	document.getElementById('satuan').value = satuan;
+	setSel2('satuan', satuan);
 	document.getElementById('jumlah').value = jumlah;
 	document.getElementById('keterangan').value = keterangan;
-	document.getElementById('posisiasset').value = posisiasset;
-	document.getElementById('tipelokasiasset').value = tipelokasiasset;
+	setSel2('posisiasset', posisiasset);
+	setSel2('tipelokasiasset', tipelokasiasset);
 	document.getElementById('nomesin').value = nomesin;
 	document.getElementById('norangka').value = norangka;
+	document.getElementById('tipemodel').value = tipemodel || '';
+	document.getElementById('formapproval').hidden = true;
 
 	// if (kodecapex != '') {
 		// document.getElementById('jenisbiaya').disabled = true;
@@ -575,13 +603,15 @@ function detailForm(unit, aset, jenis, nama, tanggalmulai, tanggalselesai, metho
 					var x3 = document.getElementsByName("excapex3");
 					var i;
 					if (kodecapex != '') {
-						document.getElementById('excapex1').style.display = 'none';
+						var fsInput = document.getElementById(aset=='KD' || aset=='AB' ? 'excapex1' : 'excapex1x');
+						fsInput.style.display = 'none';
 						for (i = 0; i < x2.length; i++) {
 							x2[i].style.display = "none";
 							x3[i].style.display = "none";
 						}
 					} else {
-						document.getElementById('excapex1').style.display = '';
+						var fsInput = document.getElementById(aset=='KD' || aset=='AB' ? 'excapex1' : 'excapex1x');
+						fsInput.style.display = '';
 						for (i = 0; i < x2.length; i++) {
 							x2[i].style.display = "";
 							x3[i].style.display = "";
@@ -599,10 +629,10 @@ function detailForm(unit, aset, jenis, nama, tanggalmulai, tanggalselesai, metho
 }
 function doneSlsi() {
 	//waktu=date('d-m-Y');
-	document.getElementById('unit').value = '';
-	document.getElementById('aset').value = '';
-	document.getElementById('jenis').value = '';
-	document.getElementById('jenisbiaya').value = '';
+	setSel2('unit', '');
+	setSel2('aset', '');
+	setSel2('jenis', '');
+	setSel2('jenisbiaya', '');
 	document.getElementById('nama').value = '';
 	document.getElementById('method').value = 'insert';
 	document.getElementById('kode').value = '';
@@ -623,14 +653,13 @@ function doneSlsi() {
 	//document.getElementById('tanggalselesai').value=waktu;
 }
 function editDet(tanggalmulai, tanggalselesai, method, kode, knci, deskripsi, nmkeg, satKeg, volKeg, bobotKeg) {
-	document.getElementById('kdProj').value = kode;
+	document.getElementById('kdProjx').value = kode;
 	document.getElementById('deskripsi').value = deskripsi;
 	document.getElementById('namaKeg').value = nmkeg;
 	document.getElementById('tanggalMulai').value = tanggalmulai;
 	document.getElementById('tanggalSampai').value = tanggalselesai;
 	document.getElementById('kegId').value = knci;
-	//document.getElementById('satKeg').value=satKeg;
-	setValue('satKeg', satKeg);
+	setSel2('satKeg', satKeg);
 	document.getElementById('volKeg').value = volKeg;
 	document.getElementById('bobotKeg').value = bobotKeg;
 	document.getElementById('method').value = method;
@@ -662,9 +691,7 @@ function hapus(kode) {
 				} else {
 					//alert(con.responseText);
 					alert('Done.');
-					//document.getElementById('container').innerHTML=con.responseText;
-					loadData();
-					batal();
+					loadData(0);
 				}
 			} else {
 				busy_off();
@@ -673,25 +700,51 @@ function hapus(kode) {
 		}
 	}
 }
-function loadData(num) {
-	namacr = document.getElementById('namacr').value;
-	unitcr = document.getElementById('unitcr').value;
-	kodecr = document.getElementById('kodecr').value;
+// satu sumber filter List Data untuk tampil, Excel, dan PDF
+function getFilterParamCIP() {
+	var id = ['namacr', 'unitcr', 'kodecr', 'jeniscr', 'asetcr', 'pekerjaancr', 'statuscr', 'tahuncr'];
+	var param = '';
+	for (var i = 0; i < id.length; i++) {
+		var el = document.getElementById(id[i]);
+		var v = el ? el.value.trim() : '';
+		if (v != '') {
+			param += '&' + id[i] + '=' + encodeURIComponent(v);
+		}
+	}
+	return param;
+}
 
+// ikon List: kembalikan semua filter ke awal
+function resetFilterCIP() {
+	var teks = ['namacr', 'kodecr'];
+	for (var i = 0; i < teks.length; i++) {
+		document.getElementById(teks[i]).value = '';
+	}
+	var pil = ['unitcr', 'jeniscr', 'asetcr', 'pekerjaancr', 'statuscr', 'tahuncr'];
+	for (var j = 0; j < pil.length; j++) {
+		setSel2(pil[j], '');
+	}
+}
+
+function tampilTarikanCIP(judul, tujuan) {
+	alertify
+		.popup(judul, "<iframe frameborder=0 style='width:100%;height:100%;overflow:none' src='" + tujuan + "'></iframe>")
+		.set({ resizable: true, maximizable: true, overflow: false })
+		.resizeTo('80%', '70%');
+}
+
+function exportExcelCIP() {
+	tampilTarikanCIP('Report Ms.Excel', 'vhc_slave_project.php?method=excellist' + getFilterParamCIP());
+}
+
+function exportPdfCIP() {
+	tampilTarikanCIP('Report PDF', 'vhc_slave_project.php?method=pdflist' + getFilterParamCIP());
+}
+
+function loadData(num) {
 	param = 'method=loadData';
 	param += '&page=' + num;
-
-	if (namacr != '') {
-		param += '&namacr=' + namacr;
-	}
-	if (unitcr != '') {
-		param += '&unitcr=' + unitcr;
-	}
-	if (kodecr != '') {
-		param += '&kodecr=' + kodecr;
-	}
-	// alert(param);
-	// return;
+	param += getFilterParamCIP();
 	tujuan = 'vhc_slave_project.php';
 	post_response_text(tujuan, param, respog);
 	function respog() {
@@ -985,10 +1038,25 @@ function getformApproval(kd, unit, jnsbiaya) {
 	}
 	post_response_text('vhc_slave_project.php?method=showformApproval', param, respon);
 }
+// dd-mm-yyyy -> yyyymmdd (angka) untuk membandingkan tanggal
+function tanggalJs(t) {
+	var p = String(t).split('-');
+	return p.length == 3 ? parseInt(p[2] + p[1] + p[0], 10) : 0;
+}
+
+// kosongkan input rincian kegiatan dan kembali ke mode tambah (juga dipakai tombol Batal saat mengubah)
 function batalKeg() {
-	document.getElementById('satKeg').selectedIndex = 0;
+	var d = new Date();
+	var hariIni = ('0' + d.getDate()).slice(-2) + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + d.getFullYear();
+	setSel2('satKeg', '');
+	document.getElementById('deskripsi').value = '';
+	document.getElementById('namaKeg').value = '';
 	document.getElementById('volKeg').value = '';
 	document.getElementById('bobotKeg').value = '';
+	document.getElementById('tanggalMulai').value = hariIni;
+	document.getElementById('tanggalSampai').value = hariIni;
+	document.getElementById('kegId').value = '';
+	document.getElementById('method').value = 'insertDetail';
 }
 
 function batalKegAK() {
@@ -1011,9 +1079,37 @@ function addDetail() {
 	volKeg = document.getElementById('volKeg').value;
 	bobotKeg = document.getElementById('bobotKeg').value;
 
-	param = '&kode=' + kd + '&deskripsi=' + deskripsi + '&nmKeg=' + nmKeg + '&tglMul=' + tglMul + '&tglSmp=' + tglSmp;
-	param += '&index=' + knci + '&method=insertDetail';
-	param += '&satKeg=' + satKeg + '&volKeg=' + volKeg + '&bobotKeg=' + bobotKeg;
+	if (met != 'updatedet') {
+		met = 'insertDetail';
+	}
+	// validasi (diulang di server)
+	if (trim(nmKeg) == '') {
+		alert('Please fill NAMA KEGIATAN');
+		return;
+	}
+	if (satKeg == '') {
+		alert('Please fill SATUAN');
+		return;
+	}
+	if (trim(volKeg) == '' || isNaN(volKeg) || parseFloat(volKeg) <= 0) {
+		alert('VOLUME harus berupa angka lebih dari 0');
+		return;
+	}
+	if (trim(bobotKeg) == '' || isNaN(bobotKeg) || parseFloat(bobotKeg) < 0 || parseFloat(bobotKeg) > 100) {
+		alert('BOBOT harus berupa angka 0 sampai 100');
+		return;
+	}
+	if (tglMul == '' || tglSmp == '') {
+		alert('Please fill TANGGAL MULAI dan TANGGAL SAMPAI');
+		return;
+	}
+	if (tanggalJs(tglSmp) < tanggalJs(tglMul)) {
+		alert('Tanggal Sampai tidak boleh lebih kecil dari Tanggal Mulai');
+		return;
+	}
+	param = '&kode=' + encodeURIComponent(kd) + '&deskripsi=' + encodeURIComponent(deskripsi) + '&nmKeg=' + encodeURIComponent(nmKeg) + '&tglMul=' + encodeURIComponent(tglMul) + '&tglSmp=' + encodeURIComponent(tglSmp);
+	param += '&index=' + encodeURIComponent(knci) + '&method=' + met;
+	param += '&satKeg=' + encodeURIComponent(satKeg) + '&volKeg=' + encodeURIComponent(volKeg) + '&bobotKeg=' + encodeURIComponent(bobotKeg);
 	tujuan = 'vhc_slave_project.php';
 	post_response_text(tujuan, param, respog);
 	function respog() {
@@ -1025,7 +1121,7 @@ function addDetail() {
 				} else {
 					//alert(con.responseText);
 					// document.getElementById('container').innerHTML=con.responseText;
-					//batalKeg();
+					batalKeg();
 					loadDetail();
 				}
 			} else {
@@ -1046,8 +1142,8 @@ function addDetailAK() {
 	//alert(kegiatanx);
 	met = document.getElementById('method').value;
 	//alert(met);
-	param = '&kode=' + kd + '&nomesin=' + nomesin + '&norangka=' + norangka + '&tahunproduksi=' + tahunproduksi + '&tahunprolehan=' + tahunprolehan;
-	param += '&kegiatanx=' + kegiatanx + '&method=' + met;
+	param = '&kode=' + encodeURIComponent(kd) + '&nomesin=' + encodeURIComponent(nomesin) + '&norangka=' + encodeURIComponent(norangka) + '&tahunproduksi=' + encodeURIComponent(tahunproduksi) + '&tahunprolehan=' + encodeURIComponent(tahunprolehan);
+	param += '&kegiatanx=' + encodeURIComponent(kegiatanx) + '&method=' + met;
 	tujuan = 'vhc_slave_project.php';
 	post_response_text(tujuan, param, respog);
 	function respog() {
@@ -1102,7 +1198,7 @@ function loadDetail(tipelokasiasset) {
 
 function loadDetailAK() {
 	kd = document.getElementById('kdProj').value;
-	param = 'method=detailak' + '&kode=' + kd;
+	param = 'method=detailAK' + '&kode=' + encodeURIComponent(kd);
 	tujuan = 'vhc_slave_project.php';
 	post_response_text(tujuan, param, respog);
 	function respog() {
@@ -1112,7 +1208,6 @@ function loadDetailAK() {
 				if (!isSaveResponse(con.responseText)) {
 					alert(con.responseText);
 				} else {
-					alert(con.responseText);
 					document.getElementById('printDat').innerHTML = con.responseText;
 					document.getElementById('method').value = 'insertDetailAK';
 					document.getElementById('deskripsi').value = '';
@@ -1151,7 +1246,7 @@ function hapusData(kode) {
 }
 
 function hapusDataAK(kode) {
-	param = 'index=' + kode + '&method=hpsDetailAK';
+	param = 'index=' + encodeURIComponent(kode) + '&method=hpsDetailAK';
 	if (confirm('Delete/Hapus Detail ?')) {
 		tujuan = 'vhc_slave_project.php';
 		post_response_text(tujuan, param, respog);
@@ -1164,7 +1259,7 @@ function hapusDataAK(kode) {
 					alert(con.responseText);
 				} else {
 					//alert(con.responseText);
-					loadDetail();
+					loadDetailAK();
 				}
 			} else {
 				busy_off();
@@ -1385,7 +1480,7 @@ function changetipelokasi(lokasi) {
 				if (!isSaveResponse(con.responseText)) {
 					alert(con.responseText);
 				} else {
-					document.getElementById('tipelokasiasset').innerHTML = con.responseText;
+					document.getElementById('tipelokasiasset').innerHTML = con.responseText; refreshSel2('tipelokasiasset');
 				}
 			} else {
 				busy_off();

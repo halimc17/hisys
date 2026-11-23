@@ -47,15 +47,17 @@ foreach($arrStatus as $key)
 	$optTipeBg.="<option value='".$key."'>".$key."</option>";
 }
  $str="select kodeorganisasi, namaorganisasi, induk from ".$dbname.".organisasi
-    where length(kodeorganisasi)=4 
+    where length(kodeorganisasi)=4 and kodeorganisasi in (".getOrgDetail(2).") 
     order by induk, tipe, namaorganisasi";
     
 $res=$owlPDO->query($str) or die(print " Gagal: ".PDOException::getMessage());
 $res->setFetchMode(PDO::FETCH_OBJ);
 $optunit="<option value=''>".$_SESSION['lang']['pilihdata']."</option>";
+$optunitcr="<option value=''>".$_SESSION['lang']['all']."</option>";
 while($bar=$res->fetch())
 {
     $optunit.="<option value='".$bar->kodeorganisasi."'>".$bar->kodeorganisasi." - ".$bar->namaorganisasi."</option>";
+    $optunitcr.="<option value='".$bar->kodeorganisasi."'>".$bar->kodeorganisasi." - ".$bar->namaorganisasi."</option>";
 }
 if($_SESSION['language']=='EN'){
     $dd='namatipe1 as namatipe';
@@ -70,6 +72,23 @@ $optaset="<option value=''>".$_SESSION['lang']['pilihdata']."</option>";
 while($bar=$res->fetch())
 {
     $optaset.="<option value='".$bar->kodetipe."'>".$bar->kodetipe." - ".$bar->namatipe."</option>";
+}
+
+#opsi filter List Data: tipe aset, jenis, status, tahun
+$optasetcr = "<option value=''>" . $_SESSION['lang']['all'] . "</option>";
+$resAst = $owlPDO->query("select kodetipe, " . $dd . " from " . $dbname . ".sdm_5tipeasset order by kodetipe");
+$resAst->setFetchMode(PDO::FETCH_OBJ);
+while ($barAst = $resAst->fetch()) {
+    $optasetcr .= "<option value='" . htmlspecialchars($barAst->kodetipe, ENT_QUOTES) . "'>" . htmlspecialchars($barAst->kodetipe . " - " . $barAst->namatipe) . "</option>";
+}
+$optjeniscr = "<option value=''>" . $_SESSION['lang']['all'] . "</option><option value='AK'>AK - Aktiva Dalam Konstruksi</option><option value='PB'>PB - Pabrikasi</option>";
+$optpekerjaancr = "<option value=''>" . $_SESSION['lang']['all'] . "</option><option value='Internal'>Internal</option><option value='External'>External</option>";
+$optstatuscr = "<option value=''>" . $_SESSION['lang']['all'] . "</option><option value='0'>Belum Diposting</option><option value='1'>Sudah Diposting</option>";
+$opttahuncr = "<option value=''>Semua Tahun</option>";
+$resThn = $owlPDO->query("select distinct year(tanggalmulai) as thn from " . $dbname . ".project where tanggalmulai > '0000-00-00' order by thn desc");
+$resThn->setFetchMode(PDO::FETCH_OBJ);
+while ($barThn = $resThn->fetch()) {
+    $opttahuncr .= "<option value='" . (int)$barThn->thn . "'>" . (int)$barThn->thn . "</option>";
 }
 
 $kamusjenis['AK']='Aktiva Dalam Konstruksi / Activa Under Construction';
@@ -122,25 +141,42 @@ echo"<table>
      <tr valign=middle>	 
 		<td align=center style='width:100px;cursor:pointer;' onclick=add_new_data()>
 			<img class=delliconBig src=images/skyblue/addbig.png title='" . $_SESSION['lang']['new'] . "'><br>" . $_SESSION['lang']['new'] . "</td>
-		<td align=center style='width:100px;cursor:pointer;' onclick=displayList()>
+		<td align=center style='width:100px;cursor:pointer;' onclick=resetFilterCIP();displayList()>
 			<img class=delliconBig src=images/skyblue/list.png title='" . $_SESSION['lang']['list'] . "'><br>" . $_SESSION['lang']['list'] . "</td>
 		<td>
-		<fieldset><legend>" . $_SESSION['lang']['find'] . "</legend> 
-			<table> 
+		<fieldset><legend>" . $_SESSION['lang']['find'] . "</legend>
+			<style>
+				#filterTabelCIP td {padding:2px 3px;vertical-align:middle}
+				#filterTabelCIP td.lbl {white-space:nowrap}
+				#filterTabelCIP td.lbl2 {white-space:nowrap;padding-left:15px}
+			</style>
+			<table id=filterTabelCIP border=0 cellspacing=1>
 				<tr>
-					<td>".$_SESSION['lang']['nama']."</td>
-					<td>:</td>
-					<td><input type=text id='namacr' class='myinputtext' style='width:150px;' onkeypress='return tanpa_kutip(event)' /></td>
-					<td>".$_SESSION['lang']['unit'] . "</td>
-					<td>:</td>
-					<td><input type=text class='myinputtext' id='unitcr'  size='12' maxlength='10' /></td>
-					<td>".$_SESSION['lang']['kode']."</td>
-					<td>:</td>
-					<td><input type=text id='kodecr' class='myinputtext' style='width:150px;' onkeypress='return tanpa_kutip(event)' /></td>
-				</tr><tr>
-					<td></td>
-					<td></td>
-					<td><button class=mybutton onclick=loadData(0)>" . $_SESSION['lang']['find'] . "</button></td>
+					<td class=lbl>".$_SESSION['lang']['unit']."</td><td>:</td>
+					<td><select id='unitcr' class='select2' style='width:230px;'>".$optunitcr."</select></td>
+					<td class=lbl2>".$_SESSION['lang']['jenis']."</td><td>:</td>
+					<td><select id='jeniscr' class='select2' style='width:230px;'>".$optjeniscr."</select></td>
+					<td class=lbl2>".$_SESSION['lang']['aset']."</td><td>:</td>
+					<td><select id='asetcr' class='select2' style='width:230px;'>".$optasetcr."</select></td>
+				</tr>
+				<tr>
+					<td class=lbl>Int / Ext</td><td>:</td>
+					<td><select id='pekerjaancr' class='select2' style='width:230px;'>".$optpekerjaancr."</select></td>
+					<td class=lbl2>Status</td><td>:</td>
+					<td><select id='statuscr' class='select2' style='width:230px;'>".$optstatuscr."</select></td>
+					<td class=lbl2>".$_SESSION['lang']['tahun']."</td><td>:</td>
+					<td><select id='tahuncr' class='select2' style='width:230px;'>".$opttahuncr."</select></td>
+				</tr>
+				<tr>
+					<td class=lbl>".$_SESSION['lang']['kode']."</td><td>:</td>
+					<td><input type=text id='kodecr' class='myinputtext' style='width:226px;' onkeypress=\"if(event.keyCode==13){loadData(0);return false;}return tanpa_kutip(event);\" /></td>
+					<td class=lbl2>".$_SESSION['lang']['nama']."</td><td>:</td>
+					<td><input type=text id='namacr' class='myinputtext' style='width:226px;' onkeypress=\"if(event.keyCode==13){loadData(0);return false;}return tanpa_kutip(event);\" /></td>
+					<td colspan=3 class=lbl2>
+						<button class=mybutton onclick=loadData(0)>" . $_SESSION['lang']['find'] . "</button>
+						<button class=mybutton onclick=exportExcelCIP()>" . $_SESSION['lang']['excel'] . "</button>
+						<button class=mybutton onclick=exportPdfCIP()>PDF</button>
+					</td>
 				</tr>
 			</table>
 		</fieldset>
@@ -169,13 +205,13 @@ echo"<fieldset style='float:left;'>
 	    </td>
 	    <td>:</td>
 	    <td>
-	        <select id=unit style='width:200px;' onchange='getjbiaya()'>".$optunit."</select>
+	        <select id=unit class=select2 style='width:200px;' onchange='getjbiaya()'>".$optunit."</select>
 	    </td>
 
 	    <td class='bintang'>".$_SESSION['lang']['posisiasset']."</td>
 	    <td>:</td>
 		<td>
-			<select style=width:195px id=posisiasset onchange='changetipelokasi()'>".$orgOption."</select>
+			<select class=select2 style=width:195px id=posisiasset onchange='changetipelokasi()'>".$orgOption."</select>
 		</td>
 	</tr>
 
@@ -185,7 +221,7 @@ echo"<fieldset style='float:left;'>
 	    </td>
 	    <td>:</td>
 	    <td>
-	        <select id=aset onchange=getSub() style='width:200px;'>".$optaset."</select>
+	        <select id=aset class=select2 onchange=getSub() style='width:200px;'>".$optaset."</select>
 	    </td>
     
 	    <td class='bintang' align=left>
@@ -193,13 +229,13 @@ echo"<fieldset style='float:left;'>
 	    </td>
 	    <td>:</td>
 	    <td>
-	        <select id=sub style='width:200px;'>".$optSub."</select>
+	        <select id=sub class=select2 style='width:200px;'>".$optSub."</select>
 	    </td>
 
 		<td class='bintang'>Tipe Lokasi Asset</td>
 		<td>:</td>
 		<td>
-			<select  style=width:195px id=tipelokasiasset ></select>
+			<select class=select2 style=width:195px id=tipelokasiasset ></select>
 		</td>
 	</tr>
 
@@ -209,7 +245,7 @@ echo"<fieldset style='float:left;'>
 	    </td>
 	    <td>:</td>
 	    <td>
-	        <select id=jenis style='width:200px;'>".$optjenis."</select>
+	        <select id=jenis class=select2 style='width:200px;'>".$optjenis."</select>
 	    </td>
 
 	    <td class='bintang' align=left>
@@ -217,7 +253,7 @@ echo"<fieldset style='float:left;'>
 	    </td>
 	    <td>:</td>
 	    <td>
-	        <select style=width:200px id=jenisbiaya>".$optjb."</select>
+	        <select class=select2 style=width:200px id=jenisbiaya>".$optjb."</select>
 	    </td>
 
 		<td>No Mesin</td>
@@ -231,13 +267,13 @@ echo"<fieldset style='float:left;'>
 		<td class='bintang' align=left>".$_SESSION['lang']['tipe']."</td>
 		<td>:</td>
 		<td>
-			<select id=tipebg style='width:200px;'>".$optTipeBg."</select>
+			<select id=tipebg class=select2 style='width:200px;'>".$optTipeBg."</select>
 		</td>
 
 		<td class='bintang' align=left >".$_SESSION['lang']['pekerjaan']."</td>
 		<td>:</td>
 		<td>
-			<select id=pekerjaan style='width:200px;'>".$optPekerjaan."</select>
+			<select id=pekerjaan class=select2 style='width:200px;'>".$optPekerjaan."</select>
 		</td>
 
 		<td>No Rangka</td>
@@ -257,7 +293,7 @@ echo"<fieldset style='float:left;'>
 		<td class='bintang' align=left>".$_SESSION['lang']['satuan']."</td>
 		<td>:</td>
 		<td class='bintang'>
-        	<select id=satuan style='width:75px;'>".$optsat."</select>
+        	<select id=satuan class=select2 style='width:75px;'>".$optsat."</select>
     
 	        &nbsp;".$_SESSION['lang']['jumlah']."&nbsp;
 			<input type=text id=jumlah style='width:67px;' class=myinputtextnumber onkeypress='return angka_doang(event)'/>
@@ -295,21 +331,26 @@ echo"<fieldset style='float:left;'>
 		while($rstr=$res->fetch()){ 
 			$optPersetujuan.="<option value=".$rstr['karyawanid'].">".$rstr['namakaryawan']."</option>"; 
 		} 
-            echo"<div > <table id=formapproval hidden> "; 
-            for ($i=1; $i <=4 ; $i++) { 
-                echo"<tr>
-                <td>".$_SESSION['lang']['persetujuan']." ".$i."</td>
-                <td>:</td>
-                <td><select id=aprv".$i." style=\"width:155px;\">" . $optPersetujuan . "</select></td>
-                </tr>";
-            }  
-            echo" </table></div>";
-	echo"<td><td><td colspan=2>
-    <button class=mybutton onclick=simpan()>".$_SESSION['lang']['save']."</button>
-    <button class=mybutton onclick=batal()>".$_SESSION['lang']['cancel']."</button>	 
-    <input type=hidden value=insert id=method>
-    <input type=hidden value='' id=kode>
-	
+                        #Persetujuan 1-3 sejajar dengan kolom form, Persetujuan 4 di baris berikutnya; tampil hanya bila proyek memakai approval
+            echo"<tbody id=formapproval hidden>";
+            foreach (array(array(1,2,3), array(4)) as $barisApr) {
+                echo"<tr>";
+                foreach ($barisApr as $i) {
+                    echo"<td align=left>".$_SESSION['lang']['persetujuan']." ".$i."</td>
+                    <td>:</td>
+                    <td><select id=aprv".$i." class=select2 style='width:200px;'>" . $optPersetujuan . "</select></td>";
+                }
+                echo"</tr>";
+            }
+            echo"</tbody>";
+	echo"<tr>
+        <td colspan=9 style='padding-top:8px;'>
+            <button class=mybutton onclick=simpan()>".$_SESSION['lang']['save']."</button>
+            <button class=mybutton onclick=batal()>".$_SESSION['lang']['cancel']."</button>
+            <input type=hidden value=insert id=method>
+            <input type=hidden value='' id=kode>
+        </td>
+    </tr>
     </table>
 	</fieldset>";
 CLOSE_BOX();
@@ -317,8 +358,8 @@ echo"</div>";
 echo"<div id=formdetailinput>";
 OPEN_BOX();
 echo "
-	 <div class='table-scroll' id=dataDisimpan>
-      <table class=sortable border=0 cellspacing=1 cellpadding=5>
+	 <div class='table-scroll' id=dataDisimpan style='height:68vh;width:100%;'>
+      <table class=sortable border=0 cellspacing=1 cellpadding=5 style='width:100%;'>
 	  <thead> 
 	  <tr>
 	  <th align=center>".$_SESSION['lang']['kodecapex']."</th>
@@ -370,13 +411,42 @@ $frmdt.="<td align=center>No Mesin</td>";
 $frmdt.="<td align=center>No Rangka/Casis</td>";
 $frmdt.="<td align=center>Tahun Produksi</td>";
 $frmdt.="<td align=center>Tahun Prolehan</td>";
-$frmdt.="<td align=center style='width:50px;'>".$_SESSION['lang']['action']."</td></tr></thead><tbody >";
+$frmdt.="<td align=center style='width:50px;'>".$_SESSION['lang']['action']."</td></tr></thead><tbody id=printDat>";
 $frmdt.="</tbody></table></fieldset>";
 $frmdt.="</div>";
 
 $frmdt.="<div id=detailInput style=display:none>";
-$frmdt.="<fieldset id='excapex1' style=min-width:800px;><legend>".$_SESSION['lang']['detail']."</legend>";
-$frmdt.="<table cellpadding=1 cellspacing=1 border=0 class=sortable>";
+#kolom tabel input dan tabel list dibuat identik (lebar tetap) supaya sejajar
+$colKeg = "<colgroup><col style='width:120px'><col style='width:260px'><col style='width:260px'><col style='width:95px'><col style='width:85px'><col style='width:85px'><col style='width:110px'><col style='width:110px'><col style='width:120px'></colgroup>";
+$frmdt.="<fieldset id='excapex1x' style='min-width:800px;width:fit-content;max-width:100%;'><legend>".$_SESSION['lang']['detail']."</legend>";
+$frmdt.="<table cellpadding=1 cellspacing=1 border=0 class=sortable style='width:1245px;max-width:100%;table-layout:fixed;'>".$colKeg;
+$frmdt.="<thead><tr><td align=center>".$_SESSION['lang']['kode']."</td>";
+$frmdt.="<td align=center>".$_SESSION['lang']['deskripsi']."</td>";
+$frmdt.="<td align=center>".$_SESSION['lang']['namakegiatan']." <span style='color:#c0392b'>*</span></td>";
+
+$frmdt.="<td align=center>".$_SESSION['lang']['satuan']." <span style='color:#c0392b'>*</span></td>";
+$frmdt.="<td align=center>".$_SESSION['lang']['volume']." <span style='color:#c0392b'>*</span></td>";
+$frmdt.="<td align=center>".$_SESSION['lang']['bobot']." % <span style='color:#c0392b'>*</span></td>";
+
+$frmdt.="<td align=center>".$_SESSION['lang']['tanggalmulai']."</td>";
+$frmdt.="<td align=center>".$_SESSION['lang']['tanggalsampai']."</td>";
+$frmdt.="<td align=center>".$_SESSION['lang']['action']."</td></tr></thead><tbody>";
+$frmdt.="<tr class=rowcontent><td><input type=text id=kdProjx class=myinputtext maxlength=20 onkeypress=\"return tanpa_kutip(event);\" style='width:100%;box-sizing:border-box;' disabled></td>";
+$frmdt.="<td><input type=text id=deskripsi class=myinputtext maxlength=500 onkeypress=\"return tanpa_kutip(event);\" style='width:100%;box-sizing:border-box;'></td>";
+$frmdt.="<td><input type=text id=namaKeg class=myinputtext maxlength=500 onkeypress=\"return tanpa_kutip(event);\" style='width:100%;box-sizing:border-box;'></td>";
+
+$frmdt.="<td><select id=satKeg class=select2 style='width:100%;'>".$optsat."</select></td>";
+$frmdt.="<td><input type=text id=volKeg onkeypress=\"return angka_doang(event);\" class=myinputtextnumber style='width:100%;box-sizing:border-box;'></td>";
+$frmdt.="<td><input type=text id=bobotKeg onkeypress=\"return angka_doang(event);\" class=myinputtextnumber style='width:100%;box-sizing:border-box;'></td>";
+
+
+$frmdt.="<td><input style='width:100%;box-sizing:border-box;' id=tanggalMulai class=myinputtext maxlength=10 onkeypress=\"return false;\" size=10 onmousemove=setCalendar(this.id) value=".date('d-m-Y')." readonly></td>";
+$frmdt.="<td><input style='width:100%;box-sizing:border-box;' id=tanggalSampai class=myinputtext maxlength=10 onkeypress=\"return false;\" size=10 onmousemove=setCalendar(this.id) value=".date('d-m-Y')." readonly></td>";
+$frmdt.="<td align=center><img src='images/save.png' class='zImgBtn' title='".$_SESSION['lang']['save']."' style='cursor:pointer;' onclick=addDetail() /></td></tr></tbody></table> <button class=mybutton onclick=batalKeg()>".$_SESSION['lang']['cancel']."</button> <button class=mybutton onclick=doneSlsi()>".$_SESSION['lang']['selesai']."</button></fieldset><input type=hidden id=kegId />";
+
+
+$frmdt.="<fieldset style='min-width:800px;width:fit-content;max-width:100%;'><legend>".$_SESSION['lang']['list']."</legend>";
+$frmdt.="<table cellpadding=1 cellspacing=1 border=0 class=sortable style='width:1245px;max-width:100%;table-layout:fixed;'>".$colKeg;
 $frmdt.="<thead><tr><td align=center>".$_SESSION['lang']['kode']."</td>";
 $frmdt.="<td align=center>".$_SESSION['lang']['deskripsi']."</td>";
 $frmdt.="<td align=center>".$_SESSION['lang']['namakegiatan']."</td>";
@@ -387,34 +457,7 @@ $frmdt.="<td align=center>".$_SESSION['lang']['bobot']." %</td>";
 
 $frmdt.="<td align=center>".$_SESSION['lang']['tanggalmulai']."</td>";
 $frmdt.="<td align=center>".$_SESSION['lang']['tanggalsampai']."</td>";
-$frmdt.="<td align=center>".$_SESSION['lang']['action']."</td></tr></thead><tbody>";
-$frmdt.="<tr class=rowcontent><td><input type=text id=kdProjx class=myinputtext maxlength=20 onkeypress=\"return tanpa_kutip(event);\" style='width:100px;'  disabled></td>";
-$frmdt.="<td><input type=text id=deskripsi class=myinputtext onkeypress=\"return tanpa_kutip(event);\" style='width:250px;'></td>";
-$frmdt.="<td><input type=text id=namaKeg class=myinputtext onkeypress=\"return tanpa_kutip(event);\" style='width:250px;'></td>";
- 
-$frmdt.="<td>".makeElement('satKeg','select',"",array(),$optSatuan)."</td>";
-$frmdt.="<td><input type=text id=volKeg  onkeypress=\"return angka_doang(event);\" class=myinputtextnumber style=\"width:50px;\"></td>";
-$frmdt.="<td><input type=text id=bobotKeg  onkeypress=\"return angka_doang(event);\" class=myinputtextnumber style=\"width:50px;\"></td>";
-
-
-$frmdt.="<td><input style='width:80px;' id=tanggalMulai class=myinputtext maxlength=10 onkeypress=\"return false;\" size=10 onmousemove=setCalendar(this.id) value=".date('d-m-Y')." readonly></td>";
-$frmdt.="<td><input style='width:80px;' id=tanggalSampai class=myinputtext maxlength=10 onkeypress=\"return false;\" size=10 onmousemove=setCalendar(this.id) value=".date('d-m-Y')." readonly></td>";
-$frmdt.="<td style='width:40px;' align=center><img src='images/save.png' class='zImgBtn' style='cursor:pointer;' onclick=addDetail() /></td></tr></tbody></table> <button class=mybutton onclick=doneSlsi()>".$_SESSION['lang']['selesai']."</button></fieldset><input type=hidden id=kegId />";
-
-
-$frmdt.="<fieldset style=min-width:800px;><legend>".$_SESSION['lang']['list']."</legend>";
-$frmdt.="<table style=min-width:1030px; cellpadding=1 cellspacing=1 border=0 class=sortable>";
-$frmdt.="<thead><tr><td align=center style='width:100px;'>".$_SESSION['lang']['kode']."</td>";
-$frmdt.="<td align=center>".$_SESSION['lang']['deskripsi']."</td>";
-$frmdt.="<td align=center>".$_SESSION['lang']['namakegiatan']."</td>";
-
-$frmdt.="<td align=center style='width:70px;'>".$_SESSION['lang']['satuan']."</td>";
-$frmdt.="<td align=center style='width:50px;'>".$_SESSION['lang']['volume']."</td>";
-$frmdt.="<td align=center style='width:50px;'>".$_SESSION['lang']['bobot']." %</td>";
-
-$frmdt.="<td align=center style='width:90px;'>".$_SESSION['lang']['tanggalmulai']."</td>";
-$frmdt.="<td align=center style='width:90px;'>".$_SESSION['lang']['tanggalsampai']."</td>";
-$frmdt.="<td align=center style='width:80px;'>".$_SESSION['lang']['action']."</td></tr></thead><tbody id=printDatx>";
+$frmdt.="<td align=center>".$_SESSION['lang']['action']."</td></tr></thead><tbody id=printDatx>";
 $frmdt.="</tbody></table></fieldset>";
 $frmdt.="</div>";
 echo $frmdt;

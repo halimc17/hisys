@@ -1145,6 +1145,17 @@ if (isTransactionPeriod()){
 					$blok=$blok;
 				}
 
+				## Proyek aktiva dalam konstruksi (AK-/PB-): kode proyek disimpan di kodeasset (sama dengan jurnal pemakaian), bukan di kodeblok,
+				## supaya retur mengurangi biaya CIP proyek (nilai CIP dihitung dari kodeasset)
+				$kodeassetRetur = '';
+				$kodeblokRetur = $kodebblok;
+				$blokRetur = $blok;
+				if (substr($blok, 0, 3) == 'AK-' or substr($blok, 0, 3) == 'PB-') {
+					$kodeassetRetur = $blok;
+					$kodeblokRetur = '';
+					$blokRetur = '';
+				}
+
 				
 				## Ambil noakun barang
 				$klbarang = substr($kodebarang, 0, 3);
@@ -1207,7 +1218,7 @@ if (isTransactionPeriod()){
 							'kurs' => '1',
 							'kodeorg' => substr($gudang, 0, 4),
 							'kodekegiatan' => '',
-							'kodeasset' => '',
+							'kodeasset' => $kodeassetRetur,
 							'kodebarang' => $kodebarang,
 							'nik' => '',
 							'kodecustomer' => '',
@@ -1216,7 +1227,7 @@ if (isTransactionPeriod()){
 							'noaruskas' => '',
 							'kodevhc' => $kodemesin,
 							'nodok' => '',
-							'kodeblok' => $kodebblok,
+							'kodeblok' => $kodeblokRetur,
 							'revisi' => '0',
 							'kodesegment' => $segment
 						);
@@ -1234,7 +1245,7 @@ if (isTransactionPeriod()){
 							'kurs' => '1',
 							'kodeorg' => substr($gudang, 0, 4),
 							'kodekegiatan' => $kodekegiatan,
-							'kodeasset' => '',
+							'kodeasset' => $kodeassetRetur,
 							'kodebarang' => $kodebarang,
 							'nik' => '',
 							'kodecustomer' => '',
@@ -1243,7 +1254,7 @@ if (isTransactionPeriod()){
 							'noaruskas' => '',
 							'kodevhc' => $kodemesin,
 							'nodok' => '',
-							'kodeblok' => $kodebblok,
+							'kodeblok' => $kodeblokRetur,
 							'revisi' => '0',
 							'kodesegment' => $segment
 						);
@@ -1474,7 +1485,7 @@ if (isTransactionPeriod()){
 							'noaruskas' => '',
 							'kodevhc' => $kodemesin,
 							'nodok' => '',
-							'kodeblok' => $blok,
+							'kodeblok' => $blokRetur,
 							'revisi' => '0',
 							'kodesegment' => $segment
 						);
@@ -1492,7 +1503,7 @@ if (isTransactionPeriod()){
 							'kurs' => '1',
 							'kodeorg' => $pengguna,
 							'kodekegiatan' => $kodekegiatan,
-							'kodeasset' => '',
+							'kodeasset' => $kodeassetRetur,
 							'kodebarang' => $kodebarang,
 							'nik' => '',
 							'kodecustomer' => '',
@@ -1501,7 +1512,7 @@ if (isTransactionPeriod()){
 							'noaruskas' => '',
 							'kodevhc' => $kodemesin,
 							'nodok' => '',
-							'kodeblok' => $blok,
+							'kodeblok' => $blokRetur,
 							'revisi' => '0',
 							'kodesegment' => $segment
 						);

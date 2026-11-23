@@ -6,6 +6,250 @@ include_once('lib/zLib.php');
 include_once('lib/zFunction.php');
 include_once('lib/rTable.php');
 
+#Semua isian dari browser (POST/GET) di-escape SATU kali di sini sebelum dipakai di kueri; nilai dari database yang ditampilkan di-escape lewat heAC()/jsAC()
+function bersihInputCIP(&$v)
+{
+    global $owlPDO;
+    if (is_array($v)) {
+        foreach ($v as $k => $x) {
+            bersihInputCIP($x);
+            $v[$k] = $x;
+        }
+    } elseif (is_string($v)) {
+        $v = substr($owlPDO->quote($v), 1, -1);
+    }
+}
+bersihInputCIP($_POST);
+bersihInputCIP($_GET);
+
+#teks untuk ditampilkan di HTML
+function heAC($s)
+{
+    return htmlspecialchars((string)$s, ENT_QUOTES);
+}
+
+#teks untuk argumen string JavaScript di dalam atribut HTML onclick="fn('...')"
+function jsAC($s)
+{
+    return htmlspecialchars(addcslashes((string)$s, "\\'\"\r\n</"), ENT_QUOTES);
+}
+
+#proyek milik unit pengguna (sama dengan pembatasan List Data); null bila tidak ada atau bukan unit pengguna
+function ambilProyekAC($kode)
+{
+    global $dbname;
+    $r = fetchData("select kode,kodeorg,posting from " . $dbname . ".project where kode='" . $kode . "' and kodeorg in (" . getOrgDetail(2) . ")");
+    return isset($r[0]) ? $r[0] : null;
+}
+
+#filter List Data CIP; dipakai tampilan, Excel, dan PDF. Nilai sudah di-escape oleh bersihInputCIP(), di sini ditambah whitelist
+function filterCIP()
+{
+    $w = "";
+    $kodecr = trim((string)checkPostGet('kodecr', ''));
+    $namacr = trim((string)checkPostGet('namacr', ''));
+    $unitcr = trim((string)checkPostGet('unitcr', ''));
+    $jeniscr = trim((string)checkPostGet('jeniscr', ''));
+    $asetcr = trim((string)checkPostGet('asetcr', ''));
+    $pekerjaancr = trim((string)checkPostGet('pekerjaancr', ''));
+    $statuscr = trim((string)checkPostGet('statuscr', ''));
+    $tahuncr = trim((string)checkPostGet('tahuncr', ''));
+    if ($kodecr != '') {
+        $w .= " and a.kode like '%" . $kodecr . "%' ";
+    }
+    if ($namacr != '') {
+        $w .= " and a.nama like '%" . $namacr . "%' ";
+    }
+    if ($unitcr != '') {
+        if (!preg_match('/^[A-Za-z0-9]{1,10}$/', $unitcr)) {
+            exit("Warning : Unit tidak valid.");
+        }
+        $w .= " and a.kodeorg = '" . $unitcr . "' ";
+    }
+    if ($jeniscr != '') {
+        if (!in_array($jeniscr, array('AK', 'PB'), true)) {
+            exit("Warning : Jenis tidak valid.");
+        }
+        $w .= " and a.tipe = '" . $jeniscr . "' ";
+    }
+    if ($asetcr != '') {
+        if (!preg_match('/^[A-Za-z0-9]{2}$/', $asetcr)) {
+            exit("Warning : Tipe aset tidak valid.");
+        }
+        $w .= " and substr(a.kode,4,2) = '" . $asetcr . "' ";
+    }
+    if ($pekerjaancr != '') {
+        if (!in_array($pekerjaancr, array('Internal', 'External'), true)) {
+            exit("Warning : Int / Ext tidak valid.");
+        }
+        $w .= " and a.pekerjaan = '" . $pekerjaancr . "' ";
+    }
+    if ($statuscr != '') {
+        if (!in_array($statuscr, array('0', '1'), true)) {
+            exit("Warning : Status tidak valid.");
+        }
+        $w .= " and a.posting = '" . $statuscr . "' ";
+    }
+    if ($tahuncr != '') {
+        if (!preg_match('/^\d{4}$/', $tahuncr)) {
+            exit("Warning : Tahun tidak valid.");
+        }
+        $w .= " and year(a.tanggalmulai) = '" . $tahuncr . "' ";
+    }
+    return $w;
+}
+
+#keterangan filter aktif untuk judul Excel/PDF
+function infoFilterCIP()
+{
+    global $dbname;
+    $o = array();
+    $unitcr = trim((string)checkPostGet('unitcr', ''));
+    $o[] = 'Unit: ' . ($unitcr != '' ? stripslashes($unitcr) : 'Semua');
+    $jeniscr = trim((string)checkPostGet('jeniscr', ''));
+    $o[] = 'Jenis: ' . ($jeniscr != '' ? stripslashes($jeniscr) : 'Semua');
+    $asetcr = trim((string)checkPostGet('asetcr', ''));
+    $o[] = 'Tipe Aset: ' . ($asetcr != '' ? stripslashes($asetcr) : 'Semua');
+    $pekerjaancr = trim((string)checkPostGet('pekerjaancr', ''));
+    $o[] = 'Int/Ext: ' . ($pekerjaancr != '' ? stripslashes($pekerjaancr) : 'Semua');
+    $statuscr = trim((string)checkPostGet('statuscr', ''));
+    $o[] = 'Status: ' . ($statuscr === '0' ? 'Belum Diposting' : ($statuscr === '1' ? 'Sudah Diposting' : 'Semua'));
+    $tahuncr = trim((string)checkPostGet('tahuncr', ''));
+    $o[] = 'Tahun: ' . ($tahuncr != '' ? stripslashes($tahuncr) : 'Semua');
+    $kodecr = trim((string)checkPostGet('kodecr', ''));
+    if ($kodecr != '') {
+        $o[] = 'Kode: ' . stripslashes($kodecr);
+    }
+    $namacr = trim((string)checkPostGet('namacr', ''));
+    if ($namacr != '') {
+        $o[] = 'Nama: ' . stripslashes($namacr);
+    }
+    return implode(' | ', $o);
+}
+
+#data List Data CIP untuk tarikan Excel/PDF: proyek milik unit pengguna sesuai filter, paling banyak 3000 baris; nilai dan kode aset diambil sekaligus (bukan per baris)
+function dataCIP(&$terpotong)
+{
+    global $dbname;
+    $batas = 3000;
+    $rows = fetchData("select a.kode,a.kodeorg,a.tipe,a.nama,a.pekerjaan,a.satuan,a.jumlah,a.tanggalmulai,a.tanggalselesai,a.posting,a.lastupdate,b.namakaryawan
+        from " . $dbname . ".project a left join " . $dbname . ".datakaryawan b on a.updateby=b.karyawanid
+        where 1=1 " . filterCIP() . " and a.kodeorg in (" . getOrgDetail(2) . ") order by substring(a.kode,-7) desc limit " . ($batas + 1));
+    $terpotong = (count($rows) > $batas);
+    if ($terpotong) {
+        array_pop($rows);
+    }
+    $nilai = array();
+    $aset = array();
+    if (count($rows) > 0) {
+        $in = array();
+        foreach ($rows as $r) {
+            $in[] = "'" . addslashes($r['kode']) . "'";
+        }
+        $daftar = implode(',', $in);
+        foreach (fetchData("select kodeasset, sum(jumlah) as biaya from " . $dbname . ".keu_jurnaldt where kodeasset in (" . $daftar . ") and noakun like '12903%' group by kodeasset") as $r) {
+            $nilai[$r['kodeasset']] = $r['biaya'];
+        }
+        foreach (fetchData("select kodeproject, kodeasset from " . $dbname . ".sdm_daftarasset where kodeproject in (" . $daftar . ") order by kodeasset") as $r) {
+            if (!isset($aset[$r['kodeproject']])) {
+                $aset[$r['kodeproject']] = $r['kodeasset'];
+            }
+        }
+    }
+    foreach ($rows as $i => $r) {
+        $rows[$i]['nilai'] = isset($nilai[$r['kode']]) ? $nilai[$r['kode']] : 0;
+        $rows[$i]['kodeasset'] = isset($aset[$r['kode']]) ? $aset[$r['kode']] : '';
+    }
+    return $rows;
+}
+
+function tglCIP($d)
+{
+    return ($d == '' || $d == '0000-00-00') ? '' : tanggalnormal($d);
+}
+
+#proyek untuk operasi tulis rincian (kegiatan / mesin): milik unit pengguna dan belum diposting; keluar dengan pesan bila tidak
+function proyekBolehUbahAC($kode)
+{
+    $p = ambilProyekAC($kode);
+    if ($p === null) {
+        exit("Gagal: Proyek tidak ditemukan atau bukan unit Anda.");
+    }
+    if ($p['posting'] == 1) {
+        exit("Gagal: Proyek sudah diposting, rincian tidak bisa diubah.");
+    }
+    return $p;
+}
+
+#data proyek lengkap untuk tarikan Excel per proyek: hanya proyek milik unit pengguna; keluar dengan pesan bila tidak ditemukan
+function dataProyekAC($kode)
+{
+    global $dbname;
+    if (ambilProyekAC($kode) === null) {
+        exit("Gagal: Proyek tidak ditemukan atau bukan unit Anda.");
+    }
+    $r = fetchData("select * from " . $dbname . ".project where kode='" . $kode . "'");
+    return $r[0];
+}
+
+#kop Excel per proyek: nama unit/PT, judul, identitas proyek, dan penarik; $kol = jumlah kolom tabel di bawahnya
+function kopExcelProyekAC($dHead, $judul, $kol)
+{
+    global $dbname, $optNmOrg;
+    $ind = fetchData("select induk from " . $dbname . ".organisasi where kodeorganisasi='" . $dHead['kodeorg'] . "'");
+    $hd = setheadreport(isset($ind[0]['induk']) ? $ind[0]['induk'] : $dHead['kodeorg'], $dHead['kodeorg']);
+    $tglm = ($dHead['tanggalmulai'] == '0000-00-00') ? '-' : tanggalnormal($dHead['tanggalmulai']);
+    $tgls = ($dHead['tanggalselesai'] == '0000-00-00') ? '-' : tanggalnormal($dHead['tanggalselesai']);
+    $h = "<table>
+        <tr><td colspan=" . $kol . "><b>" . heAC($hd['nama']) . "</b></td></tr>
+        <tr><td colspan=" . $kol . "><b>" . heAC($judul) . "</b></td></tr>
+        <tr><td colspan=" . $kol . ">&nbsp;</td></tr>
+        <tr><td colspan=2>Unit Kerja</td><td colspan=" . ($kol - 2) . ">: " . heAC($dHead['kodeorg'] . ' - ' . (isset($optNmOrg[$dHead['kodeorg']]) ? $optNmOrg[$dHead['kodeorg']] : '')) . "</td></tr>
+        <tr><td colspan=2>Kode Proyek</td><td colspan=" . ($kol - 2) . ">: " . heAC($dHead['kode']) . "</td></tr>
+        <tr><td colspan=2>Nama Proyek</td><td colspan=" . ($kol - 2) . ">: " . heAC($dHead['nama']) . "</td></tr>
+        <tr><td colspan=2>Periode Proyek</td><td colspan=" . ($kol - 2) . ">: " . $tglm . " s/d " . $tgls . "</td></tr>
+        <tr><td colspan=2>Status</td><td colspan=" . ($kol - 2) . ">: " . ($dHead['posting'] == 1 ? 'Sudah Diposting' : 'Belum Diposting') . "</td></tr>
+        <tr><td colspan=" . $kol . ">Ditarik oleh " . heAC($_SESSION['empl']['name']) . " (" . heAC($_SESSION['standard']['username']) . ") pada " . date('d-m-Y H:i:s') . "</td></tr>
+        <tr><td colspan=" . $kol . ">&nbsp;</td></tr></table>";
+    return $h;
+}
+
+#validasi isian rincian kegiatan (dipakai tambah dan ubah); keluar dengan pesan bila tidak sah
+function cekRincianAC($nmKeg, $deskripsi, $satKeg, $volKeg, $bobotKeg)
+{
+    if (trim((string)$nmKeg) == '') {
+        exit("Error:Nama Kegiatan wajib diisi");
+    }
+    if (strlen((string)$nmKeg) > 500 || strlen((string)$deskripsi) > 500) {
+        exit("Error:Nama Kegiatan dan Deskripsi maksimal 500 karakter");
+    }
+    if (trim((string)$satKeg) == '') {
+        exit("Error:Satuan wajib diisi");
+    }
+    if (!is_numeric($volKeg) || $volKeg <= 0) {
+        exit("Error:Volume harus berupa angka lebih dari 0");
+    }
+    if (!is_numeric($bobotKeg) || $bobotKeg < 0 || $bobotKeg > 100) {
+        exit("Error:Bobot harus berupa angka 0 sampai 100");
+    }
+}
+
+#kode proyek pemilik sebuah baris rincian (project_dt.kegiatan); kosong bila tidak ada
+function proyekDariKegiatanAC($kegiatan)
+{
+    global $dbname;
+    $r = fetchData("select kodeproject from " . $dbname . ".project_dt where kegiatan='" . $kegiatan . "'");
+    return isset($r[0]['kodeproject']) ? $r[0]['kodeproject'] : '';
+}
+
+#selisih hari tanggal selesai - tanggal mulai (yyyy-mm-dd); null bila salah satu tanggal tidak sah
+function selisihHariAC($mulai, $selesai)
+{
+    global $dbname;
+    $r = fetchData("select datediff('" . $selesai . "', '" . $mulai . "') as selisih");
+    return (isset($r[0]['selisih']) && $r[0]['selisih'] !== null) ? (int)$r[0]['selisih'] : null;
+}
+
 $path = "fileupload/cip/";
 $method = checkPostGet('method', '');
 $kode = checkPostGet('kode', '');
@@ -165,6 +409,9 @@ switch ($method) {
             // Menggunakan chmod untuk mengatur izin folder
             // chmod($path, $newPermissions);
 
+            if (!preg_match('/^[A-Za-z0-9._\-]{1,40}$/', (string)$param['notransaksi'])) {
+                throw new PDOException("Nomor transaksi tidak valid.");
+            }
             if ($data['fileupload'] != '') {
                 if ($_FILES['file']['error'] == 0) {
                     $filetype = strtolower('.' . substr($_FILES['file']['name'], strripos($_FILES['file']['name'], '.') + 1));
@@ -628,7 +875,7 @@ switch ($method) {
         </thead>
         <tbody>";
 
-        $str = "select * from " . $dbname . ".spl_capexbangunan where posting='1' and kode not in (select kodecapex from " . $dbname . ".project)";
+        $str = "select * from " . $dbname . ".spl_capexbangunan where posting='1' and kodeorg in (" . getOrgDetail(2) . ") and kode not in (select kodecapex from " . $dbname . ".project)";
         $res = fetchData($str);
         $no = 0;
         foreach ($res as $key => $val) {
@@ -658,7 +905,7 @@ switch ($method) {
         </thead>
         <tbody>";
 
-        $str = "select * from " . $dbname . ".spl_capexbangunan where posting='1' and (kode like '%" . $crcapex . "%' or nama like '%" . $crcapex . "%') and kode not in (select kodecapex from " . $dbname . ".project)";
+        $str = "select * from " . $dbname . ".spl_capexbangunan where posting='1' and kodeorg in (" . getOrgDetail(2) . ") and (kode like '%" . $crcapex . "%' or nama like '%" . $crcapex . "%') and kode not in (select kodecapex from " . $dbname . ".project)";
         $res = fetchData($str);
         $no = 0;
         if (count($res) <= 0) {
@@ -743,6 +990,13 @@ switch ($method) {
 
 
     case 'update':
+        $pjCek = ambilProyekAC($kode);
+        if ($pjCek === null) {
+            exit("Gagal: Proyek tidak ditemukan atau bukan unit Anda.");
+        }
+        if ($pjCek['posting'] == 1) {
+            exit("Gagal: Proyek sudah diposting, tidak bisa diubah.");
+        }
         // exit('error'.$aprv2);
         $str = "update " . $dbname . ".project set nama='" . $nama . "',
           tanggalmulai='" . $tanggalmulai . "',tanggalselesai='" . $tanggalselesai . "',
@@ -770,6 +1024,10 @@ switch ($method) {
         break;
 
     case 'insert':
+        $uOk = fetchData("select kodeorganisasi from " . $dbname . ".organisasi where kodeorganisasi='" . $unit . "' and kodeorganisasi in (" . getOrgDetail(2) . ")");
+        if (count($uOk) == 0) {
+            exit("Gagal: Unit tidak valid.");
+        }
         // String Kode
         $kode = $jenis . '-' . $aset . $sub;
 
@@ -777,6 +1035,7 @@ switch ($method) {
         $str = "select kode from " . $dbname . ".project where kode like '" . $kode . "%' order by substring(kode, -5) desc  limit 1";
         $res = $owlPDO->query($str) or die(print " Gagal: " . PDOException::getMessage());
         $res->setFetchMode(PDO::FETCH_OBJ);
+        $belakangnya = 0;
         while ($bar = $res->fetch()) {
             $belakangnya = intval(substr($bar->kode, -5));
         }
@@ -826,7 +1085,7 @@ switch ($method) {
             for ($i = 1; $i <= 4; $i++) {
 
                 $aprv = checkPostGet('aprv' . $i, '');
-                if (@$aprv . $i != '') {
+                if (trim((string)$aprv) != '') {
                     $stra = "INSERT INTO " . $dbname . ".`project_approval` (`kode`,`level`,`karyawanid`,`createby`)
                     values('" . $kode . "','" . $i . "','" . $aprv . "','" . $_SESSION['standard']['userid'] . "')";
                     try {
@@ -857,6 +1116,13 @@ switch ($method) {
         break;
 
     case 'delete':
+        $pjCek = ambilProyekAC($kode);
+        if ($pjCek === null) {
+            exit("Gagal: Proyek tidak ditemukan atau bukan unit Anda.");
+        }
+        if ($pjCek['posting'] == 1) {
+            exit("Gagal: Proyek sudah diposting, tidak bisa dihapus.");
+        }
         $sGudang = "select * from " . $dbname . ".log_transaksi_vw where kodeblok = '" . $kode . "'";
         $res = $owlPDO->query($sGudang) or die(print " Gagal: " . PDOException::getMessage());
         $numrows = owlBaris($res);
@@ -897,6 +1163,14 @@ switch ($method) {
             die();
         }
 
+        $str = "delete from " . $dbname . ".project_approval where kode='" . $kode . "'";
+        try {
+            $owlPDO->exec($str);
+        } catch (PDOException $e) {
+            print " Gagal  !: " . $e->getMessage() . "\n";
+            die();
+        }
+
         $str = "delete from " . $dbname . ".project where kode='" . $kode . "'";
         try {
             $owlPDO->exec($str);
@@ -908,19 +1182,9 @@ switch ($method) {
 
     case 'loadData':
         // exit('warning : ');
-        $where = "";
-        // $where = " dibuat_oleh ='".$_SESSION['standard']['userid']."'";
+        $where = filterCIP();
         $whrunit="";
         $whrunit = " and kodeorg in (".getOrgDetail(2).")";
-        if ($kodecr != '') {
-            $where .= " and a.kode like '%" . $kodecr . "%' ";
-        }
-        if ($namacr != '') {
-            $where .= " and a.nama like '%" . $namacr . "%' ";
-        }
-        if ($unitcr != '') {
-            $where .= " and a.kodeorg like '%" . $unitcr . "%' ";
-        }
         // if ($tglcr != '') {
         //     $where.=" and tanggal='" . $tglcr . "' ";
         // }
@@ -957,7 +1221,7 @@ switch ($method) {
 
 
                 #= cek apakah jadi asset / jadi biaya
-                $strdt = "select kodeasset from " . $dbname . ".sdm_daftarasset  where kodeproject='" . $bar1->kode . "'";
+                $strdt = "select kodeasset from " . $dbname . ".sdm_daftarasset  where kodeproject='" . jsAC($bar1->kode) . "'";
                 $resdt = fetchdata($strdt);
                 @$kodeasset = $resdt[0]['kodeasset'];
 
@@ -976,26 +1240,26 @@ switch ($method) {
 
                 #= ambil data nilai
                 //  $sBiaya = "select distinct sum(jumlah) as biaya from " . $dbname . ".keu_jurnaldt
-                //    where kodeasset='" . $bar1->kode . "' and noakun like '1299%'";
+                //    where kodeasset='" . jsAC($bar1->kode) . "' and noakun like '1299%'";
                 $sBiaya = "select distinct sum(jumlah) as biaya from " . $dbname . ".keu_jurnaldt
-                   where kodeasset='" . $bar1->kode . "' and noakun like '12903%'";
+                   where kodeasset='" . jsAC($bar1->kode) . "' and noakun like '12903%'";
                 $qBiaya = $owlPDO->query($sBiaya) or die(print " Gagal: " . PDOException::getMessage());
                 $qBiaya->setFetchMode(PDO::FETCH_ASSOC);
                 $rBiaya = $qBiaya->fetch();
                 $tab .= "<tr class=rowcontent title='Show Detail Data'>
-                <td onclick=\"viewbiaya('" . $bar1->kode . "');\" style='cursor:pointer;' title='Show Detail Biaya' >" . $bar1->kode . "</td>
-                <td onclick=\"viewbiaya('" . $bar1->kode . "');\" style='cursor:pointer;' title='Show Detail Biaya' >" . $bar1->kodeorg . "</td>
-                <td onclick=\"viewbiaya('" . $bar1->kode . "');\" style='cursor:pointer;' title='Show Detail Biaya' >" . $bar1->tipe . "</td>
-                <td onclick=\"viewbiaya('" . $bar1->kode . "');\" style='cursor:pointer;' title='Show Detail Biaya' >" . $bar1->nama . "</td>
-                <td onclick=\"viewbiaya('" . $bar1->kode . "');\" style='cursor:pointer;' title='Show Detail Biaya' >" . $bar1->pekerjaan . "</td>
-                <td align=center  onclick=\"viewbiaya('" . $bar1->kode . "');\" style='cursor:pointer;' title='Show Detail Biaya' >" . $bar1->satuan . "</td>
-                <td align=right  onclick=\"viewbiaya('" . $bar1->kode . "');\" style='cursor:pointer;' title='Show Detail Biaya' >" . @number_format($bar1->jumlah) . "</td>
+                <td onclick=\"viewbiaya('" . jsAC($bar1->kode) . "');\" style='cursor:pointer;' title='Show Detail Biaya' >" . heAC($bar1->kode) . "</td>
+                <td onclick=\"viewbiaya('" . jsAC($bar1->kode) . "');\" style='cursor:pointer;' title='Show Detail Biaya' >" . heAC($bar1->kodeorg) . "</td>
+                <td onclick=\"viewbiaya('" . jsAC($bar1->kode) . "');\" style='cursor:pointer;' title='Show Detail Biaya' >" . heAC($bar1->tipe) . "</td>
+                <td onclick=\"viewbiaya('" . jsAC($bar1->kode) . "');\" style='cursor:pointer;' title='Show Detail Biaya' >" . heAC($bar1->nama) . "</td>
+                <td onclick=\"viewbiaya('" . jsAC($bar1->kode) . "');\" style='cursor:pointer;' title='Show Detail Biaya' >" . heAC($bar1->pekerjaan) . "</td>
+                <td align=center  onclick=\"viewbiaya('" . jsAC($bar1->kode) . "');\" style='cursor:pointer;' title='Show Detail Biaya' >" . heAC($bar1->satuan) . "</td>
+                <td align=right  onclick=\"viewbiaya('" . jsAC($bar1->kode) . "');\" style='cursor:pointer;' title='Show Detail Biaya' >" . @number_format($bar1->jumlah) . "</td>
 
-                <td align=center  onclick=\"viewbiaya('" . $bar1->kode . "');\" style='cursor:pointer;' title='Show Detail Biaya' >" . tanggalnormal($bar1->tanggalmulai) . "</td>
-                <td align=center  onclick=\"viewbiaya('" . $bar1->kode . "');\" style='cursor:pointer;' title='Show Detail Biaya' >" . tanggalnormal($bar1->tanggalselesai) . "</td>
-                 <td  align=right  onclick=\"viewbiaya('" . $bar1->kode . "');\" style='cursor:pointer;' title='Show Detail Biaya' >" . number_format($rBiaya['biaya'], 2) . "</td>
-                <td  onclick=\"viewbiaya('" . $bar1->kode . "');\" style='cursor:pointer;' title='Show Detail Biaya' >" . $kodeasset . "</td>
-                <td  onclick=\"viewbiaya('" . $bar1->kode . "');\" style='cursor:pointer;' title='Show Detail Biaya' >" . $bar1->namakaryawan . "</td>
+                <td align=center  onclick=\"viewbiaya('" . jsAC($bar1->kode) . "');\" style='cursor:pointer;' title='Show Detail Biaya' >" . tanggalnormal($bar1->tanggalmulai) . "</td>
+                <td align=center  onclick=\"viewbiaya('" . jsAC($bar1->kode) . "');\" style='cursor:pointer;' title='Show Detail Biaya' >" . tanggalnormal($bar1->tanggalselesai) . "</td>
+                 <td  align=right  onclick=\"viewbiaya('" . jsAC($bar1->kode) . "');\" style='cursor:pointer;' title='Show Detail Biaya' >" . number_format($rBiaya['biaya'], 2) . "</td>
+                <td  onclick=\"viewbiaya('" . jsAC($bar1->kode) . "');\" style='cursor:pointer;' title='Show Detail Biaya' >" . heAC($kodeasset) . "</td>
+                <td  onclick=\"viewbiaya('" . jsAC($bar1->kode) . "');\" style='cursor:pointer;' title='Show Detail Biaya' >" . heAC($bar1->namakaryawan) . "</td>
                 ";
                 $namasts = array(1 => 'Approved', 0 => 'Waiting', 2 => 'Ditolak');
 
@@ -1015,19 +1279,19 @@ switch ($method) {
                 // }  
 
                 // for ($i=1; $i <= 4; $i++) {  
-                $strb = "select * from " . $dbname . ".project_approval  where kode='" . $bar1->kode . "' and level='1' ";
+                $strb = "select * from " . $dbname . ".project_approval  where kode='" . jsAC($bar1->kode) . "' and level='1' ";
                 $resa = fetchdata($strb);
                 @$kryApr1 = $resa[0]['karyawanid'];
 
-                $strb = "select * from " . $dbname . ".project_approval  where kode='" . $bar1->kode . "' and level='2' ";
+                $strb = "select * from " . $dbname . ".project_approval  where kode='" . jsAC($bar1->kode) . "' and level='2' ";
                 $resa = fetchdata($strb);
                 @$kryApr2 = $resa[0]['karyawanid'];
 
-                $strb = "select * from " . $dbname . ".project_approval  where kode='" . $bar1->kode . "' and level='3' ";
+                $strb = "select * from " . $dbname . ".project_approval  where kode='" . jsAC($bar1->kode) . "' and level='3' ";
                 $resa = fetchdata($strb);
                 @$kryApr3 = $resa[0]['karyawanid'];
 
-                $strb = "select * from " . $dbname . ".project_approval  where kode='" . $bar1->kode . "' and level='4' ";
+                $strb = "select * from " . $dbname . ".project_approval  where kode='" . jsAC($bar1->kode) . "' and level='4' ";
                 $resa = fetchdata($strb);
                 @$kryApr4 = $resa[0]['karyawanid'];
 
@@ -1035,17 +1299,17 @@ switch ($method) {
                 // echo $kryApr;
                 //if(($bar1->posting==0 and $bar1->updateby==$_SESSION['standard']['userid']) || ($bar1->posting==0 and in_array($_SESSION['empl']['kodejabatan'],$postJabatan))){
                 if ($bar1->posting == 0) {
-                    $tab .= "<td width=25px align=center><img src=images/application/application_edit.png class=zImgBtn  title='Edit' onclick=\"fillField('" . $bar1->kodeorg . "','" . $bar1->aset . "','" . $bar1->tipe . "','" . $bar1->nama . "','" . tanggalnormal($bar1->tanggalmulai) . "','" . tanggalnormal($bar1->tanggalselesai) . "','update','" . $bar1->kode . "','" . $bar1->subtipe . "','" . $bar1->jenis_biaya . "','" . $bar1->tipebg . "','" . $bar1->pekerjaan . "','" . $bar1->kodecapex . "','" . strtoupper($bar1->satuan) . "','" . $bar1->jumlah . "','" . $bar1->keterangan . "','" . $bar1->posisiasset . "','" . $bar1->tipelokasi . "','" . $bar1->nomesin . "','" . $bar1->norangka . "','" . $bar1->tipemodel . "','" . $bar1->dgnapproval . "','" . $bar1->statuspersetujuan . "','" . $kryApr1 . "','" . $kryApr2 . "','" . $kryApr3 . "','" . $kryApr4 . "');\"></td>
-                    <td width=25px align=center><img src=images/application/application_delete.png class=zImgBtn  title='Delete' onclick=\"hapus('" . $bar1->kode . "');\"></td>";
+                    $tab .= "<td width=25px align=center><img src=images/application/application_edit.png class=zImgBtn  title='Edit' onclick=\"fillField('" . jsAC($bar1->kodeorg) . "','" . jsAC($bar1->aset) . "','" . jsAC($bar1->tipe) . "','" . jsAC($bar1->nama) . "','" . tanggalnormal($bar1->tanggalmulai) . "','" . tanggalnormal($bar1->tanggalselesai) . "','update','" . jsAC($bar1->kode) . "','" . jsAC($bar1->subtipe) . "','" . jsAC($bar1->jenis_biaya) . "','" . jsAC($bar1->tipebg) . "','" . jsAC($bar1->pekerjaan) . "','" . jsAC($bar1->kodecapex) . "','" . jsAC(strtoupper($bar1->satuan)) . "','" . jsAC($bar1->jumlah) . "','" . jsAC($bar1->keterangan) . "','" . jsAC($bar1->posisiasset) . "','" . jsAC($bar1->tipelokasi) . "','" . jsAC($bar1->nomesin) . "','" . jsAC($bar1->norangka) . "','" . jsAC($bar1->tipemodel) . "','" . jsAC($bar1->dgnapproval) . "','" . jsAC($bar1->statuspersetujuan) . "','" . jsAC($kryApr1) . "','" . jsAC($kryApr2) . "','" . jsAC($kryApr3) . "','" . jsAC($kryApr4) . "');\"></td>
+                    <td width=25px align=center><img src=images/application/application_delete.png class=zImgBtn  title='Delete' onclick=\"hapus('" . jsAC($bar1->kode) . "');\"></td>";
 
-                    $tab .= "<td width=25px align=center> <img src=images/skyblue/posting.png class=zImgBtn  title='posting data " . $bar1->nama . "' onclick=\"postIni('" . $bar1->kode . "','" . $bar1->kodeorg . "','" . $bar1->jenis_biaya . "','" . $bar1->posisiasset . "');\"></td>";
+                    $tab .= "<td width=25px align=center> <img src=images/skyblue/posting.png class=zImgBtn  title='posting data " . heAC($bar1->nama) . "' onclick=\"postIni('" . jsAC($bar1->kode) . "','" . jsAC($bar1->kodeorg) . "','" . jsAC($bar1->jenis_biaya) . "','" . jsAC($bar1->posisiasset) . "');\"></td>";
 
-                    $tab .= "<td width=25px align=center> <img src=images/nxbtn.png class=zImgBtn  title='Detail' onclick=\"detailForm('" . $bar1->kodeorg . "','" . $aset . "','" . $bar1->tipe . "','" . $bar1->nama . "','" . tanggalnormal($bar1->tanggalmulai) . "','" . tanggalnormal($bar1->tanggalselesai) . "','detail','" . $bar1->kode . "','" . $bar1->subtipe . "','" . $bar1->jenis_biaya . "','" . $bar1->tipebg . "','" . $bar1->pekerjaan . "','" . $bar1->kodecapex . "','" . $bar1->satuan . "','" . $bar1->jumlah . "','" . $bar1->keterangan . "','" . $bar1->posisiasset . "','" . $bar1->tipelokasi . "','" . $bar1->nomesin . "','" . $bar1->norangka . "');\"></td>";
+                    $tab .= "<td width=25px align=center> <img src=images/nxbtn.png class=zImgBtn  title='Detail' onclick=\"detailForm('" . jsAC($bar1->kodeorg) . "','" . jsAC($bar1->aset) . "','" . jsAC($bar1->tipe) . "','" . jsAC($bar1->nama) . "','" . tanggalnormal($bar1->tanggalmulai) . "','" . tanggalnormal($bar1->tanggalselesai) . "','detail','" . jsAC($bar1->kode) . "','" . jsAC($bar1->subtipe) . "','" . jsAC($bar1->jenis_biaya) . "','" . jsAC($bar1->tipebg) . "','" . jsAC($bar1->pekerjaan) . "','" . jsAC($bar1->kodecapex) . "','" . jsAC($bar1->satuan) . "','" . jsAC($bar1->jumlah) . "','" . jsAC($bar1->keterangan) . "','" . jsAC($bar1->posisiasset) . "','" . jsAC($bar1->tipelokasi) . "','" . jsAC($bar1->nomesin) . "','" . jsAC($bar1->norangka) . "','" . jsAC($bar1->tipemodel) . "');\"></td>";
                 } else {
                     // $tab.="<td width=25px align=center> <img src=images/zoom.png class=zImgBtn  title='View Detail Asset ".$bar1->nama."' onclick=\"viewasset('".$bar1->kode."');\"></td>";   
                     if ($bar1->posting == 1) {
                         $tab .= "<td width=25px align=center> </td>";
-                        $tab .= "<td width=25px align=center><img src=images/zoom.png class=zImgBtn  title='View Detail Asset " . $bar1->nama . "' onclick=\"viewasset('" . $bar1->kode . "');\"></td>";
+                        $tab .= "<td width=25px align=center><img src=images/zoom.png class=zImgBtn  title='View Detail Asset " . heAC($bar1->nama) . "' onclick=\"viewasset('" . jsAC($bar1->kode) . "');\"></td>";
                         $tab .= "<td width=25px align=center> <img src=images/skyblue/posted.png class=zImgBtn></td>";
                         $tab .= "<td width=25px align=center> </td>";
                     }
@@ -1054,7 +1318,7 @@ switch ($method) {
                 // if (($bar1->statuspersetujuan==0)||($bar1->statuspersetujuan==2)) { 
 
                 if ($bar1->dgnapproval == '1') {
-                    $tab .= "<td width=25px align=center><img onclick=approval('" . $bar1->kode . "','" . $bar1->kodeorg . "','" . $bar1->jenis_biaya . "') src=images/approve.png class=zImgBtn title='Approval'></td>";
+                    $tab .= "<td width=25px align=center><img onclick=\"approval('" . jsAC($bar1->kode) . "','" . jsAC($bar1->kodeorg) . "','" . jsAC($bar1->jenis_biaya) . "')\" src=images/approve.png class=zImgBtn title='Approval'></td>";
                 } else {
                     $tab .= "<td width=25px align=center> </td>";
                 }
@@ -1063,9 +1327,9 @@ switch ($method) {
                 // }
                 $tab .= "
                     <td width=25px align=center>
-                        <img onclick=\"masterPDF('project','" . $bar1->kode . "," . $bar1->updateby . "','','vhc_slave_project_pdf',event);\" title=\"Print\" class=\"zImgBtn\" src=\"images/pdf.jpg\"></td>
-					<td width=25px align=center><img onclick=excelMaterial(event,'" . $bar1->kode . "') src=images/excel.jpg class=zImgBtn title='MS.Excel Material'></td>
-					<td width=25px align=center><img onclick=timeFrame(event,'" . $bar1->kode . "') src=images/excel.jpg class=zImgBtn title='MS.Excel Time Frame Project'>
+                        <img onclick=\"masterPDF('project','" . jsAC($bar1->kode) . "," . jsAC($bar1->updateby) . "','','vhc_slave_project_pdf',event);\" title=\"Print\" class=\"zImgBtn\" src=\"images/pdf.jpg\"></td>
+					<td width=25px align=center><img onclick=\"excelMaterial(event,'" . jsAC($bar1->kode) . "')\" src=images/excel.jpg class=zImgBtn title='MS.Excel Material'></td>
+					<td width=25px align=center><img onclick=\"timeFrame(event,'" . jsAC($bar1->kode) . "')\" src=images/excel.jpg class=zImgBtn title='MS.Excel Time Frame Project'>
             </td></tr>";
             }
             $totrows = ceil($jlhbrs / $limit);
@@ -1088,6 +1352,167 @@ switch ($method) {
         }
         echo $tab . "####" . $footd;
         break;
+    case 'excellist':
+        include_once('lib/HtmlExcel.php');
+        $terpotong = false;
+        $data = dataCIP($terpotong);
+        $hdpt = setheadreport($_SESSION['empl']['kodeorganisasi'], $_SESSION['empl']['kodeorganisasi']);
+        $judulKol = array('No', 'Kode Capex', 'Unit', 'Jenis', 'Nama', 'Int / Ext', 'Satuan', 'Jumlah', 'Tanggal Mulai', 'Sampai Tanggal', 'Nilai', 'Kode Asset', 'Status', 'Last Update', 'Update By');
+        $kol = count($judulKol);
+        $stream = "<table>
+            <tr><td colspan=" . $kol . "><b>" . heAC($hdpt['nama']) . "</b></td></tr>
+            <tr><td colspan=" . $kol . "><b>DAFTAR CONSTRUCTION IN PROGRESS (CIP)</b></td></tr>
+            <tr><td colspan=" . $kol . ">" . heAC(infoFilterCIP() . ($terpotong ? ' | Catatan: ditampilkan 3000 proyek pertama' : '')) . "</td></tr>
+            <tr><td colspan=" . $kol . ">Ditarik oleh " . heAC($_SESSION['empl']['name']) . " (" . heAC($_SESSION['standard']['username']) . ") pada " . date('d-m-Y H:i:s') . "</td></tr>
+            <tr><td colspan=" . $kol . ">&nbsp;</td></tr></table>";
+        $stream .= "<table class=sortable cellspacing=1 cellpadding=3 border=1><thead><tr>";
+        foreach ($judulKol as $j) {
+            $stream .= "<th align=center bgcolor=#CCCCCC>" . heAC($j) . "</th>";
+        }
+        $stream .= "</tr></thead><tbody>";
+        $no = 0;
+        $totNilai = 0;
+        foreach ($data as $r) {
+            $no++;
+            $totNilai += $r['nilai'];
+            $stream .= "<tr>
+                <td align=center>" . $no . "</td>
+                <td>" . heAC($r['kode']) . "</td>
+                <td align=center>" . heAC($r['kodeorg']) . "</td>
+                <td align=center>" . heAC($r['tipe']) . "</td>
+                <td>" . heAC($r['nama']) . "</td>
+                <td align=center>" . heAC($r['pekerjaan']) . "</td>
+                <td align=center>" . heAC($r['satuan']) . "</td>
+                <td align=right>" . round($r['jumlah'], 2) . "</td>
+                <td align=center>" . tglCIP($r['tanggalmulai']) . "</td>
+                <td align=center>" . tglCIP($r['tanggalselesai']) . "</td>
+                <td align=right>" . round($r['nilai'], 2) . "</td>
+                <td>" . heAC($r['kodeasset']) . "</td>
+                <td align=center>" . ($r['posting'] == 1 ? 'Sudah Diposting' : 'Belum Diposting') . "</td>
+                <td align=center>" . heAC($r['lastupdate']) . "</td>
+                <td>" . heAC($r['namakaryawan']) . "</td>
+            </tr>";
+        }
+        if ($no == 0) {
+            $stream .= "<tr><td colspan=" . $kol . " align=center>Tidak ada data CIP untuk filter ini</td></tr>";
+        } else {
+            $stream .= "<tr><td colspan=10 align=right><b>TOTAL (" . $no . " proyek)</b></td><td align=right><b>" . round($totNilai, 2) . "</b></td><td colspan=4></td></tr>";
+        }
+        $stream .= "</tbody></table>";
+        $xls = new HtmlExcel();
+        $xls->addSheet("DaftarCIP", $stream);
+        $xls->headers("DaftarCIP_" . date('YmdHis') . ".xls");
+        echo $xls->buildFile();
+        exit;
+    case 'pdflist':
+        require_once('lib/fpdf.php');
+        $terpotong = false;
+        $data = dataCIP($terpotong);
+        $hdpt = setheadreport($_SESSION['empl']['kodeorganisasi'], $_SESSION['empl']['kodeorganisasi']);
+        if (!class_exists('PDFDaftarCIP')) {
+            class PDFDaftarCIP extends FPDF
+            {
+                public $colW = array();
+                public $judul = array();
+                public $kopNama = '';
+                public $kopLogo = '';
+                public $kopInfo = '';
+                public $kopDitarik = '';
+
+                function Header()
+                {
+                    $lebar = $this->w - $this->lMargin - $this->rMargin;
+                    if ($this->kopLogo != '' && file_exists($this->kopLogo)) {
+                        $this->Image($this->kopLogo, $this->lMargin, $this->tMargin, 18);
+                    }
+                    $this->SetFont('Arial', 'B', 11);
+                    $this->SetXY($this->lMargin + 22, $this->tMargin + 2);
+                    $this->Cell(160, 6, utf8_decode($this->kopNama), 0, 1, 'L');
+                    $this->SetY($this->tMargin + 15);
+                    $this->SetFont('Arial', 'B', 13);
+                    $this->Cell($lebar, 7, 'DAFTAR CONSTRUCTION IN PROGRESS (CIP)', 0, 1, 'C');
+                    $this->SetFont('Arial', '', 8);
+                    $this->Cell($lebar, 5, utf8_decode($this->kopInfo), 0, 1, 'C');
+                    $this->Cell($lebar, 5, utf8_decode($this->kopDitarik), 0, 1, 'C');
+                    $this->Ln(1);
+                    $this->SetFillColor(220, 220, 220);
+                    $this->SetFont('Arial', 'B', 7);
+                    foreach ($this->judul as $i => $j) {
+                        $this->Cell($this->colW[$i], 8, utf8_decode($j), 1, 0, 'C', true);
+                    }
+                    $this->Ln();
+                }
+
+                function Footer()
+                {
+                    $this->SetY(-12);
+                    $this->SetFont('Arial', 'I', 7);
+                    $this->Cell(0, 8, 'Halaman ' . $this->PageNo() . ' / {nb}', 0, 0, 'R');
+                }
+
+                function fit($txt, $w, $f = 7)
+                {
+                    $txt = utf8_decode($txt);
+                    $this->SetFont('Arial', '', $f);
+                    if ($this->GetStringWidth($txt) <= $w - 2) {
+                        return $txt;
+                    }
+                    while (strlen($txt) > 1 && $this->GetStringWidth($txt . '...') > $w - 2) {
+                        $txt = substr($txt, 0, -1);
+                    }
+                    return rtrim($txt) . '...';
+                }
+            }
+        }
+        $pdf = new PDFDaftarCIP('L', 'mm', 'A4');
+        $pdf->kopNama = $hdpt['nama'];
+        $pdf->kopLogo = isset($hdpt['logo']) ? $hdpt['logo'] : '';
+        $pdf->kopInfo = infoFilterCIP() . ($terpotong ? ' | 3000 proyek pertama' : '');
+        $pdf->kopDitarik = 'Ditarik oleh ' . $_SESSION['empl']['name'] . ' (' . $_SESSION['standard']['username'] . ') pada ' . date('d-m-Y H:i:s');
+        $pdf->judul = array('No', 'Kode Capex', 'Unit', 'Jenis', 'Nama', 'Int / Ext', 'Satuan', 'Jumlah', 'Tgl Mulai', 'Sampai Tgl', 'Nilai', 'Kode Asset', 'Status');
+        $pdf->AliasNbPages();
+        $pdf->SetAutoPageBreak(false, 16);
+        $pdf->colW = array(8, 28, 12, 10, 60, 16, 14, 14, 20, 20, 28, 30, 17);
+        $pdf->AddPage();
+        $h = 6;
+        $c = $pdf->colW;
+        $no = 0;
+        $totNilai = 0;
+        foreach ($data as $r) {
+            $no++;
+            $totNilai += $r['nilai'];
+            if ($pdf->GetY() + $h > $pdf->h - $pdf->bMargin) {
+                $pdf->AddPage();
+            }
+            $pdf->SetFont('Arial', '', 7);
+            $pdf->Cell($c[0], $h, $no, 1, 0, 'C');
+            $pdf->Cell($c[1], $h, $pdf->fit($r['kode'], $c[1]), 1, 0, 'L');
+            $pdf->Cell($c[2], $h, $pdf->fit($r['kodeorg'], $c[2]), 1, 0, 'C');
+            $pdf->Cell($c[3], $h, $pdf->fit($r['tipe'], $c[3]), 1, 0, 'C');
+            $pdf->Cell($c[4], $h, $pdf->fit($r['nama'], $c[4]), 1, 0, 'L');
+            $pdf->Cell($c[5], $h, $pdf->fit($r['pekerjaan'], $c[5]), 1, 0, 'C');
+            $pdf->Cell($c[6], $h, $pdf->fit($r['satuan'], $c[6]), 1, 0, 'C');
+            $pdf->Cell($c[7], $h, number_format($r['jumlah']), 1, 0, 'R');
+            $pdf->Cell($c[8], $h, tglCIP($r['tanggalmulai']), 1, 0, 'C');
+            $pdf->Cell($c[9], $h, tglCIP($r['tanggalselesai']), 1, 0, 'C');
+            $pdf->Cell($c[10], $h, number_format($r['nilai'], 2), 1, 0, 'R');
+            $pdf->Cell($c[11], $h, $pdf->fit($r['kodeasset'], $c[11]), 1, 0, 'L');
+            $pdf->Cell($c[12], $h, $r['posting'] == 1 ? 'Diposting' : 'Belum', 1, 1, 'C');
+        }
+        if ($no == 0) {
+            $pdf->Cell(array_sum($c), $h, 'Tidak ada data CIP untuk filter ini', 1, 1, 'C');
+        } else {
+            if ($pdf->GetY() + $h > $pdf->h - $pdf->bMargin) {
+                $pdf->AddPage();
+            }
+            $pdf->SetFont('Arial', 'B', 7);
+            $pdf->SetFillColor(238, 243, 250);
+            $pdf->Cell(array_sum(array_slice($c, 0, 10)), $h, 'TOTAL (' . $no . ' proyek)', 1, 0, 'R', true);
+            $pdf->Cell($c[10], $h, number_format($totNilai, 2), 1, 0, 'R', true);
+            $pdf->Cell($c[11] + $c[12], $h, '', 1, 1, 'C', true);
+        }
+        $pdf->Output();
+        exit;
     case 'detail':
         $sDet = "select distinct * from " . $dbname . ".project_dt  where kodeproject='" . $kode . "'";
         $resx = $owlPDO->query($sDet) or die(print " Gagal: " . PDOException::getMessage());
@@ -1098,18 +1523,18 @@ switch ($method) {
             $frmdt .= "<tr class=rowcontent><td colspan=9>" . $_SESSION['lang']['dataempty'] . "</td></tr>";
         } else {
             while ($rDet = $resx->fetch()) {
-                $frmdt .= "<tr class=rowcontent><td>" . $rDet['kodeproject'] . "</td>";
-                $frmdt .= "<td>" . $rDet['deskripsi'] . "</td>";
-                $frmdt .= "<td>" . $rDet['namakegiatan'] . "</td>";
-                $frmdt .= "<td>" . $rDet['satuan'] . "</td>";
-                $frmdt .= "<td align=right>" . $rDet['volume'] . "</td>";
-                $frmdt .= "<td align=right>" . $rDet['bobot'] . "</td>";
+                $frmdt .= "<tr class=rowcontent><td>" . heAC($rDet['kodeproject']) . "</td>";
+                $frmdt .= "<td>" . heAC($rDet['deskripsi']) . "</td>";
+                $frmdt .= "<td>" . heAC($rDet['namakegiatan']) . "</td>";
+                $frmdt .= "<td>" . heAC($rDet['satuan']) . "</td>";
+                $frmdt .= "<td align=right>" . heAC($rDet['volume']) . "</td>";
+                $frmdt .= "<td align=right>" . heAC($rDet['bobot']) . "</td>";
                 $frmdt .= "<td>" . tanggalnormal($rDet['tanggalmulai']) . "</td>";
                 $frmdt .= "<td>" . tanggalnormal($rDet['tanggalselesai']) . "</td>";
                 $frmdt .= "<td>
-                <img src=images/zoom.png title='" . $_SESSION['lang']['find'] . "' id=tmblCariNoGudang class=zImgBtn onclick=tambahBarang('" . $rDet['kegiatan'] . "','" . $rDet['kodeproject'] . "','" . $_SESSION['lang']['find'] . "',event)>
-                <img src=images/application/application_edit.png class=zImgBtn name='excapex2' title='Edit' onclick=\"editDet('" . tanggalnormal($rDet['tanggalmulai']) . "','" . tanggalnormal($rDet['tanggalselesai']) . "','updatedet','" . $rDet['kodeproject'] . "','" . $rDet['kegiatan'] . "','" . $rDet['deskripsi'] . "','" . $rDet['namakegiatan'] . "','" . $rDet['satuan'] . "','" . $rDet['volume'] . "','" . $rDet['bobot'] . "');\">
-                <img src=images/application/application_delete.png class=zImgBtn name='excapex3' title='Delete' onclick=\"hapusData('" . $rDet['kegiatan'] . "');\">
+                <img src=images/zoom.png title='" . $_SESSION['lang']['find'] . "' id=tmblCariNoGudang class=zImgBtn onclick=tambahBarang('" . jsAC($rDet['kegiatan']) . "','" . jsAC($rDet['kodeproject']) . "','" . $_SESSION['lang']['find'] . "',event)>
+                <img src=images/application/application_edit.png class=zImgBtn name='excapex2' title='Edit' onclick=\"editDet('" . tanggalnormal($rDet['tanggalmulai']) . "','" . tanggalnormal($rDet['tanggalselesai']) . "','updatedet','" . jsAC($rDet['kodeproject']) . "','" . jsAC($rDet['kegiatan']) . "','" . jsAC($rDet['deskripsi']) . "','" . jsAC($rDet['namakegiatan']) . "','" . jsAC($rDet['satuan']) . "','" . jsAC($rDet['volume']) . "','" . jsAC($rDet['bobot']) . "');\">
+                <img src=images/application/application_delete.png class=zImgBtn name='excapex3' title='Delete' onclick=\"hapusData('" . jsAC($rDet['kegiatan']) . "');\">
 
                 <img src=images/upload-2-xxl.png class=zImgBtn class=zImgBtn height='30' title='Upload' onclick=\"showupload('" . $rDet['kodeproject'] . $rDet['kegiatan'] . "');\"></td>
                 </tr>";
@@ -1129,14 +1554,14 @@ switch ($method) {
             $frmdt .= "<tr class=rowcontent><td colspan=9>" . $_SESSION['lang']['dataempty'] . "</td></tr>";
         } else {
             while ($rDet =  $resx->fetch()) {
-                $frmdt .= "<tr class=rowcontent><td>" . $rDet['kodeproject'] . "</td>";
-                $frmdt .= "<td>" . $rDet['no_mesin'] . "</td>";
-                $frmdt .= "<td>" . $rDet['no_rangka'] . "</td>";
-                $frmdt .= "<td>" . $rDet['tahun_produksi'] . "</td>";
-                $frmdt .= "<td>" . $rDet['tahun_prolehan'] . "</td>";
+                $frmdt .= "<tr class=rowcontent><td>" . heAC($rDet['kodeproject']) . "</td>";
+                $frmdt .= "<td>" . heAC($rDet['no_mesin']) . "</td>";
+                $frmdt .= "<td>" . heAC($rDet['no_rangka']) . "</td>";
+                $frmdt .= "<td>" . heAC($rDet['tahun_produksi']) . "</td>";
+                $frmdt .= "<td>" . heAC($rDet['tahun_prolehan']) . "</td>";
                 $frmdt .= "<td>
-                <img src=images/application/application_edit.png class=zImgBtn name='excapex2' title='Edit' onclick=\"editDetAK('" . $rDet['no_mesin'] . "','" . $rDet['no_rangka'] . "','updatedetAK','" . $rDet['kodeproject'] . "','" . $rDet['tahun_produksi'] . "','" . $rDet['tahun_prolehan'] . "','" . $rDet['kegiatan'] . "');\">
-                <img src=images/application/application_delete.png class=zImgBtn name='excapex3' title='Delete' onclick=\"hapusDataAK('" . $rDet['kegiatan'] . "');\">
+                <img src=images/application/application_edit.png class=zImgBtn name='excapex2' title='Edit' onclick=\"editDetAK('" . jsAC($rDet['no_mesin']) . "','" . jsAC($rDet['no_rangka']) . "','updatedetAK','" . jsAC($rDet['kodeproject']) . "','" . jsAC($rDet['tahun_produksi']) . "','" . jsAC($rDet['tahun_prolehan']) . "','" . jsAC($rDet['kegiatan']) . "');\">
+                <img src=images/application/application_delete.png class=zImgBtn name='excapex3' title='Delete' onclick=\"hapusDataAK('" . jsAC($rDet['kegiatan']) . "');\">
                 </td></tr>";
             }
         }
@@ -1146,16 +1571,18 @@ switch ($method) {
 
 
     case 'insertDetail':
+        proyekBolehUbahAC($kode);
         $tglMul = tanggalsystem(checkPostGet('tglMul', ''));
         $tglakh = tanggalsystem(checkPostGet('tglSmp', ''));
 
-        $sCek = "SELECT datediff('" . $tglakh . "', '" . $tglMul . "') as selisih";
-        $resx = $owlPDO->query($sCek) or die(print " Gagal: " . PDOException::getMessage());
-        $resx->setFetchMode(PDO::FETCH_NUM);
-        $data = $resx->fetch();
-        if ($data['selisih'] < 0) {
-            exit("Error:Tanggal Selesai Lebih Besar dari Tanggal Mulai");
+        $selisihTgl = selisihHariAC($tglMul, $tglakh);
+        if ($selisihTgl === null) {
+            exit("Error:Tanggal Mulai dan Tanggal Selesai wajib diisi");
         }
+        if ($selisihTgl < 0) {
+            exit("Error:Tanggal Selesai tidak boleh lebih kecil dari Tanggal Mulai");
+        }
+        cekRincianAC($_POST['nmKeg'], $deskripsi, $satKeg, $volKeg, $bobotKeg);
         $sInser = "insert into " . $dbname . ".project_dt (kodeproject,deskripsi, namakegiatan, tanggalmulai, tanggalselesai,satuan,volume,bobot)
              values ('" . $kode . "','" . $deskripsi . "','" . $_POST['nmKeg'] . "','" . tanggalsystem($_POST['tglMul']) . "','" . tanggalsystem($_POST['tglSmp']) . "','" . $satKeg . "','" . $volKeg . "','" . $bobotKeg . "')";
         //exit($sInser.'Error');
@@ -1168,6 +1595,7 @@ switch ($method) {
         break;
 
     case 'insertDetailAK':
+        proyekBolehUbahAC($kode);
         $norangka = checkPostGet('norangka', '');
         $nomesin = checkPostGet('nomesin', '');
         $tahunproduksi = checkPostGet('tahunproduksi', '');
@@ -1185,6 +1613,7 @@ switch ($method) {
         break;
 
     case 'updatedetAK':
+        proyekBolehUbahAC(proyekDariKegiatanAC(checkPostGet('kegiatanx', '')));
         $norangka = checkPostGet('norangka', '');
         $nomesin = checkPostGet('nomesin', '');
         $tahunproduksi = checkPostGet('tahunproduksi', '');
@@ -1203,16 +1632,18 @@ switch ($method) {
         break;
 
     case 'updatedet':
+        proyekBolehUbahAC(proyekDariKegiatanAC(checkPostGet('index', '')));
         $tglMul = tanggalsystem($_POST['tglMul']);
         $tglakh = tanggalsystem($_POST['tglSmp']);
 
-        $sCek = "SELECT datediff('" . $tglakh . "', '" . $tglMul . "') as selisih";
-        $resx = $owlPDO->query($sCek) or die(print " Gagal: " . PDOException::getMessage());
-        $resx->setFetchMode(PDO::FETCH_NUM);
-        $data = $resx->fetch();
-        if ($data['selisih'] < 0) {
-            exit("Error:Tanggal Selesai Lebih Kecil dari Tanggal Mulai");
+        $selisihTgl = selisihHariAC($tglMul, $tglakh);
+        if ($selisihTgl === null) {
+            exit("Error:Tanggal Mulai dan Tanggal Selesai wajib diisi");
         }
+        if ($selisihTgl < 0) {
+            exit("Error:Tanggal Selesai tidak boleh lebih kecil dari Tanggal Mulai");
+        }
+        cekRincianAC($_POST['nmKeg'], $deskripsi, $satKeg, $volKeg, $bobotKeg);
         $sUpdate = "update " . $dbname . ".project_dt set deskripsi='" . $deskripsi . "', namakegiatan='" . $_POST['nmKeg'] . "',
               tanggalmulai='" . tanggalsystem($_POST['tglMul']) . "', tanggalselesai='" . tanggalsystem($_POST['tglSmp']) . "',
               satuan='" . $satKeg . "',volume='" . $volKeg . "',bobot='" . $bobotKeg . "' where kegiatan='" . $_POST['index'] . "'";
@@ -1230,6 +1661,14 @@ switch ($method) {
     case 'postingData':
         try {
             $owlPDO->beginTransaction();
+
+            $pjCek = ambilProyekAC($kode);
+            if ($pjCek === null) {
+                throw new PDOException("Proyek tidak ditemukan atau bukan unit Anda.");
+            }
+            if ($pjCek['posting'] == 1) {
+                throw new PDOException("Proyek ini sudah diposting.");
+            }
 
             if ($param['alokasi'] == 'biaya' and $param['noakun'] == '') {
                 throw new PDOException("Untuk alokasi biaya, nomor akun wajib terisi.");
@@ -1749,111 +2188,71 @@ switch ($method) {
         break;
 
     case 'timeFrame':
-        $iHead = "select * from " . $dbname . ".project where kode='" . $kode . "'";
-        $res = $owlPDO->query($iHead) or die(print " Gagal: " . PDOException::getMessage());
-        $res->setFetchMode(PDO::FETCH_ASSOC);
-        $dHead = $res->fetch();
-
-        $tgl1 =
-            $stream = "PROJECT TIMEFRAME<table border=0>
-                    <tr>
-                            <td colspan=2>" . $_SESSION['lang']['unit'] . "</td>
-                            <td><u>" . $optNmOrg[$dHead['kodeorg']] . "</u></td>
-                    </tr>
-                    <tr>
-                            <td colspan=2>" . $_SESSION['lang']['nama'] . " " . $_SESSION['lang']['project'] . "</td>
-                            <td><u>" . $dHead['nama'] . "</u></td>
-                    </tr>
-                    <tr>
-                            <td colspan=2>" . $_SESSION['lang']['tanggal'] . " " . $_SESSION['lang']['mulai'] . "</td>
-                            <td><u>" . tanggalnormal($dHead['tanggalmulai']) . "</u></td>
-                            <td>" . $_SESSION['lang']['tanggal'] . " " . $_SESSION['lang']['selesai'] . "</td>
-                            <td><u>" . tanggalnormal($dHead['tanggalselesai']) . "</u></td>
-                    </tr>
-                </table>"; //NO  Kodebarang  Namabarang  Satuan  JLH RAB DIPAKAI SELISIH
+        include_once('lib/HtmlExcel.php');
+        $dHead = dataProyekAC($kode);
+        if ($dHead['tanggalmulai'] == '0000-00-00' || $dHead['tanggalselesai'] == '0000-00-00' || $dHead['tanggalselesai'] < $dHead['tanggalmulai']) {
+            exit("Warning : Tanggal mulai / selesai proyek belum sah, Time Frame tidak bisa dibuat.");
+        }
         $arrTgl = rangeTanggal($dHead['tanggalmulai'], $dHead['tanggalselesai']);
-        //  print_r($arrTgl);
-        $stream .= "<br /><table class=sortable border=1 cellspacing=1>
-                         <thead>
-                            <tr>
-                                <td align=center bgcolor=#CCCCCC>Tahapan</td>";
-        if (!empty($arrTgl)) foreach ($arrTgl as $lstTgl => $tgl) {
-            $stream .= "<td align=center bgcolor=#CCCCCC>" . tanggalnormal($tgl) . "</td>";
+        if (count($arrTgl) > 1000) {
+            exit("Warning : Rentang proyek lebih dari 1000 hari, Time Frame tidak bisa dibuat.");
         }
-        $stream .= "</tr>";
-        $iTahap = "select * from " . $dbname . ".project_dt where kodeproject='" . $kode . "' ";
-        $res = $owlPDO->query($iTahap) or die(print " Gagal: " . PDOException::getMessage());
-        $res->setFetchMode(PDO::FETCH_ASSOC);
-        while ($dTahap = $res->fetch()) {
-            //$i+=1;
-            //$listkodeect[$dTahap['kodeproject']]=$dTahap['kodeproject'];
-            $tahapan[$dTahap['namakegiatan']] = $dTahap['namakegiatan'];
-            $tglMulai[$dTahap['namakegiatan']] = $dTahap['tanggalmulai'];
-            $tglSelesai[$dTahap['namakegiatan']] = $dTahap['tanggalselesai'];
+        $namaBulan = array(1 => 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember');
+        #kelompok kolom per bulan untuk baris judul
+        $grupBulan = array();
+        foreach ($arrTgl as $t) {
+            $kunci = substr($t, 0, 7);
+            if (!isset($grupBulan[$kunci])) {
+                $grupBulan[$kunci] = 0;
+            }
+            $grupBulan[$kunci]++;
         }
-        //echo $i;
-        //$tglMulai[$dTahap['namakegiatan'].$dTahap['tanggalmulai']]
-        //$arrTgl=rangeTanggal($dHead['tanggalmulai'],$dHead['tanggalselesai']);
-
-        if (!empty($tahapan)) foreach ($tahapan as $listTahapan) {
-            $arrTglData = rangeTanggal($tglMulai[$listTahapan], $tglSelesai[$listTahapan]);
-            $listTersimpan = false;
-            $dert = false;
+        $kolTetap = 4;
+        $kol = $kolTetap + count($arrTgl);
+        $stream = kopExcelProyekAC($dHead, 'TIME FRAME PROYEK CIP', $kol);
+        $stream .= "<table border=1 cellspacing=0 cellpadding=2><thead>
+            <tr>
+                <th rowspan=2 align=center bgcolor=#CCCCCC>No</th>
+                <th rowspan=2 align=center bgcolor=#CCCCCC width=260>Tahapan / Kegiatan</th>
+                <th rowspan=2 align=center bgcolor=#CCCCCC width=75>Mulai</th>
+                <th rowspan=2 align=center bgcolor=#CCCCCC width=75>Sampai</th>";
+        foreach ($grupBulan as $kunci => $jml) {
+            $stream .= "<th colspan=" . $jml . " align=center bgcolor=#CCCCCC>" . $namaBulan[(int)substr($kunci, 5, 2)] . " " . substr($kunci, 0, 4) . "</th>";
+        }
+        $stream .= "</tr><tr>";
+        foreach ($arrTgl as $t) {
+            $stream .= "<th align=center bgcolor=#CCCCCC width=22>" . (int)substr($t, 8, 2) . "</th>";
+        }
+        $stream .= "</tr></thead><tbody>";
+        $kegs = fetchData("select namakegiatan,deskripsi,tanggalmulai,tanggalselesai from " . $dbname . ".project_dt where kodeproject='" . $kode . "' order by tanggalmulai, kegiatan");
+        $no = 0;
+        foreach ($kegs as $kg) {
+            $no++;
+            $namaKeg = trim($kg['namakegiatan']) != '' ? $kg['namakegiatan'] : $kg['deskripsi'];
+            $sah = ($kg['tanggalmulai'] != '0000-00-00' && $kg['tanggalselesai'] != '0000-00-00');
             $stream .= "<tr>
-                        <td>" . $tahapan[$listTahapan] . "</td>";
-            $isi = "";
-            if (!empty($arrTgl)) foreach ($arrTgl as $listTgl) {
-                if ($dert == false) {
-                    if ($tglSelesai[$listTahapan] == $listTgl) {
-                        $isi = "bgcolor=blue"; //$isi="bgcolor=red";
-                        $listTersimpan = false;
-                        //$tglSelesai[$listTahapan]="";
-                        $dert = true;
-                    } else {
-                        if ($listTersimpan == false) {
-                            if ($tglMulai[$listTahapan] == $listTgl) {
-                                $isi = "bgcolor=blue";
-                                $listTersimpan = true;
-                            }
-                        }
-                    }
-                } else {
-                    $isi = "";
-                    $dert = false;
-                }
-                //$isi="";//exit("Error:HAHA");
-                $stream .= "<td " . $isi . "></td>";  //".$tglSelesai[$listTahapan]."
+                <td align=center>" . $no . "</td>
+                <td>" . heAC($namaKeg) . "</td>
+                <td align=center>" . ($kg['tanggalmulai'] == '0000-00-00' ? '-' : tanggalnormal($kg['tanggalmulai'])) . "</td>
+                <td align=center>" . ($kg['tanggalselesai'] == '0000-00-00' ? '-' : tanggalnormal($kg['tanggalselesai'])) . "</td>";
+            foreach ($arrTgl as $t) {
+                $aktif = ($sah && $t >= $kg['tanggalmulai'] && $t <= $kg['tanggalselesai']);
+                $stream .= $aktif ? "<td bgcolor=#1F4E79>&nbsp;</td>" : "<td>&nbsp;</td>";
             }
+            $stream .= "</tr>";
         }
-        //$stream.="Print Time : ".date('H:i:s, d/m/Y')."<br>By : ".$_SESSION['empl']['name'];
-        $tglSkrg = date("Ymd");
-        $nop_ = "Laporan_Progres_Project" . $dHead['kode'];
-        if (strlen($stream) > 0) {
-            if ($handle = opendir('tempExcel')) {
-                while (false !== ($file = readdir($handle))) {
-                    if ($file != "." && $file != ".." && $file != "index.html") {
-                        @unlink('tempExcel/' . $file);
-                    }
-                }
-                closedir($handle);
-            }
-            $handle = fopen("tempExcel/" . $nop_ . ".xls", 'w');
-            if (!fwrite($handle, $stream)) {
-                echo "<script language=javascript1.2>
-                        parent.window.alert('Can't convert to excel format');
-                        </script>";
-                exit;
-            } else {
-                echo "<script language=javascript1.2>
-                        window.location='tempExcel/" . $nop_ . ".xls';
-                        </script>";
-            }
-            fclose($handle);
+        if ($no == 0) {
+            $stream .= "<tr><td colspan=" . $kol . " align=center>Belum ada rincian kegiatan untuk proyek ini</td></tr>";
         }
-
-        break;
+        $stream .= "</tbody></table>";
+        $xls = new HtmlExcel();
+        $xls->addSheet("TimeFrame", $stream);
+        $xls->headers("TimeFrame_" . $dHead['kode'] . "_" . date('YmdHis') . ".xls");
+        echo $xls->buildFile();
+        exit;
 
     case 'hpsDetailAK':
+        proyekBolehUbahAC(proyekDariKegiatanAC(checkPostGet('index', '')));
         $sdel = "delete from " . $dbname . ".project_dt where kegiatan='" . $_POST['index'] . "'";
         try {
             $owlPDO->exec($sdel);
@@ -1864,206 +2263,66 @@ switch ($method) {
         break;
 
     case 'excelMaterial':
-
-        $iHead = "select * from " . $dbname . ".project where kode='" . $kode . "'";
-        $res = $owlPDO->query($iHead) or die(print " Gagal: " . PDOException::getMessage());
-        $res->setFetchMode(PDO::FETCH_ASSOC);
-        $dHead = $res->fetch();
-        $stream = "MATERIAL USAGE<table border=0>
-                                    <tr>
-                                            <td></td>
-                                            <td>" . $_SESSION['lang']['unitkerja'] . "</td>
-                                            <td><u>" . $optNmOrg[$dHead['kodeorg']] . "</u></td>
-                                    </tr>
-                                    <tr>
-                                            <td ></td >
-                                            <td>" . $_SESSION['lang']['nama'] . " " . $_SESSION['lang']['project'] . "</td>
-                                            <td><u>" . $dHead['nama'] . "</u></td>
-                                    </tr>
-                                    <tr>
-                                            <td></td>
-                                            <td>" . $_SESSION['lang']['namakelompok'] . " " . $_SESSION['lang']['project'] . "</td>
-                                            <td><u>" . $dHead['tipe'] . "</u></td>
-                                    </tr>
-                                    <tr>
-                                            <td></td>
-                                            <td>" . $_SESSION['lang']['tanggal'] . " " . $_SESSION['lang']['mulai'] . "</td>
-                                            <td><u>" . tanggalnormal($dHead['tanggalmulai']) . "</u></td>
-                                            <td>" . $_SESSION['lang']['tanggal'] . " " . $_SESSION['lang']['selesai'] . "</td>
-                                            <td><u>" . tanggalnormal($dHead['tanggalselesai']) . "</u></td>
-                                    </tr>
-                            </table>"; //NO  Kodebarang  Namabarang  Satuan  JLH RAB DIPAKAI SELISIH
-
-        $stream .= "<br /><table class=sortable border=1 cellspacing=1>
-                                     <thead>
-                                            <tr>
-                                                    <td align=center bgcolor=#CCCCCC>" . $_SESSION['lang']['nourut'] . "</td>
-                                                    <td align=center bgcolor=#CCCCCC>" . $_SESSION['lang']['kodebarang'] . "</td>
-                                                    <td align=center bgcolor=#CCCCCC>" . $_SESSION['lang']['namabarang'] . "</td>
-                                                    <td align=center bgcolor=#CCCCCC>" . $_SESSION['lang']['satuan'] . "</td>
-                                                    <td align=center bgcolor=#CCCCCC>" . $_SESSION['lang']['penggunaan'] . " " . $_SESSION['lang']['project'] . "</td>
-                                                    <td align=center bgcolor=#CCCCCC>" . $_SESSION['lang']['jumlahkeluargudang'] . "</td>
-                                                    <td align=center bgcolor=#CCCCCC>" . $_SESSION['lang']['selisih'] . "</td>
-                                            </tr>";
-
-        $iPro = "select * from " . $dbname . ".project_material where kodeproject='" . $kode . "' ";
-        $res = $owlPDO->query($iPro) or die(print " Gagal: " . PDOException::getMessage());
-        $res->setFetchMode(PDO::FETCH_ASSOC);
-        while ($dPro = $res->fetch()) {
-            $listKdBrg[$dPro['kodebarang']] = $dPro['kodebarang'];
-            @$listJumlahRab[$dPro['kodebarang']] += $dPro['jumlah'];
+        include_once('lib/HtmlExcel.php');
+        $dHead = dataProyekAC($kode);
+        $listKdBrg = array();
+        $jmlRab = array();
+        $jmlPakai = array();
+        foreach (fetchData("select kodebarang, sum(jumlah) as jml from " . $dbname . ".project_material where kodeproject='" . $kode . "' group by kodebarang") as $r) {
+            $listKdBrg[$r['kodebarang']] = $r['kodebarang'];
+            $jmlRab[$r['kodebarang']] = $r['jml'];
         }
-        $iGud = "select * from " . $dbname . ".log_transaksi_vw where kodeblok='" . $kode . "' and post='1' ";
-        $res = $owlPDO->query($iGud) or die(print " Gagal: " . PDOException::getMessage());
-        $res->setFetchMode(PDO::FETCH_ASSOC);
-        while ($dGud = $res->fetch()) {
-            $listKdBrg[$dGud['kodebarang']] = $dGud['kodebarang'];
-            @$listJumlahPakai[$dGud['kodebarang']] += $dGud['jumlah'];
+        foreach (fetchData("select kodebarang, sum(jumlah) as jml from " . $dbname . ".log_transaksi_vw where kodeblok='" . $kode . "' and post='1' group by kodebarang") as $r) {
+            $listKdBrg[$r['kodebarang']] = $r['kodebarang'];
+            $jmlPakai[$r['kodebarang']] = $r['jml'];
         }
-        if (!empty($listKdBrg)) foreach ($listKdBrg as $kdBarang) {
-            $no += 1;
-            setIt($listJumlahRab[$kdBarang], 0);
-            setIt($listJumlahPakai[$kdBarang], 0);
-            $selisih[$kdBarang] = $listJumlahRab[$kdBarang] - $listJumlahPakai[$kdBarang];
+        ksort($listKdBrg);
+        $kol = 7;
+        $stream = kopExcelProyekAC($dHead, 'MATERIAL USAGE PROYEK CIP', $kol);
+        $stream .= "<table border=1 cellspacing=0 cellpadding=3><thead><tr>
+            <th align=center bgcolor=#CCCCCC width=40>" . $_SESSION['lang']['nourut'] . "</th>
+            <th align=center bgcolor=#CCCCCC width=90>" . $_SESSION['lang']['kodebarang'] . "</th>
+            <th align=center bgcolor=#CCCCCC width=320>" . $_SESSION['lang']['namabarang'] . "</th>
+            <th align=center bgcolor=#CCCCCC width=60>" . $_SESSION['lang']['satuan'] . "</th>
+            <th align=center bgcolor=#CCCCCC width=110>" . $_SESSION['lang']['penggunaan'] . " " . $_SESSION['lang']['project'] . "</th>
+            <th align=center bgcolor=#CCCCCC width=110>" . $_SESSION['lang']['jumlahkeluargudang'] . "</th>
+            <th align=center bgcolor=#CCCCCC width=90>" . $_SESSION['lang']['selisih'] . "</th>
+        </tr></thead><tbody>";
+        $no = 0;
+        foreach ($listKdBrg as $kdBarang) {
+            $no++;
+            $rab = isset($jmlRab[$kdBarang]) ? $jmlRab[$kdBarang] : 0;
+            $pakai = isset($jmlPakai[$kdBarang]) ? $jmlPakai[$kdBarang] : 0;
             $stream .= "<tr>
-                                            <td>" . $no . "</td>
-                                            <td>" . $kdBarang . "</td>
-                                            <td>" . $nmBrg[$kdBarang] . "</td>
-                                            <td>" . $satBrg[$kdBarang] . "</td>
-                                            <td>" . $listJumlahRab[$kdBarang] . "</td>
-                                            <td>" . $listJumlahPakai[$kdBarang] . "</td>
-                                            <td>" . $selisih[$kdBarang] . "</td>
-                                    </tr>";
+                <td align=center>" . $no . "</td>
+                <td>" . heAC($kdBarang) . "</td>
+                <td>" . heAC(isset($nmBrg[$kdBarang]) ? $nmBrg[$kdBarang] : '') . "</td>
+                <td align=center>" . heAC(isset($satBrg[$kdBarang]) ? $satBrg[$kdBarang] : '') . "</td>
+                <td align=right>" . round($rab, 2) . "</td>
+                <td align=right>" . round($pakai, 2) . "</td>
+                <td align=right>" . round($rab - $pakai, 2) . "</td>
+            </tr>";
         }
-        $nop_ = "Laporan_Material_" . $dHead['kode'];
-        if (strlen($stream) > 0) {
-            if ($handle = opendir('tempExcel')) {
-                while (false !== ($file = readdir($handle))) {
-                    if ($file != "." && $file != ".." && $file != "index.html") {
-                        @unlink('tempExcel/' . $file);
-                    }
-                }
-                closedir($handle);
-            }
-            $handle = fopen("tempExcel/" . $nop_ . ".xls", 'w');
-            if (!fwrite($handle, $stream)) {
-                echo "<script language=javascript1.2>
-                            parent.window.alert('Can't convert to excel format');
-                            </script>";
-                exit;
-            } else {
-                echo "<script language=javascript1.2>
-                            window.location='tempExcel/" . $nop_ . ".xls';
-                            </script>";
-            }
-            fclose($handle);
+        if ($no == 0) {
+            $stream .= "<tr><td colspan=" . $kol . " align=center>Belum ada material pada proyek ini</td></tr>";
         }
-        break;
+        $stream .= "</tbody></table>";
+        $xls = new HtmlExcel();
+        $xls->addSheet("MaterialUsage", $stream);
+        $xls->headers("MaterialUsage_" . $dHead['kode'] . "_" . date('YmdHis') . ".xls");
+        echo $xls->buildFile();
+        exit;
 
     case 'hpsDetail':
+        $kodePjHps = proyekDariKegiatanAC(checkPostGet('index', ''));
+        proyekBolehUbahAC($kodePjHps);
+        $owlPDO->exec("delete from " . $dbname . ".project_material where kodeproject='" . $kodePjHps . "' and kodekegiatan='" . checkPostGet('index', '') . "'");
         $sdel = "delete from " . $dbname . ".project_dt where kegiatan='" . $_POST['index'] . "'";
         try {
             $owlPDO->exec($sdel);
         } catch (PDOException $e) {
             print " Gagal  !: " . $e->getMessage() . "\n";
             die();
-        }
-        break;
-
-    case 'excelMaterial':
-
-        $iHead = "select * from " . $dbname . ".project where kode='" . $kode . "'";
-        $res = $owlPDO->query($iHead) or die(print " Gagal: " . PDOException::getMessage());
-        $res->setFetchMode(PDO::FETCH_ASSOC);
-        $dHead = $res->fetch();
-        $stream = "MATERIAL USAGE<table border=0>
-                                    <tr>
-                                            <td></td>
-                                            <td>" . $_SESSION['lang']['unitkerja'] . "</td>
-                                            <td><u>" . $optNmOrg[$dHead['kodeorg']] . "</u></td>
-                                    </tr>
-                                    <tr>
-                                            <td ></td >
-                                            <td>" . $_SESSION['lang']['nama'] . " " . $_SESSION['lang']['project'] . "</td>
-                                            <td><u>" . $dHead['nama'] . "</u></td>
-                                    </tr>
-                                    <tr>
-                                            <td></td>
-                                            <td>" . $_SESSION['lang']['namakelompok'] . " " . $_SESSION['lang']['project'] . "</td>
-                                            <td><u>" . $dHead['tipe'] . "</u></td>
-                                    </tr>
-                                    <tr>
-                                            <td></td>
-                                            <td>" . $_SESSION['lang']['tanggal'] . " " . $_SESSION['lang']['mulai'] . "</td>
-                                            <td><u>" . tanggalnormal($dHead['tanggalmulai']) . "</u></td>
-                                            <td>" . $_SESSION['lang']['tanggal'] . " " . $_SESSION['lang']['selesai'] . "</td>
-                                            <td><u>" . tanggalnormal($dHead['tanggalselesai']) . "</u></td>
-                                    </tr>
-                            </table>"; //NO  Kodebarang  Namabarang  Satuan  JLH RAB DIPAKAI SELISIH
-
-        $stream .= "<br /><table class=sortable border=1 cellspacing=1>
-                                     <thead>
-                                            <tr>
-                                                    <td align=center bgcolor=#CCCCCC>" . $_SESSION['lang']['nourut'] . "</td>
-                                                    <td align=center bgcolor=#CCCCCC>" . $_SESSION['lang']['kodebarang'] . "</td>
-                                                    <td align=center bgcolor=#CCCCCC>" . $_SESSION['lang']['namabarang'] . "</td>
-                                                    <td align=center bgcolor=#CCCCCC>" . $_SESSION['lang']['satuan'] . "</td>
-                                                    <td align=center bgcolor=#CCCCCC>" . $_SESSION['lang']['penggunaan'] . " " . $_SESSION['lang']['project'] . "</td>
-                                                    <td align=center bgcolor=#CCCCCC>" . $_SESSION['lang']['jumlahkeluargudang'] . "</td>
-                                                    <td align=center bgcolor=#CCCCCC>" . $_SESSION['lang']['selisih'] . "</td>
-                                            </tr>";
-
-        $iPro = "select * from " . $dbname . ".project_material where kodeproject='" . $kode . "' ";
-        $res = $owlPDO->query($iPro) or die(print " Gagal: " . PDOException::getMessage());
-        $res->setFetchMode(PDO::FETCH_ASSOC);
-        while ($dPro = $res->fetch()) {
-            $listKdBrg[$dPro['kodebarang']] = $dPro['kodebarang'];
-            @$listJumlahRab[$dPro['kodebarang']] += $dPro['jumlah'];
-        }
-        $iGud = "select * from " . $dbname . ".log_transaksi_vw where kodeblok='" . $kode . "' and post='1' ";
-        $res = $owlPDO->query($iGud) or die(print " Gagal: " . PDOException::getMessage());
-        $res->setFetchMode(PDO::FETCH_ASSOC);
-        while ($dGud = $res->fetch()) {
-            $listKdBrg[$dGud['kodebarang']] = $dGud['kodebarang'];
-            @$listJumlahPakai[$dGud['kodebarang']] += $dGud['jumlah'];
-        }
-        if (!empty($listKdBrg)) foreach ($listKdBrg as $kdBarang) {
-            $no += 1;
-            setIt($listJumlahRab[$kdBarang], 0);
-            setIt($listJumlahPakai[$kdBarang], 0);
-            $selisih[$kdBarang] = $listJumlahRab[$kdBarang] - $listJumlahPakai[$kdBarang];
-            $stream .= "<tr>
-                                            <td>" . $no . "</td>
-                                            <td>" . $kdBarang . "</td>
-                                            <td>" . $nmBrg[$kdBarang] . "</td>
-                                            <td>" . $satBrg[$kdBarang] . "</td>
-                                            <td>" . $listJumlahRab[$kdBarang] . "</td>
-                                            <td>" . $listJumlahPakai[$kdBarang] . "</td>
-                                            <td>" . $selisih[$kdBarang] . "</td>
-                                    </tr>";
-        }
-        $nop_ = "Laporan_Material_" . $dHead['kode'];
-        if (strlen($stream) > 0) {
-            if ($handle = opendir('tempExcel')) {
-                while (false !== ($file = readdir($handle))) {
-                    if ($file != "." && $file != ".." && $file != "index.html") {
-                        @unlink('tempExcel/' . $file);
-                    }
-                }
-                closedir($handle);
-            }
-            $handle = fopen("tempExcel/" . $nop_ . ".xls", 'w');
-            if (!fwrite($handle, $stream)) {
-                echo "<script language=javascript1.2>
-                            parent.window.alert('Can't convert to excel format');
-                            </script>";
-                exit;
-            } else {
-                echo "<script language=javascript1.2>
-                            window.location='tempExcel/" . $nop_ . ".xls';
-                            </script>";
-            }
-            fclose($handle);
         }
         break;
 
@@ -2314,6 +2573,7 @@ switch ($method) {
         break;
 
     case 'showform':
+        proyekBolehUbahAC(checkPostGet('kodeproject', ''));
         $res = array('asset' => 'Naikkan Menjadi Asset', 'biaya' => 'Alokasi Sebagai Biaya');
         $optjenis = "<option value=''>" . $_SESSION['lang']['pilihdata'] . "</option>";
         foreach ($res as $key => $val) {
@@ -2387,74 +2647,89 @@ switch ($method) {
         }
 
 
-        $tab = "<table>";
-        $tab .= "<tr>
-                <td>" . $_SESSION['lang']['kode'] . "</td>
-                <td>:</td>
-                <td><input type=text id=kode onkeypress=\"return tanpa_kutip(event);\" class=myinputtext  style=\"width:150px;\" value='" . $_POST['kodeproject'] . "' disabled=disabled /></td>
+        #akun yang dipakai bila dinaikkan menjadi aset: dari Parameter Jurnal PRJ + kode tipe project (sama dengan yang dipakai saat posting)
+        $dkPost = explode('-', (string)$_POST['kodeproject']);
+        $tipePost = substr(isset($dkPost[1]) ? $dkPost[1] : '', 0, 2);
+        $rPrm = fetchData("select noakundebet,noakunkredit from " . $dbname . ".keu_5parameterjurnal where kodeaplikasi='PRJ' and jurnalid='PRJ" . $tipePost . "'");
+        if (isset($rPrm[0])) {
+            $nmAkunPrm = makeOption($dbname, 'keu_5akun', 'noakun,namaakun', "noakun in ('" . $rPrm[0]['noakundebet'] . "','" . $rPrm[0]['noakunkredit'] . "')");
+            $barisAkunAset = "<tr id=rowakunasset1 style=display:none>
+                <td class=lbl>Akun Aset (Debet)</td>
+                <td class=sep>:</td>
+                <td><b>" . heAC($rPrm[0]['noakundebet'] . " - " . (isset($nmAkunPrm[$rPrm[0]['noakundebet']]) ? $nmAkunPrm[$rPrm[0]['noakundebet']] : '')) . "</b></td>
             </tr>
-			<tr>
-                <td>" . $_SESSION['lang']['nama'] . "</td>
-                <td>:</td>
-                <td><input type=text id=namaasetposting onkeypress=\"return tanpa_kutip(event);\" class=myinputtext  style=\"width:500px;\" value='" . $namaaset . "' /></td>
+            <tr id=rowakunasset2 style=display:none>
+                <td class=lbl>Akun CIP (Kredit)</td>
+                <td class=sep>:</td>
+                <td><b>" . heAC($rPrm[0]['noakunkredit'] . " - " . (isset($nmAkunPrm[$rPrm[0]['noakunkredit']]) ? $nmAkunPrm[$rPrm[0]['noakunkredit']] : '')) . "</b></td>
+            </tr>";
+        } else {
+            $barisAkunAset = "<tr id=rowakunasset1 style=display:none>
+                <td class=lbl>Akun Aset</td>
+                <td class=sep>:</td>
+                <td style='color:#b42318'>Parameter Jurnal PRJ" . heAC($tipePost) . " belum ada, posting aset tidak bisa dilakukan. Hubungi pihak IT.</td>
             </tr>
-			<tr>
-                <td>" . $_SESSION['lang']['norangka'] . "</td>
-                <td>:</td>
-                <td><input type=text id=norangkaposting onkeypress=\"return tanpa_kutip(event);\" class=myinputtext  style=\"width:500px;\" value='" . $norangka . "' /></td>
-            </tr>
-			<tr>
-                <td>" . $_SESSION['lang']['nomesin'] . "</td>
-                <td>:</td>
-                <td><input type=text id=nomesinposting onkeypress=\"return tanpa_kutip(event);\" class=myinputtext  style=\"width:500px;\" value='" . $nomesin . "' /></td>
-            </tr>
-			<tr>
-                <td>" . $_SESSION['lang']['tipemodel'] . "</td>
-                <td>:</td>
-                <td><input type=text id=tipemodelposting onkeypress=\"return tanpa_kutip(event);\" class=myinputtext  style=\"width:500px;\" value='" . $tipemodel . "' /></td>
-            </tr>
-			
+            <tr id=rowakunasset2 style=display:none><td colspan=3></td></tr>";
+        }
+
+        $tglPosting = date('d-m-Y');
+        $fw = "style='width:100%;box-sizing:border-box;'";
+        $kodePost = heAC($_POST['kodeproject']);
+        $tab = "<style>
+            #tbPostCIP {width:100%;max-width:760px;border-collapse:collapse}
+            #tbPostCIP td {padding:3px 4px;vertical-align:middle}
+            #tbPostCIP td.lbl {width:150px;white-space:nowrap}
+            #tbPostCIP td.sep {width:12px;text-align:center}
+            #tbPostCIP tr.judul td {font-weight:bold;padding-top:12px;border-bottom:1px solid #9bb3d0}
+            #tbPostCIP .select2-container {width:100% !important}
+            #infoPostCIP {max-width:760px;margin-top:12px;padding:7px 10px;background:#f4f8fd;border:1px solid #c5d5e8;font-size:12px}
+        </style>";
+        $tab .= "<table id=tbPostCIP>
+            <tr class=judul><td colspan=3>Data Aset</td></tr>
             <tr>
-                <td>" . $_SESSION['lang']['tanggal'] . "</td>
-                <td>:</td>
-                <td><input type=text class=myinputtext readonly  id=tglpost onmousemove=setCalendar(this.id) onkeypress=return false;  size=10 maxlength=10 style=\"width:500px;\" value='" . $tglPosting . "'/></td>
-            </tr>
-			<tr>
-                <td>" . $_SESSION['lang']['alokasi'] . "</td>
-                <td>:</td>
-                <td><select id=alokasi onchange=showhide(this.value); style=\"width:505px;\">" . $optjenis . "</select></td>
-            </tr>
-			<tr id=rowakun style=display:none>
-                <td>" . $_SESSION['lang']['noakun'] . "</td>
-                <td>:</td>
-                <td><select id=noakun class=select2 style=\"width:505px;\">" . $optJnsKerja . "</select>
-					</td>
-            </tr>
-			<tr id=rowkary style=display:none>
-                <td>" . $_SESSION['lang']['namakaryawan'] . "</td>
-                 <td>:</td>
-				<td><select id=karyawanid class=select2 style=\"width:505px;\">" . $optkary . "</select>
-					</td>
+                <td class=lbl>" . $_SESSION['lang']['kode'] . "</td><td class=sep>:</td>
+                <td><input type=text id=kodeposting class=myinputtext " . $fw . " value='" . $kodePost . "' disabled=disabled /></td>
             </tr>
             <tr>
-				<td colspan=2>&nbsp;</td>
-				<td><button class=mybutton onclick=savePosting('" . $_POST['kodeproject'] . "','" . $_POST['kodeorg'] . "','" . $_POST['kodeorg'] . "')>" . $_SESSION['lang']['save'] . "</button></td>
-			</tr>
-			<tr>
-				<td colspan=3><hr></td>
-			</tr>
-            <tr>
-                <td colspan=3>Pemilihan naik menjadi asset, Tanggal 1 s/d 30 maka periode penyusutan masuk ke bulan yg sama.</td>
+                <td class=lbl>" . $_SESSION['lang']['nama'] . "</td><td class=sep>:</td>
+                <td><input type=text id=namaasetposting onkeypress=\"return tanpa_kutip(event);\" class=myinputtext " . $fw . " value='" . heAC($namaaset) . "' /></td>
             </tr>
-            <!--
-                <tr>
-                    <td colspan=3>Pemilihan naik menjadi asset, Jika tanggal > 15 maka periode penyusutan masuk ke bulan yg sama.</td>
-                </tr>
-                <tr>
-                    <td colspan=3>Pemilihan naik menjadi asset, Jika tanggal >= 15 maka periode penyusutan masuk ke bulan depan.</td>
-                </tr>
-            -->
-        </table>";
+            <tr>
+                <td class=lbl>" . $_SESSION['lang']['norangka'] . "</td><td class=sep>:</td>
+                <td><input type=text id=norangkaposting onkeypress=\"return tanpa_kutip(event);\" class=myinputtext " . $fw . " value='" . heAC($norangka) . "' /></td>
+            </tr>
+            <tr>
+                <td class=lbl>" . $_SESSION['lang']['nomesin'] . "</td><td class=sep>:</td>
+                <td><input type=text id=nomesinposting onkeypress=\"return tanpa_kutip(event);\" class=myinputtext " . $fw . " value='" . heAC($nomesin) . "' /></td>
+            </tr>
+            <tr>
+                <td class=lbl>" . $_SESSION['lang']['tipemodel'] . "</td><td class=sep>:</td>
+                <td><input type=text id=tipemodelposting onkeypress=\"return tanpa_kutip(event);\" class=myinputtext " . $fw . " value='" . heAC($tipemodel) . "' /></td>
+            </tr>
+            <tr class=judul><td colspan=3>Posting</td></tr>
+            <tr>
+                <td class=lbl>" . $_SESSION['lang']['tanggal'] . " <span style='color:#c0392b'>*</span></td><td class=sep>:</td>
+                <td><input type=text class=myinputtext readonly id=tglpost onmousemove=setCalendar(this.id) onkeypress=return false; size=10 maxlength=10 style='width:110px;' value='" . $tglPosting . "'/></td>
+            </tr>
+            <tr>
+                <td class=lbl>" . $_SESSION['lang']['alokasi'] . " <span style='color:#c0392b'>*</span></td><td class=sep>:</td>
+                <td><select id=alokasi class=select2 onchange=showhide(this.value); style='width:100%;'>" . $optjenis . "</select></td>
+            </tr>
+            " . $barisAkunAset . "
+            <tr id=rowakun style=display:none>
+                <td class=lbl>" . $_SESSION['lang']['noakun'] . " <span style='color:#c0392b'>*</span></td><td class=sep>:</td>
+                <td><select id=noakun class=select2 style='width:100%;'>" . $optJnsKerja . "</select></td>
+            </tr>
+            <tr id=rowkary style=display:none>
+                <td class=lbl>" . $_SESSION['lang']['namakaryawan'] . "</td><td class=sep>:</td>
+                <td><select id=karyawanid class=select2 style='width:100%;'>" . $optkary . "</select></td>
+            </tr>
+            <tr>
+                <td colspan=2>&nbsp;</td>
+                <td style='padding-top:8px;'><button class=mybutton onclick=\"savePosting('" . jsAC($_POST['kodeproject']) . "','" . jsAC($_POST['kodeorg']) . "','" . jsAC($_POST['kodeorg']) . "')\">" . $_SESSION['lang']['save'] . "</button></td>
+            </tr>
+        </table>
+        <div id=infoPostCIP>Pemilihan naik menjadi asset, Tanggal 1 s/d 30 maka periode penyusutan masuk ke bulan yg sama.</div>";
 
         echo $tab;
         break;
