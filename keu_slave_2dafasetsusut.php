@@ -186,7 +186,7 @@ function dataAD($f, &$terpotong)
 		$susut = isset($jurnal[$r['kodeasset']]) ? (float)$jurnal[$r['kodeasset']]['susut'] : 0;
 		$berjalan = bulanBerjalanAD($r['awalpenyusutan'], $f['periode'], $umur);
 		$grup[$tp]['baris'][] = array(
-			'kode' => $r['kodeasset'], 'nama' => $r['namasset'], 'unit' => $r['kodeorg'], 'tgl' => $r['tanggalperolehan'],
+			'kode' => $r['kodeasset'], 'nama' => $r['namasset'], 'unit' => $r['kodeorg'], 'tgl' => $r['tanggalperolehan'], 'awal' => $r['awalpenyusutan'],
 			'harga' => $harga, 'umur' => $umur, 'bulanan' => $bulanan, 'susut' => $susut, 'akum' => $akum,
 			'nilai' => $harga - $akum, 'sisa' => max(0, $umur - $berjalan)
 		);
@@ -210,12 +210,18 @@ function angkaAD($v)
 	return abs($v) < 0.5 ? '-' : number_format($v, 0);
 }
 
+#awal penyusutan tersimpan YYYY-MM; tampil MM-YYYY
+function awalAD($a)
+{
+	return preg_match('/^(\d{4})-(\d{2})$/', (string)$a, $m) ? $m[2] . '-' . $m[1] : '';
+}
+
 function tglAD($t)
 {
 	return ($t == '' || $t == '0000-00-00') ? '' : date('d-m-Y', strtotime($t));
 }
 
-$kolomJudul = array('No', 'Kode Aset', 'Nama Aset', 'Unit', 'Tgl Perolehan', 'Harga Perolehan', 'Umur (Bln)', 'Susut / Bln', 'Susut Periode', 'Akumulasi Susut', 'Nilai Buku (Sisa Nilai)', 'Sisa Umur (Bln)');
+$kolomJudul = array('No', 'Kode Aset', 'Nama Aset', 'Unit', 'Tgl Perolehan', 'Awal Susut', 'Harga Perolehan', 'Umur (Bln)', 'Susut / Bln', 'Susut Periode', 'Akumulasi Susut', 'Nilai Buku (Sisa Nilai)', 'Sisa Umur (Bln)');
 
 switch ($method) {
 	case 'unit':
@@ -312,11 +318,11 @@ switch ($method) {
 		}
 		$out .= "</tr></thead><tbody>";
 		if ($jml == 0) {
-			$out .= "<tr class=rowcontent><td colspan=12 align=center>Tidak ada data aset untuk filter ini.</td></tr>";
+			$out .= "<tr class=rowcontent><td colspan=13 align=center>Tidak ada data aset untuk filter ini.</td></tr>";
 		}
 		$grand = array('harga' => 0, 'bulanan' => 0, 'susut' => 0, 'akum' => 0, 'nilai' => 0);
 		foreach ($grup as $g) {
-			$out .= "<tr class=rowcontent style='font-weight:bold;background:#d9e8fb'><td colspan=12>" . htmlspecialchars($g['nama']) . "</td></tr>";
+			$out .= "<tr class=rowcontent style='font-weight:bold;background:#d9e8fb'><td colspan=13>" . htmlspecialchars($g['nama']) . "</td></tr>";
 			$no = 0;
 			foreach ($g['baris'] as $b) {
 				$no++;
@@ -326,6 +332,7 @@ switch ($method) {
 					<td>" . htmlspecialchars($b['nama']) . "</td>
 					<td align=center>" . htmlspecialchars($b['unit']) . "</td>
 					<td align=center nowrap>" . tglAD($b['tgl']) . "</td>
+					<td align=center nowrap>" . awalAD($b['awal']) . "</td>
 					<td align=right>" . angkaAD($b['harga']) . "</td>
 					<td align=center>" . ($b['umur'] > 0 ? $b['umur'] : '-') . "</td>
 					<td align=right>" . angkaAD($b['bulanan']) . "</td>
@@ -339,13 +346,13 @@ switch ($method) {
 			foreach ($grand as $k => $v) {
 				$grand[$k] += $t[$k];
 			}
-			$out .= "<tr class=rowcontent style='font-weight:bold'><td colspan=5 align=right>Subtotal " . htmlspecialchars($g['nama']) . " (" . count($g['baris']) . " aset)</td>
+			$out .= "<tr class=rowcontent style='font-weight:bold'><td colspan=6 align=right>Subtotal " . htmlspecialchars($g['nama']) . " (" . count($g['baris']) . " aset)</td>
 				<td align=right>" . angkaAD($t['harga']) . "</td><td></td><td align=right>" . angkaAD($t['bulanan']) . "</td>
 				<td align=right>" . angkaAD($t['susut']) . "</td><td align=right>" . angkaAD($t['akum']) . "</td>
 				<td align=right>" . angkaAD($t['nilai']) . "</td><td></td></tr>";
 		}
 		if ($jml > 0) {
-			$out .= "<tr class=rowcontent style='font-weight:bold;background:#eef3fa'><td colspan=5 align=right>TOTAL (" . $jml . " aset)</td>
+			$out .= "<tr class=rowcontent style='font-weight:bold;background:#eef3fa'><td colspan=6 align=right>TOTAL (" . $jml . " aset)</td>
 				<td align=right>" . angkaAD($grand['harga']) . "</td><td></td><td align=right>" . angkaAD($grand['bulanan']) . "</td>
 				<td align=right>" . angkaAD($grand['susut']) . "</td><td align=right>" . angkaAD($grand['akum']) . "</td>
 				<td align=right>" . angkaAD($grand['nilai']) . "</td><td></td></tr>";
@@ -361,7 +368,7 @@ switch ($method) {
 		$terpotong = false;
 		$grup = dataAD($f, $terpotong);
 		$hdpt = setheadreport($_SESSION['empl']['kodeorganisasi'], $_SESSION['empl']['kodeorganisasi']);
-		$kol = 12;
+		$kol = 13;
 		$stream = "<table>
 			<tr><td colspan=" . $kol . "><b>" . htmlspecialchars($hdpt['nama']) . "</b></td></tr>
 			<tr><td colspan=" . $kol . "><b>DAFTAR ASET DAN PENYUSUTAN</b></td></tr>
@@ -387,6 +394,7 @@ switch ($method) {
 					<td>" . htmlspecialchars($b['nama']) . "</td>
 					<td align=center>" . htmlspecialchars($b['unit']) . "</td>
 					<td align=center>" . tglAD($b['tgl']) . "</td>
+					<td align=center>" . awalAD($b['awal']) . "</td>
 					<td align=right>" . round($b['harga'], 2) . "</td>
 					<td align=center>" . $b['umur'] . "</td>
 					<td align=right>" . round($b['bulanan'], 2) . "</td>
@@ -400,7 +408,7 @@ switch ($method) {
 			foreach ($grand as $k => $v) {
 				$grand[$k] += $t[$k];
 			}
-			$stream .= "<tr><td colspan=5 align=right><b>Subtotal " . htmlspecialchars($g['nama']) . " (" . count($g['baris']) . " aset)</b></td>
+			$stream .= "<tr><td colspan=6 align=right><b>Subtotal " . htmlspecialchars($g['nama']) . " (" . count($g['baris']) . " aset)</b></td>
 				<td align=right><b>" . round($t['harga'], 2) . "</b></td><td></td><td align=right><b>" . round($t['bulanan'], 2) . "</b></td>
 				<td align=right><b>" . round($t['susut'], 2) . "</b></td><td align=right><b>" . round($t['akum'], 2) . "</b></td>
 				<td align=right><b>" . round($t['nilai'], 2) . "</b></td><td></td></tr>";
@@ -408,7 +416,7 @@ switch ($method) {
 		if ($jml == 0) {
 			$stream .= "<tr><td colspan=" . $kol . " align=center>Tidak ada data aset untuk filter ini</td></tr>";
 		} else {
-			$stream .= "<tr><td colspan=5 align=right><b>TOTAL (" . $jml . " aset)</b></td>
+			$stream .= "<tr><td colspan=6 align=right><b>TOTAL (" . $jml . " aset)</b></td>
 				<td align=right><b>" . round($grand['harga'], 2) . "</b></td><td></td><td align=right><b>" . round($grand['bulanan'], 2) . "</b></td>
 				<td align=right><b>" . round($grand['susut'], 2) . "</b></td><td align=right><b>" . round($grand['akum'], 2) . "</b></td>
 				<td align=right><b>" . round($grand['nilai'], 2) . "</b></td><td></td></tr>";
@@ -486,10 +494,10 @@ switch ($method) {
 		$pdf->kopLogo = isset($hdpt['logo']) ? $hdpt['logo'] : '';
 		$pdf->kopInfo = infoFilterAD($f) . ($terpotong ? ' | 3000 aset pertama' : '');
 		$pdf->kopDitarik = 'Ditarik oleh ' . $_SESSION['empl']['name'] . ' (' . $_SESSION['standard']['username'] . ') pada ' . date('d-m-Y H:i:s');
-		$pdf->judul = array('No', 'Kode Aset', 'Nama Aset', 'Unit', 'Tgl Perolehan', 'Harga Perolehan', 'Umur (Bln)', 'Susut / Bln', 'Susut Periode', 'Akumulasi Susut', 'Nilai Buku', 'Sisa Umur');
+		$pdf->judul = array('No', 'Kode Aset', 'Nama Aset', 'Unit', 'Tgl Perolehan', 'Awal Susut', 'Harga Perolehan', 'Umur (Bln)', 'Susut / Bln', 'Susut Periode', 'Akumulasi Susut', 'Nilai Buku', 'Sisa Umur');
 		$pdf->AliasNbPages();
 		$pdf->SetAutoPageBreak(false, 16);
-		$pdf->colW = array(8, 28, 68, 14, 20, 25, 10, 18, 20, 25, 25, 12);
+		$pdf->colW = array(8, 28, 52, 14, 20, 16, 25, 10, 18, 20, 25, 25, 12);
 		$pdf->AddPage();
 		$h = 6;
 		$c = $pdf->colW;
@@ -516,13 +524,14 @@ switch ($method) {
 				$pdf->Cell($c[2], $h, $pdf->fit($b['nama'], $c[2]), 1, 0, 'L');
 				$pdf->Cell($c[3], $h, $pdf->fit($b['unit'], $c[3]), 1, 0, 'C');
 				$pdf->Cell($c[4], $h, tglAD($b['tgl']), 1, 0, 'C');
-				$pdf->Cell($c[5], $h, angkaAD($b['harga']), 1, 0, 'R');
-				$pdf->Cell($c[6], $h, $b['umur'] > 0 ? $b['umur'] : '-', 1, 0, 'C');
-				$pdf->Cell($c[7], $h, angkaAD($b['bulanan']), 1, 0, 'R');
-				$pdf->Cell($c[8], $h, angkaAD($b['susut']), 1, 0, 'R');
-				$pdf->Cell($c[9], $h, angkaAD($b['akum']), 1, 0, 'R');
-				$pdf->Cell($c[10], $h, angkaAD($b['nilai']), 1, 0, 'R');
-				$pdf->Cell($c[11], $h, $b['sisa'], 1, 1, 'C');
+				$pdf->Cell($c[5], $h, awalAD($b['awal']), 1, 0, 'C');
+				$pdf->Cell($c[6], $h, angkaAD($b['harga']), 1, 0, 'R');
+				$pdf->Cell($c[7], $h, $b['umur'] > 0 ? $b['umur'] : '-', 1, 0, 'C');
+				$pdf->Cell($c[8], $h, angkaAD($b['bulanan']), 1, 0, 'R');
+				$pdf->Cell($c[9], $h, angkaAD($b['susut']), 1, 0, 'R');
+				$pdf->Cell($c[10], $h, angkaAD($b['akum']), 1, 0, 'R');
+				$pdf->Cell($c[11], $h, angkaAD($b['nilai']), 1, 0, 'R');
+				$pdf->Cell($c[12], $h, $b['sisa'], 1, 1, 'C');
 			}
 			$t = totalAD($g['baris']);
 			foreach ($grand as $k => $v) {
@@ -530,14 +539,14 @@ switch ($method) {
 			}
 			$cekHal();
 			$pdf->SetFont('Arial', 'B', 7);
-			$pdf->Cell(array_sum(array_slice($c, 0, 5)), $h, utf8_decode('Subtotal ' . $g['nama'] . ' (' . count($g['baris']) . ' aset)'), 1, 0, 'R');
-			$pdf->Cell($c[5], $h, angkaAD($t['harga']), 1, 0, 'R');
-			$pdf->Cell($c[6], $h, '', 1, 0, 'C');
-			$pdf->Cell($c[7], $h, angkaAD($t['bulanan']), 1, 0, 'R');
-			$pdf->Cell($c[8], $h, angkaAD($t['susut']), 1, 0, 'R');
-			$pdf->Cell($c[9], $h, angkaAD($t['akum']), 1, 0, 'R');
-			$pdf->Cell($c[10], $h, angkaAD($t['nilai']), 1, 0, 'R');
-			$pdf->Cell($c[11], $h, '', 1, 1, 'C');
+			$pdf->Cell(array_sum(array_slice($c, 0, 6)), $h, utf8_decode('Subtotal ' . $g['nama'] . ' (' . count($g['baris']) . ' aset)'), 1, 0, 'R');
+			$pdf->Cell($c[6], $h, angkaAD($t['harga']), 1, 0, 'R');
+			$pdf->Cell($c[7], $h, '', 1, 0, 'C');
+			$pdf->Cell($c[8], $h, angkaAD($t['bulanan']), 1, 0, 'R');
+			$pdf->Cell($c[9], $h, angkaAD($t['susut']), 1, 0, 'R');
+			$pdf->Cell($c[10], $h, angkaAD($t['akum']), 1, 0, 'R');
+			$pdf->Cell($c[11], $h, angkaAD($t['nilai']), 1, 0, 'R');
+			$pdf->Cell($c[12], $h, '', 1, 1, 'C');
 		}
 		if ($jml == 0) {
 			$pdf->Cell(array_sum($c), $h, 'Tidak ada data aset untuk filter ini', 1, 1, 'C');
@@ -545,14 +554,14 @@ switch ($method) {
 			$cekHal();
 			$pdf->SetFont('Arial', 'B', 7);
 			$pdf->SetFillColor(238, 243, 250);
-			$pdf->Cell(array_sum(array_slice($c, 0, 5)), $h, 'TOTAL (' . $jml . ' aset)', 1, 0, 'R', true);
-			$pdf->Cell($c[5], $h, angkaAD($grand['harga']), 1, 0, 'R', true);
-			$pdf->Cell($c[6], $h, '', 1, 0, 'C', true);
-			$pdf->Cell($c[7], $h, angkaAD($grand['bulanan']), 1, 0, 'R', true);
-			$pdf->Cell($c[8], $h, angkaAD($grand['susut']), 1, 0, 'R', true);
-			$pdf->Cell($c[9], $h, angkaAD($grand['akum']), 1, 0, 'R', true);
-			$pdf->Cell($c[10], $h, angkaAD($grand['nilai']), 1, 0, 'R', true);
-			$pdf->Cell($c[11], $h, '', 1, 1, 'C', true);
+			$pdf->Cell(array_sum(array_slice($c, 0, 6)), $h, 'TOTAL (' . $jml . ' aset)', 1, 0, 'R', true);
+			$pdf->Cell($c[6], $h, angkaAD($grand['harga']), 1, 0, 'R', true);
+			$pdf->Cell($c[7], $h, '', 1, 0, 'C', true);
+			$pdf->Cell($c[8], $h, angkaAD($grand['bulanan']), 1, 0, 'R', true);
+			$pdf->Cell($c[9], $h, angkaAD($grand['susut']), 1, 0, 'R', true);
+			$pdf->Cell($c[10], $h, angkaAD($grand['akum']), 1, 0, 'R', true);
+			$pdf->Cell($c[11], $h, angkaAD($grand['nilai']), 1, 0, 'R', true);
+			$pdf->Cell($c[12], $h, '', 1, 1, 'C', true);
 		}
 		$pdf->Output();
 		exit;
