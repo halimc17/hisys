@@ -28,7 +28,8 @@ $akun=makeOption($dbname,'keu_5akun','noakun,namaakun');
 
 setIt($param['type'],'');
 
-$str = "select sum(debet)-sum(kredit) as jumlah,kodevhc,kodeorg from ".$dbname.".keu_jurnaldt_vw where tanggal>='".tanggalsystem($param['tglAwal'])."' and tanggal<='".tanggalsystem($param['tglAkhir'])."' and noakun='4110299' and kodevhc = '".$param['kodevhc']."' group by kodevhc ";
+$str = "select sum(debet)-sum(kredit) as jumlah,kodevhc,kodeorg from ".$dbname.".keu_jurnaldt_vw where tanggal>='".tanggalsystem($param['tglAwal'])."' and tanggal<='".tanggalsystem($param['tglAkhir'])."' and noakun='4110299' and kodevhc = '".$param['kodevhc']."' and kodejurnal!='M' group by kodevhc ";
+#jurnal memorial tidak ikut dibagi ke kolom Harga karena sudah ditampilkan sebagai baris sendiri (sebelumnya terhitung dua kali)
 $res=$owlPDO->query($str) or die(print " Gagal: ".PDOException::getMessage());
 $res->setFetchMode(PDO::FETCH_ASSOC);
 while($bar=$res->fetch()){
@@ -41,10 +42,54 @@ $resmemo=$owlPDO->query($strmemo) or die(print " Gagal: ".PDOException::getMessa
 $resmemo->setFetchMode(PDO::FETCH_OBJ);
    
 
-$str="select a.jenispekerjaan , a.notransaksi,a.alokasibiaya,a.keterangan,a.jumlah,b.tanggal from ".$dbname.".vhc_rundt a left join ".$dbname.".vhc_runht b on a.notransaksi=b.notransaksi where kodevhc='".$param['kodevhc']."' and tanggal between '".tanggalsystem($param['tglAwal'])."' and '".tanggalsystem($param['tglAkhir'])."'";
+$str="select a.jenispekerjaan , a.notransaksi,a.alokasibiaya,a.keterangan,a.jumlah,b.tanggal from ".$dbname.".vhc_rundt a left join ".$dbname.".vhc_runht b on a.notransaksi=b.notransaksi where kodevhc='".addslashes($param['kodevhc'])."' and tanggal between '".tanggalsystem($param['tglAwal'])."' and '".tanggalsystem($param['tglAkhir'])."' order by b.tanggal asc,a.notransaksi asc";
 // $res=fetchdata($str);
-// $jumbaris=count($res);	
-		
+// $jumbaris=count($res);
+
+##Rp Jurnal: nilai jurnal Proses Alokasi Traksi (ALK_KERJA_AB; periode lama juga alokasi gaji traksi ALK_TRK_GYMH) per baris, untuk dibandingkan dengan kolom Harga
+##dicocokkan per no transaksi + kegiatan jurnal (setupkegiatan, kosong untuk project AK/pabrikasi PB) + alokasi (blok kecil dikembalikan ke blok induk)
+##jurnal lama tanpa no transaksi dicocokkan per kegiatan + alokasi untuk seluruh periode; bila satu kunci punya beberapa baris, dibagi menurut jam
+$dataInput=fetchData($str,'OBJECT');
+$setupkeg=makeOption($dbname,'vhc_kegiatan','kodekegiatan,setupkegiatan');
+$tgAwalAlk=tanggalsystem($param['tglAwal']);
+$tgAkhirAlk=tanggalsystem($param['tglAkhir']);
+$kodevhcAlk=addslashes($param['kodevhc']);
+$strj="select nodok,kodekegiatan,kodeblok,sum(jumlah) as jumlah from ".$dbname.".keu_jurnaldt_vw where noreferensi in ('ALK_KERJA_AB','ALK_TRK_GYMH') and kodevhc='".$kodevhcAlk."' and tanggal>='".$tgAwalAlk."' and tanggal<='".$tgAkhirAlk."' and jumlah>0 and kodeblok!='' group by nodok,kodekegiatan,kodeblok";
+$dataJurnal=fetchData($strj);
+$perPeriode=false;
+foreach($dataJurnal as $j){
+	if(trim($j['nodok'])==''){
+		$perPeriode=true;
+	}
+}
+$indukAlk=array();
+$strb="select kodeorg,indukblok from ".$dbname.".setup_blok where indukblok!='' and indukblok in (select a.alokasibiaya from ".$dbname.".vhc_rundt a left join ".$dbname.".vhc_runht b on a.notransaksi=b.notransaksi where b.kodevhc='".$kodevhcAlk."' and b.tanggal between '".$tgAwalAlk."' and '".$tgAkhirAlk."')";
+foreach(fetchData($strb) as $b){
+	$indukAlk[$b['kodeorg']]=$b['indukblok'];
+}
+function kunciJurnalAlk($notransaksi,$jenispekerjaan,$alokasi,$perPeriode,$setupkeg){
+	$jp=trim($jenispekerjaan);
+	$keg=(substr($alokasi,0,2)=='AK' || substr($alokasi,0,2)=='PB') ? '' : (isset($setupkeg[$jp]) ? trim($setupkeg[$jp]) : '');
+	return ($perPeriode ? '' : $notransaksi).'|'.$keg.'|'.$alokasi;
+}
+$alokasiAlk=array();
+$jamKunciAlk=array();
+foreach($dataInput as $bar){
+	$alokasiAlk[$perPeriode ? '' : $bar->notransaksi][$bar->alokasibiaya]=1;
+	$k=kunciJurnalAlk($bar->notransaksi,$bar->jenispekerjaan,$bar->alokasibiaya,$perPeriode,$setupkeg);
+	$jamKunciAlk[$k]=(isset($jamKunciAlk[$k]) ? $jamKunciAlk[$k] : 0)+$bar->jumlah;
+}
+$rpJurnalAlk=array();
+foreach($dataJurnal as $j){
+	$nt=$perPeriode ? '' : trim($j['nodok']);
+	$alok=$j['kodeblok'];
+	if(!isset($alokasiAlk[$nt][$alok]) && isset($indukAlk[$alok]) && isset($alokasiAlk[$nt][$indukAlk[$alok]])){
+		$alok=$indukAlk[$alok];
+	}
+	$k=$nt.'|'.trim($j['kodekegiatan']).'|'.$alok;
+	$rpJurnalAlk[$k]=(isset($rpJurnalAlk[$k]) ? $rpJurnalAlk[$k] : 0)+$j['jumlah'];
+}
+
 echo"<fieldset style=float:left><label>Detail Activity : ".$param['kodevhc']." ".$_SESSION['lang']['tanggal']." : ".$param['tglAwal']." - ".$param['tglAkhir']."</label>
      <img onclick=\"detailData(event,'vhc_slave_2biayaalokasiperkendaraandetail.php?type=excel&kodevhc=".$param['kodevhc']."&tglAwal=".$param['tglAwal']."&tglAkhir=".$param['tglAkhir']."&hrgaSatuan=".$param['hrgaSatuan']."&totalhm=".(isset($param['totalhm'])?(float)$param['totalhm']:0)."')\" src=images/excel.jpg class=resicon title='MS.Excel'>
      </fieldset>";
@@ -63,32 +108,54 @@ $stream.="<thead>
           <th bgcolor=#DEDEDE align=center>".$_SESSION['lang']['keterangan']."</th>
           <th bgcolor=#DEDEDE align=center>".$_SESSION['lang']['jumlah']."(HM/KM)</th> 
           <th bgcolor=#DEDEDE align=center>".$_SESSION['lang']['harga']."</th>
+          <th bgcolor=#DEDEDE align=center>Rp Jurnal</th>
+          <th bgcolor=#DEDEDE align=center>Selisih</th>
       </tr>
       </thead>
       <tbody>";
 	  
 	  
-$totalhm=(float)(isset($param['totalhm'])?$param['totalhm']:0);
+#Harga dihitung dengan cara yang sama dengan Proses Alokasi Traksi (ALKJAM), supaya selisih dengan jurnal hanya karena jam/kegiatan:
+#- jam yang ikut dialokasikan: ada alokasi, ada kegiatan, jam > 0; total jam dari baris-baris itu
+#- per no transaksi + kegiatan + alokasi: biaya = bulat ke bawah (jam / total jam x teralokasi); sisa pembulatan masuk ke kelompok terakhir
+#- kelompok yang berisi beberapa baris dibagi menurut jam
 $teralokasi=isset($teralokasi)?$teralokasi:0;
-$hargapersatuan=($totalhm>0)?floor($teralokasi/$totalhm):0;
-
-$floorteralokasi=$hargapersatuan*$totalhm;
-$selisihpembulatan=$teralokasi-$floorteralokasi;
+$totalhm=0;
+$jamKelompokAlk=array();
+foreach($dataInput as $bar){
+	if($bar->jumlah>0 && $bar->alokasibiaya!='' && trim($bar->jenispekerjaan)!=''){
+		$kk=$bar->notransaksi.'|'.trim($bar->jenispekerjaan).'|'.$bar->alokasibiaya;
+		$jamKelompokAlk[$kk]=(isset($jamKelompokAlk[$kk]) ? $jamKelompokAlk[$kk] : 0)+$bar->jumlah;
+		$totalhm+=$bar->jumlah;
+	}
+}
+$hargaKelompokAlk=array();
+$sisaAlk=$teralokasi;
+$urutAlk=0;
+foreach($jamKelompokAlk as $kk=>$jamK){
+	$urutAlk++;
+	$hk=($totalhm>0) ? floor(($jamK/$totalhm)*$teralokasi) : 0;
+	if($urutAlk==count($jamKelompokAlk) || ($sisaAlk-$hk)<=0){
+		$hk=$sisaAlk;
+	}
+	$hargaKelompokAlk[$kk]=$hk;
+	$sisaAlk-=$hk;
+}
 
 $no=0;
-$ttl=$total=0;
+$ttl=$total=$totalJurnal=$totalSelisih=0;
 
-$res=$owlPDO->query($str) or die(print " Gagal: ".PDOException::getMessage());
-$res->setFetchMode(PDO::FETCH_OBJ);
-while($bar=$res->fetch()){
+foreach($dataInput as $bar){
    //$hrg=$param['hrgaSatuan']*$bar->jumlah;
    // $hrg=floor(($teralokasi/$param['totalhm'])*$bar->jumlah);
    @$no+=1;
-   
-   if($no>1){
-	   $selisihpembulatan=0;
-   }
-   
+
+   $kk=$bar->notransaksi.'|'.trim($bar->jenispekerjaan).'|'.$bar->alokasibiaya;
+   $harga=(isset($hargaKelompokAlk[$kk]) && $jamKelompokAlk[$kk]>0 && $bar->jumlah>0) ? $hargaKelompokAlk[$kk]*$bar->jumlah/$jamKelompokAlk[$kk] : 0;
+   $k=kunciJurnalAlk($bar->notransaksi,$bar->jenispekerjaan,$bar->alokasibiaya,$perPeriode,$setupkeg);
+   $rpJurnal=(isset($rpJurnalAlk[$k]) && $jamKunciAlk[$k]>0) ? $rpJurnalAlk[$k]*$bar->jumlah/$jamKunciAlk[$k] : 0;
+   $selisih=$rpJurnal-$harga;
+
     $stream.="<tr class=rowcontent>
           <td align=center>".$no."</td>
           <td>".tanggalnormal($bar->tanggal)."</td>   
@@ -103,11 +170,33 @@ while($bar=$res->fetch()){
 	
     $stream.="<td>".$bar->keterangan."</td>    
 	<td align=right>".number_format($bar->jumlah,2)."</td>
-          <td align=right>".number_format(($bar->jumlah*$hargapersatuan)+$selisihpembulatan,2)."</td>
- 
-      </tr>";  
+          <td align=right>".number_format($harga,2)."</td>
+          <td align=right>".number_format($rpJurnal,2)."</td>
+          <td align=right>".number_format($selisih,2)."</td>
+
+      </tr>";
     $ttl+=$bar->jumlah;
-    $total+=($bar->jumlah*$hargapersatuan)+$selisihpembulatan;
+    $total+=$harga;
+    $totalJurnal+=$rpJurnal;
+    $totalSelisih+=$selisih;
+}
+##jurnal yang tidak punya pasangan di input (mis. kode kegiatan di jurnal berbeda dengan setup kegiatan sekarang)
+$sisaJurnal=0;
+foreach($rpJurnalAlk as $k=>$rp){
+	if(!isset($jamKunciAlk[$k]) || $jamKunciAlk[$k]<=0){
+		$sisaJurnal+=$rp;
+	}
+}
+if(abs($sisaJurnal)>=0.005){
+	@$no+=1;
+	$stream.="<tr class=rowcontent>
+          <td align=center>".$no."</td>
+          <td colspan=8>Jurnal Alokasi Traksi yang tidak ada pasangannya di input (kode kegiatan/alokasi berbeda)</td>
+          <td align=right>".number_format($sisaJurnal,2)."</td>
+          <td align=right>".number_format($sisaJurnal,2)."</td>
+      </tr>";
+	$totalJurnal+=$sisaJurnal;
+	$totalSelisih+=$sisaJurnal;
 }
 while($barm=$resmemo->fetch()){
    @$no+=1;
@@ -126,14 +215,19 @@ while($barm=$resmemo->fetch()){
     $stream.="<td>".$barm->keterangan."</td>    
 	    <td align=right></td>
         <td align=right>".number_format($barm->jumlah,2)."</td>
-      </tr>";  
+        <td align=right>".number_format($barm->jumlah,2)."</td>
+        <td align=right>0.00</td>
+      </tr>";
     $total+=$barm->jumlah;
+    $totalJurnal+=$barm->jumlah;
 }//<td align=right>".number_format($hrg,2)."</td>
     $stream.="<tr class=rowcontent>
-          <td colspan=7 align=center>Total</td> 
+          <td colspan=7 align=center>Total</td>
           <td align=right>".$ttl."</td>
           <td align=right>".number_format($total,2)."</td>
-      </tr>"; 
+          <td align=right>".number_format($totalJurnal,2)."</td>
+          <td align=right>".number_format($totalSelisih,2)."</td>
+      </tr>";
 $stream.="</tbody><tfoot></tfoot></table>";
  if($param['type']=='excel')
    {

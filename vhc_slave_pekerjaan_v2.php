@@ -139,18 +139,7 @@ switch ($proses) {
         $res = $owlPDO->query($sjnskrj) or die(print " Gagal: " . PDOException::getMessage());
         $res->setFetchMode(PDO::FETCH_ASSOC);
         $d = '';
-        while ($rjnskrj = $res->fetch()) {
-            $d = substr($rjnskrj['kodekegiatan'], 0, 5);
-            if ($d != $n) {
-                $nmorg = makeOption($dbname, 'keu_5akun', 'noakun,namaakun', "noakun='" . $d . "'");
-                $optJnsKerja .= "<optgroup label='" . $nmorg[$d] . "'>";
-            }
-            $optJnsKerja .= "<option value=" . $rjnskrj['kodekegiatan'] . ">" . $rjnskrj['kodekegiatan'] . " - " . $rjnskrj['namakegiatan'] . "</option>";
-            if ($d != $n) {
-                $n = $d;
-                $optJnsKerja .= "</optgroup>";
-            }
-        }
+        $optJnsKerja .= susunOptKegiatanTraksi($res->fetchAll());
 
         $sql = selectQuery($dbname, 'vhc_rundt', 'jenispekerjaan', "notransaksi='" . $param['no_trans'] . "'");
         $res = fetchData($sql)[0];
@@ -187,9 +176,7 @@ switch ($proses) {
         $skary = "select distinct(a.karyawanid),a.nama,b.nik,a.jabatan from " . $dbname . ".vhc_5operator a left join " . $dbname . ".datakaryawan b on a.karyawanid=b.karyawanid where a.aktif='1' and a.vhc = '" . $res['kodevhc'] . "'and a.jabatan in ('0','2') and (tanggalkeluar = '0000-00-00' or tanggalkeluar>= '" . $res['tanggal'] . "')  order by a.jabatan,a.nama"; //echo $skary;
         $res1 = $owlPDO->query($skary) or die(print " Gagal: " . PDOException::getMessage());
         $res1->setFetchMode(PDO::FETCH_ASSOC);
-        while ($rkary = $res1->fetch()) {
-            $optKary .= "<option value=" . $rkary['karyawanid'] . ">" . $rkary['nama'] . "&nbsp; [" . $arrJab[$rkary['jabatan']] . "] &nbsp;[" . $rkary['nik'] . "]</option>";
-        }
+        $optKary .= susunOptKaryawanTraksi($res1->fetchAll());
 
         #PPP genset (jenis kendaraan di parameter TRGENSET): operator = semua karyawan aktif unit, hanya dicatat namanya
         if (gensetPPP($res['kodeorg'], $res['jenisvhc'])) {
@@ -201,9 +188,7 @@ switch ($proses) {
         $skary = "select distinct(a.karyawanid),a.nama,b.nik,a.jabatan from " . $dbname . ".vhc_5operator a left join " . $dbname . ".datakaryawan b on a.karyawanid=b.karyawanid where a.aktif='1' and a.vhc = '" . $res['kodevhc'] . "'and a.jabatan in ('1') and (tanggalkeluar = '0000-00-00' or tanggalkeluar>= '" . $res['tanggal'] . "')  order by a.jabatan,a.nama"; //echo $skary;
         $res1 = $owlPDO->query($skary) or die(print " Gagal: " . PDOException::getMessage());
         $res1->setFetchMode(PDO::FETCH_ASSOC);
-        while ($rkary = $res1->fetch()) {
-            $optKary_Help .= "<option value=" . $rkary['karyawanid'] . ">" . $rkary['nama'] . "&nbsp; [" . $arrJab[$rkary['jabatan']] . "] &nbsp;[" . $rkary['nik'] . "]</option>";
-        }
+        $optKary_Help .= susunOptKaryawanTraksi($res1->fetchAll());
 
         #= Mandor
         // $optMandor="<option value=''>".$_SESSION['lang']['pilihdata']."</option>";
@@ -339,11 +324,14 @@ switch ($proses) {
 
         #== Ambil lokasi 
         $optOrg = "<option value=''>" . $_SESSION['lang']['pilihdata'] . "</option>";
-        $sOrg   = selectQuery($dbname, 'organisasi', 'kodeorganisasi,namaorganisasi', "length(kodeorganisasi)='4' and tipe in ('PABRIK','KEBUN','HOLDING')");
+        #lokasi dibatasi sesuai detail akses; lokasi transaksi yang sedang diedit tetap ikut walau di luar akses
+        $kdkbn = preg_replace('/[^A-Za-z0-9]/', '', isset($param['kdkbn']) ? $param['kdkbn'] : '');
+        $sOrg   = selectQuery($dbname, 'organisasi', 'kodeorganisasi,namaorganisasi', "length(kodeorganisasi)='4' and tipe in ('PABRIK','KEBUN','HOLDING') and (kodeorganisasi in (" . getOrgDetail(2) . ") or kodeorganisasi='" . $kdkbn . "')");
         $rOrg   = fetchData($sOrg);
+        $pilihOtomatis = (count($rOrg) == 1 and ($kdkbn == '' or $kdkbn == 'undefined'));
         foreach ($rOrg as $row => $lsDt) {
             // if(substr($lsDt['kodeorganisasi'],0,4)==$_SESSION['empl']['lokasitugas']){
-            if (substr($lsDt['kodeorganisasi'], 0, 4) == $param['kdkbn']) {
+            if (substr($lsDt['kodeorganisasi'], 0, 4) == $kdkbn or $pilihOtomatis) {
                 $optOrg .= "<option value='" . $lsDt['kodeorganisasi'] . "' selected>" . $lsDt['kodeorganisasi'] . " - " . $lsDt['namaorganisasi'] . "</option>";
             } else {
                 $optOrg .= "<option value='" . $lsDt['kodeorganisasi'] . "'>" . $lsDt['kodeorganisasi'] . " - " . $lsDt['namaorganisasi'] . "</option>";
@@ -406,38 +394,23 @@ switch ($proses) {
         $n = '';
         $resblk = fetchData($sBlok);
         $d = '';
+        $blokDipilih = isset($param['blok']) ? $param['blok'] : '';
         foreach ($resblk as $rBlok) {
             if ($rAlokasi['kelompok'] != 'INF') {
                 $d = substr($rBlok['kodeorganisasi'], 0, 6);
                 if ($d != $n) {
+                    if ($n != '') {
+                        $optBlok .= "</optgroup>";
+                    }
                     $nmorg = makeOption($dbname, 'organisasi', 'kodeorganisasi,namaorganisasi,indukblok,namaindukblok', "kodeorganisasi='" . $d . "'");
                     $optBlok .= "<optgroup label='" . $nmorg[$d] . "'>";
-                }
-
-                if (isset($param['blok']) != "") {
-                    if ($rBlok['indukblok'] == isset($param['blok'])) {
-                        $optBlok .= "<option value=" . $rBlok['indukblok'] . " selected>" . $rBlok['namaindukblok'] . "</option>";
-                    } else {
-                        $optBlok .= "<option value=" . $rBlok['indukblok'] . ">" . $rBlok['namaindukblok'] . "</option>";
-                    }
-                } else {
-                    $optBlok .= "<option value=" . $rBlok['indukblok'] . ">" . $rBlok['namaindukblok'] . "</option>";
-                }
-                if ($d != $n) {
                     $n = $d;
-                    $optBlok .= "</optgroup>";
-                }
-            } else {
-                if (isset($param['blok']) != "") {
-                    if ($rBlok['indukblok'] == isset($param['blok'])) {
-                        $optBlok .= "<option value=" . $rBlok['indukblok'] . " selected>" . $rBlok['namaindukblok'] . "</option>";
-                    } else {
-                        $optBlok .= "<option value=" . $rBlok['indukblok'] . ">" . $rBlok['namaindukblok'] . "</option>";
-                    }
-                } else {
-                    $optBlok .= "<option value=" . $rBlok['indukblok'] . ">" . $rBlok['namaindukblok'] . "</option>";
                 }
             }
+            $optBlok .= "<option value=" . $rBlok['indukblok'] . (($blokDipilih != '' and $rBlok['indukblok'] == $blokDipilih) ? " selected" : "") . ">" . $rBlok['namaindukblok'] . "</option>";
+        }
+        if ($n != '') {
+            $optBlok .= "</optgroup>";
         }
 
         #khusus Project:
@@ -794,7 +767,7 @@ switch ($proses) {
             if ($err != '' && $errhelp != '') {
                 $dan = ' dan';
             }
-            $errall = "Upah " . $err . "" . @$dan . " " . $errhelp . " sudah terdaftar ditransaksi lain pada tangal yang sama, kolom upah akan terisi 0";
+            $errall = "Upah " . $err . "" . @$dan . " " . $errhelp . " sudah terdaftar ditransaksi lain pada tanggal yang sama, kolom upah akan terisi 0";
         }
 
         #= Cek dihari biasa libur atau minggu
@@ -1593,20 +1566,7 @@ switch ($proses) {
                 $sjnskrj = selectQuery($dbname, 'vhc_kegiatan', '*', "tipe='traksi' and LEFT(kodekegiatan, 3) != '111' and (kelompokvhc='" . $kelvhc . "' or kelompokvhc='GLOBAL') and (jenisvhc='" . $param['jenisvhc'] . "' or jenisvhc='GLOBAL') AND status='1'", "noakun");
                 $rjnskrj = fetchData($sjnskrj);
                 $d = '';
-                foreach ($rjnskrj as $jnskrj) {
-                    $d = substr($jnskrj['kodekegiatan'], 0, 5);
-                    if ($d != $n) {
-                        $nmorg = makeOption($dbname, 'keu_5akun', 'noakun,namaakun', "noakun='" . $d . "'");
-                        $optJnsKerja .= "<optgroup label='" . $nmorg[$d] . "'>";
-                    }
-
-                    $optJnsKerja .= "<option value=" . $jnskrj['kodekegiatan'] . ">" . $jnskrj['kodekegiatan'] . " - " . $jnskrj['namakegiatan'] . "</option>";
-
-                    if ($d != $n) {
-                        $n = $d;
-                        $optJnsKerja .= "</optgroup>";
-                    }
-                }
+                $optJnsKerja .= susunOptKegiatanTraksi($rjnskrj);
 
                 // #== Ambil Operator
                 // $optKary="<option value=''>".$_SESSION['lang']['pilihdata']."</option>";
@@ -1624,9 +1584,7 @@ switch ($proses) {
 
                 $res1 = $owlPDO->query($skary) or die(print " Gagal: " . PDOException::getMessage());
                 $res1->setFetchMode(PDO::FETCH_ASSOC);
-                while ($rkary = $res1->fetch()) {
-                    $optKary .= "<option value=" . $rkary['karyawanid'] . ">" . $rkary['nama'] . "&nbsp; [" . $arrJab[$rkary['jabatan']] . "] &nbsp;[" . $rkary['nik'] . "]</option>";
-                }
+                $optKary .= susunOptKaryawanTraksi($res1->fetchAll());
 
                 #PPP genset (jenis kendaraan di parameter TRGENSET): operator = semua karyawan aktif unit, hanya dicatat namanya
                 if (gensetPPP($param['kodeorg'], $param['jenisvhc'])) {
@@ -1638,9 +1596,7 @@ switch ($proses) {
                 $skary = "select distinct(a.karyawanid),a.nama,b.nik,a.jabatan from " . $dbname . ".vhc_5operator a left join " . $dbname . ".datakaryawan b on a.karyawanid=b.karyawanid where a.aktif='1' and a.vhc = '" . $param['kodevhc'] . "'and a.jabatan in ('1') and (tanggalkeluar = '0000-00-00' or tanggalkeluar>= '" . $tgl_kerja . "')  order by a.jabatan,a.nama";
                 $res1 = $owlPDO->query($skary) or die(print " Gagal: " . PDOException::getMessage());
                 $res1->setFetchMode(PDO::FETCH_ASSOC);
-                while ($rkary = $res1->fetch()) {
-                    $optKary_Helper .= "<option value=" . $rkary['karyawanid'] . ">" . $rkary['nama'] . "&nbsp; [" . $arrJab[$rkary['jabatan']] . "] &nbsp;[" . $rkary['nik'] . "]</option>";
-                }
+                $optKary_Helper .= susunOptKaryawanTraksi($res1->fetchAll());
 
 
                 #== Ambil kmhmakhir dari kendaraan dipilih.
@@ -1689,18 +1645,7 @@ switch ($proses) {
             $res = $owlPDO->query($sjnskrj) or die(print " Gagal: " . PDOException::getMessage());
             $res->setFetchMode(PDO::FETCH_ASSOC);
             $d = '';
-            while ($rjnskrj = $res->fetch()) {
-                $d = substr($rjnskrj['kodekegiatan'], 0, 5);
-                if ($d != $n) {
-                    $nmorg = makeOption($dbname, 'keu_5akun', 'noakun,namaakun', "noakun='" . $d . "'");
-                    $optJnsKerja .= "<optgroup label='" . $nmorg[$d] . "'>";
-                }
-                $optJnsKerja .= "<option value=" . $rjnskrj['kodekegiatan'] . ">" . $rjnskrj['kodekegiatan'] . " - " . $rjnskrj['namakegiatan'] . "</option>";
-                if ($d != $n) {
-                    $n = $d;
-                    $optJnsKerja .= "</optgroup>";
-                }
-            }
+            $optJnsKerja .= susunOptKegiatanTraksi($res->fetchAll());
 
 
             $sKm = "select distinct kmhmakhir from " . $dbname . ".vhc_kmhmakhir_vw where kodevhc='" . $param['kodevhc'] . "'";
@@ -2355,191 +2300,82 @@ switch ($proses) {
         $personPosting      = getPostingJabatan('traksi');
         if (in_array(getKary($user_entry, 'kodejabatan'), $personPosting)) {
             $dt = 0;
-            $str = selectQuery($dbname, 'vhc_rundt', 'count(*) as dt', "notransaksi='" . $param['no_trans'] . "'");
+            $str = selectQuery($dbname, 'vhc_rundt', 'count(*) as dt', "notransaksi='" . addslashes($param['no_trans']) . "'");
             $bar = fetchData($str)[0];
             $dt = $bar['dt'];
 
             if ($dt < 1) {
-                exit("Warningsystem : Data Detail Pekerjaan dengan notransaksi " . $param['no_trans'] . " masih kosong, harap melengkapi detail untuk dapat .
+                exit("Warningsystem : Data Detail Pekerjaan dengan notransaksi " . htmlspecialchars($param['no_trans']) . " masih kosong, harap melengkapi detail untuk dapat .
                     memposting data.");
             }
 
             try {
                 $owlPDO->beginTransaction();
+                $noTransPost = addslashes($param['no_trans']);
+                #= Bentuk detail per blok kecil dari SETIAP baris vhc_rundt, sehingga jam detail = jam vhc_rundt
+                #  (dipakai proses Alokasi Traksi/ALKJAM dan alokasi gaji traksi, harus sama dengan pop up Laporan Biaya Total per Kendaraan)
+                #  - baris ke blok induk: jam, muatan, dan premi operator dibagi ke blok kecil aktif menurut luas (lihat porsiBlokKecilPosting)
+                #  - baris ke unit sendiri, unit lain, project (AK), pabrikasi (PB), atau kode lain: disalin apa adanya
+                #  - detail lama transaksi ini dihapus dulu supaya posting ulang tidak membuat baris dobel
+                $owlPDO->exec("delete from " . $dbname . ".vhc_rundt_detail where notransaksi='" . $noTransPost . "'");
+
+                #== Blok kecil aktif per blok induk
                 $blokkecil = array();
-                #= Proporsikan prestasi,upah,premi
-                #== Ambil luasan blok kecil
-                $sql = selectQuery($dbname, 'setup_blok', 'luasareaproduktif,kodeorg,indukblok', "status='A' and indukblok in (SELECT alokasibiaya FROM $dbname.vhc_rundt WHERE notransaksi='{$param['no_trans']}')");
-                // exit('warning:'.$sql);
-                $res = fetchData($sql);
-                foreach ($res as $val) {
-                    # Bentuk array luas blok
-                    $blokkecil[$val['indukblok']][$val['kodeorg']] = $val['kodeorg'];
-                    $ttlluasblok[$val['indukblok']] += $val['luasareaproduktif'];
-                    $luasblokkecil[$val['indukblok']][$val['kodeorg']] = $val['luasareaproduktif'];
+                $sql = "select kodeorg,indukblok,statusblok,luasareaproduktif,luasbloking from " . $dbname . ".setup_blok
+                        where status='A' and indukblok in (select alokasibiaya from " . $dbname . ".vhc_rundt where notransaksi='" . $noTransPost . "')
+                        order by kodeorg";
+                foreach (fetchData($sql) as $val) {
+                    # Luas acuan: blok TB memakai luas bloking (luas produktifnya umumnya kosong), selain itu luas produktif
+                    $luasAcuan = ($val['statusblok'] == 'TB' and $val['luasbloking'] > 0) ? $val['luasbloking'] : $val['luasareaproduktif'];
+                    $blokkecil[$val['indukblok']][$val['kodeorg']] = array('status' => $val['statusblok'], 'luas' => floatval($luasAcuan));
                 }
-                #== Ambil data detail pekerjaan
-                $qry = "SELECT a.*,b.kodeorg,b.indukblok,b.statusblok FROM $dbname.vhc_rundt a LEFT JOIN $dbname.setup_blok b ON a.alokasibiaya=b.indukblok WHERE b.status='A' AND notransaksi='{$param['no_trans']}'";
-                $rsx = fetchData($qry);
+
+                #== Kelompok kegiatan (TB/TBM) untuk kegiatan TB kode 126
+                $kelompokKeg = array();
+                $sql = "select kodekegiatan,kelompok from " . $dbname . ".vhc_kegiatan
+                        where tipe='traksi' and kodekegiatan in (select jenispekerjaan from " . $dbname . ".vhc_rundt where notransaksi='" . $noTransPost . "')";
+                foreach (fetchData($sql) as $val) {
+                    $kelompokKeg[trim($val['kodekegiatan'])] = $val['kelompok'];
+                }
+
+                #== Susun detail; baris yang kuncinya sama (kegiatan, blok, segment, km/hm awal) digabung agar tidak bentrok kunci primer
+                $detailBaru = array();
+                $rsx = fetchData("select * from " . $dbname . ".vhc_rundt where notransaksi='" . $noTransPost . "'");
                 foreach ($rsx as $v) {
-                    # Bentuk array detail pekerjaan
-                    $jenispekerjaan[$v['alokasibiaya']][$v['kodeorg']] = trim($v['jenispekerjaan']);
-                    $jumlahrit[$v['alokasibiaya']][$v['kodeorg']] = $v['jumlahrit'];
-                    $keterangan[$v['alokasibiaya']][$v['kodeorg']] = $v['keterangan'];
-                    $biaya[$v['alokasibiaya']][$v['kodeorg']] = $v['biaya'];
-                    $kmhmawal[$v['alokasibiaya']][$v['kodeorg']] = $v['kmhmawal'];
-                    $kmhmakhir[$v['alokasibiaya']][$v['kodeorg']] = $v['kmhmakhir'];
-                    $jumlah[$v['alokasibiaya']][$v['kodeorg']] = $v['jumlah'];
-                    $satuan[$v['alokasibiaya']][$v['kodeorg']] = $v['satuan'];
-                    $kodesegment[$v['alokasibiaya']][$v['kodeorg']] = $v['kodesegment'];
-                    $operator[$v['alokasibiaya']][$v['kodeorg']] = $v['operator'];
-                    $helper[$v['alokasibiaya']][$v['kodeorg']] = $v['helper'];
-                    $helper2[$v['alokasibiaya']][$v['kodeorg']] = $v['helper2'];
-                    $helper3[$v['alokasibiaya']][$v['kodeorg']] = $v['helper3'];
-                    $denda[$v['alokasibiaya']][$v['kodeorg']] = $v['denda'];
-                    if (strlen($v['alokasibiaya']) > 6) { //jika alokasi ke blok
-                        $karydt[$v['alokasibiaya']][$v['operator']] = $v['operator'];
-                        $prestasinya[$v['alokasibiaya']][$v['operator']] = $v['beratmuatan'];
-                        $preminya[$v['alokasibiaya']][$v['operator']] = $v['premiopt'];
-                        $orangperblok[$v['operator']] += 1;
+                    $jp = trim($v['jenispekerjaan']);
+                    if (!isset($blokkecil[$v['alokasibiaya']])) {
+                        tambahDetailPosting($detailBaru, $v, $jp, $v['alokasibiaya'], $v['jumlah'], $v['beratmuatan'], $v['premiopt']);
+                        continue;
+                    }
+                    $porsi = porsiBlokKecilPosting($blokkecil[$v['alokasibiaya']], $jp, isset($kelompokKeg[$jp]) ? $kelompokKeg[$jp] : '');
+                    $sisaJam = $v['jumlah'];
+                    $sisaMuatan = $v['beratmuatan'];
+                    $sisaPremi = $v['premiopt'];
+                    $jmlPorsi = count($porsi);
+                    $urut = 0;
+                    foreach ($porsi as $kodeKecil => $p) {
+                        $urut++;
+                        if ($urut == $jmlPorsi) {
+                            # blok terakhir menerima sisa, sehingga jumlah per blok kecil persis sama dengan baris induknya
+                            $jamKecil = $sisaJam;
+                            $muatanKecil = $sisaMuatan;
+                            $premiKecil = $sisaPremi;
+                        } else {
+                            $jamKecil = $v['jumlah'] * $p;
+                            $muatanKecil = $v['beratmuatan'] * $p;
+                            $premiKecil = $v['premiopt'] * $p;
+                            $sisaJam -= $jamKecil;
+                            $sisaMuatan -= $muatanKecil;
+                            $sisaPremi -= $premiKecil;
+                        }
+                        tambahDetailPosting($detailBaru, $v, $jp, $kodeKecil, $jamKecil, $muatanKecil, $premiKecil);
                     }
                 }
-                #== Ambil data yg umum saja
-                $qry1 = "SELECT * FROM $dbname.vhc_rundt WHERE notransaksi='{$param['no_trans']}' AND alokasibiaya='" . $_SESSION['empl']['lokasitugas'] . "'";
-                $rsx1 = fetchData($qry1);
-                foreach ($rsx1 as $val1) {
-                    //Insert yang umum
-                    $data = array(
-                        'notransaksi'   => $param['no_trans'],
-                        'jenispekerjaan' => trim($val1['jenispekerjaan']),
-                        'alokasibiaya'  => $val1['alokasibiaya'],
-                        'beratmuatan'   => $val1['beratmuatan'],
-                        'jumlahrit'     => $val1['jumlahrit'],
-                        'keterangan'    => $val1['keterangan'],
-                        'biaya'         => $val1['biaya'],
-                        'kmhmawal'      => $val1['kmhmawal'],
-                        'kmhmakhir'     => $val1['kmhmakhir'],
-                        'jumlah'        => $val1['jumlah'],
-                        'satuan'        => $val1['satuan'],
-                        'kodesegment'   => $val1['kodesegment'],
-                        'operator'      => $val1['operator'],
-                        'helper'        => $val1['helper'],
-                        'helper2'       => $val1['helper2'],
-                        'helper3'       => $val1['helper3'],
-                        'denda'         => $val1['denda'],
-                        'premiopt'      => $val1['premiopt']
-                    );
-
-                    // if(strlen($duk) >6){//selain umum masuk _detail
+                foreach ($detailBaru as $data) {
                     $sins = insertQuery($dbname, 'vhc_rundt_detail', $data, array_keys($data));
                     $owlPDO->exec($sins);
                 }
 
-                if (count($blokkecil) > 0) {
-                    #== proporsikan ke masing-masing blok kecil
-                    foreach ($blokkecil as $indk => $arrkcl) {
-                        foreach ($arrkcl as $kcl) {
-                            # luas proporsi per blok
-                            // $luasproporsi[$indk][$kcl]=$luasblokkecil[$indk][$kcl]/$ttlluasblok[$indk];
-                            foreach ($karydt[$indk] as $kry) {
-                                # prestasi proporsi per blok
-                                $prstsiproporsi[$indk][$kcl] = ($luasblokkecil[$indk][$kcl] / $ttlluasblok[$indk]) * $prestasinya[$indk][$kry];
-                                $premiproporsi[$indk][$kcl] = ($luasblokkecil[$indk][$kcl] / $ttlluasblok[$indk]) * $preminya[$indk][$kry];
-                            }
-                        }
-                    }
-                    #== input ke tabel detail proporsinya
-                    isset($blokkecil);
-                    foreach ($blokkecil as $duk => $arrkcl) {
-                        foreach ($arrkcl as $cil) {
-                            if (substr($jenispekerjaan[$duk][$cil], 0, 3) == '128' and getBlok($cil, 'statusblok') == 'BBT') {
-
-                                $data = array(
-                                    'notransaksi'   => $param['no_trans'],
-                                    'jenispekerjaan' => trim($jenispekerjaan[$duk][$cil]),
-                                    'alokasibiaya'  => $cil,
-                                    'beratmuatan'   => $prstsiproporsi[$duk][$cil],
-                                    'jumlahrit'     => $jumlahrit[$duk][$cil],
-                                    'keterangan'    => $keterangan[$duk][$cil],
-                                    'biaya'         => $biaya[$duk][$cil],
-                                    'kmhmawal'      => $kmhmawal[$duk][$cil],
-                                    'kmhmakhir'     => $kmhmakhir[$duk][$cil],
-                                    'jumlah'        => $jumlah[$duk][$cil],
-                                    'satuan'        => $satuan[$duk][$cil],
-                                    'kodesegment'   => $kodesegment[$duk][$cil],
-                                    'operator'      => $operator[$duk][$cil],
-                                    'helper'        => $helper[$duk][$cil],
-                                    'helper2'       => $helper2[$duk][$cil],
-                                    'helper3'       => $helper3[$duk][$cil],
-                                    'denda'         => $denda[$duk][$cil],
-                                    'premiopt'      => $premiproporsi[$duk][$cil]
-                                );
-
-                                // if(strlen($duk) >6){//selain umum masuk _detail
-                                $sins = insertQuery($dbname, 'vhc_rundt_detail', $data, array_keys($data));
-                                $owlPDO->exec($sins);
-                                // }
-                            }
-                            // exit('warning:'.$jenispekerjaan[$duk][$cil].'__'.getBlok($cil,'statusblok').'__'.$cil);
-                            if ((substr($jenispekerjaan[$duk][$cil], 0, 3) == '621' and getBlok($cil, 'statusblok') == 'TM') || (substr($jenispekerjaan[$duk][$cil], 0, 3) == '611' and getBlok($cil, 'statusblok') == 'TM')) {
-
-                                $data = array(
-                                    'notransaksi'   => $param['no_trans'],
-                                    'jenispekerjaan' => trim($jenispekerjaan[$duk][$cil]),
-                                    'alokasibiaya'  => $cil,
-                                    'beratmuatan'   => $prstsiproporsi[$duk][$cil],
-                                    'jumlahrit'     => $jumlahrit[$duk][$cil],
-                                    'keterangan'    => $keterangan[$duk][$cil],
-                                    'biaya'         => $biaya[$duk][$cil],
-                                    'kmhmawal'      => $kmhmawal[$duk][$cil],
-                                    'kmhmakhir'     => $kmhmakhir[$duk][$cil],
-                                    'jumlah'        => $jumlah[$duk][$cil],
-                                    'satuan'        => $satuan[$duk][$cil],
-                                    'kodesegment'   => $kodesegment[$duk][$cil],
-                                    'operator'      => $operator[$duk][$cil],
-                                    'helper'        => $helper[$duk][$cil],
-                                    'helper2'       => $helper2[$duk][$cil],
-                                    'helper3'       => $helper3[$duk][$cil],
-                                    'denda'         => $denda[$duk][$cil],
-                                    'premiopt'      => $premiproporsi[$duk][$cil]
-                                );
-
-                                // if(strlen($duk) >6){//selain umum masuk _detail
-                                $sins = insertQuery($dbname, 'vhc_rundt_detail', $data, array_keys($data));
-                                $owlPDO->exec($sins);
-                                // }
-                            }
-                            if (substr($jenispekerjaan[$duk][$cil], 0, 3) == '126' and (getBlok($cil, 'statusblok') == 'TBM' || getBlok($cil, 'statusblok') == 'TB')) {
-
-                                $data = array(
-                                    'notransaksi'   => $param['no_trans'],
-                                    'jenispekerjaan' => trim($jenispekerjaan[$duk][$cil]),
-                                    'alokasibiaya'  => $cil,
-                                    'beratmuatan'   => $prstsiproporsi[$duk][$cil],
-                                    'jumlahrit'     => $jumlahrit[$duk][$cil],
-                                    'keterangan'    => $keterangan[$duk][$cil],
-                                    'biaya'         => $biaya[$duk][$cil],
-                                    'kmhmawal'      => $kmhmawal[$duk][$cil],
-                                    'kmhmakhir'     => $kmhmakhir[$duk][$cil],
-                                    'jumlah'        => $jumlah[$duk][$cil],
-                                    'satuan'        => $satuan[$duk][$cil],
-                                    'kodesegment'   => $kodesegment[$duk][$cil],
-                                    'operator'      => $operator[$duk][$cil],
-                                    'helper'        => $helper[$duk][$cil],
-                                    'helper2'       => $helper2[$duk][$cil],
-                                    'helper3'       => $helper3[$duk][$cil],
-                                    'denda'         => $denda[$duk][$cil],
-                                    'premiopt'      => $premiproporsi[$duk][$cil]
-                                );
-
-                                // if(strlen($duk) >6){//selain umum masuk _detail
-                                $sins = insertQuery($dbname, 'vhc_rundt_detail', $data, array_keys($data));
-                                $owlPDO->exec($sins);
-                                // }
-                            }
-                        }
-                    }
-                }
                 #= Update Flag Transaksi
                 $postedtime = date('Y-m-d H:i:s');
                 $dataUpd = array(
@@ -2547,7 +2383,7 @@ switch ($proses) {
                     'postingby' => $user_entry,
                     'postedtime' => $postedtime
                 );
-                $sudPost = updateQuery($dbname, 'vhc_runht', $dataUpd, "notransaksi='" . $param['no_trans'] . "'");
+                $sudPost = updateQuery($dbname, 'vhc_runht', $dataUpd, "notransaksi='" . $noTransPost . "'");
                 $owlPDO->exec($sudPost);
 
                 #execute
@@ -2567,6 +2403,85 @@ switch ($proses) {
 ?>
 
 <?php
+#porsi blok kecil untuk satu baris pekerjaan yang dialokasikan ke blok induk (jumlah porsi = 1)
+#- kegiatan 128 -> blok BBT, 611/621 -> blok TM, 126 -> blok sesuai kelompok kegiatan (TB/TBM), bila tidak ada -> blok TB dan TBM
+#- kegiatan lain, atau tidak ada blok kecil yang statusnya cocok -> semua blok kecil aktif di induk itu (jam tidak boleh hilang)
+#- dibagi menurut luas; bila luas blok terpilih semuanya kosong dibagi rata; blok dengan porsi 0 tidak dibuatkan detail
+function porsiBlokKecilPosting($arrBlok, $jenispekerjaan, $kelompok)
+{
+    $jp3 = substr($jenispekerjaan, 0, 3);
+    $sasaran = array();
+    if ($jp3 == '128') {
+        $sasaran = array('BBT');
+    } else if ($jp3 == '611' || $jp3 == '621') {
+        $sasaran = array('TM');
+    } else if ($jp3 == '126') {
+        $sasaran = array('TB', 'TBM');
+        if ($kelompok == 'TB' || $kelompok == 'TBM') {
+            foreach ($arrBlok as $b) {
+                if ($b['status'] == $kelompok) {
+                    $sasaran = array($kelompok);
+                    break;
+                }
+            }
+        }
+    }
+
+    $pilih = array();
+    foreach ($arrBlok as $kode => $b) {
+        if (empty($sasaran) || in_array($b['status'], $sasaran)) {
+            $pilih[$kode] = $b['luas'];
+        }
+    }
+    if (empty($pilih)) {
+        foreach ($arrBlok as $kode => $b) {
+            $pilih[$kode] = $b['luas'];
+        }
+    }
+
+    $porsi = array();
+    $ttlLuas = array_sum($pilih);
+    foreach ($pilih as $kode => $luas) {
+        $p = ($ttlLuas > 0) ? ($luas / $ttlLuas) : (1 / count($pilih));
+        if ($p > 0) {
+            $porsi[$kode] = $p;
+        }
+    }
+    return $porsi;
+}
+
+#tambah satu baris vhc_rundt_detail ke daftar; kunci sama (kegiatan, alokasi, segment, km/hm awal) digabung jam, muatan, dan preminya
+function tambahDetailPosting(&$detail, $baris, $jenispekerjaan, $alokasi, $jam, $muatan, $premi)
+{
+    $kunci = $jenispekerjaan . '|' . $alokasi . '|' . $baris['kodesegment'] . '|' . floatval($baris['kmhmawal']);
+    if (isset($detail[$kunci])) {
+        $detail[$kunci]['jumlah'] += $jam;
+        $detail[$kunci]['beratmuatan'] += $muatan;
+        $detail[$kunci]['premiopt'] += $premi;
+        return;
+    }
+    $detail[$kunci] = array(
+        'notransaksi'   => $baris['notransaksi'],
+        'jenispekerjaan' => $jenispekerjaan,
+        'alokasibiaya'  => $alokasi,
+        'beratmuatan'   => $muatan,
+        'jumlahrit'     => $baris['jumlahrit'],
+        'keterangan'    => is_null($baris['keterangan']) ? null : addslashes($baris['keterangan']),
+        'biaya'         => $baris['biaya'],
+        'kmhmawal'      => $baris['kmhmawal'],
+        'kmhmakhir'     => $baris['kmhmakhir'],
+        'jumlah'        => $jam,
+        'satuan'        => $baris['satuan'],
+        'kodesegment'   => $baris['kodesegment'],
+        'operator'      => $baris['operator'],
+        'helper'        => $baris['helper'],
+        'helper2'       => $baris['helper2'],
+        'helper3'       => $baris['helper3'],
+        'denda'         => $baris['denda'],
+        'premiopt'      => $premi
+    );
+}
+
 function updateKmHm($kodevhc)
 {
     global $dbname;
@@ -3240,6 +3155,64 @@ function perbandingan($a, $b, $operator)
         default:
             return '';
     }
+}
+
+
+/**
+ * Susun pilihan Jenis Pekerjaan kendaraan: dikelompokkan TB, TBM, TM, dan Lainnya.
+ * Di dalam grup urut kode kegiatan; kelompok PNN (pengangkutan panen) masuk TM.
+ */
+function susunOptKegiatanTraksi($rows)
+{
+    $peta  = array('TB' => 'TB', 'TBM' => 'TBM', 'TM' => 'TM', 'PNN' => 'TM');
+    $grup  = array('TB' => array(), 'TBM' => array(), 'TM' => array(), 'Lainnya' => array());
+    foreach ($rows as $r) {
+        $g = isset($peta[$r['kelompok']]) ? $peta[$r['kelompok']] : 'Lainnya';
+        $grup[$g][] = $r;
+    }
+    $opt = '';
+    foreach ($grup as $label => $list) {
+        if (count($list) == 0) {
+            continue;
+        }
+        usort($list, function ($a, $b) {
+            return strcmp($a['kodekegiatan'], $b['kodekegiatan']);
+        });
+        $opt .= "<optgroup label='" . $label . "'>";
+        foreach ($list as $r) {
+            $opt .= "<option value='" . $r['kodekegiatan'] . "'>" . htmlspecialchars($r['kodekegiatan'] . ' - ' . $r['namakegiatan']) . "</option>";
+        }
+        $opt .= "</optgroup>";
+    }
+    return $opt;
+}
+
+
+/**
+ * Susun pilihan operator/supir/helper: "NAMA (NIK)"; dikelompokkan per jabatan bila ada lebih dari satu jabatan.
+ */
+function susunOptKaryawanTraksi($rows)
+{
+    $label = array('0' => 'Operator', '1' => 'Helper', '2' => 'Supir');
+    $grup = array();
+    foreach ($rows as $r) {
+        $grup[$r['jabatan']][] = $r;
+    }
+    $pakaiGrup = count($grup) > 1;
+    $opt = '';
+    foreach ($grup as $jab => $list) {
+        if ($pakaiGrup) {
+            $opt .= "<optgroup label='" . (isset($label[$jab]) ? $label[$jab] : $jab) . "'>";
+        }
+        foreach ($list as $r) {
+            $teks = strtoupper(trim($r['nama'])) . (trim($r['nik']) != '' ? ' (' . trim($r['nik']) . ')' : '');
+            $opt .= "<option value='" . $r['karyawanid'] . "'>" . htmlspecialchars($teks) . "</option>";
+        }
+        if ($pakaiGrup) {
+            $opt .= "</optgroup>";
+        }
+    }
+    return $opt;
 }
 
 
