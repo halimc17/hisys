@@ -46,7 +46,7 @@ $str="select a.jenispekerjaan , a.notransaksi,a.alokasibiaya,a.keterangan,a.juml
 // $jumbaris=count($res);	
 		
 echo"<fieldset style=float:left><label>Detail Activity : ".$param['kodevhc']." ".$_SESSION['lang']['tanggal']." : ".$param['tglAwal']." - ".$param['tglAkhir']."</label>
-     <img onclick=\"detailData(event,'vhc_slave_2biayaalokasiperkendaraandetail.php?type=excel&kodevhc=".$param['kodevhc']."&tglAwal=".$param['tglAwal']."&tglAkhir=".$param['tglAkhir']."&hrgaSatuan=".$param['hrgaSatuan']."')\" src=images/excel.jpg class=resicon title='MS.Excel'>
+     <img onclick=\"detailData(event,'vhc_slave_2biayaalokasiperkendaraandetail.php?type=excel&kodevhc=".$param['kodevhc']."&tglAwal=".$param['tglAwal']."&tglAkhir=".$param['tglAkhir']."&hrgaSatuan=".$param['hrgaSatuan']."&totalhm=".(isset($param['totalhm'])?(float)$param['totalhm']:0)."')\" src=images/excel.jpg class=resicon title='MS.Excel'>
      </fieldset>";
 if($param['type']!='excel')
 $stream="<table class=sortable cellpadding=5 cellspacing=1 border=0 width=100%>";
@@ -68,9 +68,11 @@ $stream.="<thead>
       <tbody>";
 	  
 	  
-$hargapersatuan=floor($teralokasi/$param['totalhm']);
+$totalhm=(float)(isset($param['totalhm'])?$param['totalhm']:0);
+$teralokasi=isset($teralokasi)?$teralokasi:0;
+$hargapersatuan=($totalhm>0)?floor($teralokasi/$totalhm):0;
 
-$floorteralokasi=$hargapersatuan*$param['totalhm']; 
+$floorteralokasi=$hargapersatuan*$totalhm;
 $selisihpembulatan=$teralokasi-$floorteralokasi;
 
 $no=0;
