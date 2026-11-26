@@ -9,6 +9,19 @@ require_once('dompdf/autoload.inc.php');
 
 use Dompdf\Dompdf;
 
+#Sel foto BKM: nilai foto kosong (BKM dibuat manual tanpa foto) tampil '-', bukan gambar rusak.
+#Foto yang tidak bisa dimuat (server foto tidak terjangkau / file hilang) menampilkan teks alt.
+#Jangan memakai atribut onerror / kata Error, Warning, Gagal di hasil ini: JavaScript pemanggil menganggap respons yang memuatnya sebagai pesan gagal (isSaveResponse).
+function fotoBkm($url, $ukuran)
+{
+	$url = trim((string)$url);
+	if ($url === '') {
+		return "<span style='color:#888'>-</span>";
+	}
+	$u = htmlspecialchars($url, ENT_QUOTES);
+	return "<a href='" . $u . "' class='popup-img'><img onclick=\"popupimage()\" style='height:" . (int)$ukuran . "px;width:" . (int)$ukuran . "px;font-size:10px;color:#b42318;overflow:hidden;' src='" . $u . "' alt='Foto tidak dapat dimuat' /></a>";
+}
+
 
 $proses = checkPostGet('proses', '');
 $tipe = checkPostGet('tipe', '');
@@ -178,17 +191,8 @@ if ($tipetrans != "BKM") {
 	foreach ($rPhoto as $foto) {
 		$tab .= "<tr class=rowcontent style='vertical-align:top;'>";
 		if ($jenis == 'html') {
-			$tab .= "<td align=center>";
-			$tab .= "<a href='" . $foto['photo'] . "' class='popup-img'>";
-			$tab .= "<img onclick=\"popupimage()\" style='height:100px;width:100px;' src='" . $foto['photo'] . "' />";
-			$tab .= "</a>";
-			$tab .= "</td>";
-
-			$tab .= "<td align=center>";
-			$tab .= "<a href='" . $foto['photoakhir'] . "' class='popup-img'>";
-			$tab .= "<img onclick=\"popupimage()\" style='height:100px;width:100px;' src='" . $foto['photoakhir'] . "' />";
-			$tab .= "</a>";
-			$tab .= "</td>";
+			$tab .= "<td align=center>" . fotoBkm($foto['photo'], 100) . "</td>";
+			$tab .= "<td align=center>" . fotoBkm($foto['photoakhir'], 100) . "</td>";
 		} else {
 			$tab .= "<td align=center>";
 			// $tab.="<img style='height:100px;width:100px;' src='".$foto['photo']."' />";
@@ -282,16 +286,8 @@ while ($rPres = $qPres->fetch()) {
 	$tab .= "<td " . $row . " align=right>" . @hidezerodecimal($rPres['upahpremi'], 0) . "</td>";
 	$tab .= "<td " . $row . " align=right>" . @hidezerodecimal($rPres['umr'] + $rPres['upahpremi'], 0) . "</td>";
 	if ($jenis == 'html') {
-		$tab .= "<td " . $row . " align=left>
-				<a href='" . $rPres['photo'] . "' class='popup-img'>
-					<img onclick=\"popupimage()\" style='height:50px;width:50px;' src='" . $rPres['photo'] . "'
-				</a>
-			</td>";
-		$tab .= "<td " . $row . " align=left>
-				<a href='" . $rPres['photoakhir'] . "' class='popup-img'>
-					<img onclick=\"popupimage()\" style='height:50px;width:50px;' src='" . $rPres['photoakhir'] . "'
-				</a>
-			</td>";
+		$tab .= "<td " . $row . " align=left>" . fotoBkm($rPres['photo'], 50) . "</td>";
+		$tab .= "<td " . $row . " align=left>" . fotoBkm($rPres['photoakhir'], 50) . "</td>";
 	} else {
 		$tab .= "<td " . $row . " align=left>
 				<a href='" . $rPres['photo'] . "'>" . $rPres['photo'] . "</a>

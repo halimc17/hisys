@@ -12,6 +12,20 @@ $param = $_POST;
 if(count($param)==0){
 	$param = $_GET;
 }
+#validasi masukan yang dipakai langsung di banyak query di bawah
+if (isset($param['kodeorg']) && $param['kodeorg'] !== '' && !preg_match('/^[A-Za-z0-9_\-]{1,12}$/', (string)$param['kodeorg'])) {
+	exit("Warning : Kode unit tidak valid");
+}
+if (isset($param['periodegaji']) && $param['periodegaji'] !== '' && !preg_match('/^[0-9]{4}-[0-9]{2}$/', (string)$param['periodegaji'])) {
+	exit("Warning : Periode gaji tidak valid");
+}
+if (isset($param['tipekar']) && $param['tipekar'] !== '' && !preg_match('/^[0-9]{1,2}$/', (string)$param['tipekar'])) {
+	exit("Warning : Tipe karyawan tidak valid");
+}
+#variabel penampung diisi dulu agar count()/foreach tidak error (PHP 8) bila tidak ada datanya
+$cekabsen = array(); $lstKary = array(); $penalty = array(); $penaltykehadiran = array(); $dtkomplus = array(); $dtkommin = array();
+$upahLebih = array(); $potupahLebih = array(); $premi = array(); $premikontanan = array(); $potkontanan = array(); $readyData = array();
+$pesangon = array(); $kompensasi = array(); $uangpisah = array(); $umrbulanan = array(); $natura_karyawan = array();
 
 $method=checkPostGet('method','');
 $tgl1=tanggalsystemn(checkPostGet('tgl1',''));
@@ -1488,6 +1502,10 @@ $jlhhari= round(abs($endd-$startd)/60/60/24);
 	###################################################################################################################################################
 	###################################################################################################################################################
 
+			if(count($readyData) < 1){
+				exit("Error:Data Kosong");
+			}
+
 			$idkomponen_list = [];
 			foreach ($readyData as $item) {
 				$idkomponen_list[] = $item['idkomponen'];
@@ -1576,7 +1594,7 @@ $jlhhari= round(abs($endd-$startd)/60/60/24);
 		$list3='';
 		$no=0;
 
-			if($readyData<1){
+			if(empty($readyData)){
 				exit("Error:Data Kosong");
 			}
 
@@ -1804,7 +1822,7 @@ switch($proses) {
            . " where idkomponen not in ('26','28') "
             . " and periodegaji='".$param['periodegaji']."' and kodeorg='".$param['kodeorg']."' "
            . " and karyawanid in (select distinct karyawanid from ".$dbname.".datakaryawan "
-            . " where lokasitugas='".$param['kodeorg']."'   )  and sumber!='UPLOAD'";
+            . " where sistemgaji='Bulanan' and lokasitugas='".$param['kodeorg']."'   )  and sumber!='UPLOAD'";
 
         #delete dulu baru insert        
         $owlPDO->exec($sdel);

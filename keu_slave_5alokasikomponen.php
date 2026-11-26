@@ -6,7 +6,7 @@ require_once('lib/zLib.php');
 require_once('lib/zAlokasiGajiPPP.php');
 
 #Setup Alokasi Komponen Gaji per PT, dua bagian:
-#  1. Komponen Upah (Setup Upah, tipe basic): satu akun debet per jabatan untuk semua komponen upah jabatan itu (idkomponen 0, tanpa jenis biaya)
+#  1. Komponen Upah (Setup Upah, tipe basic, ditambah catu dari Setup Catu): satu akun debet per jabatan untuk semua komponen upah jabatan itu (idkomponen 0, tanpa jenis biaya)
 #  2. Pendapatan Lain (komponen tambahan): jenis biaya + akun debet (opsional) per komponen, untuk semua jabatan (kodejabatan 0) atau jabatan tertentu
 $method = checkPostGet('method', '');
 $kodejabatan = checkPostGet('kodejabatan', '0');
@@ -117,6 +117,9 @@ switch ($method) {
         if (!$stm->fetchColumn()) {
             exit("Warning : Komponen tidak ditemukan, bukan komponen pendapatan, atau termasuk komponen upah (diatur per jabatan di tab Komponen Upah).");
         }
+        if (in_array((int)$idkomponen, komponenCatuPPP())) {
+            exit("Warning : Komponen catu diatur per jabatan di tab Komponen Upah, bukan di Pendapatan Lain.");
+        }
         if (!is_string($jenisbiaya) || ($jenisbiaya != '' && !isset($arrJenis[$jenisbiaya]))) {
             exit("Warning : Jenis Biaya tidak valid.");
         }
@@ -161,7 +164,7 @@ switch ($method) {
             $akun = preg_replace('/[^0-9A-Za-z]/', '', trim($r['noakundebet']));
             echo "<tr class=rowcontent>
                 <td align=center>" . $no . "</td>
-                <td>" . htmlspecialchars((string)@$nmJabatan[$jab]) . "</td>
+                <td><b>" . htmlspecialchars(strtoupper((string)@$nmJabatan[$jab])) . "</b></td>
                 <td>" . htmlspecialchars(teksAkun5alokasi($akun, $nmAkun)) . "</td>
                 <td align=center>" . ($r['aktif'] == 1 ? 'Ya' : 'Tidak') . "</td>
                 <td align=center width=25px><img src=images/application/application_edit.png class=zImgBtn title='Edit' onclick=\"editUpah5('" . $jab . "','" . htmlspecialchars($akun, ENT_QUOTES) . "','" . (int)$r['aktif'] . "');\"></td>
@@ -204,7 +207,7 @@ switch ($method) {
             $jab = (int)$r['kodejabatan'];
             $akun = preg_replace('/[^0-9A-Za-z]/', '', trim($r['noakundebet']));
             $nama = htmlspecialchars(trim((string)@$nmKomponen[$idk])) . " (" . $idk . ")";
-            $upah = (@$tipeKomponen[$idk] == 'basic');
+            $upah = (@$tipeKomponen[$idk] == 'basic') || in_array($idk, komponenCatuPPP()); #catu ikut tab Komponen Upah
             if ($upah) {
                 #aturan lama komponen upah: sekarang komponen upah diatur per jabatan, jadi aturan ini tidak dipakai lagi
                 echo "<tr class=rowcontent style='color:#777'>
@@ -235,7 +238,7 @@ switch ($method) {
             echo "<tr class=rowcontent>
                 <td align=center>" . $no . "</td>
                 <td>" . $nama . "</td>
-                <td>" . ($jab == 0 ? "<i>Semua jabatan</i>" : htmlspecialchars((string)@$nmJabatan[$jab])) . "</td>
+                <td>" . ($jab == 0 ? "<i>Semua jabatan</i>" : "<b>" . htmlspecialchars(strtoupper((string)@$nmJabatan[$jab])) . "</b>") . "</td>
                 <td>" . ($r['jenisbiaya'] == '' ? "<i>ikut semua jabatan</i> (" . htmlspecialchars((string)@$arrJenis[$jenisEf]) . ")" : htmlspecialchars((string)@$arrJenis[$r['jenisbiaya']])) . "</td>
                 " . $selAkun . "
                 <td align=center>" . ($r['aktif'] == 1 ? 'Ya' : 'Tidak') . "</td>

@@ -9,6 +9,32 @@ $notransaksi=checkPostGet('notransaksi','');
 $prd=checkPostGet('prd','');
 $unit=checkPostGet('unit','');
 
+function urutkanJurnal(&$a){
+	ksort($a);
+	foreach($a as $k => $v){
+		if(is_array($v)){
+			urutkanJurnal($a[$k]);
+		}
+	}
+}
+
+function pnnNomorJurnalUnit($dbname,$cu,$notransaksi,$prd,$kodeJurnal){
+	$tmpNoJurnal=explode('/',$notransaksi);
+	$out=array();
+	foreach(array($kodeJurnal=>'konter','PNN03'=>'konter2') as $kk=>$nm){
+		$q=selectQuery($dbname,'keu_5kelompokjurnal','nokounter',"kodeorg='".$_SESSION['org']['kodeorganisasi']."' and kodekelompok='".$kk."' and kodeunit='".$cu."' and periode='".$prd."'");
+		$tk=fetchData($q);
+		$k=addZero($tk[0]['nokounter']+1,3);
+		if($k>999){
+			throw new PDOException("Nomor transaksi Jurnal sudah melebihi batas, silahkan reset nomor melalui menu Keuangan - Setup - Kelompok Jurnal, Kode Org = ".$_SESSION['org']['kodeorganisasi'].", Kode Kelompok = ".$kk.", Unit = ".$cu);
+		}
+		$out[$nm]=$k;
+	}
+	$out['nojurnal']=$tmpNoJurnal[0]."/".$cu."/".$kodeJurnal."/".$out['konter'];
+	$out['nojurnal2']=$tmpNoJurnal[0]."/".$cu."/PNN03/".$out['konter2'];
+	return $out;
+}
+
 try {
 $owlPDO->beginTransaction();
 	
@@ -32,6 +58,17 @@ if(count($res)>0){
 	throw new PDOException("Periode Gaji sudah di Tutup.");
 }
 
+
+#3b. Cek periode akuntansi unit tempat blok dikerjakan (biaya dijurnal ke unit blok, bisa berbeda dari unit karyawan/transaksi)
+$strCu="select distinct left(blok,4) as cu from ".$dbname.".kebun_3premipemanen where notransaksi='".$notransaksi."'";
+foreach(fetchData($strCu) as $vcu){
+	if($vcu['cu']!=$unit){
+		$res=fetchData("select * from ".$dbname.".setup_periodeakuntansi where periode = '".$prd."' and kodeorg='".$vcu['cu']."' and tutupbuku='1'");
+		if(count($res)>0){
+			throw new PDOException("Periode Akuntansi unit ".$vcu['cu']." (lokasi blok) Sudah di Tutup.");
+		}
+	}
+}
 
 #4. Cek apakah transaksi kegiatan panen sudah di posting semua
 $str="select * from ".$dbname.".kebun_prestasi_vs_hk where	tanggal like '".$prd."%' and unit='".$unit."' and jurnal='0'";
@@ -83,8 +120,9 @@ if($jumlahkaryhist > 0) {
 	
 
 	# ambil data
-	$str="select tanggalpanen,mandor,kerani,kodeorg,divisi from ".$dbname.".kebun_3premipemanen 
-	where notransaksi ='".$notransaksi."' group by tanggalpanen,mandor,kerani,divisi";
+	#Header kegiatan panen dibuat per unit/divisi BLOK tempat panen dikerjakan (karyawan dari unit lain bisa memanen blok unit lain)
+	$str="select tanggalpanen,mandor,kerani,left(blok,4) as kodeorg,left(blok,6) as divisi from ".$dbname.".kebun_3premipemanen
+	where notransaksi ='".$notransaksi."' group by tanggalpanen,mandor,kerani,left(blok,6)";
 	$res=$owlPDO->query($str) or die(print " Gagal: ".PDOException::getMessage());
 	$res->setFetchMode(PDO::FETCH_ASSOC);
 	$dataheader='';
@@ -150,40 +188,18 @@ if($jumlahkaryhist > 0) {
 
 	
 
-	# Get Journal Counter
-	$queryJ = selectQuery($dbname,'keu_5kelompokjurnal','nokounter',
-	    "kodeorg='".$_SESSION['org']['kodeorganisasi']."' and kodekelompok='".$kodeJurnal."' and kodeunit='".$unit."' and periode='".$prd."'");
-	$tmpKonter = fetchData($queryJ);
-	$konter = addZero($tmpKonter[0]['nokounter']+1,3);
-
-	# Validasi jika nomor konter sudah 1000
-	if($konter>999){
-		throw new PDOException("Nomor transaksi Jurnal sudah melebihi batas, silahkan reset nomor melalui menu Keuangan - Setup - Kelompok Jurnal, Kode Org = ".$_SESSION['org']['kodeorganisasi'].", Kode Kelompok = PNN01");
-	}
-
-	# Transform No Jurnal dari No Transaksi
+	# Nomor jurnal dibuat per UNIT TEMPAT BLOK DIKERJAKAN (karyawan dari unit lain bisa memanen blok unit lain).
+	# Untuk transaksi yang semua bloknya di unit transaksi hasilnya sama seperti sebelumnya (satu jurnal PNN01 dan satu PNN03).
 	$tmpNoJurnal = explode('/',$notransaksi);
-	// print_r($tmpNoJurnal);exit("Error:A");
 	$tmpKodeOrg = substr($tmpNoJurnal[1],0,4);
-	$nojurnal = $tmpNoJurnal[0]."/".$tmpKodeOrg."/".$kodeJurnal."/".$konter;
-	#======================== End Nomor Jurnal =============================
-
-	# Get Journal Counter
-	$queryJ2 = selectQuery($dbname,'keu_5kelompokjurnal','nokounter',
-	    "kodeorg='".$_SESSION['org']['kodeorganisasi']."' and kodekelompok='PNN03' and kodeunit='".$unit."' and periode='".$prd."'");
-	$tmpKonter2 = fetchData($queryJ2);
-	$konter2 = addZero($tmpKonter2[0]['nokounter']+1,3);
-
-	# Validasi jika nomor konter sudah 1000
-	if($konter2>999){
-		throw new PDOException("Nomor transaksi Jurnal sudah melebihi batas, silahkan reset nomor melalui menu Keuangan - Setup - Kelompok Jurnal, Kode Org = ".$_SESSION['org']['kodeorganisasi'].", Kode Kelompok = PNN03");
-	}
-
-	# Transform No Jurnal dari No Transaksi
-	$tmpNoJurnal2 = explode('/',$notransaksi);
-	// print_r($tmpNoJurnal);exit("Error:A");
-	$tmpKodeOrg2 = substr($tmpNoJurnal2[1],0,4);
-	$nojurnal2 = $tmpNoJurnal2[0]."/".$tmpKodeOrg2."/PNN03/".$konter2;
+	$tmpKodeOrg2 = $tmpKodeOrg;
+	$jU=array();
+	$konter=0;
+	$konter2=0;
+	$unitNoJurnal=array();
+	$unitNoJurnal2=array();
+	$rupiahHTu=array();
+	$rupiahHT2u=array();
 	#======================== End Nomor Jurnal =============================
 
 
@@ -203,13 +219,25 @@ if($jumlahkaryhist > 0) {
 	$ttx=0;
 	while($bar=$res->fetch()){
 
+			#unit tempat blok dikerjakan menentukan unit jurnal biaya
+			$cu=substr($bar['blok'],0,4);
+			if(!isset($jU[$cu])){
+				$jU[$cu]=pnnNomorJurnalUnit($dbname,$cu,$notransaksi,$prd,$kodeJurnal);
+			}
+			$nojurnal=$jU[$cu]['nojurnal'];
+			$nojurnal2=$jU[$cu]['nojurnal2'];
+			$unitNoJurnal[$nojurnal]=$cu;
+			$unitNoJurnal2[$nojurnal2]=$cu;
+
 			if($datadetail1!=''){
 				$datadetail1.=",";
 			}
-			$datadetail1.="('".$datanoperx[$bar['tanggalpanen']][$bar['mandor']][$bar['kerani']][$bar['divisi']]."','".$notransaksi."','".$bar['karyawanid']."','".$bar['blok']."','".($bar['jjgbuahbesar']+$bar['jjgbuahkecil'])."','".($bar['kgbuahbesar']+$bar['kgbuahkecil'])."','".($bar['hkbuahbesar']+$bar['hkbuahkecil'])."','".($bar['rphkbuahkecil']+$bar['rphkbuahbesar'])."','".($bar['rphkbuahkecilpot']+$bar['rphkbuahbesarpot'])."','".($bar['rplbbuahkecil']+$bar['rplbbuahbesar'])."','".$bar['dendapanen']."','".$bar['hapanen']."','".$bar['brondolan']."','".$bar['rpbrondolan']."','".$bar['nospb']."','".$_SESSION['standard']['userid']."')";
+			$datadetail1.="('".$datanoperx[$bar['tanggalpanen']][$bar['mandor']][$bar['kerani']][substr($bar['blok'],0,6)]."','".$notransaksi."','".$bar['karyawanid']."','".$bar['blok']."','".($bar['jjgbuahbesar']+$bar['jjgbuahkecil'])."','".($bar['kgbuahbesar']+$bar['kgbuahkecil'])."','".($bar['hkbuahbesar']+$bar['hkbuahkecil'])."','".($bar['rphkbuahkecil']+$bar['rphkbuahbesar'])."','".($bar['rphkbuahkecilpot']+$bar['rphkbuahbesarpot'])."','".($bar['rplbbuahkecil']+$bar['rplbbuahbesar'])."','".$bar['dendapanen']."','".$bar['hapanen']."','".$bar['brondolan']."','".$bar['rpbrondolan']."','".$bar['nospb']."','".$_SESSION['standard']['userid']."')";
 		
 			$rupiahHT+=($bar['rphkbuahkecil']+$bar['rphkbuahbesar'])-($bar['rphkbuahkecilpot']+$bar['rphkbuahbesarpot'])+($bar['rplbbuahkecil']+$bar['rplbbuahbesar'])-$bar['dendapanen'];
 			$rupiahHT2+=$bar['rpbrondolan'];
+			@$rupiahHTu[$nojurnal]+=($bar['rphkbuahkecil']+$bar['rphkbuahbesar'])-($bar['rphkbuahkecilpot']+$bar['rphkbuahbesarpot'])+($bar['rplbbuahkecil']+$bar['rplbbuahbesar'])-$bar['dendapanen'];
+			@$rupiahHT2u[$nojurnal2]+=$bar['rpbrondolan'];
 
 			$totaldapatbersih=$rupiahHT+$rupiahHT2;
 
@@ -318,7 +346,7 @@ if($jumlahkaryhist > 0) {
 			if($datadetail2!=''){
 				$datadetail2.=",";
 			}
-			$datadetail2.="('".$datanoperx[$bar['tanggalpanen']][$bar['mandor']][$bar['kerani']][$bar['divisi']]."','".$notransaksi."','".$bar['karyawanid']."','".$blokkecil."','".$tahuntanam."','".$sbttljjg."','".$sbttlkg."','".$sbttlhk."','".($sbttlupah)."','".$sbttlupahpot."','".$sbttlrplbs."','".$sbttldenda."','".$sbttlhapanen."','".$sbttlbrdl."','".$sbttlrpbrd."','".$bar['nospb']."','".$_SESSION['standard']['userid']."')";
+			$datadetail2.="('".$datanoperx[$bar['tanggalpanen']][$bar['mandor']][$bar['kerani']][substr($bar['blok'],0,6)]."','".$notransaksi."','".$bar['karyawanid']."','".$blokkecil."','".$tahuntanam."','".$sbttljjg."','".$sbttlkg."','".$sbttlhk."','".($sbttlupah)."','".$sbttlupahpot."','".$sbttlrplbs."','".$sbttldenda."','".$sbttlhapanen."','".$sbttlbrdl."','".$sbttlrpbrd."','".$bar['nospb']."','".$_SESSION['standard']['userid']."')";
 			
 		}
 	}
@@ -326,17 +354,28 @@ if($jumlahkaryhist > 0) {
 // echo "<pre>";
 // echo($ttx);
 // echo "</pre>";
+#Urutan baris jurnal tetap: nomor jurnal (unit biaya), karyawan, lalu blok
+ksort($datajurnal1);
+ksort($datajurnal2);
+ksort($rupiahHTu);
+ksort($rupiahHT2u);
+urutkanJurnal($datajurnal1);
+urutkanJurnal($datajurnal2);
 $indukunit=makeOption($dbname,'organisasi','kodeorganisasi,induk',"tipe='KEBUN'");
 $noxjur=array();
-$str="insert into ".$dbname.".keu_jurnalht
-	(`nojurnal`,`kodejurnal`,`tanggal`,`tanggalentry`,`posting`,`totaldebet`,`totalkredit`,`amountkoreksi`,
-	`noreferensi`,`autojurnal`,`matauang`,`kurs`,`revisi`)values
-	('".$nojurnal."','".$kodeJurnal."','".$tgl2."','".$tglEntry."','0','".$rupiahHT."','".$rupiahHT."','0','".$notransaksi."','1','IDR','1','0')";
+foreach ($rupiahHTu as $njHt => $rpHt) {
+	$str="insert into ".$dbname.".keu_jurnalht
+		(`nojurnal`,`kodejurnal`,`tanggal`,`tanggalentry`,`posting`,`totaldebet`,`totalkredit`,`amountkoreksi`,
+		`noreferensi`,`autojurnal`,`matauang`,`kurs`,`revisi`)values
+		('".$njHt."','".$kodeJurnal."','".$tgl2."','".$tglEntry."','0','".$rpHt."','".$rpHt."','0','".$notransaksi."','1','IDR','1','0')";
 
-$owlPDO->exec($str);
+	$owlPDO->exec($str);
+}
 		$no=0;
 		$totalxxx=0;
 		foreach ($datajurnal1 as $nojurnal => $key1) {
+			$tmpKodeOrg=$unitNoJurnal[$nojurnal];
+			$tmpKodeOrg2=$tmpKodeOrg;
 			foreach ($key1 as $karyd => $key2) {
 				foreach ($key2 as $blokkecil => $val) {
 					$no+=1;
@@ -584,15 +623,21 @@ $owlPDO->exec($str);
 
 //echo '<br>'.$totalxxx.'<br>';
 if($rupiahHT2>0){
-	$str="insert into ".$dbname.".keu_jurnalht
-		(`nojurnal`,`kodejurnal`,`tanggal`,`tanggalentry`,`posting`,`totaldebet`,`totalkredit`,`amountkoreksi`,
-		`noreferensi`,`autojurnal`,`matauang`,`kurs`,`revisi`)values
-		('".$nojurnal2."','PNN03','".$tgl2."','".$tglEntry."','0','".$rupiahHT2."','".$rupiahHT2."','0','".$notransaksi."','1','IDR','1','0')";
+	foreach ($rupiahHT2u as $nj2Ht => $rpHt2) {
+		if($rpHt2>0){
+			$str="insert into ".$dbname.".keu_jurnalht
+				(`nojurnal`,`kodejurnal`,`tanggal`,`tanggalentry`,`posting`,`totaldebet`,`totalkredit`,`amountkoreksi`,
+				`noreferensi`,`autojurnal`,`matauang`,`kurs`,`revisi`)values
+				('".$nj2Ht."','PNN03','".$tgl2."','".$tglEntry."','0','".$rpHt2."','".$rpHt2."','0','".$notransaksi."','1','IDR','1','0')";
 
-	$owlPDO->exec($str);
+			$owlPDO->exec($str);
+		}
+	}
 
 			$nox=0;
 			foreach ($datajurnal2 as $nojurnal2 => $key1) {
+				$tmpKodeOrg2=$unitNoJurnal2[$nojurnal2];
+				$tmpKodeOrg=$tmpKodeOrg2;
 				foreach ($key1 as $karyd => $key2) {
 					foreach ($key2 as $blokkecil => $val) {
 						$noxzx=0;
@@ -772,7 +817,7 @@ foreach ($noxjur as $unitz => $urutxz) {
 #============= End Insert Data ke Table Kebun Aktifitas ===============
 #======================== Cek data jurnal =============================
 
-$str="select sum(debet-kredit) as rpj from ".$dbname.".keu_jurnaldt_vw where	nojurnal in ('".$nojurnal."','".$nojurnal2."') and noreferensi='".$notransaksi."' and noakun in ('".$resParam[0]['noakundebet']."','".$resParam2[0]['noakundebet']."','".$resParam3[0]['noakundebet']."','1261004')"; 
+$str="select sum(debet-kredit) as rpj from ".$dbname.".keu_jurnaldt_vw where	nojurnal in ('".implode("','",array_merge(array_keys($rupiahHTu),array_keys($rupiahHT2u)))."') and noreferensi='".$notransaksi."' and noakun in ('".$resParam[0]['noakundebet']."','".$resParam2[0]['noakundebet']."','".$resParam3[0]['noakundebet']."','1261004')"; 
 //echo $str;
 $res=$owlPDO->query($str) or die(print " Gagal: ".PDOException::getMessage());
 $res->setFetchMode(PDO::FETCH_ASSOC);
@@ -800,14 +845,25 @@ if($varianx > 2 or $varianx < (-2)){
 
 #============================= Update ==================================
 # Update Counter
-$str="update ".$dbname.".keu_5kelompokjurnal set nokounter = '".$konter."' where kodeorg='".$_SESSION['org']['kodeorganisasi']."' and kodekelompok='".$kodeJurnal."' and kodeunit='".$unit."' and periode='".$prd."'";
-$owlPDO->exec($str);
+foreach ($jU as $cuUp => $jUp) {
+	$str="update ".$dbname.".keu_5kelompokjurnal set nokounter = '".$jUp['konter']."' where kodeorg='".$_SESSION['org']['kodeorganisasi']."' and kodekelompok='".$kodeJurnal."' and kodeunit='".$cuUp."' and periode='".$prd."'";
+	$owlPDO->exec($str);
 
-$str="update ".$dbname.".keu_5kelompokjurnal set nokounter = '".$konter2."' where kodeorg='".$_SESSION['org']['kodeorganisasi']."' and kodekelompok='PNN03' and kodeunit='".$unit."' and periode='".$prd."'";
-$owlPDO->exec($str);
+	$str="update ".$dbname.".keu_5kelompokjurnal set nokounter = '".$jUp['konter2']."' where kodeorg='".$_SESSION['org']['kodeorganisasi']."' and kodekelompok='PNN03' and kodeunit='".$cuUp."' and periode='".$prd."'";
+	$owlPDO->exec($str);
+}
+
+# Nomor jurnal yang tersimpan di transaksi (kolom jurnal 50 karakter): pasangan PNN01,PNN03 per unit sampai muat
+$jurnalFlag='';
+foreach ($jU as $cuUp => $jUp) {
+	$pasang=$jUp['nojurnal'].",".$jUp['nojurnal2'];
+	$calon=($jurnalFlag=='' ? $pasang : $jurnalFlag.",".$pasang);
+	if(strlen($calon)>50){ break; }
+	$jurnalFlag=$calon;
+}
 
 # Update flag transaksi
-$str="update ".$dbname.".kebun_3premipemanen set posting='1', jurnal = '".$nojurnal.",".$nojurnal2."', postingby ='".$_SESSION['standard']['userid']."',
+$str="update ".$dbname.".kebun_3premipemanen set posting='1', jurnal = '".$jurnalFlag."', postingby ='".$_SESSION['standard']['userid']."',
 	  postingdate='".$tglEntry."' where notransaksi='".$notransaksi."'";
 $owlPDO->exec($str);
 

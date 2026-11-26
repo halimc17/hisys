@@ -2014,6 +2014,14 @@ switch ($method) {
 		$Umr=$res->fetch();
 			$umrHarian=$Umr['nilai']/25;
 			// $umrHarianbasis=$Umr['nilai']/25;
+			#karyawan Bulanan PT yang memakai HKE (diaktifkan di Setup HK Efektif): upah harian = komponen dasar upah / HKE
+			$ubk = upahBkm($karyawanid, $tahun);
+			if($ubk['ppp']){
+				if(!$ubk['ada']){
+					exit("Warning : ".$ubk['pesan']);
+				}
+				$umrHarian = $ubk['upah'];
+			}
 		
 		if($umrHarian==0){
 			exit("Warning : Gaji Pokok Karyawan belum ada.");
@@ -2167,6 +2175,13 @@ switch ($method) {
 			$str = "select sum(jumlah) as nilai from ".$dbname.".sdm_5gajipokok where karyawanid='".$param['karyawanid']."' and tahun='".$prdgj."' and idkomponen in ('1')"; #exit("Warning :".$str);
 			$res = fetchdata($str);
 			$upahharian = $res[0]['nilai']/25;
+			$ubk = upahBkm($param['karyawanid'], $prdgj);
+			if($ubk['ppp']){
+				if(!$ubk['ada']){
+					throw new PDOException($ubk['pesan']);
+				}
+				$upahharian = $ubk['upah'];
+			}
 			$upahkary = $upahharian * $param['jhk'];
 			if(round($upahkary-$param['upah'],0)!=0){
 				throw new PDOException("Nilai HK dan Upah tidak sesuai.");
@@ -2309,6 +2324,9 @@ switch ($method) {
 				}
 
 				$totalhkx = (floatval($jmlhkbln) + floatval($param['jhk']));
+				#batas HK sebulan: 25, atau HKE bagi karyawan Bulanan PT yang memakai HKE
+				$ubkBatas = upahBkm($param['karyawanid'], $periodex);
+				$batasHkBln = $ubkBatas['batas'];
 			}
 			
 			# Buat nomor urut
@@ -2328,7 +2346,7 @@ switch ($method) {
 			// Jika Tipe Karyawan nya KHT,KBT, atau Nonstaff
 			if (in_array(getKary($param['karyawanid'],'tipekaryawan'),$arrkarybln)) {
 				// Jika Total HK nya lebih dari 25 maka upah jangan diisi, diganti ke premi
-				if ($totalhkx > 25) {
+				if ($totalhkx > $batasHkBln) {
 					$param['premi'] = $premi['upah'] + $premi['premi'];
 					$cols = array(
 								'nobkm','notransaksi','nourut','nik','nikpemel','kodekegiatan','kodeorg','hasilkerja','jumlahhk','tahuntanam','upahpremi'
@@ -2364,7 +2382,7 @@ switch ($method) {
 			// Jika Tipe Karyawan nya KHT,KBT, atau Nonstaff
 			if (in_array(getKary($param['karyawanid'],'tipekaryawan'),$arrkarybln)){
 				// Jika Total HK nya lebih dari 25 maka upah jangan diisi, diganti ke premi
-				if ($totalhkx > 25) {
+				if ($totalhkx > $batasHkBln) {
 					$param['premi'] = $premi['upah'] + $premi['premi'];
 
 					$cols = array(
@@ -2443,6 +2461,13 @@ switch ($method) {
 			$str = "select sum(jumlah) as nilai from ".$dbname.".sdm_5gajipokok where karyawanid='".$param['karyawanid']."' and tahun='".$prdgj."' and idkomponen in ('1')"; #exit("Warning :".$str);
 			$res = fetchdata($str);
 			$upahharian = $res[0]['nilai']/25;
+			$ubk = upahBkm($param['karyawanid'], $prdgj);
+			if($ubk['ppp']){
+				if(!$ubk['ada']){
+					throw new PDOException($ubk['pesan']);
+				}
+				$upahharian = $ubk['upah'];
+			}
 			$upahkary = $upahharian * $param['jhk'];
 			
 			if(round($upahkary-$param['upah'],0)!=0){
@@ -2513,13 +2538,16 @@ switch ($method) {
 				}
 
 				$totalhkx = (floatval($jmlhkbln) + floatval($param['jhk']));
+				#batas HK sebulan: 25, atau HKE bagi karyawan Bulanan PT yang memakai HKE
+				$ubkBatas = upahBkm($param['karyawanid'], $periodex);
+				$batasHkBln = $ubkBatas['batas'];
 			}
 
 			# ==========================================================================================
 			// Jika Tipe Karyawan nya KHT,KBT, atau Nonstaff
 			if (in_array(getKary($param['karyawanid'],'tipekaryawan'),$arrkarybln)){
 				// Jika Total HK nya lebih dari 25 maka upah jangan diisi, diganti ke premi
-				if ($totalhkx > 25){
+				if ($totalhkx > $batasHkBln){
 					$data = array(
 						'hasilkerja'=>$param['prestasi'],
 						'jumlahhk'=>$param['jhk'],
@@ -2550,7 +2578,7 @@ switch ($method) {
 			// Jika Tipe Karyawan nya KHT,KBT, atau Nonstaff
 			if (in_array(getKary($param['karyawanid'],'tipekaryawan'),$arrkarybln)) {
 				// Jika Total HK nya lebih dari 25 maka upah jangan diisi, diganti ke premi
-				if ($totalhkx > 25) {
+				if ($totalhkx > $batasHkBln) {
 					$data = array(
 						'hasilkerja'=>$param['prestasi'],
 						'jhk'=>$param['jhk'],
@@ -3130,8 +3158,10 @@ switch ($method) {
 			'kodeorg' => getOrgDetail(28),
 		);
 		$data = $getApi->post($url,$dataParam);
-		$countbkmmobile = count($data->response['result']['data']); 
-		foreach ($data->response['result']['data'] as $key => $val) {
+		#hasil API mobile bisa kosong / gagal: anggap tidak ada data, jangan mengeluarkan peringatan PHP ke daftar
+		$dataMobile = (isset($data->response['result']['data']) && is_array($data->response['result']['data'])) ? $data->response['result']['data'] : array();
+		$countbkmmobile = count($dataMobile);
+		foreach ($dataMobile as $key => $val) {
 			$nok++;
 			$tab.="<tr class=rowcontent style='background-color:#4cdf26;'>";
             $tab.="<td align=center>".$nok."</td>";
@@ -3190,8 +3220,9 @@ switch ($method) {
 		// echo "<pre>";
 		// print_r($data2->response['result']['data']);
 		// echo "</pre>";
-		$countbkmmobile += count($data2->response['result']['data']);
-		foreach ($data2->response['result']['data'] as $key => $val) {
+		$dataMobile2 = (isset($data2->response['result']['data']) && is_array($data2->response['result']['data'])) ? $data2->response['result']['data'] : array();
+		$countbkmmobile += count($dataMobile2);
+		foreach ($dataMobile2 as $key => $val) {
 			if (!empty($val['noreferensi'])) {
 				$nok++;
 				$tab.="<tr class=rowcontent style='background-color:#4cdf26;'>";
@@ -3243,10 +3274,10 @@ switch ($method) {
 			if(getKary($bar['karyawanid'],'tipekaryawan')==4){				
 				$umrab[$bar['norefrensi']][$bar['nobkm']]+=$bar['umr'];
 				$ttl[$bar['norefrensi']][$bar['nobkm']]+=$bar['hk']+$bar['umr']+$bar['premi'];
-				$countabs[$bar['norefrensi']][$bar['nobkm']]=count($bar['karyawanid']);
+				$countabs[$bar['norefrensi']][$bar['nobkm']]=1;
 			}else{				
 				$ttl[$bar['norefrensi']][$bar['nobkm']]+=$bar['hk']+$bar['premi'];
-				$countabs[$bar['norefrensi']][$bar['nobkm']]=count($bar['karyawanid']);
+				$countabs[$bar['norefrensi']][$bar['nobkm']]=1;
 			}
 			// premi bkm jangan pake $resn[0]['premi']
 			$hkab[$bar['norefrensi']][$bar['nobkm']]+=$bar['hk'];
@@ -3371,7 +3402,7 @@ switch ($method) {
             $tab.="<td align=center>" . getKary($bar['nikasisten']). "</td>";
             $tab.="<td align=center>" . $bar['kontanan']. "</td>";
 			$tab.="<td align=center>";
-				foreach ($verified[$bar['notransaksi']] as $v) 
+				foreach ((isset($verified[$bar['notransaksi']]) ? $verified[$bar['notransaksi']] : array()) as $v) 
 				{
 					@$nokr++;
 					if($nokr == 1){
@@ -3383,7 +3414,7 @@ switch ($method) {
 			$tab.="</td>";
 
 			$tab.="<td align=center>";
-				foreach ($waktuverif[$bar['notransaksi']] as $wv) {
+				foreach ((isset($waktuverif[$bar['notransaksi']]) ? $waktuverif[$bar['notransaksi']] : array()) as $wv) {
 					@$notkr++;
 					if ($notkr == 1) {
 						$tab.=$wv;	
@@ -4454,6 +4485,19 @@ function cekPrestasi($param) {
 	}
 }
 
+#Upah harian dan batas HK sebulan karyawan untuk BKM.
+#Karyawan Bulanan PT yang memakai HKE (diaktifkan di Setup HK Efektif): upah = komponen dasar upah / HKE, batas = HKE.
+#Selain itu tetap seperti semula: gaji pokok / 25 dan batas 25. Hasil: upah, batas, ppp, ada (false bila HKE periode itu belum diisi), pesan.
+function upahBkm($karyawanid, $periode) {
+	global $dbname;
+	$uh = getUpahHarian($karyawanid, $periode, '1');
+	if ($uh['ppp']) {
+		return array('upah' => $uh['upah'], 'batas' => $uh['pembagi'], 'ppp' => true, 'ada' => $uh['ada'], 'pesan' => $uh['pesan']);
+	}
+	$res = fetchdata("select sum(jumlah) as nilai from ".$dbname.".sdm_5gajipokok where karyawanid='".$karyawanid."' and tahun='".$periode."' and idkomponen in ('1')");
+	return array('upah' => (isset($res[0]['nilai']) ? $res[0]['nilai'] : 0)/25, 'batas' => 25, 'ppp' => false, 'ada' => true, 'pesan' => '');
+}
+
 function cekmaxhkBln($karyawanid,$tgl,$hknew,$hkold,$mode='new',$exit='1') {
 	global $dbname;
 	global $owlPDO;
@@ -4490,6 +4534,19 @@ function cekmaxhkBln($karyawanid,$tgl,$hknew,$hkold,$mode='new',$exit='1') {
 	$str = "select sum(jumlah) as nilai from ".$dbname.".sdm_5gajipokok where karyawanid='".$param['karyawanid']."' and tahun='".$periode."' and idkomponen='1'"; 
 	$Umr = fetchdata($str);
 	$gapok = $Umr[0]['nilai']/25;
+	#karyawan Bulanan PT yang memakai HKE: batas kehadiran sebulan = HKE dan tarif harian = komponen dasar upah / HKE
+	$ubk = upahBkm($karyawanid, $periode);
+	if($ubk['ppp']){
+		if(!$ubk['ada']){
+			if($exit=='0'){
+				throw new PDOException($ubk['pesan']);
+			}else{
+				exit("Error, ".$ubk['pesan']);
+			}
+		}
+		$maxhk = $ubk['batas'];
+		$gapok = $ubk['upah'];
+	}
 
 	$arrkarybln = array("1","2","3","5");
 	if($maxhk>0 and in_array(getKary($param['karyawanid'],'tipekaryawan'),$arrkarybln)){
@@ -4530,7 +4587,7 @@ function cekmaxhkBln($karyawanid,$tgl,$hknew,$hkold,$mode='new',$exit='1') {
 		$res = fetchData($str);
 		foreach($res as $bar){
 			if($bar['upah']>0){				
-				$hkpres['TRAKSI']['hk']+=$bar['upah']/$gapok;
+				if($gapok>0){ $hkpres['TRAKSI']['hk']+=$bar['upah']/$gapok; }
 			}
 			$hkpres['TRAKSI']['hadir']+=1;
 		}

@@ -207,6 +207,10 @@ foreach ($res as $bar) {
 	$pejabatbkm[$bar['keranimuat']] = $bar['keranimuat'];
 }
 
+#PPP HKE: komponen dasar upah karyawan Bulanan dijurnalkan satu kali sebagai komponen 1 (lihat gabungDasarUpahPPP)
+$namaGabung = array();
+gabungDasarUpahPPP($gaji, $info, $kodeorg, $param['periode'], $namaGabung);
+
 $GJ = $gaji;
 #buang karyawan yang gajinya sudah teralokasi
 
@@ -524,7 +528,7 @@ if (empty($gaji)) {
 				$ttlgaji += $tmpJml;
 			}
 			$ttl += $tmpJml;
-			if ($tmpJml != 0) { #komponen bernilai nol tidak dijurnalkan, jadi tidak ditampilkan
+			if (abs($tmpJml) >= 0.005) { #komponen bernilai nol (atau noise hitung di bawah setengah sen) tidak dijurnalkan, jadi tidak ditampilkan
 				$kompKar[$val] = $tmpJml;
 			}
 		}
@@ -539,7 +543,7 @@ if (empty($gaji)) {
 		foreach ($kompKar as $val => $tmpJml) {
 			$barisKar++;
 			$no++;
-			$infoKomp = $info[$key][$val] ?? '';
+			$infoKomp = ($info[$key][$val] ?? '') . (($val == 1 && isset($namaGabung[$key])) ? ' (termasuk ' . implode(', ', array_map(function ($c) use ($namakomponen) { return isset($namakomponen[$c]) ? $namakomponen[$c] : $c; }, $namaGabung[$key])) . ')' : '');
 			$jid = $kelompokJurnal($bagianKey, $key, $val);
 			$pjInfo = isset($optParamJurnal[$jid]) ? $optParamJurnal[$jid] : array('noakundebet' => '');
 			$akunDbInfo = $pjInfo['noakundebet'];

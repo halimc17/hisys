@@ -263,6 +263,14 @@ switch($method){
 				}
 
 				$jlhumr = $req[0]['jumlah']/25;
+				#karyawan Bulanan PT yang memakai HKE (diaktifkan di Setup HK Efektif): upah harian = komponen dasar upah / HKE; selain itu tetap gaji pokok / 25
+				$uh = getUpahHarian($bar['karyawanid'], $periodegaji, '1');
+				if($uh['ppp']){
+					if(!$uh['ada']){
+						throw new PDOException($uh['pesan'] . ' (' . getKary($bar['karyawanid']) . ')');
+					}
+					$jlhumr = $uh['upah'];
+				}
 				
 				$day = date('D', strtotime($bar['tanggalabsen']));
 				$sql = "select * from ".$dbname.".sdm_5harilibur where tanggal='".$bar['tanggalabsen']."' and (kebun='GLOBAL' or kebun='".$bar['kodeorg']."')";

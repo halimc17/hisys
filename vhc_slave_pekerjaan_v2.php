@@ -493,7 +493,7 @@ switch ($proses) {
             #cek nilai umr
             $str = selectQuery($dbname, 'sdm_5gajipokok', 'jumlah', "karyawanid='{$param['kode_karyawan']}' and tahun='" . substr($tgl_kerja, 0, 7) . "' and idkomponen='1'");
             $res = fetchData($str)[0];
-            $gaji = $res['jumlah'] / 25;
+            $gaji = upahHarianDariGapok($param['kode_karyawan'], substr($tgl_kerja, 0, 7), $res['jumlah']);
             $umr = $gaji;
 
             if ($umr == '') {
@@ -560,7 +560,7 @@ switch ($proses) {
             #UMR HELPER 1
             $str = selectQuery($dbname, 'sdm_5gajipokok', 'jumlah', "karyawanid='{$param['kode_helper']}' and tahun='" . substr($tgl_kerja, 0, 7) . "' and idkomponen='1'");
             $res = fetchData($str)[0];
-            $gaji = $res['jumlah'] / 25;
+            $gaji = upahHarianDariGapok($param['kode_helper'], substr($tgl_kerja, 0, 7), $res['jumlah']);
             $umrhelp = $gaji;
 
             if ($umrhelp == '') {
@@ -619,7 +619,7 @@ switch ($proses) {
             #UMR HELPER 2
             $str = selectQuery($dbname, 'sdm_5gajipokok', 'jumlah', "karyawanid='{$param['kode_helper2']}' and tahun='" . substr($tgl_kerja, 0, 7) . "' and idkomponen='1'");
             $res = fetchData($str)[0];
-            $gaji = $res['jumlah'] / 25;
+            $gaji = upahHarianDariGapok($param['kode_helper2'], substr($tgl_kerja, 0, 7), $res['jumlah']);
             $umrhelp2 = $gaji;
 
             if ($umrhelp2 == '') {
@@ -678,7 +678,7 @@ switch ($proses) {
             #UMR HELPER 3
             $str = selectQuery($dbname, 'sdm_5gajipokok', 'jumlah', "karyawanid='{$param['kode_helper3']}' and tahun='" . substr($tgl_kerja, 0, 7) . "' and idkomponen='1'");
             $res = fetchData($str)[0];
-            $gaji = $res['jumlah'] / 25;
+            $gaji = upahHarianDariGapok($param['kode_helper3'], substr($tgl_kerja, 0, 7), $res['jumlah']);
             $umrhelp3 = $gaji;
 
             if ($umrhelp3 == '') {
@@ -737,7 +737,7 @@ switch ($proses) {
             #UMR HELPER 4
             $str = selectQuery($dbname, 'sdm_5gajipokok', 'jumlah', "karyawanid='{$param['kode_helper4']}' and tahun='" . substr($tgl_kerja, 0, 7) . "' and idkomponen='1'");
             $res = fetchData($str)[0];
-            $gaji = $res['jumlah'] / 25;
+            $gaji = upahHarianDariGapok($param['kode_helper4'], substr($tgl_kerja, 0, 7), $res['jumlah']);
             $umrhelp4 = $gaji;
 
             if ($umrhelp4 == '') {
@@ -1821,7 +1821,7 @@ switch ($proses) {
         #= Cek nilai umr
         $str = selectQuery($dbname, 'sdm_5gajipokok', '*', "karyawanid='" . $param['kode_karyawan'] . "' and tahun='" . substr(tanggaldb($param['tglpekerjaan']), 0, 7) . "' and idkomponen='1'");
         $bar = fetchdata($str)[0];
-        $gajipokok = $bar['jumlah'] / 25;
+        $gajipokok = upahHarianDariGapok($param['kode_karyawan'], substr(tanggaldb($param['tglpekerjaan']), 0, 7), $bar['jumlah']);
 
         if ($param['uphOprt'] > $gajipokok) {
             if ($rCekHt[0]['kontanan'] != 'KONTAN') {
@@ -2219,7 +2219,7 @@ switch ($proses) {
         if (isset($rKode['kodeorg']) && gensetPPP($rKode['kodeorg'], $rKode['jenisvhc']) && (float)$param['uphOprt'] > 0 && preg_match('/^[0-9]{1,10}$/', (string)$param['kode_karyawan'])) {
             $tglCekHk = tanggalDbWakarPPP($tgl_kerja);
             $rGp = fetchData("select jumlah from " . $dbname . ".sdm_5gajipokok where karyawanid='" . $param['kode_karyawan'] . "' and tahun='" . substr($tglCekHk, 0, 7) . "' and idkomponen='1'");
-            $gajiHarian = isset($rGp[0]['jumlah']) ? round($rGp[0]['jumlah'] / 25, 0) : 0;
+            $gajiHarian = isset($rGp[0]['jumlah']) ? round(upahHarianDariGapok($param['kode_karyawan'], substr($tglCekHk, 0, 7), $rGp[0]['jumlah']), 0) : 0;
             if ($gajiHarian <= 0) {
                 exit("Warningsystem: Gaji pokok karyawan periode " . substr($tglCekHk, 0, 7) . " belum ada, upah tidak bisa diisi.");
             }
@@ -2649,6 +2649,11 @@ function syncVhcRunHk($dbname, $owlPDO, $notransaksi, $idkaryawan, $posisi = '0'
                 $upahPart = ", upah='" . floatval($upahLain) . "'";
             }
         }
+        #upah per hari (HKE) saat transaksi, dipakai view vhc_runhk_vw untuk menghitung HK; hanya bila kolomnya sudah ada
+        if (vhcRunhkAdaUpahHarian() && $tgl_kerja !== '') {
+            $rtUh = upahHarianTersimpan($idkaryawan, $tgl_kerja);
+            $upahPart .= ", upahharian=" . ($rtUh === null ? "NULL" : "'" . $rtUh . "'");
+        }
         $sqlUpd = "UPDATE " . $dbname . ".vhc_runhk 
                    SET premi='" . $premiall . "', penalty='" . $dendaall . "'" . $upahPart . " 
                    WHERE notransaksi='" . $notransaksi . "' AND idkaryawan='" . $idkaryawan . "'";
@@ -2658,6 +2663,12 @@ function syncVhcRunHk($dbname, $owlPDO, $notransaksi, $idkaryawan, $posisi = '0'
         $sqlIns = "INSERT INTO " . $dbname . ".vhc_runhk (`notransaksi`,`idkaryawan`,`posisi`,`tanggal`,`statuskaryawan`,`upah`,`premi`,`penalty`,`keterangan`)
                    VALUES ('" . $notransaksi . "','" . $idkaryawan . "','" . $posisi . "','" . $tgl_kerja . "','','" . $upahVal . "','" . $premiall . "','" . $dendaall . "','" . addslashes($keterangan) . "')";
         $owlPDO->exec($sqlIns);
+        if (vhcRunhkAdaUpahHarian() && $tgl_kerja !== '') {
+            $rtUh = upahHarianTersimpan($idkaryawan, $tgl_kerja);
+            if ($rtUh !== null) {
+                $owlPDO->exec("UPDATE " . $dbname . ".vhc_runhk SET upahharian='" . $rtUh . "' WHERE notransaksi='" . $notransaksi . "' AND idkaryawan='" . $idkaryawan . "'");
+            }
+        }
     }
 }
 
@@ -2715,7 +2726,7 @@ function hitungpremiold($param)
     $res->setFetchMode(PDO::FETCH_ASSOC);
     $bar = $res->fetch();
     if ($libur == true) {
-        $gapok = $bar['jumlah'] / 25;
+        $gapok = upahHarianDariGapok($kar, substr($tglTrans, 0, 7), $bar['jumlah']);
     }
 
     if ($gapok == 0) {
@@ -3444,7 +3455,7 @@ function validasiWakarMandorPPP($dbname, $param, $tgl_kerja, $notransaksi, &$has
             }
             $lain = fetchData("select count(*) as n from " . $dbname . ".vhc_runhk where idkaryawan='" . $id . "' and tanggal='" . $tgl_kerja . "' and upah>0 and notransaksi<>'" . $notransaksi . "'");
             if ($lain[0]['n'] == 0) {
-                $upah = $gp[0]['jumlah'] / 25;
+                $upah = upahHarianDariGapok($o['id'], substr($tgl_kerja, 0, 7), $gp[0]['jumlah']);
             }
         }
         $hasil['baris'][] = array('id' => $o['id'], 'posisi' => $o['posisi'], 'upah' => $upah, 'premi' => $o['premi']);
@@ -3464,6 +3475,12 @@ function simpanHkWakarMandorPPP($dbname, $owlPDO, $notransaksi, $tgl_kerja, $has
         $ket = ($b['posisi'] == 3) ? 'WAKAR' : 'MANDOR';
         $owlPDO->exec("INSERT INTO " . $dbname . ".vhc_runhk (`notransaksi`,`idkaryawan`,`posisi`,`tanggal`,`statuskaryawan`,`upah`,`premi`,`penalty`,`keterangan`)
             VALUES ('" . $notransaksi . "','" . $b['id'] . "','" . $b['posisi'] . "','" . $tgl_kerja . "','','" . floatval($b['upah']) . "','" . floatval($b['premi']) . "','0','" . $ket . "')");
+        if (vhcRunhkAdaUpahHarian()) {
+            $rtUh = upahHarianTersimpan($b['id'], $tgl_kerja);
+            if ($rtUh !== null) {
+                $owlPDO->exec("UPDATE " . $dbname . ".vhc_runhk SET upahharian='" . $rtUh . "' WHERE notransaksi='" . $notransaksi . "' AND idkaryawan='" . $b['id'] . "'");
+            }
+        }
     }
 }
 

@@ -6,6 +6,61 @@ require_once('lib/zLib.php');
 require_once('lib/fpdf.php');
 require_once('lib/terbilang.php');
 
+#=== Premi BM TBS mengikuti UNIT dan DIVISI KARYAWAN (lokasi tugas + subbagian pada periode), bukan lokasi SPB ===
+#Unit/divisi karyawan: riwayat B periode itu (jika ada), cadangan data karyawan. Bila subbagian bukan divisi (AFDELING) milik unit karyawan
+#atau datanya tidak ada, karyawan diproses di unit/divisi SPB tempat ia memuat supaya tidak ada yang terlewat.
+function bmDivisiValid(){
+	global $dbname,$owlPDO;
+	static $valid=null;
+	if($valid===null){
+		$valid=array();
+		$res=$owlPDO->query("select kodeorganisasi, induk from ".$dbname.".organisasi where tipe='AFDELING'");
+		if($res){
+			foreach($res->fetchAll(PDO::FETCH_ASSOC) as $r){
+				$valid[$r['kodeorganisasi']]=$r['induk'];
+			}
+		}
+	}
+	return $valid;
+}
+function bmProsesKary($nik,$prd){
+	global $dbname,$owlPDO;
+	static $cache=array();
+	$k=$prd.'|'.$nik;
+	if(!array_key_exists($k,$cache)){
+		$r=false;
+		$res=$owlPDO->query("select lokasitugas, subbagian from ".$dbname.".datakaryawan_hist where karyawanid='".$nik."' and version_type='B' and periodegaji='".$prd."' limit 1");
+		if($res){ $r=$res->fetch(PDO::FETCH_ASSOC); }
+		if(!$r){
+			$res=$owlPDO->query("select lokasitugas, subbagian from ".$dbname.".datakaryawan where karyawanid='".$nik."' limit 1");
+			if($res){ $r=$res->fetch(PDO::FETCH_ASSOC); }
+		}
+		$cache[$k]=null;
+		if($r){
+			$valid=bmDivisiValid();
+			if($r['lokasitugas']!='' and isset($valid[$r['subbagian']]) and $valid[$r['subbagian']]==$r['lokasitugas']){
+				$cache[$k]=array($r['lokasitugas'],$r['subbagian']);
+			}
+		}
+	}
+	return $cache[$k];
+}
+function bmMasukProses($nik,$spbUnit,$spbDiv,$unit,$afd,$prd){
+	$home=bmProsesKary($nik,$prd);
+	if($home===null){
+		return ($spbUnit==$unit and strpos($spbDiv,$afd)!==false);
+	}
+	return ($home[0]==$unit and $home[1]==$afd);
+}
+#tarif per kg: tarif divisi SPB tempat memuat, bila tidak ada pakai tarif unit/divisi karyawan
+function rpkgSpb($spbDiv,$keg,$jenis){
+	global $rpkg,$rpkgD;
+	if(isset($rpkgD[$spbDiv][$keg][$jenis])){
+		return $rpkgD[$spbDiv][$keg][$jenis];
+	}
+	return isset($rpkg[$keg][$jenis]) ? $rpkg[$keg][$jenis] : null;
+}
+
 //error_reporting(0);
 
 # Cek Datakaryawan History
@@ -77,11 +132,27 @@ if($kontanan=='KONTAN'){
 
 //exit('error');
 # Ambil TK BM
+$homeKary=array();
+$spbUnitOf=$spbDivOf=$ambilSpb=array();
+$condKaryB='';
+if($prd > '2024-10' and getNamaOrg($unit,'induk')=='PPP'){
+	$resHome=$owlPDO->query("select lpad(karyawanid,10,'0') from ".$dbname.".datakaryawan_hist where version_type='B' and periodegaji='".$prd."' and lokasitugas='".$unit."' and subbagian='".$afd."'
+		union select lpad(karyawanid,10,'0') from ".$dbname.".datakaryawan where lokasitugas='".$unit."' and subbagian='".$afd."'
+		and karyawanid not in (select karyawanid from ".$dbname.".datakaryawan_hist where version_type='B' and periodegaji='".$prd."')");
+	if($resHome){
+		foreach($resHome->fetchAll(PDO::FETCH_NUM) as $rh){
+			$homeKary[$rh[0]]=$rh[0];
+		}
+	}
+	if(count($homeKary)>0){
+		$condKaryB=" or a.karyawanid in ('".implode("','",$homeKary)."')";
+	}
+}
 if($prd > '2024-10'){
 	if(getNamaOrg($unit,'induk')=='PPP'){
-		$str="select *,a.tanggal as tanggalx,a.kontanan as kontananx,b.tanggal as tanggalspb from ".$dbname.".kebun_spbbm a 
+		$str="select *,a.tanggal as tanggalx,a.kontanan as kontananx,b.tanggal as tanggalspb,b.kodeorg as spbunit,b.divisi as spbdiv from ".$dbname.".kebun_spbbm a 
 		  left join ".$dbname.".kebun_spb_vw3 b on a.nospb=b.nospb
-		  where	a.tanggal like '".$prd."%' and b.kodeorg='".$unit."' and b.divisi like '%".$afd."%' and posting='1' and b.kontanan='".$kontanan."' ".$where."  order by a.tanggal asc, a.nospb,a.kegiatan, a.sesi asc";
+		  where	a.tanggal like '".$prd."%' and ((b.kodeorg='".$unit."' and b.divisi like '%".$afd."%')".$condKaryB.") and posting='1' and b.kontanan='".$kontanan."' ".$where."  order by a.tanggal asc, a.nospb,a.kegiatan, a.sesi asc";
 	}else{
 		$str="select *,a.tanggal as tanggalx,a.kontanan as kontananx,b.tanggal as tanggalspb from ".$dbname.".kebun_spbbm a 
 		  left join ".$dbname.".kebun_spb_vw4 b on a.nospb=b.nospb
@@ -91,6 +162,14 @@ if($prd > '2024-10'){
 	$res=$owlPDO->query($str) or die(print " Gagal: ".PDOException::getMessage());
 	$res->setFetchMode(PDO::FETCH_ASSOC);
 	while($bar=$res->fetch()){
+		if(getNamaOrg($unit,'induk')=='PPP'){
+			if(!bmMasukProses($bar['karyawanid'],$bar['spbunit'],$bar['spbdiv'],$unit,$afd,$prd)){
+				continue;
+			}
+			$spbUnitOf[$bar['nospb']]=$bar['spbunit'];
+			$spbDivOf[$bar['nospb']]=$bar['spbdiv'];
+			$ambilSpb[$bar['nospb']]=$bar['nospb'];
+		}
 		// if(getNamaOrg($unit,'induk')=='PPP'){
 		// 	$tanggal[]=new DateTime($bar['tanggalspb']);
 		// }else{
@@ -135,6 +214,9 @@ if($prd > '2024-10'){
 
 # ambil kg wb
 if(getNamaOrg($unit,'induk')=='PPP'){
+	if(empty($tanggal)){
+		exit("Warning : Data kosong, tidak ada pemuat unit dan divisi ini yang perlu diproses pada periode ini.");
+	}
 	$MaxDate = max($tanggal);
 	$MinDate = min($tanggal);
 
@@ -151,8 +233,7 @@ if(getNamaOrg($unit,'induk')=='PPP'){
 						AND tanggal <= '".$MaxDate->format('Y-m-d H:i:s')."')
 						OR tanggal LIKE '".$prd."%'
 					)
-				AND kodeorg = '".$unit."' 
-				AND divisi LIKE '".$afd."%' 
+				AND nospb IN ('".implode("','",array_keys($ambilSpb))."') 
 				AND posting = '1'";
 				
 }else{
@@ -177,10 +258,34 @@ $res->setFetchMode(PDO::FETCH_ASSOC);
 while($bar=$res->fetch()){
 	$rpkg[$bar['kegiatan']][$bar['jenispremi']]=$bar['harga'];
 }
+#tarif divisi SPB tempat karyawan memuat (bila berbeda dari unit/divisi karyawan)
+$rpkgD=array();
+$pasangSpb=array();
+foreach($spbDivOf as $nsp => $dvs){
+	if($spbUnitOf[$nsp]!='' and $dvs!='' and !($spbUnitOf[$nsp]==$unit and $dvs==$afd)){
+		$pasangSpb[$spbUnitOf[$nsp].'|'.$dvs]="(kodeorg='".$spbUnitOf[$nsp]."' and divisi='".$dvs."')";
+	}
+}
+if(count($pasangSpb)>0){
+	$resTarif=$owlPDO->query("select * from ".$dbname.".kebun_5premibmtbs where (".implode(" or ",$pasangSpb).") and tanggalberlaku<='".$prd."-01'");
+	if($resTarif){
+		$resTarif->setFetchMode(PDO::FETCH_ASSOC);
+		while($bar=$resTarif->fetch()){
+			$rpkgD[$bar['divisi']][$bar['kegiatan']][$bar['jenispremi']]=$bar['harga'];
+		}
+	}
+}
 
 #cek transaksi belum posting
 $row='';
-$str="select distinct(nospb) as nospb, a.tanggal from ".$dbname.".kebun_spbht a where	tanggal like '".$prd."%' and nospb like '%".$afd."%' and kodeorg='".$unit."' and posting='0' and a.kontanan='".$kontanan."'";
+$pasangBelum=array("(nospb like '%".$afd."%' and kodeorg='".$unit."')");
+foreach($spbDivOf as $nsp => $dvs){
+	if($spbUnitOf[$nsp]!='' and $dvs!='' and !($spbUnitOf[$nsp]==$unit and $dvs==$afd)){
+		$pasangBelum[$spbUnitOf[$nsp].'|'.$dvs]="(nospb like '%".$dvs."%' and kodeorg='".$spbUnitOf[$nsp]."')";
+	}
+}
+$sqlSpbBelum=implode(" or ",$pasangBelum);
+$str="select distinct(nospb) as nospb, a.tanggal from ".$dbname.".kebun_spbht a where	tanggal like '".$prd."%' and (".$sqlSpbBelum.") and posting='0' and a.kontanan='".$kontanan."'";
 $res=fetchdata($str);
 $row=count($res);
 $ttp=$owlPDO->query($str) or die(print " Gagal: ".PDOException::getMessage());
@@ -297,7 +402,7 @@ while ($dspb = $ttp->fetch()) {
 
 						// Cek Hist Karyawannya untuk membaca periode gaji apakah ada perubahan
 						$cekHistNik = getCekHistKary($kary,substr($ltgl,0,7),"kodejabatan");
-						$countHisNik =  count($cekHistNik);
+						$countHisNik = is_array($cekHistNik) ? count($cekHistNik) : (($cekHistNik === null) ? 0 : 1); #getCekHistKary mengembalikan nilai kolom (teks) atau null bila tidak ada histori; count() lama: teks=1, null=0
 
 						// Jika ada perubahan data history di periode gaji tersebut maka munculkan yang versi historynya
 						if ($countHisNik == "1") {
@@ -331,7 +436,7 @@ while ($dspb = $ttp->fetch()) {
 							if(count($pnn)>0){
 								$pnnx='';
 								$title[$kary][$ltgl].=" title=\"Sudah ada di kegiatan panen, dengan notransaksi : ".$pnn[0]['notransaksi']."\" style=background-color:#7FFF00;cursor:pointer;";
-								$jmlhk[$kary][$ltgl] += $pnn[0]['nilaihk'];
+								if(empty($hkLainSudah[$kary][$ltgl]['panen'])){ $hkLainSudah[$kary][$ltgl]['panen']=1; foreach($pnn as $rx){ $jmlhk[$kary][$ltgl] += (float)$rx['hkpanenperhari']; } } #kolom view = hkpanenperhari, semua baris dijumlah, dihitung sekali per orang per tanggal
 							}
 
 							$str="select * from ".$dbname.".kebun_kehadiran_vw where tanggal ='".$ltgl."' and karyawanid='".$kary."'";
@@ -339,7 +444,7 @@ while ($dspb = $ttp->fetch()) {
 							if(count($pnn)>0){
 								$pnnx='';
 								$title[$kary][$ltgl].=" title=\"Sudah ada di kegiatan rawat, dengan notransaksi : ".$pnn[0]['notransaksi']."\" style=background-color:#7FFF00;cursor:pointer;";
-								$jmlhk[$kary][$ltgl] += $pnn[0]['jhk'];
+								if(empty($hkLainSudah[$kary][$ltgl]['rawat'])){ $hkLainSudah[$kary][$ltgl]['rawat']=1; $seenx=array(); foreach($pnn as $rx){ $kx=$rx['notransaksi']; if(isset($seenx[$kx])){ continue; } $seenx[$kx]=1; $jmlhk[$kary][$ltgl] += (float)$rx['jhk']; } }
 							}
 
 							$str="select * from ".$dbname.".sdm_absensidt_vw where tanggal ='".$ltgl."' and karyawanid='".$kary."'";
@@ -347,15 +452,26 @@ while ($dspb = $ttp->fetch()) {
 							if(count($pnn)>0){
 								$pnnx='';
 								$title[$kary][$ltgl].=" title=\"Sudah ada di kegiatan umum\" style=background-color:#7FFF00;cursor:pointer;";
-								$jmlhk[$kary][$ltgl] += $pnn[0]['hkpanenperhari'];
+								if(empty($hkLainSudah[$kary][$ltgl]['absen'])){ $hkLainSudah[$kary][$ltgl]['absen']=1; foreach($pnn as $rx){ $jmlhk[$kary][$ltgl] += (float)$rx['nilaihk']; } } #kolom view = nilaihk
 							}
 
-							$str="select * from ".$dbname.".vhc_runhk_vw where tanggal ='".$ltgl."' and idkaryawan='".$kary."' and upah > 0";
+							if(empty($hkLainSudah[$kary][$ltgl]['bmtbs'])){
+									$hkLainSudah[$kary][$ltgl]['bmtbs']=1;
+									#HK Premi BM TBS yang sudah tersimpan untuk orang dan tanggal yang sama di divisi/proses lain (proses ini sendiri tidak dihitung karena akan diganti)
+									$pnn=fetchdata("select notransaksi, hk from ".$dbname.".kebun_3premibmtbs where tanggal ='".$ltgl."' and karyawanid='".$kary."' and not (kodeorg='".$unit."' and divisi='".$afd."' and periode='".$prd."' and kontanan='".$kontanan."')");
+									if(is_array($pnn) and count($pnn)>0){
+										$pnnx='';
+										$title[$kary][$ltgl].=" title=\"Sudah ada di Premi BM TBS divisi/proses lain, dengan notransaksi : ".$pnn[0]['notransaksi']."\" style=background-color:#7FFF00;cursor:pointer;";
+										foreach($pnn as $rx){ $jmlhk[$kary][$ltgl] += (float)$rx['hk']; }
+									}
+								}
+
+								$str="select * from ".$dbname.".vhc_runhk_vw where tanggal ='".$ltgl."' and idkaryawan='".$kary."' and upah > 0";
 							$pnn=fetchdata($str);
 							if(count($pnn)>0){
 								$pnnx='';
 								$title[$kary][$ltgl].=" title=\"Sudah ada di kegiatan traksi, dengan notransaksi : ".$pnn[0]['notransaksi']."\" style=background-color:#7FFF00;cursor:pointer;";
-								$jmlhk[$kary][$ltgl] += $pnn[0]['hk'];
+								if(empty($hkLainSudah[$kary][$ltgl]['traksi'])){ $hkLainSudah[$kary][$ltgl]['traksi']=1; foreach($pnn as $rx){ $jmlhk[$kary][$ltgl] += (float)$rx['hk']; } }
 							}
 
 							$str="select * from ".$dbname.".vhc_spl_kehadiran_vw where tanggal ='".$ltgl."' and nik ='".$kary."' and umr > 0";
@@ -363,7 +479,7 @@ while ($dspb = $ttp->fetch()) {
 							if(count($pnn)>0){
 								$pnnx='';
 								$title[$kary][$ltgl].=" title=\"Sudah ada di kegiatan traksi, dengan notransaksi : ".$pnn[0]['notransaksi']."\" style=background-color:#7FFF00;cursor:pointer;";
-								$jmlhk[$kary][$ltgl] += $pnn[0]['jhk'];
+								if(empty($hkLainSudah[$kary][$ltgl]['spl'])){ $hkLainSudah[$kary][$ltgl]['spl']=1; $seenx=array(); foreach($pnn as $rx){ $kx=$rx['notransaksi'].'|'.$rx['nourut']; if(isset($seenx[$kx])){ continue; } $seenx[$kx]=1; $jmlhk[$kary][$ltgl] += (float)$rx['jhk']; } }
 							}
 							
 							
@@ -417,6 +533,14 @@ foreach($listtgl as $ltgl => $key ){
 							$res->setFetchMode(PDO::FETCH_ASSOC);
 							$bar=$res->fetch();
 							$gjperhari[$kary]=$bar['jumlah']/25;
+							#karyawan Bulanan PT yang memakai HKE (diaktifkan di Setup HK Efektif): tarif HK = komponen dasar upah / HKE
+							$uhb = getUpahHarian($kary, $prd, '1');
+							if ($uhb['ppp']) {
+								if (!$uhb['ada']) {
+									exit("Warning : " . $uhb['pesan']);
+								}
+								$gjperhari[$kary] = $uhb['upah'];
+							}
 
 							// Ambil 7 karakter pertama: 'YYYY-MM'
 							// bandingin antara tanggal muat dan spb beda periode gak
@@ -429,7 +553,7 @@ foreach($listtgl as $ltgl => $key ){
 							$bjrx=$kgwb[$spb]/$jjgwb[$spb];
 
 							$kgx=fixnan($bjrx*$jlhkarykg[$kary][$spb][$keg][$sesi]);
-							$totalrupiah=(($kgx + $jlhkarybrd[$kary][$spb][$keg][$sesi])*$rpkg[$keg][$jenispremi]);
+							$totalrupiah=(($kgx + $jlhkarybrd[$kary][$spb][$keg][$sesi])*rpkgSpb(@$spbDivOf[$spb],$keg,$jenispremi));
 
 							$premi[$keg][$kary][$ltgl][$sesi]=0;
 							if(!isset($jmlhk[$kary][$ltgl])){
@@ -537,6 +661,14 @@ foreach($listtgl as $ltgl => $key ){
 							$res->setFetchMode(PDO::FETCH_ASSOC);
 							$bar=$res->fetch();
 							$gjperhari[$kary]=$bar['jumlah']/25;
+							#karyawan Bulanan PT yang memakai HKE (diaktifkan di Setup HK Efektif): tarif HK = komponen dasar upah / HKE
+							$uhb = getUpahHarian($kary, $prd, '1');
+							if ($uhb['ppp']) {
+								if (!$uhb['ada']) {
+									exit("Warning : " . $uhb['pesan']);
+								}
+								$gjperhari[$kary] = $uhb['upah'];
+							}
 
 							// Ambil 7 karakter pertama: 'YYYY-MM'
 							// bandingin antara tanggal muat dan spb beda periode gak
@@ -575,7 +707,7 @@ foreach($listtgl as $ltgl => $key ){
 
 							$bjrx=fixnan($kgwb[$spb]/$jjgwb[$spb]);
 							$kgx=fixnan($bjrx*$jlhkarykg[$kary][$spb][$keg][$sesi]);
-							$totalrupiah=(($kgx + $jlhkarybrd[$kary][$spb][$keg][$sesi])*$rpkg[$keg][$jenispremi]);
+							$totalrupiah=(($kgx + $jlhkarybrd[$kary][$spb][$keg][$sesi])*rpkgSpb(@$spbDivOf[$spb],$keg,$jenispremi));
 
 							$stream.="<td><font ".$fontc." ".$stylex.">".$ltgl."</font></td>";
 							$stream.="<td align=center id=kontanan_".$no.">".$kontanan."</td>";
@@ -586,7 +718,7 @@ foreach($listtgl as $ltgl => $key ){
 							$stream.="<td align=right id=brondkry_".$no.">".number_format($jlhkarybrd[$kary][$spb][$keg][$sesi])."</td>";
 
 							$stream.="<td align=center >".$jenispremi."</td>";
-							$stream.="<td align=right id=rpkg".$no.">".$rpkg[$keg][$jenispremi]."</td>";
+							$stream.="<td align=right id=rpkg".$no.">".rpkgSpb(@$spbDivOf[$spb],$keg,$jenispremi)."</td>";
 							$stream.="<td align=right id=totalrupiah".$no.">".number_format($totalrupiah,2)."</td>";
 							$stream.="<td align=right id=nilai1hk_".$no.">".number_format($gjperhari[$kary])."</td>";
 

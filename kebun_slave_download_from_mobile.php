@@ -800,6 +800,18 @@ switch ($proses) {
                 $umrHarian = $bar['nilai'] / 25;
                 $gjPokok[$val['karyawanid']] = ($bar['nilai'] / 25);
                 $karyidgjpkk[$val['karyawanid']] = $bar['karyawanid'];
+                #karyawan Bulanan PT yang memakai HKE (diaktifkan di Setup HK Efektif): upah harian = komponen dasar upah / HKE
+                $uhm = getUpahHarian($val['karyawanid'], substr($sekarang2,0,7), '1');
+                if ($uhm['ppp']) {
+                    if (!$uhm['ada']) {
+                        $mError = "Setup HKE belum diisi (" . $uhm['pesan'] . ") untuk Karyawan dibawah Berikut:<br>";
+                        $n++;
+                        $nmkaryerr .=$n.". ".getNamaKaryawan($val['karyawanid'])."<br>";
+                    } else {
+                        $umrHarian = $uhm['upah'];
+                        $gjPokok[$val['karyawanid']] = $uhm['upah'];
+                    }
+                }
             }
 
             if (empty($gjPokok[$val['karyawanid']])) {
@@ -818,6 +830,18 @@ switch ($proses) {
                 $umrHarian = $bar['nilai'] / 25;
                 $gjPokok[$val['nik']] = ($bar['nilai'] / 25);
                 $karyidgjpkk[$val['nik']] = $bar['karyawanid'];
+                #karyawan Bulanan PT yang memakai HKE (diaktifkan di Setup HK Efektif): upah harian = komponen dasar upah / HKE
+                $uhm = getUpahHarian($val['nik'], substr($sekarang2,0,7), '1');
+                if ($uhm['ppp']) {
+                    if (!$uhm['ada']) {
+                        $mError = "Setup HKE belum diisi (" . $uhm['pesan'] . ") untuk Karyawan dibawah Berikut:<br>";
+                        $n++;
+                        $nmkaryerr .=$n.". ".getNamaKaryawan($val['nik'])."<br>";
+                    } else {
+                        $umrHarian = $uhm['upah'];
+                        $gjPokok[$val['nik']] = $uhm['upah'];
+                    }
+                }
             }
 
             if (empty($gjPokok[$val['nik']])) {
@@ -1345,6 +1369,18 @@ switch ($proses) {
                 $umrHarian = $bar['nilai'] / 25;
                 $gjPokok[$val['nik']] = ($bar['nilai'] / 25);
                 $karyidgjpkk[$val['nik']] = $bar['karyawanid'];
+                #karyawan Bulanan PT yang memakai HKE (diaktifkan di Setup HK Efektif): upah harian = komponen dasar upah / HKE
+                $uhm = getUpahHarian($val['nik'], substr($sekarang2,0,7), '1');
+                if ($uhm['ppp']) {
+                    if (!$uhm['ada']) {
+                        $mError = "Setup HKE belum diisi (" . $uhm['pesan'] . ") untuk Karyawan dibawah Berikut:<br>";
+                        $n++;
+                        $nmkaryerr .=$n.". ".getNamaKaryawan($val['nik'])."<br>";
+                    } else {
+                        $umrHarian = $uhm['upah'];
+                        $gjPokok[$val['nik']] = $uhm['upah'];
+                    }
+                }
             }
 
             if (empty($gjPokok[$val['nik']])) {

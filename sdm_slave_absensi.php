@@ -64,8 +64,9 @@ if($asbensiId!=''){
     $sGaji="select (sum(jumlah)/25) as gaji from ".$dbname.".sdm_5gajipokok where ".$whrGjDt."";
     $rGaji=fetchData($sGaji);
 
-    if($hkDt[$asbensiId]==0){
-        $jmlHk=$hkDt[$asbensiId];
+    $nilaiHkAbsen = isset($hkDt[$asbensiId]) ? $hkDt[$asbensiId] : 0;
+    if($nilaiHkAbsen==0){
+        $jmlHk=$nilaiHkAbsen;
         $umr=0;
     }
 
@@ -75,7 +76,16 @@ if($asbensiId!=''){
 		$jmlHk=0;
 	}
 
-    $umr=$rGaji[0]['gaji']*$jmlHk;
+    $umr=(isset($rGaji[0]['gaji']) ? $rGaji[0]['gaji'] : 0)*$jmlHk;
+
+    #karyawan Bulanan PT yang memakai HKE (diaktifkan di Setup HK Efektif): upah harian = komponen dasar upah / HKE; selain itu tetap gaji pokok / 25
+    $uh = getUpahHarian($krywnId, $periode, '1');
+    if ($uh['ppp']) {
+        if (!$uh['ada']) {
+            exit('Warning : ' . $uh['pesan']);
+        }
+        $umr = $uh['upah'] * $jmlHk;
+    }
 
     if($jmlHk>1){
         exit('warning: HK Tidak boleh lebih dari 1');
@@ -293,11 +303,11 @@ switch ($proses) {
 		$res=$owlPDO->query($str) or die(print " Gagal: ".PDOException::getMessage());
 		$res->setFetchMode(PDO::FETCH_ASSOC);
 		$bar=$res->fetch();
-		$jumlahumr+=$bar['jumlah'];
+		$jumlahumr=(float)(isset($bar['jumlah']) ? $bar['jumlah'] : 0);
 		
 		$tipekaryawan_val = getKary($krywnId,'tipekaryawan');
 		if($tipekaryawan_val != '0'){
-			if($jumlahumr==''){
+			if($jumlahumr<=0){
 				exit("Warning : Gaji Pokok untuk periode ".$periode." belum ada !");
 			}
 		}
@@ -327,7 +337,7 @@ switch ($proses) {
 			// exit("warning".print_r($barDt));
 			// exit("warning".print_r($jmlHk));
 			if($datakbm > 0 and $jmlHk > 0) {
-				exit("Warning : Data sudah terdaftar di BKM, dengan<b> No Transaksi : ".$barDt['notransaksi'])."</b>";
+				exit("Warning : Data sudah terdaftar di BKM, dengan<b> No Transaksi : ".$barDt['notransaksi']."</b>");
 			}
 
 			// CEK DATA PANEN SPB
@@ -349,7 +359,7 @@ switch ($proses) {
 			// exit("warning".print_r($barDt));
 			// exit("warning".print_r($jmlHk));
 			if($datapnn > 0 and $jmlHk > 0) {
-				exit("Warning : Data sudah terdaftar di Kegiatan Panen, dengan<b> No Transaksi : ".$barDtpnn['notransaksi'])."</b>";
+				exit("Warning : Data sudah terdaftar di Kegiatan Panen, dengan<b> No Transaksi : ".$barDtpnn['notransaksi']."</b>");
 			}
 
 			
@@ -367,7 +377,6 @@ switch ($proses) {
                 $sIns = "insert into " . $dbname . ".sdm_absensiht (`kodeorg`,`tanggal`,`periode`,`updateby`) values
 					('" . $kdOrg . "','" . $tgl . "','" . $periode . "','" . $_SESSION['standard']['userid'] . "')"; //echo"warning:".$sIns;
 				try{
-					$owlPDO->exec($sIns); 
 					if ($_POST['premi'] == '') {
                         $_POST['premi'] = 0;
                     }
@@ -375,7 +384,7 @@ switch ($proses) {
                         $_POST['insentif'] = 0;
                     }
                     if ($_POST['premidt'] == '') {
-                        $_POST['premi'] = 0;
+                        $_POST['premidt'] = 0;
                     }
 					
 					$sdtCek = "select distinct * from " . $dbname . ".kebun_kehadiran_vw where tanggal='" . $tgl . "' and karyawanid='" . $krywnId . "'";
@@ -428,8 +437,9 @@ switch ($proses) {
 					$str = "select sum(upah) as jumvhc from ".$dbname.".vhc_runhk_vw where tanggal='" . $tgl . "' and idkaryawan='".$krywnId."'";
 					$res=fetchdata($str);
 					$jumvhc=$res[0]['jumvhc'];
+					$resnew=fetchdata("select * from ".$dbname.".vhc_runhk_vw where tanggal='" . $tgl . "' and idkaryawan='".$krywnId."'");
 					if($tipekary[$krywnId]!='4'){
-						if(count($res)>0 and $jmlHk>0){
+						if(count($resnew)>0 and $jmlHk>0){
 							if($_SESSION['standard']['username']=='tim.owl3') {
 								echo "<pre>";
 								print_r($res);
@@ -462,8 +472,15 @@ switch ($proses) {
                     $sDetIns = "insert into " . $dbname . ".sdm_absensidt (`kodeorg`,`tanggal`, `karyawanid`, `shift`, `absensi`, `jam`,`jamPlg`, `jamistirahatdari`, `jamistirahatsampai`,`penjelasan`,`catu`,`penaltykehadiran`,`premi`,`insentif`,`hk`,`umr`, `insentiflibur`,`noakun`,`alokasi`,`kegiatan`) 
 					 values ('" . $kdOrg . "','" . $tgl . "','" . $krywnId . "','" . $shifTid . "','" . $asbensiId . "','" . $Jam . "','" . $Jam2 . "','" . $Jam3 . "','" . $Jam4 . "','" . $ket . "'," . $catu . "," . $penaltykehadiran . "," . $_POST['premidt'] . "," . $_POST['insentif'] . ",'".$jmlHk."','".$umr."','".$insentiflibur."','".$param['noakun']."','".$param['alokasi']."','".$param['kodekegiatan']."')";
 					try{
-						$owlPDO->exec($sDetIns); 
+						$owlPDO->beginTransaction();
+						#header dibuat sesudah semua validasi lolos (bersama detail), supaya validasi yang menolak tidak meninggalkan header tanpa detail
+						$owlPDO->exec($sIns);
+						$owlPDO->exec($sDetIns);
+						$owlPDO->commit();
 					}catch (PDOException $e){
+						if($owlPDO->inTransaction()){
+							$owlPDO->rollBack();
+						}
 						echo "DB Error : " . $e->getMessage();
 						die();
 					}
@@ -684,7 +701,12 @@ switch ($proses) {
 
 		$nourut = 0;
 		$optNewOrg = "";
-		foreach(getOrgDetail(29) as $key => $value){
+		#getOrgDetail mengembalikan kosong (bukan array) bila pengguna tidak punya unit tipe ini; foreach pada nilai kosong membuat peringatan PHP yang ikut terkirim dan dianggap error oleh JS
+		$daftarOrg29 = @getOrgDetail(29);
+		if(!is_array($daftarOrg29)){
+			$daftarOrg29 = array();
+		}
+		foreach($daftarOrg29 as $key => $value){
 			if($nourut==0){
 				$optNewOrg .= "'".$key."'";
 			}else{
@@ -693,7 +715,11 @@ switch ($proses) {
 			$nourut++;
 		}
 
-		foreach(getOrgDetail(1) as $key => $value){
+		$daftarOrg1 = @getOrgDetail(1);
+		if(!is_array($daftarOrg1)){
+			$daftarOrg1 = array();
+		}
+		foreach($daftarOrg1 as $key => $value){
 			if($nourut==0){
 				$optNewOrg .= "'".$key."'";
 			}else{
@@ -702,7 +728,11 @@ switch ($proses) {
 			$nourut++;
 		}
 
-		foreach(getOrgDetail(21) as $key => $value){
+		$daftarOrg21 = @getOrgDetail(21);
+		if(!is_array($daftarOrg21)){
+			$daftarOrg21 = array();
+		}
+		foreach($daftarOrg21 as $key => $value){
 			if($nourut==0){
 				$optNewOrg .= "'".$key."'";
 			}else{
@@ -1375,11 +1405,11 @@ switch ($proses) {
 			$res=$owlPDO->query($str) or die(print " Gagal: ".PDOException::getMessage());
 			$res->setFetchMode(PDO::FETCH_ASSOC);
 			$bar=$res->fetch();
-				$jumlahumr+=$bar['jumlah'];
+				$jumlahumr=(float)(isset($bar['jumlah']) ? $bar['jumlah'] : 0);
 
 			$tipekaryawan_val = getKary($krywnId,'tipekaryawan');
 			if($tipekaryawan_val != 0){
-				if($jumlahumr==''){
+				if($jumlahumr<=0){
 					exit("Warning : Gaji Pokok untuk tahun ".$periode." belum ada !");
 				}
 			}
@@ -1408,7 +1438,7 @@ switch ($proses) {
 				// exit("warning".print_r($barDt));
 				// exit("warning".print_r($jmlHk));
 				if($datakbm > 0 and $jmlHk > 0) {
-					exit("Warning : Data sudah terdaftar di BKM, dengan<b> No Transaksi : ".$barDt['notransaksi'])."</b>";
+					exit("Warning : Data sudah terdaftar di BKM, dengan<b> No Transaksi : ".$barDt['notransaksi']."</b>");
 				}
 	
 				// CEK DATA PANEN SPB
@@ -1430,7 +1460,7 @@ switch ($proses) {
 				// exit("warning".print_r($barDt));
 				// exit("warning".print_r($jmlHk));
 				if($datapnn > 0 and $jmlHk > 0) {
-					exit("Warning : Data sudah terdaftar di Kegiatan Panen, dengan<b> No Transaksi : ".$barDtpnn['notransaksi'])."</b>";
+					exit("Warning : Data sudah terdaftar di Kegiatan Panen, dengan<b> No Transaksi : ".$barDtpnn['notransaksi']."</b>");
 				}
 	
 				
@@ -1448,7 +1478,6 @@ switch ($proses) {
 					$sIns = "insert into " . $dbname . ".sdm_absensiht (`kodeorg`,`tanggal`,`periode`,`updateby`) values
 						('" . $kdOrg . "','" . $tgl . "','" . $periode . "','" . $_SESSION['standard']['userid'] . "')"; //echo"warning:".$sIns;
 					try{
-						$owlPDO->exec($sIns); 
 						if ($_POST['premi'] == '') {
 							$_POST['premi'] = 0;
 						}
@@ -1456,7 +1485,7 @@ switch ($proses) {
 							$_POST['insentif'] = 0;
 						}
 						if ($_POST['premidt'] == '') {
-							$_POST['premi'] = 0;
+							$_POST['premidt'] = 0;
 						}
 						
 						$sdtCek = "select distinct * from " . $dbname . ".kebun_kehadiran_vw where tanggal='" . $tgl . "' and karyawanid='" . $krywnId . "'";
@@ -1547,8 +1576,15 @@ switch ($proses) {
 						$sDetIns = "insert into " . $dbname . ".sdm_absensidt (`kodeorg`,`tanggal`, `karyawanid`, `shift`, `absensi`, `jam`,`jamPlg`, `jamistirahatdari`, `jamistirahatsampai`,`penjelasan`,`catu`,`penaltykehadiran`,`premi`,`insentif`,`hk`,`umr`, `insentiflibur`,`noakun`,`alokasi`,`kegiatan`) 
 						 values ('" . $kdOrg . "','" . $tgl . "','" . $krywnId . "','" . $shifTid . "','" . $asbensiId . "','" . $Jam . "','" . $Jam2 . "','" . $Jam3 . "','" . $Jam4 . "','" . $ket . "'," . $catu . "," . $penaltykehadiran . "," . $_POST['premidt'] . "," . $_POST['insentif'] . ",'".$jmlHk."','".$umr."','".$insentiflibur."','".$param['noakun']."','".$param['alokasi']."','".$param['kodekegiatan']."')";
 						try{
-							$owlPDO->exec($sDetIns); 
+							$owlPDO->beginTransaction();
+							#header dibuat sesudah semua validasi lolos (bersama detail), supaya validasi yang menolak tidak meninggalkan header tanpa detail
+							$owlPDO->exec($sIns);
+							$owlPDO->exec($sDetIns);
+							$owlPDO->commit();
 						}catch (PDOException $e){
+							if($owlPDO->inTransaction()){
+								$owlPDO->rollBack();
+							}
 							echo "DB Error : " . $e->getMessage();
 							die();
 						}

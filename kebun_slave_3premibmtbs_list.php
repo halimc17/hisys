@@ -79,6 +79,38 @@ switch($proses){
 	#=========================== End Update ===============================
 	break;
 
+	case'viewjurnal':
+		#Popup jurnal transaksi: semua jurnal dengan referensi transaksi ini (jurnal biaya per unit, brondolan, dan RK antar-unit)
+		$wKeg=(isset($keg) and $keg!='') ? " and kodekegiatan like '".$keg."%'" : "";
+		$strH="select distinct nojurnal, kodejurnal, kodeorg from ".$dbname.".keu_jurnaldt_vw where noreferensi='".$notransaksi."'".$wKeg." order by (kodejurnal='M') asc, kodejurnal asc, nojurnal asc";
+		$resH=fetchData($strH);
+		$nmcaco=array();
+		foreach(fetchData("select kodeorg, akunpiutang from ".$dbname.".keu_5caco") as $vc){
+			$nmcaco[$vc['akunpiutang']]=1;
+		}
+		$stream="<table cellspacing=1 cellpadding=3 class=sortable><thead><tr class=rowheader><td colspan=9><b>Jurnal Transaksi : ".htmlspecialchars($notransaksi)."</b></td></tr>";
+		$stream.="<tr class=rowheader><td>No Jurnal</td><td>Urut</td><td>Akun</td><td>Nama Akun</td><td>Keterangan</td><td>Unit</td><td>Blok</td><td>Debet</td><td>Kredit</td></tr></thead><tbody>";
+		if(count($resH)==0){
+			$stream.="<tr class=rowcontent><td colspan=9 align=center>Belum ada jurnal untuk transaksi ini (transaksi belum diposting).</td></tr>";
+		}
+		$gDeb=$gKre=0;
+		foreach($resH as $h){
+			$strD="select nourut, noakun, namaakun, keterangan, kodeorg, kodeblok, nik, debet, kredit from ".$dbname.".keu_jurnaldt_vw where nojurnal='".$h['nojurnal']."' and noreferensi='".$notransaksi."'".$wKeg." order by nourut asc";
+			$resD=fetchData($strD);
+			$tDeb=$tKre=0;
+			$jn=($h['kodejurnal']=='M') ? "RK (antar-unit)" : $h['kodejurnal'];
+			$stream.="<tr class=rowcontent style='background-color:#dde8f5;'><td colspan=9><b>".htmlspecialchars($h['nojurnal'])." &nbsp; [".htmlspecialchars($jn)."]</b></td></tr>";
+			foreach($resD as $d){
+				$rk=isset($nmcaco[$d['noakun']]) ? " style='background-color:#fff3cd;'" : "";
+				$stream.="<tr class=rowcontent".$rk."><td>".htmlspecialchars($h['nojurnal'])."</td><td align=center>".$d['nourut']."</td><td>".$d['noakun']."</td><td>".htmlspecialchars($d['namaakun'])."</td><td>".htmlspecialchars($d['keterangan'])."</td><td align=center>".$d['kodeorg']."</td><td>".$d['kodeblok']."</td><td align=right>".($d['debet']!=0 ? number_format($d['debet'],2) : '')."</td><td align=right>".($d['kredit']!=0 ? number_format($d['kredit'],2) : '')."</td></tr>";
+				$tDeb+=$d['debet']; $tKre+=$d['kredit'];
+			}
+			$stream.="<tr class=rowcontent><td colspan=7 align=right><b>Total</b></td><td align=right><b>".number_format($tDeb,2)."</b></td><td align=right><b>".number_format($tKre,2)."</b></td></tr>";
+			$gDeb+=$tDeb; $gKre+=$tKre;
+		}
+		$stream.="</tbody></table><div style='margin-top:6px;font-size:11px'>Baris berlatar kuning = akun RK (rekening koran antar-unit).</div>";
+		echo $stream;
+	break;
 	case'view':
 	# Ambil data
 	$str="select * from ".$dbname.".kebun_3premibmtbs where	kegiatan = '".$keg."' and divisi = '".$afd."' and notransaksi='".$notransaksi."'";
@@ -348,7 +380,7 @@ switch($proses){
             $isi = $color='';
             $no+=1;
 			#cek jurnal
-			$str="select sum(debet) as rpj from ".$dbname.".keu_jurnaldt_vw where nojurnal = '".$bar['jurnal']."' and noreferensi='".$bar['notransaksi']."'";
+			$str="select sum(debet) as rpj from ".$dbname.".keu_jurnaldt_vw where kodejurnal='BM01' and kodekegiatan='".$bar['kegiatan']."' and noreferensi='".$bar['notransaksi']."'";
 			//echo $str;
 			$cekj=fetchData($str);
 			$rpjurnal=$cekj[0]['rpj'];
@@ -377,7 +409,8 @@ switch($proses){
             $tab.="<td align=right>".@hidezerodecimal($bar['rphk'],2)."</td>";
             $tab.="<td align=right>".@hidezerodecimal($bar['rppremi'],2) . "</td>";
             $tab.="<td>" . $nmkar[$bar['updateby']] . "</td>";
-            $tab.="<td>" . $notofj . "</td>";
+            $cssJ=($bar['posting']==1) ? " style='cursor:pointer;text-decoration:underline;' title='Klik untuk melihat jurnal' onclick=\"viewjurnal('".$bar['notransaksi']."','".$bar['kegiatan']."');\"" : "";
+            $tab.="<td".$cssJ.">" . $notofj . "</td>";
 
             
 			if ($bar['posting'] == 0) {

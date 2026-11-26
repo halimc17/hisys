@@ -98,6 +98,22 @@ if($method=='insert')
 
 				$optGaji = makeOption($dbname,'sdm_5gajipokok','karyawanid,jumlah',"karyawanid='".$karyawanid."' and idkomponen='1'");
 				$gajipokok = @($optGaji[$karyawanid]/25);
+				#karyawan Bulanan PT yang memakai HKE (diaktifkan di Setup HK Efektif): upah cuti per hari = komponen dasar upah bulan tanggal cuti / HKE bulan itu.
+				#Dicek dulu semua bulan sebelum ada yang disimpan; selain itu tetap gaji pokok / 25.
+				$upahHke = array();
+				foreach($rangeTgl as $val){
+					$bln = substr($val,0,7);
+					if(!isset($upahHke[$bln])){
+						#data gaji bulan cuti yang akan datang belum tentu ada: pakai periode gaji terakhir sampai bulan itu
+						$stmGj = $owlPDO->prepare("select max(tahun) from ".$dbname.".sdm_5gajipokok where karyawanid=? and idkomponen=1 and tahun<=?");
+						$stmGj->execute(array($karyawanid, $bln));
+						$perGaji = (string)$stmGj->fetchColumn();
+						$upahHke[$bln] = getUpahHarian($karyawanid, $bln, '1', '', ($perGaji != '' ? $perGaji : $bln));
+						if($upahHke[$bln]['ppp'] && !$upahHke[$bln]['ada']){
+							exit('Warning : ' . $upahHke[$bln]['pesan']);
+						}
+					}
+				}
 		
                 foreach($rangeTgl as $val){
 					$tgl=$val;
@@ -116,7 +132,7 @@ if($method=='insert')
 						$strAbs = "insert into ".$dbname.".sdm_absensidt 
 						(kodeorg,tanggal,karyawanid,absensi,penjelasan,hk,umr) 
 						values 
-						('".$optSubBagian[$karyawanid]."','".$val."','".$karyawanid."','C','".$keterangan."','1','".$gajipokok."')";		
+						('".$optSubBagian[$karyawanid]."','".$val."','".$karyawanid."','C','".$keterangan."','1','".($upahHke[substr($val,0,7)]['ppp'] ? $upahHke[substr($val,0,7)]['upah'] : $gajipokok)."')";		
 						$owlPDO->exec($strAbs);
 					}
                 }

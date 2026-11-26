@@ -42,6 +42,24 @@ $optTipe     = makeOption($dbname, 'datakaryawan', 'karyawanid,tipekaryawan');
 $optJbtn     = makeOption($dbname, 'sdm_5jabatan', 'kodejabatan,namajabatan');
 $optKomponen = makeOption($dbname, 'sdm_ho_component', 'id,name');
 
+#Upah harian baru untuk alat hitung ulang upah transaksi.
+#Karyawan Bulanan PT PPP (diaktifkan di Setup HK Efektif, mulai periode berlaku): jumlah komponen dasar upah di setup HKE dibagi HKE periode transaksi (getUpahHarian di lib/nangkoelib.php).
+#Selain itu tetap seperti semula: gaji pokok komponen terpilih dibagi 25.
+#Hasil: upah (upah harian), ada (false bila HKE periode transaksi belum diisi), pesan.
+function upahBaruHitungUlang($karyawanid, $param)
+{
+	global $dbname;
+	if (hkeSaklarPPP()) {
+		$u = getUpahHarian($karyawanid, $param['periode'], $param['idkomponen'], $param['kodeorg'], $param['tahun']);
+		if ($u['ppp']) {
+			return array('upah' => $u['upah'], 'ada' => $u['ada'], 'pesan' => $u['pesan']);
+		}
+	}
+	$s = "select jumlah from " . $dbname . ".sdm_5gajipokok where tahun = '" . $param['tahun'] . "' and idkomponen = '" . $param['idkomponen'] . "' and karyawanid='" . $karyawanid . "' and kodeorg='" . $param['kodeorg'] . "'";
+	$r = fetchdata($s);
+	return array('upah' => (isset($r[0]['jumlah']) ? $r[0]['jumlah'] : 0) / 25, 'ada' => true, 'pesan' => '');
+}
+
 switch ($method) {
 	case 'uploadData':
 		if ($_FILES['file']['error'] == 0) {
@@ -414,12 +432,11 @@ switch ($method) {
 			$res = fetchdata($str);
 			foreach ($res as $bar) {
 				$color = "";
-				$s = "select jumlah from " . $dbname . ".sdm_5gajipokok where tahun = '" . $param['tahun'] . "' and idkomponen = '" . $param['idkomponen'] . "' and karyawanid='" . $bar['nik'] . "' and kodeorg='" . $param['kodeorg'] . "'";
-				$r = fetchdata($s);
-				$upahbaru = $r[0]['jumlah'] / 25;
-				if ($upahbaru == '0') {
+				$u = upahBaruHitungUlang($bar['nik'], $param);
+				$upahbaru = $u['upah'];
+				if ($upahbaru == '0' || !$u['ada']) {
 					if ($param['jenis'] == 'update') {
-						throw new PDOException("Gaji pokok tahun " . $param['tahun'] . " an. " . getNamaKaryawan($bar['nik']) . " belum ada.");
+						throw new PDOException($u['ada'] ? "Gaji pokok tahun " . $param['tahun'] . " an. " . getNamaKaryawan($bar['nik']) . " belum ada." : $u['pesan'] . " (" . getNamaKaryawan($bar['nik']) . ")");
 					} else {
 						$color = "style=background-color:red;";
 					}
@@ -482,12 +499,11 @@ switch ($method) {
 			$res = fetchdata($str);
 			foreach ($res as $bar) {
 				$color = "";
-				$s = "select jumlah from " . $dbname . ".sdm_5gajipokok where tahun = '" . $param['tahun'] . "' and idkomponen = '" . $param['idkomponen'] . "' and karyawanid='" . $bar['karyawanid'] . "' and kodeorg='" . $param['kodeorg'] . "'";
-				$r = fetchdata($s);
-				$upahbaru = $r[0]['jumlah'] / 25;
-				if ($upahbaru == '0') {
+				$u = upahBaruHitungUlang($bar['karyawanid'], $param);
+				$upahbaru = $u['upah'];
+				if ($upahbaru == '0' || !$u['ada']) {
 					if ($param['jenis'] == 'update') {
-						throw new PDOException("Gaji pokok tahun " . $param['tahun'] . " an. " . getNamaKaryawan($bar['karyawanid']) . " belum ada.");
+						throw new PDOException($u['ada'] ? "Gaji pokok tahun " . $param['tahun'] . " an. " . getNamaKaryawan($bar['karyawanid']) . " belum ada." : $u['pesan'] . " (" . getNamaKaryawan($bar['karyawanid']) . ")");
 					} else {
 						$color = "style=background-color:red;";
 					}
@@ -516,17 +532,17 @@ switch ($method) {
 			$res = fetchdata($str);
 			foreach ($res as $bar) {
 				$color = "";
-				$n = "select jumlah from " . $dbname . ".sdm_5gajipokok where tahun = '" . $param['periode'] . "' and idkomponen = '" . $param['idkomponen'] . "' and karyawanid='" . $bar['idkaryawan'] . "' and kodeorg='" . $param['kodeorg'] . "'";
-				$q = fetchdata($n);
-				$upahlama = $q[0]['jumlah'] / 25;
+				$paramLama = $param;
+				$paramLama['tahun'] = $param['periode'];
+				$ul = upahBaruHitungUlang($bar['idkaryawan'], $paramLama);
+				$upahlama = $ul['upah'];
 
 
-				$s = "select jumlah from " . $dbname . ".sdm_5gajipokok where tahun = '" . $param['tahun'] . "' and idkomponen = '" . $param['idkomponen'] . "' and karyawanid='" . $bar['idkaryawan'] . "' and kodeorg='" . $param['kodeorg'] . "'";
-				$r = fetchdata($s);
-				$upahbaru = $r[0]['jumlah'] / 25;
-				if ($upahbaru == '0') {
+				$u = upahBaruHitungUlang($bar['idkaryawan'], $param);
+				$upahbaru = $u['upah'];
+				if ($upahbaru == '0' || !$u['ada']) {
 					if ($param['jenis'] == 'update') {
-						throw new PDOException("Gaji pokok tahun " . $param['tahun'] . " an. " . getNamaKaryawan($bar['idkaryawan']) . " belum ada.");
+						throw new PDOException($u['ada'] ? "Gaji pokok tahun " . $param['tahun'] . " an. " . getNamaKaryawan($bar['idkaryawan']) . " belum ada." : $u['pesan'] . " (" . getNamaKaryawan($bar['idkaryawan']) . ")");
 					} else {
 						$color = "style=background-color:red;";
 					}

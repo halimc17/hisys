@@ -137,19 +137,37 @@ foreach ($resgjh as $idx => $val) {
 	}
 }
 
+#PPP Bulanan yang HKE-nya berlaku: upah per hari = dasar upah (komponen di Setup HK Efektif, plus catu bila dicentang) / HKE, sama dengan Proses Gaji
+$hkePPP = array();
+foreach (array_keys($gajiperhari) as $kidU) {
+	$uhP = getUpahHarian($kidU, substr($tanggal1, 0, 7), '1', $param['kodeorg']);
+	if ($uhP['ppp']) {
+		if (!$uhP['ada']) {
+			exit("WARNING : " . $uhP['pesan']);
+		}
+		$gajiperhari[$kidU] = $uhP['upah'];
+		$hkePPP[$kidU] = array('pembagi' => $uhP['pembagi'], 'catuIkut' => in_array(118, $uhP['komponen']));
+	}
+}
+
 
 $tdkdibayar = array();
 $hktdkbyr = array();
 
 #ambil jumlah hk tidak dibayar untuk KHT dan total tidak dibayar
-$strgjh = "select  count(*) as jlh,b.karyawanid from " . $dbname . ".sdm_hktdkdibayar_vw a left join 
+$strgjh = "select  count(*) as jlh,b.karyawanid,a.tanggal from " . $dbname . ".sdm_hktdkdibayar_vw a left join 
 				  " . $dbname . "." . $table_hist . " b on a.karyawanid=b.karyawanid 
 				   where 1=1 " . $tpkar . " and b.lokasitugas='" . $param['kodeorg'] . "' 
 				   and  (b.tanggalkeluar>='" . $tanggal1 . "' or b.tanggalkeluar='0000-00-00') 
 				   and a.tanggal>='" . $tanggal1 . "' and a.tanggal<='" . $tanggal2 . "'  " . $whereHistB . "   
-				   group by a.karyawanid";
+				   group by a.karyawanid, a.tanggal";
 $resgjh = fetchData($strgjh);
+#PPP Bulanan HKE: hari libur menurut Setup Hari Libur unit (termasuk Minggu) tidak dipotong
+$hariLiburPPP = count($hkePPP) > 0 ? hariLiburUnit($param['kodeorg'], $tanggal1, $tanggal2) : array();
 foreach ($resgjh as $idx => $val) {
+	if (isset($hkePPP[$val['karyawanid']]) && isset($hariLiburPPP[$val['tanggal']])) {
+		continue;
+	}
 	@$tdkdibayar[$val['karyawanid']] += $gajiperhari[$val['karyawanid']] * $val['jlh']; #jumlah tidak dibayar
 	@$hktdkbyr[$val['karyawanid']] += $val['jlh'];
 	@$lstKary[$val['karyawanid']] = $val['karyawanid'];
@@ -665,7 +683,17 @@ if ($dtcatu > 0) {
 		## Potongan Natura
 		if ($hktdkbyr[$bar] != '') {
 			$potNatura = ($PotRpNaturaperkelompok[$value] * $hktdkbyr[$bar]);
+			$buatPotNatura = true;
+			if (isset($hkePPP[$bar])) {
+				if ($hkePPP[$bar]['catuIkut']) {
+					#catu sudah masuk upah per hari (dasar upah HKE), dipotong lewat Potongan HK (37); baris 134 tidak dibuat
+					$buatPotNatura = false;
+				} else {
+					$potNatura = ($RpNaturaperkelompok[$value] / $hkePPP[$bar]['pembagi']) * $hktdkbyr[$bar];
+				}
+			}
 
+			if ($buatPotNatura) {
 			$readyData[] = array(
 				'kodeorg' => $param['kodeorg'],
 				'periodegaji' => substr($tanggal1, 0, 7),
@@ -675,6 +703,7 @@ if ($dtcatu > 0) {
 				'pengali' => 1,
 				'hk' => 0
 			);
+			}
 		}
 
 		## Tunjangan Natura

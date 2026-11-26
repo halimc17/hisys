@@ -21,7 +21,7 @@ $gudang_detailAkses=" and kodeorganisasi IN (".$unitDetailAkses.") ";
 //}
 
 
-if(count($unitDetailAkses) > 0){
+if(!empty($unitDetailAkses)){
     $str = "select kodeorganisasi,namaorganisasi from " . $dbname . ".organisasi where 1=1  ".$gudang_detailAkses." order by namaorganisasi";
 }else{
     $str = "select kodeorganisasi,namaorganisasi from " . $dbname . ".organisasi where kodeorganisasi='" . $_SESSION['empl']['lokasitugas'] . "' order by namaorganisasi";

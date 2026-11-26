@@ -659,7 +659,10 @@ switch($proses){
 			exit("Error : Nomor Transaksi dan Periode tidak sesuai, silahkan reload.");
 		}
 	
-		$str="select * from ".$dbname.".kebun_spb_vw where tanggalpanen between '".$tgl1."' and '".$tgl2."' and kodeorg='".$unit."' and divisi like '".$afd."%' and posting='0'";
+		#SPB dan kegiatan panen dicek pada unit/divisi BLOK tempat panen dikerjakan (karyawan bisa memanen blok unit/divisi lain)
+		$cekUnitBlok=($rowblok!='') ? substr($rowblok,0,4) : $unit;
+		$cekDivBlok=($rowblok!='') ? substr($rowblok,0,6) : $afd;
+		$str="select * from ".$dbname.".kebun_spb_vw where tanggalpanen between '".$tgl1."' and '".$tgl2."' and kodeorg='".$cekUnitBlok."' and divisi like '".$cekDivBlok."%' and posting='0'";
 		$res=fetchdata($str);
 		$row=count($res);
 		if($row>0){
@@ -667,7 +670,7 @@ switch($proses){
 		}
 		
 		$str="select * from ".$dbname.".kebun_prestasi_vw
-		where tanggal between '".$tgl1."' and '".$tgl2."' and unit='".$unit."' and kodeorg like '".$afd."%' and jurnal='0'";
+		where tanggal between '".$tgl1."' and '".$tgl2."' and unit='".$cekUnitBlok."' and kodeorg like '".$cekDivBlok."%' and jurnal='0'";
 		$res=fetchdata($str);
 		$row=count($res);
 		if($row>0){
@@ -696,6 +699,16 @@ switch($proses){
 			exit("Error : Periode dan tanggal panen tidak sesuai, proses dibatalkan.");
 		}
 		
+		#Batas 1 HK per orang per tanggal panen (semua unit/divisi/transaksi, termasuk baris yang sudah disimpan pada proses ini)
+		$hkBaruRow=(float)str_replace(',','',$HKbesar)+(float)str_replace(',','',$HKkecil);
+		if($hkBaruRow>0.005){
+			$resHkAda=fetchdata("select sum(hkbuahbesar+hkbuahkecil) as hk from ".$dbname.".kebun_3premipemanen where karyawanid='".$rowkary."' and tanggalpanen='".$tglpnn."'");
+			$hkAda=(is_array($resHkAda) and isset($resHkAda[0]['hk'])) ? (float)$resHkAda[0]['hk'] : 0;
+			if(($hkAda+$hkBaruRow)>1.005){
+				exit("Error : HK karyawan ".@$nikkar[$rowkary]." tanggal ".tanggalnormal($tglpnn)." melebihi 1 HK (sudah tersimpan ".number_format($hkAda,2)." HK di transaksi lain, baris ini ".number_format($hkBaruRow,2)." HK).<br>Proses ulang melalui Preview supaya HK dihitung ulang, lalu simpan kembali.");
+			}
+		}
+
 		$str="insert into ".$dbname.".kebun_3premipemanen (notransaksi,kodeorg,divisi,periode,tahap,tanggalpanen,nospb,mandor,kerani,karyawanid,blok,hapanen,jjgbuahbesar,jjgbuahkecil,bjrbesar,bjrkecil,kgbuahbesar,basisbuahbesar,kgbuahkecil,basisbuahkecil,hkbuahbesar,hkbuahkecil,rphkbuahbesar,rphkbuahkecil,hkbuahbesarpot,hkbuahkecilpot,rphkbuahbesarpot,rphkbuahkecilpot,lbbuahkecil,lbbuahbesar,rplbbuahbesar,rplbbuahkecil,brondolan,rpbrondolan,dendapanen,total)
 			  values ('".$notransaksi."','".$unit."','".$afd."','".$prd."','".$tahap."','".$tglpnn."','".$nospb."','".$rowmdr."','".$rowkrn."','".$rowkary."','".$rowblok."','".$hapanen."','".$rowjjgbesar."','".$rowjjgkecil."','".$bjrjjgbesar."','".$bjrjjgkecil."','".$rowkgnettobesar."','".$rowkgbssbesar."','".$rowkgnettokecil."','".$rowkgbsskecil."','".$HKbesar."','".$HKkecil."','".$rpHKbesar."','".$rpHKkecil."','".$HKbesarpot."','".$HKkecilpot."','".$rpHKbesarpot."','".$rpHKkecilpot."','".$rowkglb1kecil."','".$rowkglb1besar."','".$rowhargarplb1besar."','".$rowhargarplb1kecil."','".$brondolankg."','".$rpbrondolan."','".$dendapanen."','".$total."')";
 		
@@ -750,6 +763,38 @@ switch($proses){
 		exit('Error : Unposting gagal di lakukan, '.$errorDB);
 	}
 	#=========================== End Update ===============================
+	break;
+	case'viewjurnal':
+		#Popup jurnal transaksi: semua jurnal dengan referensi transaksi ini (jurnal biaya per unit, brondolan, dan RK antar-unit)
+		$wKeg=(isset($keg) and $keg!='') ? " and kodekegiatan like '".$keg."%'" : "";
+		$strH="select distinct nojurnal, kodejurnal, kodeorg from ".$dbname.".keu_jurnaldt_vw where noreferensi='".$notransaksi."'".$wKeg." order by (kodejurnal='M') asc, kodejurnal asc, nojurnal asc";
+		$resH=fetchData($strH);
+		$nmcaco=array();
+		foreach(fetchData("select kodeorg, akunpiutang from ".$dbname.".keu_5caco") as $vc){
+			$nmcaco[$vc['akunpiutang']]=1;
+		}
+		$stream="<table cellspacing=1 cellpadding=3 class=sortable><thead><tr class=rowheader><td colspan=9><b>Jurnal Transaksi : ".htmlspecialchars($notransaksi)."</b></td></tr>";
+		$stream.="<tr class=rowheader><td>No Jurnal</td><td>Urut</td><td>Akun</td><td>Nama Akun</td><td>Keterangan</td><td>Unit</td><td>Blok</td><td>Debet</td><td>Kredit</td></tr></thead><tbody>";
+		if(count($resH)==0){
+			$stream.="<tr class=rowcontent><td colspan=9 align=center>Belum ada jurnal untuk transaksi ini (transaksi belum diposting).</td></tr>";
+		}
+		$gDeb=$gKre=0;
+		foreach($resH as $h){
+			$strD="select nourut, noakun, namaakun, keterangan, kodeorg, kodeblok, nik, debet, kredit from ".$dbname.".keu_jurnaldt_vw where nojurnal='".$h['nojurnal']."' and noreferensi='".$notransaksi."'".$wKeg." order by nourut asc";
+			$resD=fetchData($strD);
+			$tDeb=$tKre=0;
+			$jn=($h['kodejurnal']=='M') ? "RK (antar-unit)" : $h['kodejurnal'];
+			$stream.="<tr class=rowcontent style='background-color:#dde8f5;'><td colspan=9><b>".htmlspecialchars($h['nojurnal'])." &nbsp; [".htmlspecialchars($jn)."]</b></td></tr>";
+			foreach($resD as $d){
+				$rk=isset($nmcaco[$d['noakun']]) ? " style='background-color:#fff3cd;'" : "";
+				$stream.="<tr class=rowcontent".$rk."><td>".htmlspecialchars($h['nojurnal'])."</td><td align=center>".$d['nourut']."</td><td>".$d['noakun']."</td><td>".htmlspecialchars($d['namaakun'])."</td><td>".htmlspecialchars($d['keterangan'])."</td><td align=center>".$d['kodeorg']."</td><td>".$d['kodeblok']."</td><td align=right>".($d['debet']!=0 ? number_format($d['debet'],2) : '')."</td><td align=right>".($d['kredit']!=0 ? number_format($d['kredit'],2) : '')."</td></tr>";
+				$tDeb+=$d['debet']; $tKre+=$d['kredit'];
+			}
+			$stream.="<tr class=rowcontent><td colspan=7 align=right><b>Total</b></td><td align=right><b>".number_format($tDeb,2)."</b></td><td align=right><b>".number_format($tKre,2)."</b></td></tr>";
+			$gDeb+=$tDeb; $gKre+=$tKre;
+		}
+		$stream.="</tbody></table><div style='margin-top:6px;font-size:11px'>Baris berlatar kuning = akun RK (rekening koran antar-unit).</div>";
+		echo $stream;
 	break;
 	case'view':
 	$stream='';
@@ -1406,7 +1451,7 @@ switch($proses){
 		} else {
 			if($_SESSION['empl']['subbagian']!=''){
 
-				if(count($unitDetailAkses) > 0){
+				if(!empty($unitDetailAkses)){
 					$where = " and divisi = '".$_SESSION['empl']['subbagian']."'";
 					$whj = " and kodeorg IN ".$gudang_detailAkses." ";
 					$wh = " and b.kodeorg IN ".$gudang_detailAkses." ";
@@ -1417,7 +1462,7 @@ switch($proses){
 				}
 
 			}else{
-				if(count($unitDetailAkses) > 0){
+				if(!empty($unitDetailAkses)){
 					$where = " and kodeorg IN ".$gudang_detailAkses."  ";
 					$whj = " and kodeorg IN ".$gudang_detailAkses."  ";
 					$wh = " and b.kodeorg IN ".$gudang_detailAkses."  ";
@@ -1571,7 +1616,8 @@ switch($proses){
             $tab.="<td align=center>" . getNamaKaryawan($bar['updateby']) . "</td>";
             $tab.="<td align=center>" . (@$bar['lastupdate'] ? date('d-m-Y H:i:s', strtotime($bar['lastupdate'])) : '') . "</td>";
             $tab.="<td align=center>" . (@$bar['postingby'] ? getNamaKaryawan($bar['postingby']) : '') . "</td>";
-            $tab.="<td align=center ".$color.">".$notofj."</td>";
+            $cssJ=($bar['posting']==1) ? " style='cursor:pointer;text-decoration:underline;".(($color!='') ? "background-color:red;" : "")."' title='Klik untuk melihat jurnal' onclick=\"viewjurnal('".$bar['notransaksi']."');\"" : " ".$color;
+            $tab.="<td align=center".$cssJ.">".$notofj."</td>";
             $tab.="<td align=center ".$color.">".$notofp."</td>";
 			if ($bar['posting'] == 0) {
                 $isi.="<td align=center width=20px><img src=images/application/application_delete.png class=zImgBtn  title='Delete' 
@@ -1598,6 +1644,8 @@ switch($proses){
                     onclick=\"view('".$bar['notransaksi']."','".$bar['periode']."','".$bar['kodeorg']."','".$bar['divisi']."','html');\" ></td>
 					
 					";
+            $isi.="<td align=center width=20px><img src=images/excel.jpg class=resicon height='30' title='Excel Rincian per Karyawan' onclick=\"rinciExcel(event,'".$bar['notransaksi']."');\" ></td>";
+            $isi.="<td align=center width=20px><img src=images/pdf.jpg class=resicon height='30' title='PDF Rincian per Karyawan' onclick=\"rinciPdf('".$bar['notransaksi']."');\" ></td>";
             $tab.=$isi;
             $tab.="</tr>";
 
@@ -1644,7 +1692,7 @@ switch($proses){
 		$gudang_detailAkses=" (".$unitDetailAkses.") ";
 		if($_SESSION['empl']['subbagian']!=''){
 
-			if(count($unitDetailAkses) > 0){
+			if(!empty($unitDetailAkses)){
 				$where = " and divisi = '".$_SESSION['empl']['subbagian']."'";
 				$whj = " and kodeorg IN ".$gudang_detailAkses." ";
 				$wh = " and b.kodeorg IN ".$gudang_detailAkses." ";
@@ -1655,7 +1703,7 @@ switch($proses){
 			}
 		}else{
 
-			if(count($unitDetailAkses) > 0){
+			if(!empty($unitDetailAkses)){
 				$where = " and kodeorg IN ".$gudang_detailAkses."  ";
 				$whj = " and kodeorg IN ".$gudang_detailAkses."  ";
 				$wh = " and b.kodeorg IN ".$gudang_detailAkses."  ";
@@ -1874,6 +1922,132 @@ switch($proses){
 			}
 			fclose($handle);
 		}
+	break;
+	case 'loaddataexcelrinci':
+		#Tarikan Excel: rincian Premi Pemanen per karyawan (semua transaksi hasil filter List Data), batas 3000 baris
+		$where = "";
+		$unitDetailAkses = orgDetailuser($_SESSION['standard']['username'],'2');
+		$gudang_detailAkses=" (".$unitDetailAkses.") ";
+		if($_SESSION['empl']['subbagian']!=''){
+			$where = " and divisi = '".$_SESSION['empl']['subbagian']."'";
+		}else{
+			if(!empty($unitDetailAkses)){
+				$where = " and kodeorg IN ".$gudang_detailAkses."  ";
+			}else{
+				$where = " and kodeorg = '".$_SESSION['empl']['lokasitugas']."'";
+			}
+		}
+		if($prdlist!=''){ $where.=" and periode='".$prdlist."' "; }
+		if($unitlist!=''){ $where.=" and kodeorg='".$unitlist."' "; }
+		if($afdlist!=''){ $where.=" and divisi='".$afdlist."' "; }
+		if($notranslist!=''){ $where.=" and notransaksi like '%".$notranslist."%' "; }
+		if($statuslist=='1'){ $where.=" and posting='1' "; }elseif($statuslist=='0'){ $where.=" and (posting<>'1' or posting is null) "; }
+		if($tgl1list!='' && $tgl2list!=''){ $where.=" and tanggalpanen between '".$tgl1list."' and '".$tgl2list."' "; }
+		$maksBaris=3000;
+		$nmkarR=makeOption($dbname,'datakaryawan','karyawanid,namakaryawan');
+		$nikkarR=makeOption($dbname,'datakaryawan','karyawanid,nik');
+		$strR="select notransaksi, kodeorg, divisi, periode, tanggalpanen, nospb, karyawanid, blok, tahuntanam,
+			jjgbuahbesar, jjgbuahkecil, (kgbuahbesar+kgbuahkecil) as kg, (hkbuahbesar+hkbuahkecil) as hk,
+			(rphkbuahbesar+rphkbuahkecil) as rphk, (hkbuahbesarpot+hkbuahkecilpot) as hkpot, (rphkbuahbesarpot+rphkbuahkecilpot) as rppot,
+			(lbbuahbesar+lbbuahkecil) as kglb, (rplbbuahbesar+rplbbuahkecil) as rplb, brondolan as kgbrd, rpbrondolan as rpbrd, dendapanen as denda,
+			((rplbbuahkecil+rplbbuahbesar)+(rphkbuahbesar+rphkbuahkecil)-(rphkbuahbesarpot+rphkbuahkecilpot)-dendapanen+rpbrondolan) as total, posting
+			from ".$dbname.".kebun_3premipemanen where 1=1 ".$where."
+			order by periode asc, kodeorg asc, divisi asc, notransaksi asc, tanggalpanen asc, karyawanid asc, nospb asc, blok asc limit ".($maksBaris+1);
+		$resR=$owlPDO->query($strR) or die(print " Gagal: ".PDOException::getMessage());
+		$resR->setFetchMode(PDO::FETCH_ASSOC);
+		$kolomR=array('jjgbuahbesar','jjgbuahkecil','kg','hk','rphk','hkpot','rppot','kglb','rplb','kgbrd','rpbrd','denda','total');
+		$subR=$gtR=array();
+		foreach($kolomR as $kk){ $subR[$kk]=0; $gtR[$kk]=0; }
+		$couex="<table border=1 cellspacing=1 cellpadding=2 class=sortable><thead><tr class=rowheader>
+			<td>No</td><td>Periode</td><td>No Transaksi</td><td>Unit</td><td>Divisi</td><td>Tgl Panen</td><td>No SPB</td><td>NIK</td><td>Nama Karyawan</td>
+			<td>Blok Panen</td><td>Unit Blok</td><td>Tahun Tanam</td><td>Jjg Besar</td><td>Jjg Kecil</td><td>Kg</td><td>HK</td><td>Rp Upah HK</td><td>HK Potongan</td><td>Rp Potongan</td>
+			<td>Kg Lebih Basis</td><td>Rp Lebih Basis</td><td>Kg Brondolan</td><td>Rp Brondolan</td><td>Denda</td><td>Total</td><td>Status</td></tr></thead><tbody>";
+		$noR=0;
+		$notrxSkr='';
+		$terpotong=false;
+		$barisSub=function($sub,$label){
+			$h="<tr><td colspan=12 align=right><b>".$label."</b></td>";
+			foreach(array('jjgbuahbesar','jjgbuahkecil','kg','hk','rphk','hkpot','rppot','kglb','rplb','kgbrd','rpbrd','denda','total') as $kk){
+				if($kk=='hkpot'){ $h.="<td align=right><b>".number_format($sub[$kk],2,'.','')."</b></td>"; continue; }
+				$h.="<td align=right><b>".number_format($sub[$kk],2,'.','')."</b></td>";
+			}
+			return $h."<td></td></tr>";
+		};
+		while($barR=$resR->fetch()){
+			if($noR>=$maksBaris){ $terpotong=true; break; }
+			if($barR['notransaksi']!=$notrxSkr){
+				if($notrxSkr!=''){
+					$couex.=$barisSub($subR,"Subtotal ".$notrxSkr);
+					foreach($kolomR as $kk){ $subR[$kk]=0; }
+				}
+				$notrxSkr=$barR['notransaksi'];
+			}
+			$noR++;
+			$couex.="<tr><td>".$noR."</td><td>".$barR['periode']."</td><td>".$barR['notransaksi']."</td><td>".$barR['kodeorg']."</td><td>".$barR['divisi']."</td>
+				<td>".tanggalnormal($barR['tanggalpanen'])."</td><td>".$barR['nospb']."</td><td>'".@$nikkarR[$barR['karyawanid']]."</td><td>".@$nmkarR[$barR['karyawanid']]."</td>
+				<td>".$barR['blok']."</td><td>".substr($barR['blok'],0,4)."</td><td>".$barR['tahuntanam']."</td>
+				<td align=right>".$barR['jjgbuahbesar']."</td><td align=right>".$barR['jjgbuahkecil']."</td><td align=right>".number_format($barR['kg'],2,'.','')."</td>
+				<td align=right>".number_format($barR['hk'],2,'.','')."</td><td align=right>".number_format($barR['rphk'],2,'.','')."</td>
+				<td align=right>".number_format($barR['hkpot'],2,'.','')."</td><td align=right>".number_format($barR['rppot'],2,'.','')."</td>
+				<td align=right>".number_format($barR['kglb'],2,'.','')."</td><td align=right>".number_format($barR['rplb'],2,'.','')."</td>
+				<td align=right>".number_format($barR['kgbrd'],2,'.','')."</td><td align=right>".number_format($barR['rpbrd'],2,'.','')."</td>
+				<td align=right>".number_format($barR['denda'],2,'.','')."</td><td align=right>".number_format($barR['total'],2,'.','')."</td>
+				<td>".($barR['posting']==1 ? 'Posted' : 'Belum Posting')."</td></tr>";
+			foreach($kolomR as $kk){
+				$subR[$kk]+=$barR[$kk];
+				$gtR[$kk]+=$barR[$kk];
+			}
+		}
+		if($noR==0){
+			$couex.="<tr><td colspan=26 align=center>Data tidak ada untuk filter ini.</td></tr>";
+		}else{
+			$couex.=$barisSub($subR,"Subtotal ".$notrxSkr);
+			$couex.=$barisSub($gtR,"GRAND TOTAL");
+		}
+		$couex.="</tbody></table>";
+		if($terpotong){
+			$couex.="<br>Catatan: tarikan dibatasi ".$maksBaris." baris pertama. Persempit filter (periode, unit, divisi, tanggal) untuk melihat sisanya.";
+		}
+		$unitcetak=($unitlist!='') ? $unitlist : $_SESSION['empl']['lokasitugas'];
+		$ptkode=getindukPT($unitcetak);
+		$hd=setheadreport($ptkode,$ptkode);
+		$infocetak="Periode: ".($prdlist!='' ? $prdlist : 'Seluruhnya')." | Unit: ".($unitlist!='' ? $unitlist : 'Seluruhnya')." | Divisi: ".($afdlist!='' ? $afdlist : 'Seluruhnya');
+		if($tgl1list!='' && $tgl2list!=''){
+			$infocetak.=" | Tanggal: ".tanggalnormal($tgl1list)." s/d ".tanggalnormal($tgl2list);
+		}
+		if($notranslist!=''){
+			$infocetak.=" | No Transaksi: ".$notranslist;
+		}
+		if($statuslist!=''){
+			$infocetak.=" | Status: ".($statuslist=='1' ? 'Posted' : 'Belum Posting');
+		}
+		$couex="<table>
+			<tr><td colspan='12'><b>".$hd['nama']."</b></td></tr>
+			<tr><td colspan='12'><b>RINCIAN PREMI PEMANEN PER KARYAWAN (SPB)</b></td></tr>
+			<tr><td colspan='12'>".$infocetak."</td></tr>
+			<tr><td colspan='12'>Ditarik oleh ".$_SESSION['empl']['name']." pada ".date('d-m-Y H:i:s')."</td></tr>
+		</table><br>".$couex;
+		$nop_="Rincian_Premi_Pemanen_".date("YmdHis");
+		if ($handle = opendir('tempExcel')) {
+			while (false !== ($file = readdir($handle))) {
+				if ($file != "." && $file != "..") {
+					@unlink('tempExcel/'.$file);
+				}
+			}
+			closedir($handle);
+		}
+		$handle=fopen("tempExcel/".$nop_.".xls",'w');
+		if(!fwrite($handle,$couex)){
+			echo "<script language=javascript1.2>
+			parent.window.alert('Can't convert to excel format');
+			</script>";
+			exit;
+		}else{
+			echo "<script language=javascript1.2>
+			window.location='tempExcel/".$nop_.".xls';
+			</script>";
+		}
+		fclose($handle);
 	break;
     ######EXCEL	
 	case 'excel':

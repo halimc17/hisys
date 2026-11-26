@@ -24,17 +24,26 @@ $pilih = "<option value=''>" . $_SESSION['lang']['pilihdata'] . "</option>";
 
 $namaUpah = array();
 foreach (fetchData("select id,name from " . $dbname . ".sdm_ho_component where type='basic' and plus=1 order by id") as $bar) {
-	$namaUpah[] = htmlspecialchars(trim($bar['name']));
+	$namaUpah[] = "<b>" . htmlspecialchars(strtoupper(trim($bar['name']))) . "</b>";
+}
+#PPP: komponen catu (nilai dari Setup Catu) ikut aturan jabatan di tab Komponen Upah, bukan di Pendapatan Lain
+$idCatu5 = komponenCatuPPP();
+$namaCatu = array();
+foreach (fetchData("select id,name from " . $dbname . ".sdm_ho_component where id in (" . implode(',', array_map('intval', $idCatu5)) . ") order by id") as $bar) {
+	$namaCatu[] = "<b>" . htmlspecialchars(strtoupper(trim($bar['name']))) . "</b>";
 }
 $optKomponen = $pilih;
 foreach (fetchData("select id,name from " . $dbname . ".sdm_ho_component where plus=1 and type<>'basic' order by trim(name), id") as $bar) {
+	if (in_array((int)$bar['id'], $idCatu5)) {
+		continue;
+	}
 	$optKomponen .= "<option value='" . $bar['id'] . "'>" . htmlspecialchars(trim($bar['name'])) . " (" . $bar['id'] . ")</option>";
 }
 $optJabatan = $pilih;
 $optJabatanLain = "<option value='0'>Semua jabatan</option>";
 foreach (fetchData("select kodejabatan,namajabatan from " . $dbname . ".sdm_5jabatan order by namajabatan") as $bar) {
-	$optJabatan .= "<option value='" . $bar['kodejabatan'] . "'>" . htmlspecialchars($bar['namajabatan']) . "</option>";
-	$optJabatanLain .= "<option value='" . $bar['kodejabatan'] . "'>" . htmlspecialchars($bar['namajabatan']) . "</option>";
+	$optJabatan .= "<option value='" . $bar['kodejabatan'] . "'>" . htmlspecialchars(strtoupper($bar['namajabatan'])) . "</option>";
+	$optJabatanLain .= "<option value='" . $bar['kodejabatan'] . "'>" . htmlspecialchars(strtoupper($bar['namajabatan'])) . "</option>";
 }
 $optJenis = $pilih;
 foreach (jenisBiayaPPP() as $kd => $nm) {
@@ -88,7 +97,7 @@ CLOSE_BOX();
 #================ Tab 1: Komponen Upah ================
 echo "<div id=tabUpah5>";
 OPEN_BOX();
-echo "<div class=info5>Berlaku untuk <b>komponen dari Setup Upah</b>: " . implode(', ', $namaUpah) . ". Semua komponen upah satu jabatan dibebankan ke <b>satu akun</b> sebagai satu kesatuan (jenis biaya Gaji). Jabatan yang tidak diatur memakai akun bawaan.</div>
+echo "<div class=info5>Berlaku untuk <b>komponen dari Setup Upah</b>: " . implode(', ', $namaUpah) . (count($namaCatu) > 0 ? ", serta <b>CATU</b> dari Setup Catu: " . implode(', ', $namaCatu) : "") . ". Semua komponen upah satu jabatan dibebankan ke <b>SATU AKUN</b> sebagai satu kesatuan (jenis biaya Gaji). Jabatan yang tidak diatur memakai akun bawaan (<b>CATU</b> tetap Tunjangan Lain).</div>
 <fieldset style='width:520px;float:left;margin-right:12px'><legend><b>Atur per Jabatan</b></legend>
 	<table id=formUpah5 border=0 cellpadding=3>
 		<tr><td class=lbl>Jabatan</td><td class=sep>:</td><td><select id=jabatanUpah5 class=select2 style='width:340px'>" . $optJabatan . "</select></td></tr>

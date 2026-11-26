@@ -1471,7 +1471,9 @@ switch ($method) {
 		// echo "</pre>";
 
 
-		foreach ($data->response['result']['data'] as $key => $val) {
+		#hasil API mobile bisa kosong / gagal (bukan array): anggap tidak ada data mobile, jangan mengeluarkan peringatan PHP ke daftar
+		$dataMobile = (isset($data->response['result']['data']) && is_array($data->response['result']['data'])) ? $data->response['result']['data'] : array();
+		foreach ($dataMobile as $key => $val) {
 			$nok++;
 			$tab .= "<tr class=rowcontent style='background-color:#4cdf26;'>";
 			$tab .= "<td align=center>" . $nok . "</td>";
@@ -1502,7 +1504,7 @@ switch ($method) {
 
 		$sql = "select count(distinct a.notransaksi) as notr from " . $dbname . ".kebun_aktifitas a left join " . $dbname . ".kebun_prestasi b on a.notransaksi=b.notransaksi where 1=1 and a.tipetransaksi='PNN' and ((a.noreferensi !='' and a.deviceid !='') or ((a.noreferensi ='' or a.noreferensi is null) and a.deviceid is null)) " . $where . "";
 		$res = fetchdata($sql);
-		$jlhbrs = $res[0]['notr'] + count($data->response['result']);
+		$jlhbrs = $res[0]['notr'] + ((isset($data->response['result']) && is_array($data->response['result'])) ? count($data->response['result']) : 0);
 		if ($jlhbrs == 0) {
 			$tab .= "<tr class=rowcontent>";
 			$tab .= "<td colspan=20 align=center>" . $_SESSION['lang']['errdatanotexist'] . "</td>";
