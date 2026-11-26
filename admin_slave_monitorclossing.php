@@ -125,7 +125,7 @@ $tab.="
 		$data[$bar['kodeorg']]['kasbank']+=$bar['sawal'];
 	}
 	
-	$str = "select kodeorg, awal".substr(periodeberikut($prd),-2)." as sawal from ".$dbname.".keu_saldobulanan where periode='".str_replace("-","",periodeberikut($prd))."' and awal".substr(periodeberikut($prd),-2)."!='0' and noakun like '111%'";
+	$str = "select kodeorg, awal".substr(periodeberikut($prd),-2)." as sawal from ".$dbname.".keu_saldobulanan where periode='".str_replace("-","",periodeberikut($prd))."' and awal".substr(periodeberikut($prd),-2)."!='0' and LEFT(noakun,5) IN ('11101','11102')";
 	$res = fetchdata($str);
 	foreach($res as $bar){
 		$data[$bar['kodeorg']]['kasbank']+=$bar['sawal'];
