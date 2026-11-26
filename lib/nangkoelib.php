@@ -675,8 +675,330 @@ function getUpahKary($periodegaji, $karyawanid)
 		exit("Warning: Gaji Pokok Karyawan " . getNamaKaryawan($karyawanid) . " Periode " . $periodegaji . " belum disetupkan.");
 	}
 
+	#karyawan Bulanan PT yang memakai HKE (diaktifkan di Setup HK Efektif): upah harian = komponen dasar upah / HKE; selain itu tetap gaji pokok / 25
+	$uh = getUpahHarian($karyawanid, $periodegaji, '1');
+	if ($uh['ppp']) {
+		if (!$uh['ada']) {
+			exit("Warning: " . $uh['pesan']);
+		}
+		return $uh['upah'];
+	}
+
 	return ($rGapok['jumlah'] / 25);
 }
+
+#Upah harian dari gaji pokok (komponen 1) yang sudah dibaca pemanggil: PT PPP karyawan Bulanan (HKE aktif) = dasar upah / HKE, selain itu gaji pokok / 25 seperti semula.
+#HKE belum diisi: keluar dengan peringatan (tidak diam-diam memakai 25). Dipakai transaksi Traksi/Sipil yang membaca sdm_5gajipokok sendiri.
+function upahHarianDariGapok($karyawanid, $periodegaji, $gajiPokok)
+{
+	$uh = getUpahHarian($karyawanid, $periodegaji, '1');
+	if ($uh['ppp']) {
+		if (!$uh['ada']) {
+			exit("Warningsystem : " . $uh['pesan']);
+		}
+		return $uh['upah'];
+	}
+	return $gajiPokok / 25;
+}
+
+#===================== HKE (Hari Kerja Efektif) KHUSUS PT PPP =====================
+#Satu pintu untuk upah harian karyawan; semua tempat yang tadinya "gaji pokok / 25" memanggil getUpahHarian().
+#PT yang diaktifkan + karyawan sistem gaji Bulanan + periode transaksi >= periode mulai berlaku: dasar upah = jumlah komponen yang diatur di
+#Setup HK Efektif (default hanya gaji pokok, komponen 1) dibagi HKE periode itu. Selain itu (PT lain, karyawan Harian, belum aktif atau periodenya
+#sebelum periode mulai) hasilnya sama dengan perilaku lama: jumlah komponen $komponenLama dibagi 25.
+#Pengaktifan: Setup HK Efektif (tabel sdm_hke_pengaturan: aktif + periode mulai berlaku per PT).
+
+#PT yang aturan HKE-nya boleh dipakai di transaksi. Saat ini hanya PPP; PT lain tetap perilaku lama (dibagi 25) walaupun setupnya sudah diisi.
+#Untuk menambah PT: tambahkan kodenya di daftar ini (satu-satunya tempat).
+function hkePTDaftar()
+{
+	return array('PPP');
+}
+
+#pengaturan pengaktifan satu PT dari Setup HK Efektif: array('aktif' => bool, 'mulai' => 'YYYY-MM') atau null bila belum pernah diatur
+function hkePengaturan($kodept)
+{
+	global $dbname, $owlPDO;
+	static $cache = array();
+	if (!array_key_exists($kodept, $cache)) {
+		$cache[$kodept] = null;
+		try {
+			$stm = $owlPDO->prepare("select aktif,periodemulai from " . $dbname . ".sdm_hke_pengaturan where kodept=?");
+			if ($stm && $stm->execute(array($kodept))) {
+				$r = $stm->fetch(PDO::FETCH_ASSOC);
+				if ($r) {
+					$cache[$kodept] = array('aktif' => ((int)$r['aktif'] === 1), 'mulai' => (string)$r['periodemulai']);
+				}
+			}
+		} catch (Exception $e) {
+			$cache[$kodept] = null;
+		}
+	}
+	return $cache[$kodept];
+}
+
+#ada PT yang diaktifkan di Setup HK Efektif (pintu cepat: bila tidak ada, semua transaksi memakai perilaku lama tanpa query tambahan)
+function hkeSaklarPPP()
+{
+	global $dbname, $owlPDO;
+	static $aktif = null;
+	if ($aktif === null) {
+		$aktif = false;
+		try {
+			$stm = $owlPDO->query("select count(*) from " . $dbname . ".sdm_hke_pengaturan where aktif=1 and periodemulai<>''");
+			if ($stm) {
+				$aktif = ((int)$stm->fetchColumn() > 0);
+			}
+		} catch (Exception $e) {
+			$aktif = false;
+		}
+	}
+	return $aktif;
+}
+
+#aturan HKE berlaku untuk PT ini pada periode transaksi itu (YYYY-MM): PT ada di hkePTDaftar(), diaktifkan di setup, dan periode >= periode mulai berlaku
+function hkePTAktif($kodept, $periode)
+{
+	if (!in_array((string)$kodept, hkePTDaftar(), true)) {
+		return false;
+	}
+	$p = hkePengaturan((string)$kodept);
+	return ($p !== null && $p['aktif'] && $p['mulai'] !== '' && (string)$periode >= $p['mulai']);
+}
+
+#HKE per PT per periode (YYYY-MM) dari Setup HK Efektif; null bila belum diisi
+function getHKEPPP($kodept, $periode)
+{
+	global $dbname, $owlPDO;
+	static $cache = array();
+	$kunci = $kodept . '|' . $periode;
+	if (!array_key_exists($kunci, $cache)) {
+		$cache[$kunci] = null;
+		try {
+			$stm = $owlPDO->prepare("select hke from " . $dbname . ".sdm_hke_periode where kodept=? and periode=?");
+			if ($stm && $stm->execute(array($kodept, $periode))) {
+				$v = $stm->fetchColumn();
+				if ($v !== false && (int)$v > 0) {
+					$cache[$kunci] = (int)$v;
+				}
+			}
+		} catch (Exception $e) {
+			$cache[$kunci] = null;
+		}
+	}
+	return $cache[$kunci];
+}
+
+#Hari libur unit (Setup Hari Libur, keterangan 'libur') pada rentang tanggal: array tanggal => true.
+#Dasar yang sama dengan saran HKE di Setup HK Efektif; dipakai Proses Gaji PPP agar hari yang bukan hari kerja HKE tidak dipotong sebagai HK tidak dibayar.
+function hariLiburUnit($unit, $tgl1, $tgl2)
+{
+	global $dbname, $owlPDO;
+	$hasil = array();
+	try {
+		$stm = $owlPDO->prepare("select tanggal from " . $dbname . ".sdm_5harilibur where kebun=? and keterangan='libur' and tanggal>=? and tanggal<=?");
+		if ($stm && $stm->execute(array((string)$unit, (string)$tgl1, (string)$tgl2))) {
+			foreach ($stm->fetchAll(PDO::FETCH_COLUMN) as $t) {
+				$hasil[$t] = true;
+			}
+		}
+	} catch (Exception $e) {
+		$hasil = array();
+	}
+	return $hasil;
+}
+
+#Upah per hari yang berlaku untuk karyawan pada tanggal transaksi, untuk DISIMPAN di baris transaksi Traksi (vhc_runhk.upahharian).
+#Hanya bila memakai aturan HKE (PPP Bulanan, HKE aktif dan sudah diisi); selain itu null (HK dihitung dari gaji pokok/25 seperti semula).
+function upahHarianTersimpan($karyawanid, $tgl)
+{
+	$periode = substr((string)$tgl, 0, 7);
+	if (!preg_match('/^[0-9]{4}-[0-9]{2}$/', $periode)) {
+		return null;
+	}
+	$uh = getUpahHarian($karyawanid, $periode, '1');
+	if ($uh['ppp'] && $uh['ada'] && $uh['upah'] > 0) {
+		return round($uh['upah'], 2);
+	}
+	return null;
+}
+
+#kolom vhc_runhk.upahharian ada atau belum (skrip sql_hke_ppp_setup.sql); dicek sekali per permintaan
+function vhcRunhkAdaUpahHarian()
+{
+	global $dbname, $owlPDO;
+	static $ada = null;
+	if ($ada === null) {
+		$ada = false;
+		try {
+			$stm = $owlPDO->query("show columns from " . $dbname . ".vhc_runhk like 'upahharian'");
+			$ada = ($stm && $stm->fetch(PDO::FETCH_NUM)) ? true : false;
+		} catch (Exception $e) {
+			$ada = false;
+		}
+	}
+	return $ada;
+}
+
+#komponen dasar upah harian per PT untuk satu periode: set dengan periode mulai terbesar yang <= periode; default hanya gaji pokok (1)
+function getKomponenDasarUpahPPP($kodept, $periode)
+{
+	global $dbname, $owlPDO;
+	static $cache = array();
+	$kunci = $kodept . '|' . $periode;
+	if (!isset($cache[$kunci])) {
+		$cache[$kunci] = array(1);
+		try {
+			$stm = $owlPDO->prepare("select idkomponen from " . $dbname . ".sdm_hke_komponen where kodept=? and periodemulai=(select max(periodemulai) from " . $dbname . ".sdm_hke_komponen where kodept=? and periodemulai<=?)");
+			if ($stm && $stm->execute(array($kodept, $kodept, $periode))) {
+				$daftar = array();
+				foreach ($stm->fetchAll(PDO::FETCH_COLUMN) as $id) {
+					$daftar[(int)$id] = (int)$id;
+				}
+				$daftar[1] = 1; #gaji pokok selalu ikut
+				ksort($daftar);
+				$cache[$kunci] = array_values($daftar);
+			}
+		} catch (Exception $e) {
+			$cache[$kunci] = array(1);
+		}
+	}
+	return $cache[$kunci];
+}
+
+#Nilai catu (tunjangan keluarga / natura) sebulan satu karyawan: kg kelompok catunya (datakaryawan.kodecatu, tabel sdm_5catu per unit dan tahun)
+#dikali harga catu per kg unit (sdm_5hargacatukg, status 1). Setup catu tahun periode itu belum ada: dipakai setup tahun terakhir sebelumnya. 0 bila karyawan tanpa catu atau setup belum ada.
+function getCatuBulanan($karyawanid, $unit, $periode)
+{
+	global $dbname, $owlPDO;
+	try {
+		$stm = $owlPDO->prepare("select kodecatu from " . $dbname . ".datakaryawan where karyawanid=? limit 1");
+		$stm->execute(array((int)$karyawanid));
+		$kel = trim((string)$stm->fetchColumn());
+		if ($kel === '' || $kel === '0' || $unit === '') {
+			return 0;
+		}
+		$stm = $owlPDO->prepare("select nilai from " . $dbname . ".sdm_5hargacatukg where unit=? and status='1' limit 1");
+		$stm->execute(array($unit));
+		$harga = (float)$stm->fetchColumn();
+		$stm = $owlPDO->prepare("select jumlah from " . $dbname . ".sdm_5catu where kodeorg=? and tahun<=? and kelompok=? order by tahun desc limit 1");
+		$stm->execute(array($unit, (int)substr((string)$periode, 0, 4), $kel));
+		$kg = (float)$stm->fetchColumn();
+		return $kg * $harga;
+	} catch (Exception $e) {
+		return 0;
+	}
+}
+
+#Upah harian satu karyawan pada satu periode (YYYY-MM).
+#$komponenLama = daftar komponen yang dipakai kode lama di tempat pemanggil (mis. '1' atau '1,31'), dipakai bila bukan PPP Bulanan.
+#$kodeorg      = unit karyawan (kosong = ambil dari data karyawan).
+#$periodeGaji  = periode data gaji di sdm_5gajipokok (kosong = sama dengan $periode; HKE dan komponen dasar upah tetap menurut $periode).
+#Hasil: upah (float), pembagi (25 atau HKE), dasar (jumlah komponen), komponen (array id), ppp (true bila aturan HKE yang dipakai),
+#       ada (false bila PPP Bulanan tetapi HKE periode itu belum diisi; upah tetap dihitung dengan 25 supaya pemanggil bisa memutuskan menolak), pesan.
+function getUpahHarian($karyawanid, $periode, $komponenLama = '1', $kodeorg = '', $periodeGaji = '')
+{
+	global $dbname, $owlPDO;
+	$hasil = array('upah' => 0, 'pembagi' => 25, 'dasar' => 0, 'komponen' => array(), 'ppp' => false, 'ada' => true, 'pesan' => '', 'catu' => 0);
+	$karyawanid = (int)$karyawanid;
+	if ($periodeGaji === '') {
+		$periodeGaji = $periode;
+	}
+	if (!preg_match('/^[0-9]{4}-[0-9]{2}$/', (string)$periode) || !preg_match('/^[0-9]{4}-[0-9]{2}$/', (string)$periodeGaji)) {
+		$hasil['ada'] = false;
+		$hasil['pesan'] = 'Periode tidak valid';
+		return $hasil;
+	}
+	$lama = array();
+	foreach (explode(',', str_replace("'", '', (string)$komponenLama)) as $k) {
+		if (trim($k) !== '' && (int)$k > 0) {
+			$lama[(int)$k] = (int)$k;
+		}
+	}
+	if (count($lama) == 0) {
+		$lama[1] = 1;
+	}
+	$komponen = array_values($lama);
+	$pembagi = 25;
+	$unit = (string)$kodeorg;
+
+	#aturan HKE hanya untuk PT yang diaktifkan di setup (hkePTAktif, saat ini hanya PPP) pada periode mulai berlaku, dan karyawan Bulanan
+	#unit dan sistem gaji: histori B periode itu (periode yang sudah ditutup); periode berjalan belum punya histori, jadi dari datakaryawan
+	if (hkeSaklarPPP()) {
+		try {
+			$unit = (string)$kodeorg;
+			$sistem = '';
+			$stm = $owlPDO->prepare("select lokasitugas,sistemgaji from " . $dbname . ".datakaryawan_hist where karyawanid=? and periodegaji=? and version_type='B' and approval_status='8' order by nourut limit 1");
+			if ($stm && $stm->execute(array($karyawanid, $periode))) {
+				$r = $stm->fetch(PDO::FETCH_ASSOC);
+				if ($r) {
+					$sistem = $r['sistemgaji'];
+					if ($unit === '') {
+						$unit = $r['lokasitugas'];
+					}
+				}
+			}
+			if ($sistem === '' || $unit === '') {
+				$stm = $owlPDO->prepare("select lokasitugas,sistemgaji from " . $dbname . ".datakaryawan where karyawanid=? limit 1");
+				if ($stm && $stm->execute(array($karyawanid))) {
+					$r = $stm->fetch(PDO::FETCH_ASSOC);
+					if ($r) {
+						$sistem = ($sistem === '') ? $r['sistemgaji'] : $sistem;
+						$unit = ($unit === '') ? $r['lokasitugas'] : $unit;
+					}
+				}
+			}
+			$pt = ($unit !== '') ? (string)getindukPT($unit) : '';
+			if ($pt !== '' && $sistem === 'Bulanan' && hkePTAktif($pt, $periode)) {
+				$hasil['ppp'] = true;
+				$komponen = getKomponenDasarUpahPPP($pt, $periode);
+				$hke = getHKEPPP($pt, $periode);
+				if ($hke === null) {
+					$hasil['ada'] = false;
+					$hasil['pesan'] = 'HKE PT ' . $pt . ' periode ' . $periode . ' belum diisi (SDM > Setup > HK Efektif)';
+				} else {
+					$pembagi = $hke;
+				}
+			}
+		} catch (Exception $e) {
+			#data pendukung tidak terbaca: pakai perilaku lama
+			$hasil['ppp'] = false;
+			$komponen = array_values($lama);
+			$pembagi = 25;
+		}
+	}
+
+	$dasar = 0;
+	#komponen 118 (catu / tunjangan keluarga) tidak ada di sdm_5gajipokok: dihitung dari kelompok catu karyawan, hanya bila ikut dasar upah di setup HKE
+	$idGaji = array_diff($komponen, array(118));
+	if (count($idGaji) > 0) {
+		$in = implode(',', array_map('intval', $idGaji));
+		$stm = $owlPDO->prepare("select sum(jumlah) from " . $dbname . ".sdm_5gajipokok where karyawanid=? and tahun=? and idkomponen in (" . $in . ")");
+		if ($stm && $stm->execute(array($karyawanid, $periodeGaji))) {
+			$dasar = (float)$stm->fetchColumn();
+		}
+	}
+	#gaji pokok periode itu belum ada: dasar upah dianggap belum ada (komponen tambahan dan catu tidak berdiri sendiri), supaya pemanggil yang memeriksa "gaji pokok belum ada" tetap bekerja
+	$gapokAda = true;
+	if ($hasil['ppp']) {
+		$stm = $owlPDO->prepare("select sum(jumlah) from " . $dbname . ".sdm_5gajipokok where karyawanid=? and tahun=? and idkomponen=1");
+		if ($stm && $stm->execute(array($karyawanid, $periodeGaji))) {
+			$gapokAda = ((float)$stm->fetchColumn() > 0);
+		}
+	}
+	if (!$gapokAda) {
+		$dasar = 0;
+	} elseif ($hasil['ppp'] && in_array(118, $komponen)) {
+		$hasil['catu'] = getCatuBulanan($karyawanid, $unit, $periode);
+		$dasar += $hasil['catu'];
+	}
+	$hasil['komponen'] = $komponen;
+	$hasil['pembagi'] = $pembagi;
+	$hasil['dasar'] = $dasar;
+	$hasil['upah'] = $dasar / $pembagi;
+	return $hasil;
+}
+#===================== /HKE =====================
 
 function getNamaOrg($kodeorg, $kolom = 'namaorganisasi')
 {

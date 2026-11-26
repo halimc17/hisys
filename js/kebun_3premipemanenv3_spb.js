@@ -325,16 +325,19 @@ function batal() {
 	document.getElementById('prd').value = '';
 	document.getElementById('unit').value = '';
 	document.getElementById('afd').value = '';
+	refreshSel2('prd'); refreshSel2('unit'); refreshSel2('afd');
 	document.getElementById('printContainer').innerHTML = '';
 }
 function batallist() {
 	//document.getElementById('prdlist').value = '';
 	document.getElementById('unitlist').value = '';
 	document.getElementById('afdlist').value = '';
+	refreshSel2('unitlist'); refreshSel2('afdlist');
 	document.getElementById('tgl1list').value = '';
 	document.getElementById('tgl2list').value = '';
 	document.getElementById('notranslist').value = '';
 	document.getElementById('statuslist').value = '';
+	refreshSel2('statuslist');
 	document.getElementById('contloaddata').style.display="";
 	document.getElementById('contpivot').style.display="none";
 	loaddata();
@@ -374,7 +377,22 @@ function loaddatapdf()
 	param += '&tgl2list=' + tgl2list;
 	param += '&notranslist=' + encodeURIComponent(document.getElementById('notranslist').value);
 	param += '&statuslist=' + document.getElementById('statuslist').value;
-	window.open('kebun_slave_3premipemanenv3_spb_pdf.php?' + param, '_blank');
+	//PDF dibuka sebagai pop up (bisa di-resize), sama seperti tarikan PDF di menu lain
+	var src = 'kebun_slave_3premipemanenv3_spb_pdf.php?' + param + '#zoom=page-width';
+	alertify.popuppdf("PDF","<iframe frameborder=0 style='width:100%;height:90%;overflow:none' src='" + src + "'></iframe>").set({'title':'Daftar Premi Pemanen (SPB)','resizable':true,'overflow':false}).resizeTo('90%','90%');
+}
+
+function rinciExcel(ev, notransaksi)
+{
+	param = 'prdlist=&unitlist=&afdlist=&tgl1list=&tgl2list=&statuslist=&notranslist=' + encodeURIComponent(notransaksi) + '&proses=loaddataexcelrinci';
+	printFile(param,'kebun_slave_save_3premipemanenv3_spb.php','Rincian Premi Pemanen',ev);
+}
+
+function rinciPdf(notransaksi)
+{
+	//PDF dibuka sebagai pop up (bisa di-resize), sama seperti tarikan PDF di menu lain
+	var src = 'kebun_slave_3premipemanenv3_spb_rincian_pdf.php?notranslist=' + encodeURIComponent(notransaksi) + '#zoom=page-width';
+	alertify.popuppdf("PDF","<iframe frameborder=0 style='width:100%;height:90%;overflow:none' src='" + src + "'></iframe>").set({'title':'Rincian Premi Pemanen ' + notransaksi,'resizable':true,'overflow':false}).resizeTo('90%','90%');
 }
 
 function numberFormat(number, digit) {
@@ -418,6 +436,27 @@ function form() {
 	title = "Detail HTML";
 	showDialog5(title, content, width, height, ev);
 }
+function viewjurnal(notransaksi) {
+	param = 'proses=viewjurnal&notransaksi=' + notransaksi;
+	tujuan = 'kebun_slave_save_3premipemanenv3_spb.php';
+	post_response_text(tujuan, param, respog);
+	function respog() {
+		if (con.readyState == 4) {
+			if (con.status == 200) {
+				busy_off();
+				if (!isSaveResponse(con.responseText)) {
+					alertify.alert(con.responseText);
+				} else {
+					alertify.popup().set({'resizable':true,'maximizable':true,'startMaximized':true,'message':con.responseText}).resizeTo('85%','70%').show();
+				}
+			} else {
+				busy_off();
+				error_catch(con.status);
+			}
+		}
+	}
+}
+
 function view(notransaksi, prd, unit,divisi,tipe) {
 	//form();
 	param = 'proses=view&notransaksi=' + notransaksi + '&prd=' + prd + '&unit=' + unit+ '&tipe=' + tipe+ '&divisi=' + divisi;
@@ -1081,9 +1120,9 @@ function getdivisi(tipe='html')
 				}
 				else {
 					if(tipe == 'cari'){
-						document.getElementById('afdlist').innerHTML=con.responseText;
+						document.getElementById('afdlist').innerHTML=con.responseText; refreshSel2('afdlist');
 					}else{
-						document.getElementById('afd').innerHTML=con.responseText;
+						document.getElementById('afd').innerHTML=con.responseText; refreshSel2('afd');
 					}
 				}
 			}
@@ -1104,4 +1143,11 @@ function premiPdf(passParam) {
 	}
 	param += '&proses=pdf';
 	window.open('kebun_slave_3premipemanenv3_spb.php?' + param, '_blank');
+}
+
+//perbarui tampilan select2 setelah pilihan/nilai diubah lewat kode
+function refreshSel2(id){
+	if(window.jQuery){
+		jQuery('#'+id).trigger('change.select2');
+	}
 }

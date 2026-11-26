@@ -46,6 +46,7 @@ function batal() {
 	document.getElementById('prd').value = '';
 	document.getElementById('unit').value = '';
 	document.getElementById('afd').value = '';
+	refreshSel2('prd'); refreshSel2('unit'); refreshSel2('afd');
 	document.getElementById('printContainer').innerHTML = '';
 }
 
@@ -53,6 +54,7 @@ function batallist() {
 	document.getElementById('prdlist').value = '';
 	document.getElementById('unitlist').value = '';
 	document.getElementById('afdlist').value = '';
+	refreshSel2('prdlist'); refreshSel2('unitlist'); refreshSel2('afdlist');
 	loaddata();
 }
 
@@ -96,6 +98,28 @@ function form() {
 	ev = 'event';
 	title = "Detail HTML";
 	showDialog5(title, content, width, height, ev);
+}
+
+function viewjurnal(notransaksi, keg) {
+	param = 'proses=viewjurnal&notransaksi=' + notransaksi + '&keg=' + keg;
+	tujuan = 'kebun_slave_3premibmtbs_list.php';
+	post_response_text(tujuan, param, respog);
+	function respog() {
+		if (con.readyState == 4) {
+			if (con.status == 200) {
+				busy_off();
+				if (!isSaveResponse(con.responseText)) {
+					alert(con.responseText);
+				} else {
+					alertify.popup().destroy();
+					alertify.popup().set({'resizable':true,'maximizable':true,'startMaximized':true,'message':con.responseText}).resizeTo('85%','70%').show();
+				}
+			} else {
+				busy_off();
+				error_catch(con.status);
+			}
+		}
+	}
 }
 
 function view(notransaksi, prd, unit, keg, tipe,afd) {
@@ -150,7 +174,7 @@ function getAfd() {
 				if (!isSaveResponse(con.responseText)) {
 					alert(con.responseText);
 				} else {
-					document.getElementById('afd').innerHTML = con.responseText;
+					document.getElementById('afd').innerHTML = con.responseText; refreshSel2('afd');
 				}
 			} else {
 				busy_off();
@@ -175,7 +199,7 @@ function getAfd2() {
 				if (!isSaveResponse(con.responseText)) {
 					alert(con.responseText);
 				} else {
-					document.getElementById('afdlist').innerHTML = con.responseText;
+					document.getElementById('afdlist').innerHTML = con.responseText; refreshSel2('afdlist');
 				}
 			} else {
 				busy_off();
@@ -393,4 +417,11 @@ function hitungpremi(currRow){
 		totalrp = parseFloat(ttlrplb)-parseFloat(minrp);
 	}
 	document.getElementById('ttlrplb').innerHTML=numberFormat(totalrp,0);
+}
+
+//perbarui tampilan select2 setelah pilihan/nilai diubah lewat kode
+function refreshSel2(id){
+	if(window.jQuery){
+		jQuery('#'+id).trigger('change.select2');
+	}
 }

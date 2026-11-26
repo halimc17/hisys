@@ -115,7 +115,7 @@ $optUnit="<option value=''>".$_SESSION['lang']['pilihdata']."</option>";
 $optUnit2=$optGdng=$optUnit;
 
 $unitDetailAkses = orgDetailuser($_SESSION['standard']['username'],'2');
-if(count($unitDetailAkses) > 0){
+if(!empty($unitDetailAkses)){
 	$whereUnit=" and induk IN (".$unitDetailAkses.") ";
 }else{
 	$whereUnit = " and induk = '".$_SESSION['empl']['lokasitugas']."' ";

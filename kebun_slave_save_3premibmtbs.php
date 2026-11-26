@@ -76,7 +76,8 @@ switch($proses){
 		
 	break;
     case'savedata':
-		$str="select * from ".$dbname.".kebun_spbht where	tanggal like '".$prd."%' and nospb like '%".$afd."%' and kodeorg='".$unit."' and posting='0'";
+		#SPB baris ini harus sudah diposting (pemuat bisa memuat di SPB unit/divisi lain dari unit/divisi karyawannya)
+		$str="select * from ".$dbname.".kebun_spbht where nospb='".$nospb."' and posting='0'";
 		$res=$owlPDO->query($str) or die(print " Gagal: ".PDOException::getMessage());
 		$row=$res->rowCount();
 		if($row>0){

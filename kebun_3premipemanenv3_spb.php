@@ -5,6 +5,7 @@ include_once('lib/zLib.php');
 include_once('lib/rTable.php');
 echo open_body();
 require_once('lib/zPivot.php');
+echo '<link href="lib/select2/css/select2.css" rel="stylesheet" /><script src="lib/select2/js/select2.js"></script>';
 ?>
 <script language=javascript src=js/zTools.js></script>
 <script language=javascript src='js/zReport.js'></script>
@@ -12,6 +13,7 @@ require_once('lib/zPivot.php');
 <script language=javascript src='js/kebun_3premipemanenv3_spb.js?v=<?php echo time(); ?>'></script>
 <?
 include('master_mainMenu.php');	
+echo "<script>jQuery(function(){ jQuery('select.select2').select2({dropdownAutoWidth:true,width:'style'}); jQuery('<style>.select2-container--open .select2-dropdown{z-index:100000;}</style>').appendTo('head'); });</script>";
 $frm[0]='';
 $frm[1]='';
 
@@ -23,7 +25,7 @@ $optafd="<option value='%%'>".$_SESSION['lang']['pilihdata']."</option>";
 $unitDetailAkses = orgDetailuser($_SESSION['standard']['username'],'2');
 $gudang_detailAkses=" and kodeorganisasi IN (".$unitDetailAkses.") ";
 
-if(count($unitDetailAkses) > 0){
+if(!empty($unitDetailAkses)){
 	$str="select kodeorganisasi,namaorganisasi from ".$dbname.".organisasi where 1=1 ".$gudang_detailAkses." ";
 }else{
 	$str="select kodeorganisasi,namaorganisasi from ".$dbname.".organisasi where kodeorganisasi='".$_SESSION['empl']['lokasitugas']."'";
@@ -93,13 +95,13 @@ echo"<table width=100%>
          <table>
 			<tr>
 				<td align=right style='width:90px;'>".$_SESSION['lang']['periode']." :</td>
-				<td><select id=prdlist onchange=loaddata(0) style='width:153px;'>".$optprd2."</select></td>
+				<td><select id=prdlist class=select2 onchange=loaddata(0) style='width:153px;'>".$optprd2."</select></td>
 
 				<td align=right style='width:90px;'>".$_SESSION['lang']['unitkerja']." :</td>
-				<td><select id=unitlist onchange=getdivisi('cari') style='width:153px;'>".$optunit2."</select></td>
+				<td><select id=unitlist class=select2 onchange=getdivisi('cari') style='width:153px;'>".$optunit2."</select></td>
 
 				<td align=right style='width:90px;'>".$_SESSION['lang']['afdeling']." :</td>
-				<td><select id=afdlist onchange=loaddata(0) style='width:153px;'>".$optafd2."</select></td>
+				<td><select id=afdlist class=select2 onchange=loaddata(0) style='width:153px;'>".$optafd2."</select></td>
 			</tr>
 			<tr>
 				<td align=right style='width:90px;'>".$_SESSION['lang']['tanggal']." :</td>
@@ -113,7 +115,7 @@ echo"<table width=100%>
 				<td><input type='text' class='myinputtext' id='notranslist' style='width:147px;' onkeypress=\"if(getKey(event)==13){loaddata(0);} return tanpa_kutip(event);\"></td>
 
 				<td align=right style='width:90px;'>Status Posting :</td>
-				<td><select id=statuslist onchange=loaddata(0) style='width:153px;'><option value=''>Seluruhnya</option><option value='1'>Posted</option><option value='0'>Belum Posting</option></select></td>
+				<td><select id=statuslist class=select2 onchange=loaddata(0) style='width:153px;'><option value=''>Seluruhnya</option><option value='1'>Posted</option><option value='0'>Belum Posting</option></select></td>
 			</tr>
 		";
 
@@ -187,13 +189,13 @@ echo"<fieldset style=float:left;><legend><b>Form</b></legend>
 	<tr>
 		<td>".$_SESSION['lang']['periode']."</td>
 		<td>:</td>
-		<td colspan=3><select id=prd onchange=gettanggal(); style='width:173px;'>".$optprd."</select>
+		<td colspan=3><select id=prd class=select2 onchange=gettanggal(); style='width:173px;'>".$optprd."</select>
 		</td>
 	</tr>
 	<tr>
 		<td>".$_SESSION['lang']['tahap']."</td>
 		<td>:</td>
-		<td colspan=3><select id=tahap onchange=gettanggal(); style='width:173px;'>".$opttahap."</select>
+		<td colspan=3><select id=tahap class=select2 onchange=gettanggal(); style='width:173px;'>".$opttahap."</select>
 		</td>
     </tr>
 	<tr>
@@ -207,22 +209,22 @@ echo"<fieldset style=float:left;><legend><b>Form</b></legend>
     <tr>
         <td>".$_SESSION['lang']['unitkerja']."</td>
         <td>:</td>
-        <td colspan=3><select id=unit  style='width:173px;' onchange=getdivisi()>".$optunit."</select></td>
+        <td colspan=3><select id=unit class=select2 style='width:173px;' onchange=getdivisi()>".$optunit."</select></td>
     </tr>
     <tr>
         <td>".$_SESSION['lang']['divisi']."</td>
         <td>:</td>
-        <td colspan=3><select id=afd  style='width:173px;'>".$optafd."</select></td>
+        <td colspan=3><select id=afd class=select2 style='width:173px;'>".$optafd."</select></td>
     </tr>
 	<tr hidden>
         <td>".$_SESSION['lang']['kgwb']."</td>
         <td>:</td>
-        <td colspan=3><select id=kgbrondol  style='width:173px;'>".$optbrd."</select></td>
+        <td colspan=3><select id=kgbrondol class=select2 style='width:173px;'>".$optbrd."</select></td>
     </tr>	
     <tr hidden>
         <td>Perhitungan Potongan</td>
         <td>:</td>
-        <td colspan=3><select id=perpot  style='width:173px;'>".$optpot."</select></td>
+        <td colspan=3><select id=perpot class=select2 style='width:173px;'>".$optpot."</select></td>
     </tr>	";
 echo"<tr>
 		<td colspan=6 align=right>

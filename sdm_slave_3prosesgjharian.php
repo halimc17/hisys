@@ -172,8 +172,11 @@ if ($method == 'estgaji') {
 }
 
 # Hapus tranasksi yang nomor BKM-nya salah
-$str = "delete from " . $dbname . ".kebun_aktifitas where notransaksi like '%//%'";
-$owlPDO->exec($str);
+#Hapus transaksi yang nomor BKM-nya salah: hanya saat proses (bukan saat list), dibatasi unit dan periode ini
+if ($proses == 'post' && isset($param['kodeorg']) && $param['kodeorg'] !== '') {
+	$str = "delete from " . $dbname . ".kebun_aktifitas where notransaksi like '%//%' and kodeorg like '" . $param['kodeorg'] . "%' and tanggal>='" . $tanggal1 . "' and tanggal<='" . $tanggal2 . "'";
+	$owlPDO->exec($str);
+}
 
 $query1 = "select a.karyawanid,a.nik,a.tmkjamsostek,statuspajak,tipekaryawan,namakaryawan,jms,bpjs,pensiun,lokasitugas, a.jumlahtanggungan as jmltanggungan,a.kodecatu as kodecatu from " . $dbname . ".datakaryawan_hist a left join " . $dbname . ".sdm_karyawankeluarga b on a.karyawanid=b.karyawanid where " . $tpkar2 . " lokasitugas='" . $param['kodeorg'] . "' and (tanggalkeluar>='" . $tanggal1 . "' or tanggalkeluar='0000-00-00') and alokasi in ('0','1') and ( tanggalmasuk<='" . $tanggal2 . "' or tanggalmasuk='0000-00-00' or tanggalmasuk is null) and a.periodegaji='" . $param['periodegaji'] . "' and a.version_type='B' group by a.karyawanid order by a.namakaryawan asc";
 $absRes = fetchData($query1);

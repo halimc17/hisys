@@ -21,7 +21,7 @@ $gudang_detailAkses=" (".$unitDetailAkses.") ";
 if($_SESSION['empl']['subbagian']!=''){
 	$where = " and divisi = '".$_SESSION['empl']['subbagian']."'";
 }else{
-	if(count($unitDetailAkses) > 0){
+	if(!empty($unitDetailAkses)){
 		$where = " and kodeorg IN ".$gudang_detailAkses."  ";
 	}else{
 		$where = " and kodeorg = '".$_SESSION['empl']['lokasitugas']."'";

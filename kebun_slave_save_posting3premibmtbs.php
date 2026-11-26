@@ -36,27 +36,13 @@ if($_SESSION['org']['period']['tahun'].$_SESSION['org']['period']['bulan']>$peri
 	// exit('Error : Periode Gaji belum di Tutup / di Proses.');
 // }
 
-#4. Cek apakah transaksi spb sudah di posting semua
-$str="select * from ".$dbname.".kebun_spbht where tanggal like '".$prd."%'  and nospb like '%".$afd."%' and kodeorg='".$unit."' and posting='0' and tujuan!='4'";
-$res=$owlPDO->query($str) or die(print " Gagal: ".PDOException::getMessage());
-$row=$res->rowCount();
-if($row>0){
-	exit('Error : Ada transaksi SPB yang belum di Posting, silahkan ulangi proses.');
-}
+#4. Cek apakah transaksi spb sudah di posting semua (dicek di bawah, pada unit SPB tempat pemuat memuat)
 
 #========================= End Validasi Data ===========================
 
 
 #============================ Ambil Data ===============================
 
-$str="select * from ".$dbname.".kebun_spb_vw2 where (tanggal like '".$prd."%' or tanggalpanen like '".$prd."%')  and kodeorg='".$unit."' and divisi like '".$afd."%' and posting='1'"; 
-$res=$owlPDO->query($str) or die(print " Gagal: ".PDOException::getMessage());
-$res->setFetchMode(PDO::FETCH_ASSOC);
-while($bar=$res->fetch()){
-	$blokx[$bar['nospb']][$bar['blok']]=$bar['blok'];
-	$kgwb[$bar['nospb']][$bar['blok']]+=$bar['kgwb'];
-	$tkgwb[$bar['nospb']]+=$bar['kgwb'];
-}
 
 # ambil datakaryawan
 # Cek Datakaryawan History
@@ -82,7 +68,7 @@ $res->setFetchMode(PDO::FETCH_ASSOC);
 while($bar=$res->fetch()){
 	$trpplb+=$bar['rppremi'];
 	$trphk+=$bar['rphk'];
-	$listkar[$bar['nospb']][$bar['karyawanid']]=$bar['karyawanid'];
+	$listkarAll[$bar['nospb']][$bar['karyawanid']]=$bar['karyawanid'];
 	$rpplb[$bar['nospb']][$bar['karyawanid']]+=$bar['rppremi'];
 	$rphk[$bar['nospb']][$bar['karyawanid']]+=$bar['rphk'];
 	$rplb[$bar['nospb']][$bar['karyawanid']]+=$bar['rphk']+$bar['rppremi'];
@@ -92,6 +78,52 @@ while($bar=$res->fetch()){
 }
 
 $trplb=$trpplb+$trphk;
+
+#data SPB dari transaksi ini (pemuat bisa memuat di SPB unit/divisi lain dari unit/divisi karyawannya)
+$spbIn="'".implode("','",array_keys($listkarAll))."'";
+$str="select * from ".$dbname.".kebun_spb_vw2 where (tanggal like '".$prd."%' or tanggalpanen like '".$prd."%') and nospb in (".$spbIn.") and posting='1'";
+$res=$owlPDO->query($str) or die(print " Gagal: ".PDOException::getMessage());
+$res->setFetchMode(PDO::FETCH_ASSOC);
+$spbUnit=array();
+while($bar=$res->fetch()){
+	$blokx[$bar['nospb']][$bar['blok']]=$bar['blok'];
+	$kgwb[$bar['nospb']][$bar['blok']]+=$bar['kgwb'];
+	$tkgwb[$bar['nospb']]+=$bar['kgwb'];
+	$spbUnit[$bar['nospb']]=$bar['kodeorg'];
+}
+
+#unit biaya = unit SPB tempat memuat (bila tidak ada, unit transaksi); jurnal dibuat per unit biaya
+#Unit Palma: biaya ke unit SPB tempat memuat (karyawan diproses di unit/divisinya sendiri). Unit lain tetap ke unit transaksi seperti semula.
+$palmaCu=(getNamaOrg($unit,'induk')=='PPP' and $prd>'2024-10');
+$cuOf=array();
+$cuList=array();
+$trpplbCu=array();
+$trphkCu=array();
+foreach($listkarAll as $spb => $ky1){
+	$cuOf[$spb]=($palmaCu and isset($spbUnit[$spb]) and $spbUnit[$spb]!='') ? $spbUnit[$spb] : $unit;
+	$cuList[$cuOf[$spb]]=$cuOf[$spb];
+	foreach($ky1 as $kary => $vl){
+		@$trpplbCu[$cuOf[$spb]]+=$rpplb[$spb][$kary];
+		@$trphkCu[$cuOf[$spb]]+=$rphk[$spb][$kary];
+	}
+}
+
+#cek periode akuntansi dan SPB belum posting pada tiap unit biaya
+foreach($cuList as $cuChk){
+	if($cuChk!=$unit){
+		$str="select * from ".$dbname.".setup_periodeakuntansi where periode = '".$prd."' and kodeorg='".$cuChk."' and tutupbuku='1'";
+		$res=$owlPDO->query($str) or die(print " Gagal: ".PDOException::getMessage());
+		if($res->rowCount()>0){
+			exit('Error : Periode Akuntansi unit '.$cuChk.' Sudah di Tutup.');
+		}
+	}
+	$str="select * from ".$dbname.".kebun_spbht where tanggal like '".$prd."%'  and nospb like '%".$afd."%' and kodeorg='".$cuChk."' and posting='0' and tujuan!='4'";
+	$res=$owlPDO->query($str) or die(print " Gagal: ".PDOException::getMessage());
+	$row=$res->rowCount();
+	if($row>0){
+		exit('Error : Ada transaksi SPB yang belum di Posting, silahkan ulangi proses.');
+	}
+}
 #========================= End Ambil Data ==============================
 
 #=========================== Nomor Jurnal ==============================
@@ -104,8 +136,27 @@ try {
 	$queryParam = selectQuery($dbname,'keu_5parameterjurnal','noakunkredit,noakundebet',"kodeaplikasi='PNN' and jurnalid='".$kodeJurnal."'");
 	$resParam = fetchData($queryParam);
 
+	$nojurnalList=array();
+	foreach($cuList as $cu){
+	#data pada unit biaya ini saja
+	$listkar=array();
+	foreach($listkarAll as $spb => $ky1){
+		if($cuOf[$spb]==$cu){
+			$listkar[$spb]=$ky1;
+		}
+	}
+	#Urutan baris jurnal tetap: SPB, karyawan, lalu blok
+	ksort($listkar);
+	foreach($listkar as $kSpb => $vSpb){ ksort($listkar[$kSpb]); }
+	foreach($blokx as $kBlk => $vBlk){ ksort($blokx[$kBlk]); }
+	$trpplb=isset($trpplbCu[$cu]) ? $trpplbCu[$cu] : 0;
+	$trphk=isset($trphkCu[$cu]) ? $trphkCu[$cu] : 0;
+	$trplb=$trpplb+$trphk;
+	$rupiahKr_RK2=0;
+	$rupiahKr_RK=0;
+
 	# Get Journal Counter
-	$queryJ = selectQuery($dbname,'keu_5kelompokjurnal','nokounter',"kodeunit='".$unit."' and kodekelompok='".$kodeJurnal."' and periode='".$prd."'");
+	$queryJ = selectQuery($dbname,'keu_5kelompokjurnal','nokounter',"kodeunit='".$cu."' and kodekelompok='".$kodeJurnal."' and periode='".$prd."'");
 	$tmpKonter = fetchData($queryJ);
 	$konter = addZero($tmpKonter[0]['nokounter']+1,3);
 
@@ -117,8 +168,9 @@ try {
 
 	# Transform No Jurnal dari No Transaksi
 	$tmpNoJurnal = explode('/',$notransaksi);
-	$tmpKodeOrg = substr($tmpNoJurnal[1],0,4);
+	$tmpKodeOrg = $cu;
 	$nojurnal = $tmpNoJurnal[0]."/".$tmpKodeOrg."/".$kodeJurnal."/".$konter;
+	$nojurnalList[]=$nojurnal;
 
 
 	#======================== End Nomor Jurnal =============================
@@ -185,6 +237,7 @@ try {
 
 	## RK
 	$rupiahKr_RK = 0;
+	ksort($all_organisasi_rk);
 	if(count($all_organisasi_rk) > 0){
 		foreach ($all_organisasi_rk as $organisasi) {
 			$rupiahKr_RK = 0;
@@ -283,7 +336,7 @@ try {
 									`kodeasset`,`kodebarang`,`nik`,`kodecustomer`,`kodesupplier`,`noreferensi`,`noaruskas`,`kodevhc`,`nodok`,
 									`kodeblok`,`revisi`,`kodesegment`)
 									values ('".$nojurnalRK."','".$tmpNoJurnalRK[0]."','".$nork."','".$resParam[0]['noakunkredit']."',
-									'RK Upah/Premi Muat Buah ".$blok." no spb ".$spb." ','".$jrplb[$spb][$blok]*(-1)."','IDR','1','".$listkar_lokasitugas[$spb][$kary]."',
+									'Upah/Premi Muat Buah ".$blok." no spb ".$spb." ','".$jrplb[$spb][$blok]*(-1)."','IDR','1','".$listkar_lokasitugas[$spb][$kary]."',
 									'".$keg."','','','".$kary."','','','".$notransaksi."','','','','".$blok."','0','0000000001')";
 								// try{
 								$owlPDO->exec($str); 
@@ -323,7 +376,7 @@ try {
 					`kodeasset`,`kodebarang`,`nik`,`kodecustomer`,`kodesupplier`,`noreferensi`,`noaruskas`,`kodevhc`,`nodok`,
 					`kodeblok`,`revisi`,`kodesegment`)
 					values ('".$nojurnal."','".$tmpNoJurnal[0]."','".$no."','".$aknPt[$tmpKodeOrg]."',
-					'RK Upah/Premi Muat Buah ".$unit." prd ".$prd."','".($rupiahKr_RK*(-1))."','IDR','1','".$tmpKodeOrg."',
+					'Upah/Premi Muat Buah ".$cu." prd ".$prd."','".($rupiahKr_RK*(-1))."','IDR','1','".$tmpKodeOrg."',
 					'".$keg."','','','','','','".$notransaksi."','','','','','0','0000000001')";
 				// try{
 				$owlPDO->exec($str); 
@@ -336,7 +389,7 @@ try {
 					`kodeasset`,`kodebarang`,`nik`,`kodecustomer`,`kodesupplier`,`noreferensi`,`noaruskas`,`kodevhc`,`nodok`,
 					`kodeblok`,`revisi`,`kodesegment`)
 					values ('".$nojurnalRK."','".$tmpNoJurnal[0]."','".$nork."','".$aknHtg[$organisasi]."',
-					'RK Upah/Premi Muat Buah ".$organisasi." prd ".$prd."','".$rupiahKr_RK."','IDR','1','".$organisasi."',
+					'Upah/Premi Muat Buah ".$organisasi." prd ".$prd."','".$rupiahKr_RK."','IDR','1','".$organisasi."',
 					'".$keg."','','','','','','".$notransaksi."','','','','','0','0000000001')";
 				// try{
 				$owlPDO->exec($str); 
@@ -371,7 +424,7 @@ try {
 			`kodeasset`,`kodebarang`,`nik`,`kodecustomer`,`kodesupplier`,`noreferensi`,`noaruskas`,`kodevhc`,`nodok`,
 			`kodeblok`,`revisi`,`kodesegment`)
 			values ('".$nojurnal."','".$tmpNoJurnal[0]."','".$no."','".$resParam[0]['noakunkredit']."',
-			'Upah/Premi Muat Buah ".$unit." prd ".$prd."','".(($rupiahKr - $rupiahKr_RK2) *(-1))."','IDR','1','".$tmpKodeOrg."',
+			'Upah/Premi Muat Buah ".$cu." prd ".$prd."','".(($rupiahKr - $rupiahKr_RK2) *(-1))."','IDR','1','".$tmpKodeOrg."',
 			'".$keg."','','','','','','".$notransaksi."','','','','','0','0000000001')";
 		// try{
 		$owlPDO->exec($str); 
@@ -398,7 +451,7 @@ try {
 			`kodeasset`,`kodebarang`,`nik`,`kodecustomer`,`kodesupplier`,`noreferensi`,`noaruskas`,`kodevhc`,`nodok`,
 			`kodeblok`,`revisi`,`kodesegment`)
 			values ('".$nojurnal."','".$tmpNoJurnal[0]."','".$no."','".$resParam[0]['noakunkredit']."',
-			'Upah/Premi Muat Buah ".$unit." prd ".$prd."','".$rupiahKr*(-1)."','IDR','1','".$tmpKodeOrg."',
+			'Upah/Premi Muat Buah ".$cu." prd ".$prd."','".$rupiahKr*(-1)."','IDR','1','".$tmpKodeOrg."',
 			'".$keg."','','','','','','".$notransaksi."','','','','','0','0000000001')";
 		// try{
 		$owlPDO->exec($str); 
@@ -453,13 +506,14 @@ try {
 
 	#============================= Update ==================================
 	# Update Counter
-	$str="update ".$dbname.".keu_5kelompokjurnal set nokounter = '".$konter."' where kodeunit='".$unit."' and kodekelompok='".$kodeJurnal."' and periode = '".$prd."'";
+	$str="update ".$dbname.".keu_5kelompokjurnal set nokounter = '".$konter."' where kodeunit='".$cu."' and kodekelompok='".$kodeJurnal."' and periode = '".$prd."'";
 	// try{
 	$owlPDO->exec($str); 
 	// } catch(PDOException $e){$errorDB.= " Update Konter !: " . $e->getMessage() . "\n"; die();}
+	}
 
 	# Update flag transaksi
-	$str="update ".$dbname.".kebun_3premibmtbs set posting='1', jurnal = '".$nojurnal."', postingby ='".$_SESSION['standard']['userid']."', postingdate='".$tglEntry."' where notransaksi='".$notransaksi."' and kegiatan='".$keg."' and kontanan='".$kontanan."'";
+	$str="update ".$dbname.".kebun_3premibmtbs set posting='1', jurnal = '".$nojurnalList[0]."', postingby ='".$_SESSION['standard']['userid']."', postingdate='".$tglEntry."' where notransaksi='".$notransaksi."' and kegiatan='".$keg."' and kontanan='".$kontanan."'";
 	// try{
 	$owlPDO->exec($str); 
 	// } catch(PDOException $e){$errorDB.= " Update Flag !: " . $e->getMessage() . "\n"; die();}

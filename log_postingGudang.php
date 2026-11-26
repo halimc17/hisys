@@ -38,7 +38,7 @@ echo"</legend>";
 
 		$unitDetailAkses = orgDetailuser($_SESSION['standard']['username'],'2');
 		$gudang_detailAkses=" and induk IN (".$unitDetailAkses.") ";
-		if(count($unitDetailAkses) > 0){
+		if(!empty($unitDetailAkses)){
 			$str="select namaorganisasi,kodeorganisasi from ".$dbname.".organisasi where 1=1 ".$gudang_detailAkses." and tipe like 'GUDANG%' order by kodeorganisasi";
 		}else{
 			$str="select namaorganisasi,kodeorganisasi from ".$dbname.".organisasi where (left(induk,4)='".$_SESSION['empl']['lokasitugas']."' or kodeorganisasi='".$_SESSION['empl']['lokasitugas']."') ".$gudangdivisi." and tipe like 'GUDANG%' order by kodeorganisasi";

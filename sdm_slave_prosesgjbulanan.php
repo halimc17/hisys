@@ -12,6 +12,20 @@ $param = $_POST;
 if (count($param) == 0) {
 	$param = $_GET;
 }
+#validasi masukan yang dipakai langsung di banyak query di bawah
+if (isset($param['kodeorg']) && $param['kodeorg'] !== '' && !preg_match('/^[A-Za-z0-9_\-]{1,12}$/', (string)$param['kodeorg'])) {
+	exit("Warning : Kode unit tidak valid");
+}
+if (isset($param['periodegaji']) && $param['periodegaji'] !== '' && !preg_match('/^[0-9]{4}-[0-9]{2}$/', (string)$param['periodegaji'])) {
+	exit("Warning : Periode gaji tidak valid");
+}
+if (isset($param['tipekar']) && $param['tipekar'] !== '' && !preg_match('/^[0-9]{1,2}$/', (string)$param['tipekar'])) {
+	exit("Warning : Tipe karyawan tidak valid");
+}
+#variabel penampung diisi dulu agar count()/foreach tidak error (PHP 8) bila tidak ada datanya
+$cekabsen = array(); $lstKary = array(); $penalty = array(); $penaltykehadiran = array(); $dtkomplus = array(); $dtkommin = array();
+$upahLebih = array(); $potupahLebih = array(); $premi = array(); $premikontanan = array(); $potkontanan = array(); $readyData = array();
+$pesangon = array(); $kompensasi = array(); $uangpisah = array(); $umrbulanan = array(); $natura_karyawan = array();
 
 $method = checkPostGet('method', '');
 $tgl1 = tanggalsystemn(checkPostGet('tgl1', ''));
@@ -388,12 +402,12 @@ $blmabsen .= "<table border='1' cellpadding='5' cellspacing='0'>";
 $blmabsen .= "<tr><th>No.</th><th>Nama Karyawan</th><th>Jumlah Kehadiran</th></tr>";
 
 foreach ($karydidatakary as $karyid) {
-	if (count($cekabsen[$karyid]) < $jlhhari) {
+	if (count(isset($cekabsen[$karyid]) ? $cekabsen[$karyid] : array()) < $jlhhari) {
 		$nx++;
 		$blmabsen .= "<tr>";
 		$blmabsen .= "<td>" . $nx . "</td>";
 		$blmabsen .= "<td>" . $namakar[$karyid] . "</td>";
-		$blmabsen .= "<td align=center>" . count($cekabsen[$karyid]) . "</td>";
+		$blmabsen .= "<td align=center>" . count(isset($cekabsen[$karyid]) ? $cekabsen[$karyid] : array()) . "</td>";
 		$blmabsen .= "</tr>";
 	}
 }
@@ -1651,6 +1665,10 @@ if (getindukPT($param['kodeorg']) == 'PPP' && count(fetchData("show tables from 
 	}
 }
 
+if (count($readyData) < 1) {
+	exit("Error:Data Kosong");
+}
+
 $idkomponen_list = [];
 foreach ($readyData as $item) {
 	$idkomponen_list[] = $item['idkomponen'];
@@ -1717,7 +1735,7 @@ $list2 = '';
 $list3 = '';
 $no = 0;
 
-if ($readyData < 1) {
+if (empty($readyData)) {
 	exit("Error:Data Kosong");
 }
 
@@ -2068,10 +2086,20 @@ switch ($proses) {
 			// $owlPDO->exec($sdel);
 
 			$insError = "";
+			#komponen otomatis dari transaksi: baris lama yang tidak dihasilkan lagi (nilai nol / tidak ada) ikut dihapus agar tidak tertinggal basi
+			if (count($karyawanProsesSql) > 0) {
+				$owlPDO->exec("delete from " . $dbname . ".sdm_gaji where periodegaji='" . $param['periodegaji'] . "' and kodeorg='" . $param['kodeorg'] . "' and sumber!='UPLOAD' and idkomponen in ('37','134','132','133','32','31','43','34','41','33','118') and karyawanid in (" . implode(',', $karyawanProsesSql) . ")");
+			}
+			$nilaiAda = array();
+			foreach ($readyData as $rowCek) {
+				if (!($rowCek['jumlah'] == 0 or $rowCek['jumlah'] == '')) {
+					$nilaiAda[$rowCek['karyawanid'] . '|' . $rowCek['idkomponen']] = true;
+				}
+			}
 			foreach ($readyData as $row) {
 				$row['sumber'] = "";
 
-				if ($row['jumlah'] == 0 or $row['jumlah'] == '' or $row['karyawanid'] == '') {
+				if ($row['karyawanid'] == '' or (($row['jumlah'] == 0 or $row['jumlah'] == '') and isset($nilaiAda[$row['karyawanid'] . '|' . $row['idkomponen']]))) {
 					continue;
 				} else {
 
@@ -2092,8 +2120,11 @@ switch ($proses) {
 						}
 					}
 
-					$queryIns = insertQuery($dbname, 'sdm_gaji', $row);
-					$owlPDO->exec($queryIns);
+					#nilai nol: baris lama sudah dihapus di atas, tidak ada yang disimpan
+					if (!($row['jumlah'] == 0 or $row['jumlah'] == '')) {
+						$queryIns = insertQuery($dbname, 'sdm_gaji', $row);
+						$owlPDO->exec($queryIns);
+					}
 				}
 			}
 

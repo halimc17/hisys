@@ -38,7 +38,7 @@ $whereClause_gudangx =  "AND (\n    " . implode(" OR\n    ", $conditions_kodeorg
 // AKHIR GUDANGX
 
 
-if(count($unitDetailAkses) > 0){
+if(!empty($unitDetailAkses)){
 	$str = "select distinct kodeorganisasi, namaorganisasi from " . $dbname . ".organisasi
 		  where tipe like 'GUDANG%' ".$whereClause_gudangx."
 		  order by kodeorganisasi";

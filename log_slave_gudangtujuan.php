@@ -98,7 +98,7 @@ switch($param['proses']){
 			// AKHIR kodeorganisasi
 
 
-			if(count($unitDetailAkses) > 0){
+			if(!empty($unitDetailAkses)){
 				$sql="select namaorganisasi,kodeorganisasi from ".$dbname.".organisasi where tipe like 'GUDANG%' ".$whereClause_kodegudang."  order by kodeorganisasi";
 			}else{
 				$sql="select namaorganisasi,kodeorganisasi from ".$dbname.".organisasi where tipe like 'GUDANG%' and kodeorganisasi like '".$kodeorganisasi_x."%' order by kodeorganisasi";

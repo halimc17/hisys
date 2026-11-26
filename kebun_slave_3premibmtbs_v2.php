@@ -243,7 +243,7 @@ foreach ($listtgl as $ltgl => $key) {
 
 					// Cek Hist Karyawannya untuk membaca periode gaji apakah ada perubahan
 					$cekHistNik = getCekHistKary($kary, substr($ltgl, 0, 7), "kodejabatan");
-					$countHisNik =  count($cekHistNik);
+					$countHisNik = is_array($cekHistNik) ? count($cekHistNik) : (($cekHistNik === null) ? 0 : 1); #getCekHistKary mengembalikan nilai kolom (teks) atau null bila tidak ada histori; count() lama: teks=1, null=0
 
 					// Jika ada perubahan data history di periode gaji tersebut maka munculkan yang versi historynya
 					if ($countHisNik == "1") {
@@ -361,6 +361,14 @@ foreach ($listtgl as $ltgl => $key) {
 						$res->setFetchMode(PDO::FETCH_ASSOC);
 						$bar = $res->fetch();
 						$gjperhari[$kary] = $bar['jumlah'] / 25;
+						#karyawan Bulanan PT yang memakai HKE (diaktifkan di Setup HK Efektif): tarif HK = komponen dasar upah / HKE
+						$uhb = getUpahHarian($kary, $prd, '1');
+						if ($uhb['ppp']) {
+							if (!$uhb['ada']) {
+								exit("Warning : " . $uhb['pesan']);
+							}
+							$gjperhari[$kary] = $uhb['upah'];
+						}
 
 						// Ambil 7 karakter pertama: 'YYYY-MM'
 						// bandingin antara tanggal muat dan spb beda periode gak
@@ -475,6 +483,14 @@ foreach ($listtgl as $ltgl => $key) {
 						$res->setFetchMode(PDO::FETCH_ASSOC);
 						$bar = $res->fetch();
 						$gjperhari[$kary] = $bar['jumlah'] / 25;
+						#karyawan Bulanan PT yang memakai HKE (diaktifkan di Setup HK Efektif): tarif HK = komponen dasar upah / HKE
+						$uhb = getUpahHarian($kary, $prd, '1');
+						if ($uhb['ppp']) {
+							if (!$uhb['ada']) {
+								exit("Warning : " . $uhb['pesan']);
+							}
+							$gjperhari[$kary] = $uhb['upah'];
+						}
 
 						// Ambil 7 karakter pertama: 'YYYY-MM'
 						// bandingin antara tanggal muat dan spb beda periode gak

@@ -10,6 +10,20 @@ $param = $_POST;
 if(count($param)==0){
 	$param = $_GET;
 }
+#validasi masukan yang dipakai langsung di banyak query di bawah
+if (isset($param['kodeorg']) && $param['kodeorg'] !== '' && !preg_match('/^[A-Za-z0-9_\-]{1,12}$/', (string)$param['kodeorg'])) {
+	exit("Warning : Kode unit tidak valid");
+}
+if (isset($param['periodegaji']) && $param['periodegaji'] !== '' && !preg_match('/^[0-9]{4}-[0-9]{2}$/', (string)$param['periodegaji'])) {
+	exit("Warning : Periode gaji tidak valid");
+}
+if (isset($param['tipekar']) && $param['tipekar'] !== '' && !preg_match('/^[0-9]{1,2}$/', (string)$param['tipekar'])) {
+	exit("Warning : Tipe karyawan tidak valid");
+}
+#variabel penampung diisi dulu agar count()/foreach tidak error (PHP 8) bila tidak ada datanya
+$cekabsen = array(); $lstKary = array(); $penalty = array(); $penaltykehadiran = array(); $dtkomplus = array(); $dtkommin = array();
+$upahLebih = array(); $potupahLebih = array(); $premi = array(); $premikontanan = array(); $potkontanan = array(); $readyData = array();
+$pesangon = array(); $kompensasi = array(); $uangpisah = array(); $umrbulanan = array(); $natura_karyawan = array(); $kodecatu = array(); $hkePPP = array();
 
 $method=checkPostGet('method','');
 $kodeorg=checkPostGet('unit','');
@@ -38,6 +52,9 @@ if ($param['tipekar']!='') {
 ## Filter tambahan: Subbagian & Jabatan (hanya membatasi roster utama di query1)
 $filterSubbagian = checkPostGet('subbagian','');
 $filterJabatan = checkPostGet('jabatan','');
+if(($filterSubbagian !== '' && !preg_match('/^[A-Za-z0-9_\- ]{1,30}$/', (string)$filterSubbagian)) || ($filterJabatan !== '' && !preg_match('/^[A-Za-z0-9_\-]{1,12}$/', (string)$filterJabatan))){
+	exit("Warning : Subbagian/jabatan tidak valid");
+}
 $whereFilterRoster = "";
 if($filterSubbagian=='KANTOR'){
 	$whereFilterRoster .= " and (a.subbagian='' or a.subbagian is null)";
@@ -132,6 +149,15 @@ $absRes = fetchData($query1);
 		## gajiperhari selalu dari GAJI POKOK (idkomponen 1) saja, jangan sampai ketimpa komponen basic lain
 		if($val['idkomponen'] == '1'){
 			$gajiperhari[$val['karyawanid']] = $val['umrbulanan']/25;
+			#PPP Bulanan yang HKE-nya berlaku: upah per hari = dasar upah (komponen di Setup HK Efektif, plus catu bila dicentang) / HKE, sama dengan Proses Gaji
+			$uhP = getUpahHarian($val['karyawanid'],$param['periodegaji'],'1',$param['kodeorg']);
+			if($uhP['ppp']){
+				if(!$uhP['ada']){
+					exit("WARNING : ".$uhP['pesan']);
+				}
+				$gajiperhari[$val['karyawanid']] = $uhP['upah'];
+				$hkePPP[$val['karyawanid']] = array('pembagi'=>$uhP['pembagi'],'catuIkut'=>in_array(118,$uhP['komponen']));
+			}
 		}
 
 		if($val['tipekaryawan'] == 4){
@@ -148,14 +174,19 @@ $absRes = fetchData($query1);
 	$hktdkbyr=array();
 
 	#ambil jumlah hk tidak dibayar untuk KHT dan total tidak dibayar
-	$strgjh = "select  count(*) as jlh,b.karyawanid from " . $dbname . ".sdm_hktdkdibayar_vw a left join 
+	$strgjh = "select  count(*) as jlh,b.karyawanid,a.tanggal from " . $dbname . ".sdm_hktdkdibayar_vw a left join 
 				  " . $dbname . ".".$table_hist." b on a.karyawanid=b.karyawanid 
 				   where 1=1 ".$tpkar." and b.lokasitugas='" . $param['kodeorg'] . "' 
 				   and  (b.tanggalkeluar>='" . $tanggal1 . "' or b.tanggalkeluar='0000-00-00') 
 				   and a.tanggal>='" . $tanggal1 . "' and a.tanggal<='" . $tanggal2 . "'  ".$whereHistB."   
-				   group by a.karyawanid";
+				   group by a.karyawanid, a.tanggal";
 	$resgjh = fetchData($strgjh);
+	#PPP Bulanan HKE: hari libur menurut Setup Hari Libur unit (termasuk Minggu) tidak dipotong
+	$hariLiburPPP = count($hkePPP) > 0 ? hariLiburUnit($param['kodeorg'], $tanggal1, $tanggal2) : array();
 	foreach ($resgjh as $idx => $val) {
+		if(isset($hkePPP[$val['karyawanid']]) && isset($hariLiburPPP[$val['tanggal']])){
+			continue;
+		}
 		@$tdkdibayar[$val['karyawanid']] += $gajiperhari[$val['karyawanid']] * $val['jlh']; #jumlah tidak dibayar
 		@$hktdkbyr[$val['karyawanid']] +=$val['jlh'];
 		@$lstKary[$val['karyawanid']]=$val['karyawanid'];
@@ -684,7 +715,17 @@ $absRes = fetchData($query1);
 				## Potongan Natura
 				if($hktdkbyr[$bar] != ''){
 					$potNatura = ($PotRpNaturaperkelompok[$value] * $hktdkbyr[$bar]);
+					$buatPotNatura = true;
+					if(isset($hkePPP[$bar])){
+						if($hkePPP[$bar]['catuIkut']){
+							#catu sudah masuk upah per hari (dasar upah HKE), dipotong lewat Potongan HK (37); baris 134 tidak dibuat
+							$buatPotNatura = false;
+						}else{
+							$potNatura = ($RpNaturaperkelompok[$value] / $hkePPP[$bar]['pembagi']) * $hktdkbyr[$bar];
+						}
+					}
 
+					if($buatPotNatura){
 					$readyData[] = array(
 						'kodeorg' => $param['kodeorg'],
 						'periodegaji' => $param['periodegaji'],
@@ -693,6 +734,7 @@ $absRes = fetchData($query1);
 						'jumlah' => $potNatura,
 						'pengali' => 1,
 						'hk'=>0);
+					}
 				}
 
 				## Tunjangan Natura
@@ -1234,6 +1276,10 @@ $absRes = fetchData($query1);
 	#########################################################################################################################################
 	
 
+			if (count($readyData) < 1) {
+				exit("Error:Data Kosong");
+			}
+
 			$idkomponen_list = [];
 			foreach ($readyData as $item) {
 				$idkomponen_list[] = $item['idkomponen'];
@@ -1348,7 +1394,7 @@ $absRes = fetchData($query1);
 			$grandBpjsKesKar1 = 0; $grandBpjsKesPer1 = 0; $grandBpjsTkKar1 = 0; $grandBpjsTkPer1 = 0; $grandBpjsJpKar1 = 0; $grandBpjsJpPer1 = 0;
 			$grandBpjsKesKar2 = 0; $grandBpjsKesPer2 = 0; $grandBpjsTkKar2 = 0; $grandBpjsTkPer2 = 0; $grandBpjsJpKar2 = 0; $grandBpjsJpPer2 = 0;
 
-			if($readyData<1){
+			if (empty($readyData)) {
 				exit("Error:Data Kosong");
 			}
 

@@ -234,11 +234,19 @@ function komponenUpahPPP($komponen)
 	return !empty($peta[(int)$komponen]);
 }
 
+#komponen catu (Tunj. Keluarga / Natura): nilainya dari Setup Catu (getCatuBulanan), bukan dari Setup Upah, tetapi ikut aturan jabatan
+#di tab Komponen Upah. Jabatan yang tidak diatur tetap memakai pemetaan bawaan (Tunjangan Lain), sama seperti sebelumnya.
+function komponenCatuPPP()
+{
+	return array(118);
+}
+
 function alokasiKomponenPPPInti($bagian, $kodept, $kodeorg, $periode, $karyawanid, $komponen, $bolehAkun)
 {
 	$setup = setupAlokasiPPP($kodept);
 	$komponen = (int)$komponen;
-	$upah = komponenUpahPPP($komponen);
+	$catu = in_array($komponen, komponenCatuPPP());
+	$upah = komponenUpahPPP($komponen) || $catu;
 	$jabatan = empty($setup) ? 0 : jabatanKaryawanPPP($karyawanid, $kodeorg, $periode);
 	#komponen upah: hanya aturan per jabatan (idkomponen 0, akun debet saja); aturan per komponen lama tidak dipakai
 	$aturanSemua = (!$upah && isset($setup['0|' . $komponen])) ? $setup['0|' . $komponen] : null;
@@ -246,6 +254,9 @@ function alokasiKomponenPPPInti($bagian, $kodept, $kodeorg, $periode, $karyawani
 	$aturanJabatanSemua = ($upah && $jabatan > 0 && isset($setup[$jabatan . '|0'])) ? $setup[$jabatan . '|0'] : null;
 
 	$jenis = $upah ? 'GAJI' : jenisBiayaBawaanPPP($komponen);
+	if ($catu && $aturanJabatanSemua === null) {
+		$jenis = jenisBiayaBawaanPPP($komponen); #catu jabatan yang tidak diatur: tetap bawaan
+	}
 	if ($aturanSemua !== null && $aturanSemua[0] != '') {
 		$jenis = $aturanSemua[0];
 	}
@@ -380,7 +391,7 @@ function validasiParamGajiBlmPPP($p)
 #Dipakai bersama oleh list dan proses simpan supaya angka jurnal dihitung server, bukan dipercaya dari browser.
 #$karyawanid kosong = semua karyawan unit itu. Hasil: karyawanid => array(gaji, gajibpjs, gajibpjskes, sudah, sudahbpjs, sudahkes, sisa, sisabpjs, sisakes)
 #kehadiran wakar/mandor (vhc_runhk posisi 3 dan 4) di Pekerjaan Traksi pada satu periode, untuk dibebankan ke kendaraan oleh Proses Akhir Bulan.
-#Hasil: satu baris per transaksi (tanggal, kodevhc, premi) dengan bobotgaji = gaji pokok / 25, dibagi rata bila pada hari itu ada lebih dari satu kendaraan.
+#Hasil: satu baris per transaksi (tanggal, kodevhc, premi) dengan bobotgaji = upah harian (gaji pokok / 25, atau dasar upah / HKE untuk PPP Bulanan), dibagi rata bila pada hari itu ada lebih dari satu kendaraan.
 function kehadiranWakarMandorPPP($kodeorg, $periode, $karyawanid)
 {
 	global $dbname;
@@ -394,7 +405,7 @@ function kehadiranWakarMandorPPP($kodeorg, $periode, $karyawanid)
 		return array();
 	}
 	$gp = fetchData("select jumlah from " . $dbname . ".sdm_5gajipokok where karyawanid='" . $karyawanid . "' and tahun='" . $periode . "' and idkomponen='1'");
-	$harian = (count($gp) > 0 && $gp[0]['jumlah'] > 0) ? $gp[0]['jumlah'] / 25 : 0;
+	$harian = (count($gp) > 0 && $gp[0]['jumlah'] > 0) ? upahHarianDariGapok($karyawanid, $periode, $gp[0]['jumlah']) : 0;
 	$perHari = array();
 	foreach ($rows as $r) {
 		$perHari[$r['tanggal']] = (isset($perHari[$r['tanggal']]) ? $perHari[$r['tanggal']] : 0) + 1;
@@ -524,7 +535,7 @@ function hitungSisaGajiBlmAlokasiPPP($kodeorg, $periode, $karyawanid = '')
 		$sb = isset($sudahbpjs[$id]) ? $sudahbpjs[$id] : 0;
 		$sk = isset($sudahkes[$id]) ? $sudahkes[$id] : 0;
 		$hasil[$id] = array('gaji' => $g, 'gajibpjs' => $gb, 'gajibpjskes' => $gk, 'sudah' => $sd, 'sudahbpjs' => $sb, 'sudahkes' => $sk,
-			'sisa' => round($g + $sd, 2), 'sisabpjs' => round($gb + $sb, 2), 'sisakes' => round($gk + $sk, 2)); #dibulatkan 2 desimal: sisa selisih hitung desimal (mis. 0,00000001) dianggap nol
+			'sisa' => round($g + $sd, 2), 'sisabpjs' => round($gb + $sb, 2), 'sisakes' => round($gk + $sk, 2)); #dibulatkan 2 desimal: noise hitung (mis. 0,00000001) dianggap nol, sen tetap dialokasikan sehingga selisih akhir tepat 0,00
 	}
 	return $hasil;
 }
@@ -1238,4 +1249,41 @@ function hitungSelisihKursPPP($kodeorg, $periode)
 		}
 	}
 	return $h;
+}
+
+#Proses Akhir Bulan Gaji PPP: karyawan Bulanan yang HKE-nya berlaku (Setup HK Efektif) memakai beberapa komponen sebagai dasar upah harian
+#(gaji pokok, mis. tunjangan golongan, dan catu bila dicentang). Transaksi (BKM, Traksi, dan lainnya) sudah membebankan upah memakai dasar upah itu,
+#jadi komponen-komponen itu dijurnalkan SATU kali sebagai komponen 1 (gaji pokok): nilainya jumlah semua komponen dasar upah (gaji pokok sudah
+#dikurangi Potongan HK oleh pemanggil), dan baris komponen dasar upah lainnya dibuang dari daftar. Karyawan lain dan periode sebelum HKE aktif tidak berubah.
+#$gaji[karyawanid][komponen] = jumlah, $info = keterangan baris. $namaGabung[karyawanid] = daftar komponen yang digabung.
+#$penyedia (opsional, untuk uji) = fungsi(karyawanid) yang mengembalikan array seperti getUpahHarian().
+function gabungDasarUpahPPP(&$gaji, &$info, $kodeorg, $periode, &$namaGabung, $penyedia = null)
+{
+	$namaGabung = array();
+	foreach (array_keys($gaji) as $kid) {
+		$uh = ($penyedia !== null) ? call_user_func($penyedia, $kid) : getUpahHarian($kid, $periode, '1', $kodeorg);
+		if (empty($uh['ppp']) || empty($uh['ada']) || empty($uh['komponen'])) {
+			continue;
+		}
+		$total = 0;
+		$digabung = array();
+		foreach ($uh['komponen'] as $c) {
+			if (isset($gaji[$kid][$c])) {
+				$total += (float)$gaji[$kid][$c];
+				if ((int)$c != 1) {
+					$digabung[] = $c;
+				}
+			}
+		}
+		if (count($digabung) == 0) {
+			continue; #hanya gaji pokok: tidak ada yang digabung
+		}
+		$gaji[$kid][1] = $total;
+		$info[$kid][1] = 'GAJI';
+		foreach ($digabung as $c) {
+			unset($gaji[$kid][$c]);
+			unset($info[$kid][$c]);
+		}
+		$namaGabung[$kid] = $digabung;
+	}
 }

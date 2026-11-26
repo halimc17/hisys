@@ -11,6 +11,8 @@ echo open_body();
 <script language=javascript src='js/kebun_3premibmtbs.js?v=<?php echo time(); ?>'></script>
 <?
 include('master_mainMenu.php');	
+require_once('lib/zSelect2.php');
+echo "<script>jQuery(function(){ jQuery('select.select2').select2({dropdownAutoWidth:true,width:'style'}); jQuery('<style>.select2-container--open .select2-dropdown{z-index:100000;}</style>').appendTo('head'); });</script>";
 $frm[0]='';
 $frm[1]='';
 
@@ -58,23 +60,23 @@ $frm[0].= "<fieldset style=float:left;height:140px><legend><b>Form</b></legend>
 	<tr>
 		<td>".$_SESSION['lang']['periode']."</td>
 		<td>:</td>
-		<td><select id=prd  style='width:153px;'>".$optprd."</select>
+		<td><select id=prd class=select2 style='width:153px;'>".$optprd."</select>
 		</td>
 	</tr>
     <tr>
         <td>".$_SESSION['lang']['unitkerja']."</td>
         <td>:</td>
-        <td><select id=unit  style='width:153px;' onchange=\"getAfd();\">".$optunit."</select></td>
+        <td><select id=unit class=select2 style='width:153px;' onchange=\"getAfd();\">".$optunit."</select></td>
     </tr>
     <tr>
         <td>".$_SESSION['lang']['divisi']."</td>
         <td>:</td>
-        <td><select id=afd style='width:153px;'>".$optafd."</select></td>
+        <td><select id=afd class=select2 style='width:153px;'>".$optafd."</select></td>
     </tr> 
 	<tr hidden>
         <td>Kerja / Kontanan</td>
         <td>:</td>
-        <td><select id=kontanan  style='width:153px;' onchange=gettglkontan(this.value,'tanggaltrk')>".$optkontan."</select></td>
+        <td><select id=kontanan class=select2 style='width:153px;' onchange=gettglkontan(this.value,'tanggaltrk')>".$optkontan."</select></td>
     </tr>
 	<tr id=tanggaltrk style=display:none>
         <td>".$_SESSION['lang']['tanggal']."</td>
@@ -114,22 +116,22 @@ $frm[1].= "<fieldset style=float:left><legend><b>Find</b></legend>
 	<tr>
 		<td>".$_SESSION['lang']['periode']."</td>
 		<td>:</td>
-		<td><select id=prdlist  style='width:153px;'>".$optprd2."</select></td>
+		<td><select id=prdlist class=select2 style='width:153px;'>".$optprd2."</select></td>
 	</tr>
     <tr>
         <td>".$_SESSION['lang']['unitkerja']."</td>
         <td>:</td>
-        <td><select id=unitlist style='width:153px;' onchange=\"getAfd2();\">".$optunit2."</select></td>
+        <td><select id=unitlist class=select2 style='width:153px;' onchange=\"getAfd2();\">".$optunit2."</select></td>
     </tr>
 	<tr>
         <td>".$_SESSION['lang']['divisi']."</td>
         <td>:</td>
-        <td><select id=afdlist  style='width:153px;'>".$optafd2."</select></td>
+        <td><select id=afdlist class=select2 style='width:153px;'>".$optafd2."</select></td>
     </tr>
 	<tr hidden>
         <td>Kontanan</td>
         <td>:</td>
-        <td><select id=kontlist  style='width:153px;'>".$optkontan."</select></td>
+        <td><select id=kontlist class=select2 style='width:153px;'>".$optkontan."</select></td>
     </tr>";
     
 

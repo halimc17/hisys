@@ -1829,7 +1829,7 @@ switch ($method) {
 		$res=$owlPDO->query($str) or die(print " Gagal: ".PDOException::getMessage());
 		$res->setFetchMode(PDO::FETCH_ASSOC);
 		$Umr=$res->fetch();
-			$umrHarian=$Umr['nilai']/25;
+			$umrHarian=upahHarianDariGapok($karyawanid,$tahun,$Umr['nilai']);
 		
 		if($umrHarian==0){
 			exit("Warning : Gaji Pokok Karyawan belum ada.");
@@ -1979,7 +1979,7 @@ switch ($method) {
 			$tahun = substr(tanggalsystemn($param['tgl']),0,7);
 			$str = "select sum(jumlah) as nilai from ".$dbname.".sdm_5gajipokok where karyawanid='".$param['karyawanid']."' and tahun='".$tahun."' and idkomponen in ('1')"; #exit("Warning :".$str);
 			$res = fetchdata($str);
-			$upahharian = $res[0]['nilai']/25;
+			$upahharian = upahHarianDariGapok($param['karyawanid'],$tahun,$res[0]['nilai']);
 			$upahkary = $upahharian * $param['jhk'];
 			
 			if(round($upahkary-$param['upah'],0)!=0){
@@ -2151,7 +2151,7 @@ switch ($method) {
 			$tahun = substr(tanggalsystemn($param['tgl']),0,7);
 			$str = "select sum(jumlah) as nilai from ".$dbname.".sdm_5gajipokok where karyawanid='".$param['karyawanid']."' and tahun='".$tahun."' and idkomponen in ('1')"; #exit("Warning :".$str);
 			$res = fetchdata($str);
-			$upahharian = $res[0]['nilai']/25;
+			$upahharian = upahHarianDariGapok($param['karyawanid'],$tahun,$res[0]['nilai']);
 			$upahkary = $upahharian * $param['jhk'];
 			
 			if(round($upahkary-$param['upah'],0)!=0){

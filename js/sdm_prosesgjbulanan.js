@@ -47,7 +47,7 @@ function list() {
         }
     }
 
-    post_response_text('sdm_slave_prosesgjbulanan.php?proses=list', param, respon);
+    post_response_text(tujuanProsesGaji('sdm_slave_prosesgjbulanan.php?proses=list'), param, respon);
 }
 
 function excel() {
@@ -59,7 +59,7 @@ function excel() {
     param += "&proses=excel";
 
     tipe = 'excel';
-    tujuan = 'sdm_slave_prosesgjbulanan.php';
+    tujuan = tujuanProsesGaji('sdm_slave_prosesgjbulanan.php');
     ev = 'event';
     judul = 'Report Ms.Excel';
 
@@ -96,5 +96,5 @@ function post() {
         }
     }
 
-    post_response_text('sdm_slave_prosesgjbulanan.php?proses=post', param, respon);
+    post_response_text(tujuanProsesGaji('sdm_slave_prosesgjbulanan.php?proses=post'), param, respon);
 }

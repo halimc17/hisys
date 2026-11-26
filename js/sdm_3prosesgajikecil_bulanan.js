@@ -52,7 +52,7 @@ function list() {
         }
     }
 
-    post_response_text('sdm_slave_3prosesgajikecil_bulanan.php?proses=list', param, respon);
+    post_response_text(tujuanProsesGaji('sdm_slave_3prosesgajikecil_bulanan.php?proses=list'), param, respon);
 }
 
 function excel() {
@@ -64,7 +64,7 @@ function excel() {
     param += "&proses=excel";
 
     tipe = 'excel';
-    tujuan = 'sdm_slave_3prosesgajikecil_bulanan.php';
+    tujuan = tujuanProsesGaji('sdm_slave_3prosesgajikecil_bulanan.php');
     ev = 'event';
     judul = 'Report Ms.Excel';
 
@@ -103,5 +103,5 @@ function post() {
         }
     }
 
-    post_response_text('sdm_slave_3prosesgajikecil_bulanan.php?proses=post', param, respon);
+    post_response_text(tujuanProsesGaji('sdm_slave_3prosesgajikecil_bulanan.php?proses=post'), param, respon);
 }

@@ -308,6 +308,14 @@ function getupahharian($periode,$karid){
 	$str = "select sum(jumlah) as nilai from ".$dbname.".sdm_5gajipokok where karyawanid='".$karid."' and tahun='".$periode."' and idkomponen in ('1')"; #
 	$res=fetchdata($str);
 	$umrHarian=$res[0]['nilai']/25;
+	#karyawan Bulanan PT yang memakai HKE (diaktifkan di Setup HK Efektif): upah harian = komponen dasar upah / HKE
+	$uh = getUpahHarian($karid, $periode, '1');
+	if($uh['ppp']){
+		if(!$uh['ada']){
+			exit("Warning : ".$uh['pesan']);
+		}
+		$umrHarian = $uh['upah'];
+	}
 	
 	return $umrHarian;
 }

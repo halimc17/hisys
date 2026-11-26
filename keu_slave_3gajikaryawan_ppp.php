@@ -215,6 +215,10 @@ foreach ($res as $bar) {
 // print_r($pejabatbkm);
 // echo"</pre>";
 
+#PPP HKE: komponen dasar upah karyawan Bulanan dijurnalkan satu kali sebagai komponen 1 (lihat gabungDasarUpahPPP)
+$namaGabung = array();
+gabungDasarUpahPPP($gaji, $info, $kodeorg, $param['periode'], $namaGabung);
+
 $GJ = $gaji;
 #buang karyawan yang gajinya sudah teralokasi
 
@@ -411,7 +415,7 @@ else {
   foreach (fetchData("select jurnalid,noakundebet,noakunkredit from " . $dbname . ".keu_5parameterjurnal") as $barPj) {
     $optParamJurnal[$barPj['jurnalid']] = $barPj;
   }
-  $nmAkunInfo = makeOption($dbname, 'keu_5akun', 'noakun,namaakun', "noakun like '7%' or noakun like '21%'");
+  $nmAkunInfo = makeOption($dbname, 'keu_5akun', 'noakun,namaakun'); #PPP: semua akun, karena tujuan bisa akun pengawasan/kegiatan/transit kendaraan
   $orgpt = getindukPT($kodeorg); #PT induk unit (kunci Setup Alokasi Komponen Gaji)
   $bagianInfo = (($tipe[$kodeorg] ?? '') == 'HOLDING' || ($tipe[$kodeorg] ?? '') == 'KANWIL') ? 'GJHO' : 'KBNB';
   muatCachePPP($orgpt, $kodeorg, $param['periode']); #PPP: No Akun Pendapatan Lain dan jabatan dimuat sekali untuk semua baris (tanpa query per baris)
@@ -434,6 +438,62 @@ else {
   $nmTipeKarInfo = makeOption($dbname, 'sdm_5tipekaryawan', 'id,tipe');
   $nmOrgInfo = makeOption($dbname, 'organisasi', 'kodeorganisasi,namaorganisasi');
 
+  #PPP: data kolom tujuan alokasi, supaya sama dengan jurnal Proses Akhir Bulan no 1 (keu_slave_prosesAlokasiGajiAkhirbulan_ppp.php):
+  # genset Setup Premi Tetap (prosesGajiVhcPremiPPP), mandor/kerani/asisten afdeling & bibitan ke blok yang diawasi di BKM (prosesGajiAfdeling),
+  # bagian Sipil (prosesGajiSipil), lalu biaya umum dengan akun di absensi/lembur dan Pekerjaan Traksi (prosesGajiKebun)
+  $ctxInfo = array(
+    'kodeorg' => $kodeorg,
+    'periode' => $param['periode'],
+    'orgpt' => $orgpt,
+    'bagian' => $bagianInfo,
+    'tipunit' => isset($tipe[$kodeorg]) ? $tipe[$kodeorg] : '',
+    'pj' => $optParamJurnal,
+    'bkm' => array(),
+    'akunkeg' => array(),
+    'absen' => array(),
+    'lembur' => array(),
+    'wakar' => array()
+  );
+  if ($ctxInfo['tipunit'] == 'KEBUN') {
+    $pgB = fetchData("select tanggalmulai,tanggalsampai from " . $dbname . ".sdm_5periodegaji where periode='" . addslashes($param['periode']) . "' and kodeorg='" . addslashes($kodeorg) . "' and jenisgaji='B'");
+    if (count($pgB) > 0) {
+      $snaloc = fetchData("select nilai from " . $dbname . ".setup_parameterappl where kodeparameter='SNALOC' and kodeorg='" . addslashes($kodeorg) . "'");
+      $wherekegInfo = (count($snaloc) > 0 && $snaloc[0]['nilai'] != '') ? " and b.kodekegiatan not in (" . $snaloc[0]['nilai'] . ")" : "";
+      $strBkm = "select distinct a.nikmandor,a.nikmandor1,a.keranimuat,a.nikasisten,b.kodekegiatan,a.tipetransaksi,b.kodeorg,b.kodesegment,c.luasareaproduktif,c.statusblok,
+          case when a.tipetransaksi in ('TM','TBM','TB') and c.statusblok='TB' then c.lc+c.luasbloking else c.luasareaproduktif end as luasalokasi
+          from " . $dbname . ".kebun_aktifitas a
+          left join " . $dbname . ".kebun_prestasi_detail b on a.notransaksi=b.notransaksi
+          left join " . $dbname . ".setup_blok c on b.kodeorg=c.kodeorg
+          where a.kodeorg='" . addslashes($kodeorg) . "' and a.tanggal>='" . $pgB[0]['tanggalmulai'] . "' and a.tanggal<='" . $pgB[0]['tanggalsampai'] . "'" . $wherekegInfo . "
+          having kodeorg is not null and luasalokasi > 0";
+      $sudahBkm = array();
+      foreach (fetchData($strBkm) as $barB) {
+        $kunciB = $barB['kodekegiatan'] . '|' . $barB['tipetransaksi'] . '|' . $barB['kodeorg'] . '|' . $barB['kodesegment'] . '|' . $barB['luasareaproduktif'] . '|' . $barB['statusblok'] . '|' . $barB['luasalokasi'];
+        foreach (array('nikmandor', 'nikmandor1', 'keranimuat', 'nikasisten') as $kolB) {
+          $pj = $barB[$kolB];
+          if ($pj == '' || isset($sudahBkm[$pj][$kunciB])) {
+            continue;
+          }
+          $sudahBkm[$pj][$kunciB] = 1;
+          $ctxInfo['bkm'][$pj][] = $barB;
+        }
+      }
+      $ctxInfo['akunkeg'] = makeOption($dbname, 'setup_kegiatan', 'kodekegiatan,noakun');
+    }
+  }
+  foreach (array_chunk(array_keys($gaji), 400) as $potong) {
+    $in = "'" . implode("','", array_map('addslashes', $potong)) . "'";
+    foreach (fetchData("select karyawanid,noakun,alokasi,sum(case when umr>0 then umr else 0 end) as umr,
+        sum(case when ifnull(premi,0)+ifnull(insentif,0)+ifnull(insentiflibur,0)>0 then ifnull(premi,0)+ifnull(insentif,0)+ifnull(insentiflibur,0) else 0 end) as pre
+        from " . $dbname . ".sdm_absensidt where tanggal like '" . addslashes($param['periode']) . "%' and karyawanid in (" . $in . ") group by karyawanid,noakun,alokasi") as $barA) {
+      $ctxInfo['absen'][$barA['karyawanid']][] = $barA;
+    }
+    foreach (fetchData("select karyawanid,noakun,alokasi,sum(case when uangkelebihanjam>0 then uangkelebihanjam else 0 end) as lembur
+        from " . $dbname . ".sdm_lemburdt where tanggal like '" . addslashes($param['periode']) . "%' and karyawanid in (" . $in . ") group by karyawanid,noakun,alokasi") as $barA) {
+      $ctxInfo['lembur'][$barA['karyawanid']][] = $barA;
+    }
+  }
+
   $tab = "
         <fieldset style='margin-bottom:8px'><legend><b>Informasi Proses</b></legend>
         <div style='display:flex;flex-wrap:wrap;align-items:stretch;gap:6px;font-size:12px'>
@@ -447,6 +507,7 @@ else {
         </div>
         <div style='font-size:12px;margin-top:6px;line-height:1.5'>
           &bull; Karyawan Traksi/Bengkel diproses di langkah <i>3. Gaji Karyawan Tidak Langsung - (Traksi,Bengkel)</i>.<br>
+          &bull; Mandor/kerani/asisten Afdeling dan Bibitan yang tercatat di BKM: gaji (selain BPJS) dibagi ke blok yang diawasi menurut luas (Biaya Pengawasan); kolom Akun Debet menampilkan rupiah per akun.<br>
           &bull; Komponen yang tidak ada di setup memakai Setup Bawaan; komponen baru yang belum diatur dianggap Tunjangan Lain.<br>
           <span style='background:#fff3cd;padding:1px 6px;border:1px solid #e0c36a'><b>Perhatian:</b> Process ulang untuk periode yang sama menghapus jurnal gaji periode itu lalu membuatnya lagi.</span>
         </div>
@@ -498,17 +559,27 @@ else {
     foreach ($baris as $val => $jlh) {
 
       $sken = "";
+      if (abs($jlh - ($potongan[$key][$val] ?? 0)) < 0.005) {
+        continue; #noise hitung (di bawah setengah sen); selisih sen tetap dijurnalkan agar tidak ada sisa alokasi
+      }
       if (($tipe[$subunit[$key] ?? ''] ?? '') != 'TRAKSI' and ($tipe[$subunit[$key] ?? ''] ?? '') != 'WORKSHOP') {
         $no += 1;
         #PPP: tujuan alokasi baris ini
         try {
-          $alokInfo = alokasiKomponenPPP($bagianInfo, $orgpt, $kodeorg, $param['periode'], $key, $val, true);
-          $pjInfo = isset($optParamJurnal[$alokInfo['jurnalid']]) ? $optParamJurnal[$alokInfo['jurnalid']] : array('noakundebet' => '', 'noakunkredit' => '');
-          $akunDbInfo = ($alokInfo['akundebet'] != '') ? $alokInfo['akundebet'] : $pjInfo['noakundebet'];
-          $sumberInfo = $alokInfo['sumber'];
-          $selAlokasiInfo = "<td align=center>" . htmlspecialchars($alokInfo['jurnalid']) . "</td>"
-            . "<td>" . htmlspecialchars($akunDbInfo . ($akunDbInfo != '' ? " - " . @$nmAkunInfo[$akunDbInfo] : '(parameter jurnal belum ada)')) . "</td>"
-            . "<td>" . htmlspecialchars($sumberInfo) . "</td>";
+          $tujuanInfo = tujuanInfoBarisPPP($ctxInfo, $key, $val, $jlh - ($potongan[$key][$val] ?? 0), isset($tipe[$subunit[$key] ?? '']) ? str_replace(' ', '', $tipe[$subunit[$key] ?? '']) : '');
+          if (count($tujuanInfo['akun']) == 1) {
+            $akunDbInfo = $tujuanInfo['akun'][0]['akun'];
+            $selAkunInfo = htmlspecialchars($akunDbInfo . ($akunDbInfo != '' ? " - " . @$nmAkunInfo[$akunDbInfo] : '(parameter jurnal belum ada)') . $tujuanInfo['akun'][0]['ket']);
+          } else {
+            #lebih dari satu akun debet: tampilkan rupiah per akun seperti jurnalnya
+            $selAkunInfo = '';
+            foreach ($tujuanInfo['akun'] as $baInfo) {
+              $selAkunInfo .= ($selAkunInfo != '' ? '<br>' : '') . htmlspecialchars(($baInfo['akun'] != '' ? $baInfo['akun'] . " - " . @$nmAkunInfo[$baInfo['akun']] : '(akun belum ada)') . $baInfo['ket'] . ": " . number_format($baInfo['rp']));
+            }
+          }
+          $selAlokasiInfo = "<td align=center>" . htmlspecialchars($tujuanInfo['jurnal']) . "</td>"
+            . "<td>" . $selAkunInfo . "</td>"
+            . "<td>" . htmlspecialchars($tujuanInfo['sumber']) . "</td>";
         } catch (Exception $eInfo) {
           $selAlokasiInfo = "<td colspan=3 style='color:red'>" . htmlspecialchars($eInfo->getMessage()) . "</td>";
         }
@@ -527,7 +598,7 @@ else {
                         <td id='komponen" . $no . "'>" . $val . "</td>
                         <td id='namakomponen" . $no . "'>" . ($namakomponen[$val] ?? '') . "</td>
                         <td align=right id='jumlah" . $no . "'>" . ($jlh - ($potongan[$key][$val] ?? 0)) . "</td>
-                        <td align=right>" . $info[$key][$val] . "</td>
+                        <td align=right>" . $info[$key][$val] . htmlspecialchars(($val == 1 && isset($namaGabung[$key])) ? ' (termasuk ' . implode(', ', array_map(function ($c) use ($namakomponen) { return isset($namakomponen[$c]) ? $namakomponen[$c] : $c; }, $namaGabung[$key])) . ')' : '') . "</td>
                         " . $selAlokasiInfo . "
                         <td hidden class=kolom-sembunyi id='karyawanid" . $no . "'>" . $key . "</td>
                         <td hidden class=kolom-sembunyi id='namakaryawan" . $no . "'>" . ($namakaryawan[$key] ?? '') . "</td>
@@ -563,3 +634,173 @@ else {
   echo $tab;
 }
 #----------------------------------------------------------------
+
+#PPP: tujuan jurnal satu baris (karyawan + komponen) untuk kolom Jurnal / Akun Debet / Sumber Akun di list.
+#Urutan dan aturannya mengikuti keu_slave_prosesAlokasiGajiAkhirbulan_ppp.php (unit KEBUN); kalau aturan proses berubah, fungsi ini ikut diubah.
+#Hasil: jurnal (kelompok jurnal), akun (daftar akun debet: akun, rp, ket), sumber (asal akun)
+function tujuanInfoBarisPPP(&$ctx, $karyawanid, $komponen, $jumlah, $tipeOrg)
+{
+  $komponen = (int)$komponen;
+  $pj = $ctx['pj'];
+  $akunPj = function ($jurnalid) use ($pj) {
+    return isset($pj[$jurnalid]['noakundebet']) ? $pj[$jurnalid]['noakundebet'] : '';
+  };
+
+  #1. genset di Setup Premi Tetap per Komponen (prosesGajiVhcPremiPPP): dibagi menurut hari tercatat, sisa pembulatan ke genset pertama
+  if (premiTetapSetupPPP($ctx['kodeorg'], $karyawanid, $komponen)) {
+    $hari = hariTraksiVhcPPP($ctx['kodeorg'], $ctx['periode'], $karyawanid);
+    if (count($hari) > 0) {
+      $alok = alokasiKomponenPPP('VHCG', $ctx['orgpt'], $ctx['kodeorg'], $ctx['periode'], $karyawanid, $komponen, false);
+      $akun = $akunPj($alok['jurnalid']);
+      $totalHari = array_sum($hari);
+      $daftar = array();
+      $sisa = $jumlah;
+      foreach ($hari as $kodevhc => $hr) {
+        $rp = floor($jumlah * $hr / $totalHari);
+        $sisa -= $rp;
+        $daftar[] = array('akun' => $akun, 'rp' => $rp, 'ket' => ' (' . $kodevhc . ', ' . $hr . ' hari)');
+      }
+      $daftar[0]['rp'] += $sisa;
+      return array('jurnal' => $alok['jurnalid'], 'akun' => $daftar, 'sumber' => 'Setup Premi Tetap: genset di Pekerjaan Traksi');
+    }
+  }
+
+  #2. afdeling/bibitan yang tercatat sebagai mandor/kerani/asisten di BKM (prosesGajiAfdeling), kecuali BPJS:
+  # dibagi ke blok yang diawasi menurut luas, sisa pembulatan ke baris terakhir
+  $komponenBpjs = array(70, 71, 72, 73, 80);
+  if ($ctx['tipunit'] == 'KEBUN' && in_array($tipeOrg, array('AFDELING', 'BIBITAN')) && !in_array($komponen, $komponenBpjs) && !empty($ctx['bkm'][$karyawanid])) {
+    $rows = $ctx['bkm'][$karyawanid];
+    $barisPerBlok = array();
+    foreach ($rows as $r) {
+      $barisPerBlok[$r['kodeorg']] = (isset($barisPerBlok[$r['kodeorg']]) ? $barisPerBlok[$r['kodeorg']] : 0) + 1;
+    }
+    $totalLuas = 0;
+    foreach ($rows as $r) {
+      $totalLuas += $r['luasalokasi'] / $barisPerBlok[$r['kodeorg']];
+    }
+    $perAkun = array();
+    $kelompok = array();
+    $umum = array();
+    $tporsi = 0;
+    $n = count($rows);
+    $blok = array();
+    foreach ($rows as $i => $r) {
+      $porsi = floor(($r['luasalokasi'] / $barisPerBlok[$r['kodeorg']]) / $totalLuas * $jumlah);
+      $tporsi += $porsi;
+      if ($i == $n - 1) {
+        $porsi += $jumlah - $tporsi;
+      }
+      if ($porsi == 0) {
+        continue;
+      }
+      $tipeAlok = $r['tipetransaksi'];
+      if (in_array($tipeAlok, array('TM', 'TBM', 'TB')) && in_array($r['statusblok'], array('TM', 'TBM', 'TB', 'BBT'))) {
+        $tipeAlok = ($r['statusblok'] == 'TB') ? 'TBM' : $r['statusblok'];
+      }
+      $peta = array('BBT' => 'KBNL0', 'TBM' => 'KBNL1', 'TB' => 'KBNL1', 'TM' => 'KBNL2', 'PNN' => 'KBNL3');
+      if (!isset($peta[$tipeAlok])) {
+        $umum[$r['tipetransaksi']] = 1;
+        continue;
+      }
+      $group = $peta[$tipeAlok];
+      $akun = $akunPj($group);
+      if ($group != 'KBNL3' && $r['tipetransaksi'] != 'PNN') {
+        $akunKeg = isset($ctx['akunkeg'][$r['kodekegiatan']]) ? $ctx['akunkeg'][$r['kodekegiatan']] : '';
+        $pakaiAkunParameter = in_array($group, array('KBNL1', 'KBNL2')) && $akun != '' && substr($akunKeg, 0, 3) != '611';
+        if (!$pakaiAkunParameter) {
+          $akun = $akunKeg;
+        }
+      }
+      $kelompok[$group] = 1;
+      $perAkun[$akun] = (isset($perAkun[$akun]) ? $perAkun[$akun] : 0) + $porsi;
+      $blok[$r['kodeorg']] = 1;
+    }
+    ksort($perAkun);
+    $daftar = array();
+    foreach ($perAkun as $akun => $rp) {
+      $daftar[] = array('akun' => $akun, 'rp' => $rp, 'ket' => '');
+    }
+    ksort($kelompok);
+    $sumber = 'BKM pengawasan (' . count($blok) . ' blok, dibagi luas)';
+    if (count($umum) > 0) {
+      $sumber .= ' [PERHATIAN: BKM jenis ' . implode(',', array_keys($umum)) . ' tidak dikenal, proses melempar ke biaya umum]';
+    }
+    if (count($daftar) > 0) {
+      return array('jurnal' => 'ALK_WAS ' . implode(',', array_keys($kelompok)), 'akun' => $daftar, 'sumber' => $sumber);
+    }
+  }
+
+  #3. bagian Sipil (prosesGajiSipil)
+  if ($ctx['tipunit'] == 'KEBUN' && $tipeOrg == 'SIPIL') {
+    return array('jurnal' => 'SIPL1', 'akun' => array(array('akun' => $akunPj('SIPL1'), 'rp' => $jumlah, 'ket' => '')), 'sumber' => 'Bagian Sipil (parameter jurnal SIPL1)');
+  }
+
+  #4. biaya umum (prosesGajiKebun): gaji pokok/premi/lembur (1, 14, 16, 32, 33) dibagi menurut akun di absensi/lembur dan Pekerjaan Traksi;
+  # akun absensi kosong = akun default parameter jurnal. Tanpa data itu: No Akun Pendapatan Lain / Setup / default.
+  $alok = alokasiKomponenPPP($ctx['bagian'], $ctx['orgpt'], $ctx['kodeorg'], $ctx['periode'], $karyawanid, $komponen, true);
+  $group = $alok['jurnalid'];
+  $akunDefault = $akunPj($group);
+  if (in_array($komponen, array(1, 14, 16, 32, 33)) && ($group == 'KBNB0' || $group == 'KBNB1')) {
+    $data = array();
+    $akunData = function ($noakun) use ($akunDefault) {
+      if ($noakun == '') {
+        return $akunDefault;
+      }
+      return (strlen($noakun) > 7) ? substr($noakun, 0, 7) : $noakun; #kolom noakun bisa berisi kode kegiatan
+    };
+    foreach ((isset($ctx['absen'][$karyawanid]) ? $ctx['absen'][$karyawanid] : array()) as $r) {
+      $nilai = ($group == 'KBNB0') ? $r['umr'] : $r['pre'];
+      if ($nilai > 0) {
+        $data[] = array($akunData($r['noakun']), $nilai, '');
+      }
+    }
+    if ($group == 'KBNB1') {
+      foreach ((isset($ctx['lembur'][$karyawanid]) ? $ctx['lembur'][$karyawanid] : array()) as $r) {
+        if ($r['lembur'] > 0) {
+          $data[] = array($akunData($r['noakun']), $r['lembur'], '');
+        }
+      }
+    }
+    $adaVhc = false;
+    if ($group == 'KBNB0' || $komponen == 32) {
+      $akunVhc = $akunPj($group == 'KBNB0' ? 'VHCG0' : 'VHCG1');
+      if (strlen($akunVhc) == 7) {
+        if (!isset($ctx['wakar'][$karyawanid])) {
+          $ctx['wakar'][$karyawanid] = kehadiranWakarMandorPPP($ctx['kodeorg'], $ctx['periode'], $karyawanid);
+        }
+        $perVhc = array();
+        foreach ($ctx['wakar'][$karyawanid] as $hkv) {
+          $nilai = ($group == 'KBNB0') ? $hkv['bobotgaji'] : $hkv['premi'];
+          if ($nilai > 0) {
+            $perVhc[$hkv['kodevhc']] = (isset($perVhc[$hkv['kodevhc']]) ? $perVhc[$hkv['kodevhc']] : 0) + $nilai;
+          }
+        }
+        foreach ($perVhc as $kodevhc => $nilai) {
+          $data[] = array($akunVhc, $nilai, ' (' . $kodevhc . ')');
+          $adaVhc = true;
+        }
+      }
+    }
+    if (count($data) > 0) {
+      $total = 0;
+      foreach ($data as $d) {
+        $total += $d[1];
+      }
+      $perAkun = array();
+      $sudah = 0;
+      foreach ($data as $d) {
+        $rp = floor($d[1] / $total * $jumlah);
+        $sudah += $rp;
+        $k = $d[0] . '|' . $d[2];
+        if (!isset($perAkun[$k])) {
+          $perAkun[$k] = array('akun' => $d[0], 'rp' => 0, 'ket' => $d[2]);
+        }
+        $perAkun[$k]['rp'] += $rp;
+      }
+      $perAkun[$k]['rp'] += $jumlah - $sudah; #sisa pembulatan ke akun terakhir
+      return array('jurnal' => $group . ($adaVhc ? ' + kendaraan' : ''), 'akun' => array_values($perAkun), 'sumber' => 'Akun di absensi' . ($group == 'KBNB1' ? '/lembur' : '') . ($adaVhc ? ' dan Pekerjaan Traksi' : ''));
+    }
+  }
+  $akun = ($alok['akundebet'] != '') ? $alok['akundebet'] : $akunDefault;
+  return array('jurnal' => $group, 'akun' => array(array('akun' => $akun, 'rp' => $jumlah, 'ket' => '')), 'sumber' => $alok['sumber']);
+}
