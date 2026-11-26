@@ -21,8 +21,9 @@ while ($bar = $res->fetch()) {
 
 switch ($method) {
 	case 'getperiode':
+		$optorg = '';
 		$nodata = 0;
-		$str = "select * from " . $dbname . ".keu_saldobank where kodeorg='" . $kodeorg . "' order by periode desc limit 1";
+		$str = "select a.* from " . $dbname . ".keu_saldobank a inner join " . $dbname . ".keu_5akunbank b on a.norek=b.noakun and b.pemilik=a.kodeorg and b.status='1' where a.kodeorg='" . $kodeorg . "' order by a.periode desc limit 1";
 		$res = $owlPDO->query($str) or die(print " Gagal: " . PDOException::getMessage());
 		$res->setFetchMode(PDO::FETCH_ASSOC);
 		while ($bar = $res->fetch()) {
@@ -281,8 +282,8 @@ switch ($method) {
 			$tab .= "</tr>";
 		}
 
-		$tab .= "<button onclick=preview('simpan') class=mybutton name=preview id=preview>" . $_SESSION['lang']['proses'] . "</button>";
 		$tab .= "</tbody></table>";
+		$tab .= "<button onclick=preview('simpan') class=mybutton name=btnproses id=btnproses>" . $_SESSION['lang']['proses'] . "</button>";
 
 		if ($tampil == 'show') {
 			echo $tab;
@@ -486,13 +487,14 @@ switch ($method) {
 
 				#= dasi noakun
 				foreach ($arrnoakun as $noakun) {
-					$nilaisalak[$noakun] = $nilaisawal[$noakun] + $nilaimasuk[$noakun] - $nilaikeluar[$noakun];
-					#= delet 1st
-					$str = "delete from " . $dbname . ".keu_saldobulanan where kodeorg='" . $kodeorg . "' and periode='" . $nextthn . $nextbln . "' and noakun='" . $noakun . "' ";
-					$owlPDO->exec($str);
-
-					#= insert 2nd
-					$str = "insert into " . $dbname . ".keu_saldobulanan (kodeorg,periode,noakun,awal" . $nextbln . ") values ('" . $kodeorg . "','" . $nextthn . $nextbln . "','" . $noakun . "','" . $nilaisalak[$noakun] . "')";
+					$nilaisalak[$noakun] = ($nilaisawal[$noakun] ?? 0) + ($nilaimasuk[$noakun] ?? 0) - ($nilaikeluar[$noakun] ?? 0);
+					$str = "select * from " . $dbname . ".keu_saldobulanan where kodeorg='" . $kodeorg . "' and periode='" . $nextthn . $nextbln . "' and noakun='" . $noakun . "' ";
+					$res = fetchData($str);
+					if (count($res) > 0) {
+						$str = "update " . $dbname . ".keu_saldobulanan set awal" . $nextbln . "='" . $nilaisalak[$noakun] . "' where kodeorg='" . $kodeorg . "' and periode='" . $nextthn . $nextbln . "' and noakun='" . $noakun . "'";
+					} else {
+						$str = "insert into " . $dbname . ".keu_saldobulanan (kodeorg,periode,noakun,awal" . $nextbln . ") values ('" . $kodeorg . "','" . $nextthn . $nextbln . "','" . $noakun . "','" . $nilaisalak[$noakun] . "')";
+					}
 					$owlPDO->exec($str);
 
 					// exit("Error:".$str1.____.$str2);
@@ -509,7 +511,7 @@ switch ($method) {
 				// echo "</pre>";
 				// exit('warning : '.count($dataRes));
 
-				if (count($dataRes) > 0) {
+				if (!empty($dataRes)) {
 
 					// Data Header
 					$dataRes['header'] = array(
