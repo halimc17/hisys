@@ -685,7 +685,12 @@ if (round(floatval($jumlahhk[$nikex]), 2) > 1.00) {
 		if (in_array($_SESSION['empl']['jabatan'], $jab)) {
 		}
 	}
-	$tab .= "<button id=postingbtn class=mybutton onclick=postingDataBkm('" . $param['notransaksi'] . "')>" . $_SESSION['lang']['posting'] . "</button>";
+	#PPP: posting hanya untuk BKM yang sudah diverifikasi; sebelum itu tombol Posting diganti keterangan
+	if ($countVerif == 0 && getindukPT(substr($param['notransaksi'], 9, 4)) == 'PPP') {
+		$tab .= "<div style='color:#b42318;font-weight:bold;margin-top:6px'>BKM ini belum diverifikasi. Posting hanya bisa dilakukan setelah BKM diverifikasi.</div>";
+	} else {
+		$tab .= "<button id=postingbtn class=mybutton onclick=postingDataBkm('" . $param['notransaksi'] . "')>" . $_SESSION['lang']['posting'] . "</button>";
+	}
 }
 
 echo $tab;

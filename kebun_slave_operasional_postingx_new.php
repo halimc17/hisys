@@ -55,7 +55,10 @@ if (count($res) > 0) {
 }
 
 try {
-	$owlPDO->beginTransaction();
+	#$dryRunBKM diisi true oleh dryRunPostingBKMPPP (verifikasi BKM PPP): transaksi dikelola pemanggil dan di-rollback
+	if (empty($dryRunBKM)) {
+		$owlPDO->beginTransaction();
+	}
 
 	$arrkeg = array();
 	foreach ($dataX as $notranX => $valKegX) {
@@ -85,8 +88,18 @@ try {
 				Silakan hubungi administrator untuk mengatur detail akses anda.");
 				}
 
-				#validasi posting
-				validasiInput($dataH[0]['kodeorg'], $dataH[0]['divisi'], 'BKMPOST', $dataH[0]['tanggal'], $exit = '0');
+				#validasi posting (aturan jabatan/waktu posting; tidak dijalankan saat percobaan posting untuk verifikasi)
+				if (empty($dryRunBKM)) {
+					validasiInput($dataH[0]['kodeorg'], $dataH[0]['divisi'], 'BKMPOST', $dataH[0]['tanggal'], $exit = '0');
+				}
+
+				#PPP: posting hanya untuk BKM yang sudah diverifikasi (statusverifikasi=1); percobaan posting untuk verifikasi dilewati
+				if (empty($dryRunBKM) && getindukPT($dataH[0]['kodeorg']) == 'PPP') {
+					$cekVerif = fetchData("select count(*) as jml from " . $dbname . ".kebun_verifikasibkm where notransaksi='" . addslashes($param['notransaksi']) . "' and statusverifikasi='1'");
+					if (!isset($cekVerif[0]['jml']) || $cekVerif[0]['jml'] == 0) {
+						throw new PDOException("BKM " . $param['notransaksi'] . " belum diverifikasi. Untuk PPP, posting hanya bisa dilakukan setelah BKM diverifikasi.");
+					}
+				}
 
 
 				$prdbln = substr($dataH[0]['tanggal'], 0, 7);
@@ -206,6 +219,10 @@ try {
 
 				if ($statusfp == 1) {
 					// validasifpfull($tipevalidasi, $detval, 'BKM', $arrUpload, $dataH[0]['tanggal'], '0');
+					#PPP: validasi fingerprint penuh sama dengan verifikasi (PT lain tetap seperti semula)
+					if (getindukPT($dataH[0]['kodeorg']) == 'PPP') {
+						validasifpfull($tipevalidasi, $detval, 'BKM', $arrUpload, $dataH[0]['tanggal'], '0');
+					}
 				} else {
 					if ($statusfp == '') {
 						exit("Warning: Aktivasi Fingerprint belum ada<br>
@@ -2479,7 +2496,9 @@ try {
 	}
 
 	# exekusi query di atas !!!
-	$owlPDO->commit();
+	if (empty($dryRunBKM)) {
+		$owlPDO->commit();
+	}
 } catch (PDOException $e) {
 	$owlPDO->rollback();
 	echo "Error , " . addslashes($e->getMessage());

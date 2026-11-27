@@ -4162,6 +4162,12 @@ switch ($method) {
 				}
 			}
 		}
+
+		#PPP: verifikasi menjalankan seluruh pemeriksaan posting (hak akses unit, periode, HK per hari, kelompok jurnal, periode gudang, RK, saldo/harga/akun material, dan seterusnya)
+		#lewat percobaan posting yang selalu di-rollback; satu-satunya yang dilewati adalah validasiInput BKMPOST (aturan jabatan/waktu posting). PT lain tidak berubah.
+		if (!empty($dataFP[0]['kodeorg']) && getindukPT($dataFP[0]['kodeorg']) == 'PPP') {
+			dryRunPostingBKMPPP($param['notransaksi']);
+		}
 	break;
 
 	case 'detailVerifikasi':
@@ -5319,5 +5325,37 @@ function getoptblok($param){
 	// exit("error".$str);
 	
 	return $optBlok;	
+}
+
+#PPP: percobaan posting untuk verifikasi BKM. Menjalankan skrip insertdetail lalu posting dalam SATU transaksi lalu selalu di-rollback, jadi semua
+#pemeriksaan posting berlaku persis sama dan tidak ada data yang tersimpan. Pada kegagalan, skrip posting sendiri mencetak "Error ..." dan berhenti.
+function dryRunPostingBKMPPP($notransaksi)
+{
+	global $owlPDO, $dbname;
+	$dryRunBKM = true;
+	$ownTrx = false;
+	if (!$owlPDO->inTransaction()) {
+		$owlPDO->beginTransaction();
+		$ownTrx = true;
+	}
+	try {
+		ob_start();
+		include __DIR__ . '/kebun_slave_insertdetail_bkm.php';
+		ob_end_clean();
+		ob_start();
+		include __DIR__ . '/kebun_slave_operasional_postingx_new.php';
+		ob_end_clean();
+	} catch (Throwable $e) {
+		while (ob_get_level() > 0) {
+			ob_end_clean();
+		}
+		if ($ownTrx && $owlPDO->inTransaction()) {
+			$owlPDO->rollBack();
+		}
+		exit("Error, " . addslashes($e->getMessage()));
+	}
+	if ($ownTrx && $owlPDO->inTransaction()) {
+		$owlPDO->rollBack();
+	}
 }
 ?>	

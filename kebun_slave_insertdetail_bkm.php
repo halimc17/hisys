@@ -20,7 +20,21 @@ if($_SESSION['language']=='EN'){
 
 
 try {
-	$owlPDO->beginTransaction();
+	#$dryRunBKM diisi true oleh dryRunPostingBKMPPP (verifikasi BKM PPP): transaksi dikelola pemanggil dan di-rollback
+	if (empty($dryRunBKM)) {
+		$owlPDO->beginTransaction();
+	}
+
+	#PPP: posting hanya untuk BKM yang sudah diverifikasi (dicek sebelum detail dibentuk ulang); percobaan posting untuk verifikasi dilewati
+	if (empty($dryRunBKM)) {
+		$kdorgVerif = fetchData("select kodeorg from " . $dbname . ".kebun_aktifitas where notransaksi='" . addslashes($param['notransaksi']) . "'");
+		if (isset($kdorgVerif[0]['kodeorg']) && getindukPT($kdorgVerif[0]['kodeorg']) == 'PPP') {
+			$cekVerif = fetchData("select count(*) as jml from " . $dbname . ".kebun_verifikasibkm where notransaksi='" . addslashes($param['notransaksi']) . "' and statusverifikasi='1'");
+			if (!isset($cekVerif[0]['jml']) || $cekVerif[0]['jml'] == 0) {
+				throw new PDOException("BKM " . $param['notransaksi'] . " belum diverifikasi. Untuk PPP, posting hanya bisa dilakukan setelah BKM diverifikasi.");
+			}
+		}
+	}
 
     // Cek dulu datanya ada atau gak kebun_prestasi_detail 
     $cekPres = selectQuery($dbname,"kebun_prestasi_detail","*","notransaksi='".$param['notransaksi']."'");
@@ -410,7 +424,9 @@ try {
 		}
 
 	#=========================== End Execution ===============================
-	$owlPDO->commit();
+	if (empty($dryRunBKM)) {
+		$owlPDO->commit();
+	}
 } catch (PDOException $e) {
 	$owlPDO->rollback();
 	echo "Error, " . addslashes($e->getMessage());
