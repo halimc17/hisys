@@ -30,6 +30,7 @@ $kodeorg=checkPostGet('unit','');
 $tipeprint=checkPostGet('tipeprint','');
 
 $getPT = makeOption($dbname, 'organisasi', 'kodeorganisasi,induk');
+$tanpaPembulatan = (isset($param['kodeorg']) && isset($getPT[$param['kodeorg']]) && $getPT[$param['kodeorg']] === 'PPP'); #PT PPP tidak memakai komponen Pembulatan Gaji (131)
 
 
 $namakar = array();
@@ -1352,7 +1353,7 @@ $absRes = fetchData($query1);
 				$list0 .= "<th rowspan=2 >".$_SESSION['lang']['tipekaryawan']."</th>";
 				$list0 .= "<th rowspan=2 >".$_SESSION['lang']['subbagian']."</th>";
 				$list0 .= "<th rowspan=2 >".$_SESSION['lang']['departemen']."</th>";
-				$list0 .= "<th colspan = ".($colspan_komplus+1)." >".$_SESSION['lang']['penambah']."</th>";
+				$list0 .= "<th colspan = ".($colspan_komplus + ($tanpaPembulatan ? 0 : 1))." >".$_SESSION['lang']['penambah']."</th>";
 				$list0 .= "<th rowspan=2>Total Penambah</th>";
 				$list0 .= "<th colspan=2>BPJS KES</th>";
 				$list0 .= "<th colspan=2>BPJS TK</th>";
@@ -1366,7 +1367,7 @@ $absRes = fetchData($query1);
 				foreach ($dtkomplus as $komplus){
 					$list0.="<th align=center >".$nmkom[$komplus]."</th>";
 				}
-				$list0.="<th align=center >Pembulatan Gaji</th>";
+				if (!$tanpaPembulatan) { $list0.="<th align=center >Pembulatan Gaji</th>"; }
 				$list0.="<th align=center >Peserta</th>";
 				$list0.="<th align=center >Perusahaan</th>";
 				$list0.="<th align=center >Peserta</th>";
@@ -1409,12 +1410,13 @@ $absRes = fetchData($query1);
 
 			## Subtotal per Subbagian
 			function renderSubtotalSubbagian($label, $dtkomplus, $dtkommin, $subKomplus, $subKommin, $subPembulatan, $subTotalPenambah, $subBpjsKesKar, $subBpjsKesPer, $subBpjsTkKar, $subBpjsTkPer, $subBpjsJpKar, $subBpjsJpPer, $subTotalPengurang, $subTotalGaji, $kolomAwal){
+					global $tanpaPembulatan;
 				$out = "<tr class=rowheader style='font-weight:bold; background:#dbe9f5'>";
 				$out .= "<td colspan=".$kolomAwal." align=right>SUBTOTAL - ".$label."</td>";
 				foreach ($dtkomplus as $komplus){
 					$out .= "<td align=right>".number_format(@$subKomplus[$komplus],0)."</td>";
 				}
-				$out .= "<td align=right>".number_format($subPembulatan,0)."</td>";
+				if (!$tanpaPembulatan) { $out .= "<td align=right>".number_format($subPembulatan,0)."</td>"; }
 				$out .= "<td align=right>".number_format($subTotalPenambah,0)."</td>";
 				$out .= "<td align=right>".number_format($subBpjsKesKar,0)."</td>";
 				$out .= "<td align=right>".number_format($subBpjsKesPer,0)."</td>";
@@ -1513,7 +1515,7 @@ $absRes = fetchData($query1);
 						$totalgaji[$val[0]] = round(($tt_jumkomplusxc[$val[0]] - $tt_jumkominxc[$val[0]]),0);
 						$dibelakang[$val[0]]= intval(substr(strval($totalgaji[$val[0]]), -2));
 
-						if($dibelakang[$val[0]]==0){
+						if ($tanpaPembulatan || $dibelakang[$val[0]] == 0){
 							$penambahdibelakang[$val[0]]=0;
 						}else{
 							$penambahdibelakang[$val[0]]=100-$dibelakang[$val[0]];
@@ -1531,7 +1533,7 @@ $absRes = fetchData($query1);
 
 						$tt_jumkomplus[$val[0]] += $penambahdibelakang[$val[0]];
 
-						$list1 .= "<td align=right>".number_format($penambahdibelakang[$val[0]],0)."</td>";
+						if (!$tanpaPembulatan) { $list1 .= "<td align=right>".number_format($penambahdibelakang[$val[0]],0)."</td>"; }
 
 						$list1 .= "<td align=right>".number_format($tt_jumkomplus[$val[0]],0)."</td>";
 
@@ -1620,7 +1622,7 @@ $absRes = fetchData($query1);
 						$totalgaji[$val[0]] = round(($tt_jumkomplusxc[$val[0]] - $tt_jumkominxc[$val[0]]),0);
 						$dibelakang[$val[0]]= intval(substr(strval($totalgaji[$val[0]]), -2));
 						//echo $totalgaji[$val[0]].'<br>';
-						if($dibelakang[$val[0]]==0){
+						if ($tanpaPembulatan || $dibelakang[$val[0]] == 0){
 							$penambahdibelakang[$val[0]]=0;
 						}else{
 							$penambahdibelakang[$val[0]]=100-$dibelakang[$val[0]];
@@ -1645,7 +1647,7 @@ $absRes = fetchData($query1);
 						}
 
 						$tt_jumkomplus[$val[0]] += $penambahdibelakang[$val[0]];
-						$list2 .= "<td align=right>".number_format($penambahdibelakang[$val[0]],0)."</td>";
+						if (!$tanpaPembulatan) { $list2 .= "<td align=right>".number_format($penambahdibelakang[$val[0]],0)."</td>"; }
 
 						$list2 .= "<td align=right>".number_format($tt_jumkomplus[$val[0]],0)."</td>";
 
@@ -1713,7 +1715,7 @@ $absRes = fetchData($query1);
 				foreach ($dtkomplus as $komplus){
 					$list1 .= "<td align=right>".number_format(@$grandKomplus1[$komplus],0)."</td>";
 				}
-				$list1 .= "<td align=right>".number_format($grandPembulatan1,0)."</td>";
+				if (!$tanpaPembulatan) { $list1 .= "<td align=right>".number_format($grandPembulatan1,0)."</td>"; }
 				$list1 .= "<td align=right>".number_format($grandTotalPenambah1,0)."</td>";
 				$list1 .= "<td align=right>".number_format($grandBpjsKesKar1,0)."</td>";
 				$list1 .= "<td align=right>".number_format($grandBpjsKesPer1,0)."</td>";
@@ -1736,7 +1738,7 @@ $absRes = fetchData($query1);
 				foreach ($dtkomplus as $komplus){
 					$list2 .= "<td align=right>".number_format(@$grandKomplus2[$komplus],0)."</td>";
 				}
-				$list2 .= "<td align=right>".number_format($grandPembulatan2,0)."</td>";
+				if (!$tanpaPembulatan) { $list2 .= "<td align=right>".number_format($grandPembulatan2,0)."</td>"; }
 				$list2 .= "<td align=right>".number_format($grandTotalPenambah2,0)."</td>";
 				$list2 .= "<td align=right>".number_format($grandBpjsKesKar2,0)."</td>";
 				$list2 .= "<td align=right>".number_format($grandBpjsKesPer2,0)."</td>";

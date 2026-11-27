@@ -4,6 +4,7 @@ error_reporting(0);
 require_once('master_validation.php');
 include_once('lib/nangkoelib.php');
 include_once('lib/zLib.php');
+include_once('lib/zRingkasanGajiPPP.php'); #ringkasan hasil Proses Gaji PPP
 include_once('lib/rTable.php');
 
 /*
@@ -1704,7 +1705,7 @@ $stkNo = "position:sticky;left:0;z-index:2;min-width:36px;width:36px;background:
 $stkNm = "position:sticky;left:36px;z-index:2;min-width:190px;width:190px;background:#D7EBFA;box-shadow:2px 0 2px -1px #999;";
 $stkNoH = "position:sticky;left:0;z-index:6;min-width:36px;width:36px;background:#dfe6ee;color:#000;";
 $stkNmH = "position:sticky;left:36px;z-index:6;min-width:190px;width:190px;background:#dfe6ee;color:#000;box-shadow:2px 0 2px -1px #999;";
-$jmlKolomTabel = 6 + ($colspan_komplus + 1) + 1 + $colspan_komin + 2;
+$jmlKolomTabel = 6 + $colspan_komplus + 1 + $colspan_komin + 2;
 $jmlKolomTabel1 = 6 + $colspan_komplus + 1 + $colspan_komin + 2;
 $barisSubtotal = function ($sg, $d) use ($dtkomplus, $dtkommin, $fmtHk, $stkNo) {
 	$h = "<tr class=rowcontent style='font-weight:bold;background:#C3DAF9'>";
@@ -1714,7 +1715,6 @@ $barisSubtotal = function ($sg, $d) use ($dtkomplus, $dtkommin, $fmtHk, $stkNo) 
 	foreach ($dtkomplus as $komplus) {
 		$h .= "<td align=right>" . number_format(isset($d['plus'][$komplus]) ? $d['plus'][$komplus] : 0, 0) . "</td>";
 	}
-	$h .= "<td align=right>" . number_format($d['bulat'], 0) . "</td>";
 	$h .= "<td align=right>" . number_format($d['totplus'], 0) . "</td>";
 	foreach ($dtkommin as $kommin) {
 		$h .= "<td align=right>" . number_format(isset($d['min'][$kommin]) ? $d['min'][$kommin] : 0, 0) . "</td>";
@@ -1807,21 +1807,7 @@ foreach ($id as $key => $val) {
 		$sgSub1[$sgNow1]['orang'] += 1;
 		$sgSub1[$sgNow1]['hk'] += $hkKary;
 
-		foreach ($dtkomplus as $komplus) {
 
-			$idsxc = array('70', '71', '72', '73', '80');
-			if (!in_array($komplus, $idsxc)) {
-				$tt_jumkomplusxc[$val[0]] += $new_jumlah[$val[0]][$komplus];
-			}
-		}
-
-
-		foreach ($dtkommin as $kommin) {
-			$tt_jumkominxc[$val[0]] += $new_jumlah[$val[0]][$kommin];
-		}
-
-		$totalgaji[$val[0]] = round(($tt_jumkomplusxc[$val[0]] - $tt_jumkominxc[$val[0]]), 0);
-		$dibelakang[$val[0]] = intval(substr(strval($totalgaji[$val[0]]), -2));
 
 		foreach ($dtkomplus as $komplus) {
 			$list1 .= "<td align=right>" . number_format($new_jumlah[$val[0]][$komplus], 0) . "</td>";
@@ -1876,7 +1862,7 @@ foreach ($id as $key => $val) {
 			$list2 .= "<th rowspan=2 >No Induk</th>";
 			$list2 .= "<th rowspan=2 >HK</th>";
 
-			$list2 .= "<th colspan = " . ($colspan_komplus + 1) . " >" . $_SESSION['lang']['penambah'] . "</th>";
+			$list2 .= "<th colspan = " . $colspan_komplus . " >" . $_SESSION['lang']['penambah'] . "</th>";
 
 			$list2 .= "<th rowspan=2>Total Penambah</th>";
 			$list2 .= "<th colspan = " . $colspan_komin . " >" . $_SESSION['lang']['pengurang'] . "</th>";
@@ -1888,7 +1874,6 @@ foreach ($id as $key => $val) {
 				$list2 .= "<th align=center >" . $nmkom[$komplus] . "</th>";
 			}
 
-			$list2 .= "<th align=center >Pembulatan Gaji</th>";
 
 			foreach ($dtkommin as $kommin) {
 				$list2 .= "<th align=center >" . $nmkom[$kommin] . "</th>";
@@ -1917,66 +1902,15 @@ foreach ($id as $key => $val) {
 		$sgSub[$sgNow]['orang'] += 1;
 		$sgSub[$sgNow]['hk'] += $hkKary;
 
-		foreach ($dtkomplus as $komplus) {
 
+
+		foreach ($dtkomplus as $komplus) {
+			$list2 .= "<td align=right>" . number_format($new_jumlah[$val[0]][$komplus], 0) . "</td>";
 			$idsxc = array('70', '71', '72', '73', '80');
 			if (!in_array($komplus, $idsxc)) {
-				$tt_jumkomplusxc[$val[0]] += $new_jumlah[$val[0]][$komplus];
+				$tt_jumkomplus[$val[0]] += $new_jumlah[$val[0]][$komplus];
 			}
-		}
-
-
-		foreach ($dtkommin as $kommin) {
-			$tt_jumkominxc[$val[0]] += $new_jumlah[$val[0]][$kommin];
-		}
-
-		$totalgaji[$val[0]] = round(($tt_jumkomplusxc[$val[0]] - $tt_jumkominxc[$val[0]]), 0);
-		$dibelakang[$val[0]] = intval(substr(strval($totalgaji[$val[0]]), -2));
-		//echo $totalgaji[$val[0]].'<br>';
-
-		if ($adaGajiKecil > 0) {
-
-			foreach ($dtkomplus as $komplus) {
-				$list2 .= "<td align=right>" . number_format($new_jumlah[$val[0]][$komplus], 0) . "</td>";
-				$idsxc = array('70', '71', '72', '73', '80');
-				if (!in_array($komplus, $idsxc)) {
-					$tt_jumkomplus[$val[0]] += $new_jumlah[$val[0]][$komplus];
-				}
-				$grandtotalplus[$komplus] += $new_jumlah[$val[0]][$komplus];
-			}
-			$list2 .= "<td align=right>0</td>";
-		} else {
-
-			if ($dibelakang[$val[0]] == 0) {
-				$penambahdibelakang[$val[0]] = 0;
-			} else {
-				$penambahdibelakang[$val[0]] = 100 - $dibelakang[$val[0]];
-			}
-
-			$readyData[] = array(
-				'kodeorg' => $lokasitugas[$val[0]],
-				'periodegaji' => $param['periodegaji'],
-				'karyawanid' => $val[0],
-				'idkomponen' => '131',
-				'jumlah' => $penambahdibelakang[$val[0]],
-				'pengali' => 1,
-				'hk' => 0
-			);
-
-
-			foreach ($dtkomplus as $komplus) {
-				$list2 .= "<td align=right>" . number_format($new_jumlah[$val[0]][$komplus], 0) . "</td>";
-				$idsxc = array('70', '71', '72', '73', '80');
-				if (!in_array($komplus, $idsxc)) {
-					$tt_jumkomplus[$val[0]] += $new_jumlah[$val[0]][$komplus];
-				}
-				$grandtotalplus[$komplus] += $new_jumlah[$val[0]][$komplus];
-			}
-
-			$tt_jumkomplus[$val[0]] += $penambahdibelakang[$val[0]];
-			$grandtotalplus['131'] += $penambahdibelakang[$val[0]];
-
-			$list2 .= "<td align=right>" . number_format($penambahdibelakang[$val[0]], 0) . "</td>";
+			$grandtotalplus[$komplus] += $new_jumlah[$val[0]][$komplus];
 		}
 
 
@@ -1984,7 +1918,6 @@ foreach ($id as $key => $val) {
 		foreach ($dtkomplus as $komplus) {
 			$sgSub[$sgNow]['plus'][$komplus] = (isset($sgSub[$sgNow]['plus'][$komplus]) ? $sgSub[$sgNow]['plus'][$komplus] : 0) + (isset($new_jumlah[$val[0]][$komplus]) ? $new_jumlah[$val[0]][$komplus] : 0);
 		}
-		$sgSub[$sgNow]['bulat'] += ($adaGajiKecil > 0 ? 0 : $penambahdibelakang[$val[0]]);
 		$sgSub[$sgNow]['totplus'] += $tt_jumkomplus[$val[0]];
 		$list2 .= "<td align=right>" . number_format($tt_jumkomplus[$val[0]], 0) . "</td>";
 		$grandtotalkomplus += $tt_jumkomplus[$val[0]];
@@ -2029,7 +1962,6 @@ $list2 .= "<th colspan=4></th>";
 foreach ($dtkomplus as $komplus) {
 	$list2 .= "<th align=center >" . number_format($grandtotalplus[$komplus], 0) . "</th>";
 }
-$list2 .= "<th align=center>" . number_format($grandtotalplus['131'], 0) . "</th>";
 $list2 .= "<th align=center>" . number_format($grandtotalkomplus, 0) . "</th>";
 
 
@@ -2207,6 +2139,10 @@ switch ($proses) {
 			}
 
 			$owlPDO->commit();
+			#ringkasan hasil untuk operator (ditampilkan JS setelah Proses); tanpa kata gagal/error/warning
+			echo ringkasanProsesGajiPPP(array('judul' => 'Harian', 'kodeorg' => $param['kodeorg'], 'periode' => $param['periodegaji'], 'readyData' => $readyData,
+				'comp' => $comp, 'nakomp' => $nakomp, 'namakar' => $namakar, 'subbagian' => $subbagianKry, 'karyawan' => array_keys($id),
+				'negatif' => $negatif, 'hke' => false, 'gajikecil' => isset($karyawan_gajikecil) ? count($karyawan_gajikecil) : 0));
 		} catch (PDOException $e) {
 			$owlPDO->rollback();
 			echo "Error, " . addslashes($e->getMessage());

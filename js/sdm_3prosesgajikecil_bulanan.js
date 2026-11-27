@@ -94,7 +94,13 @@ function post() {
                     alertify.alert(con.responseText);
                 } else {
                     //=== Success Response
-                    alertify.alert('Proses Gaji Success........');
+                    //=== Ringkasan hasil dari slave PPP (diawali tag HTML); slave lain tetap memakai pesan lama
+                    var hasilProses = (con.responseText || '').replace(/^\s+|\s+$/g, '');
+                    if (hasilProses.length > 0 && hasilProses.charAt(0) === '<') {
+                        alertify.popup2('Hasil Proses Gaji', hasilProses).set({ 'resizable': true, 'maximizable': true }).resizeTo('55%', '80%');
+                    } else {
+                        alertify.alert('Proses Gaji Success........');
+                    }
                 }
             } else {
                 busy_off();
