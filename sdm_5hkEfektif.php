@@ -48,7 +48,11 @@ echo "<style>
 	.hkeNote {margin:2px 0 8px 0}
 	.hkeTbl {width:100%;max-width:900px}
 	.hkeTbl td {padding:6px 12px;vertical-align:middle}
-	.hkeWarn {margin-top:6px;padding:6px 10px;max-width:900px;color:#b42318;background:#fdecea;border:1px solid #f1b8b3;border-radius:4px}
+	.hkeIngat {margin:0 0 8px 0;padding:8px 12px;max-width:900px;border-radius:4px;border:1px solid #fde68a;background:#fffbeb;color:#92400e;line-height:1.5}
+		.hkeIngat.ok {border-color:#a7f3d0;background:#ecfdf5;color:#065f46}
+		.hkeIngat.warn {border-color:#f1b8b3;background:#fdecea;color:#b42318}
+		.hkeIngat div {margin:2px 0}
+		.hkeWarn {margin-top:6px;padding:6px 10px;max-width:900px;color:#b42318;background:#fdecea;border:1px solid #f1b8b3;border-radius:4px}
 	.dsrNote {margin:2px 0 8px 0;max-width:900px}
 	.dsrForm td {padding:3px 6px;vertical-align:middle}
 	.dsrKomp td {padding:6px 12px;vertical-align:middle}
@@ -62,6 +66,7 @@ echo "<table class=hkeForm style='margin-bottom:8px'><tr>
 	<td><select id=hkePT class=select2 style='width:300px' onchange=\"hkeMuat();\">" . $optPT . "</select></td>
 	<td style='padding-left:12px'><span id=hkeStatus class='hkeBadge off'>-</span></td>
 </tr></table>";
+echo "<div id=hkeIngat class=hkeIngat style='display:none'></div>";
 
 #------------------------- HKE PER PERIODE -------------------------
 $frm[0] = "<div class=hkeNote>HKE (Hari Kerja Efektif) menjadi pembagi upah harian karyawan sistem gaji <b>Bulanan</b> pada PT yang dipilih, menggantikan angka 25. Karyawan Harian tidak berubah.

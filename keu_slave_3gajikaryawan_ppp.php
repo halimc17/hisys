@@ -501,7 +501,7 @@ else {
           <div style='align-self:center;font-size:18px'>&rarr;</div>
           <div style='flex:1 1 190px;background:#fff;border:1px solid #8aa;border-radius:6px;padding:6px 8px'><b>2. Kurangi yang sudah teralokasi</b><br>Gaji yang sudah masuk lewat BKM/prestasi/kehadiran dikurangi. Kalau habis, karyawan tidak tampil.</div>
           <div style='align-self:center;font-size:18px'>&rarr;</div>
-          <div style='flex:1 1 230px;background:#fff;border:1px solid #8aa;border-radius:6px;padding:6px 8px'><b>3. Tentukan akun debet</b><br>Urutan: <b>absensi</b> (gaji pokok, premi/lembur) &rarr; <b>No Akun</b> Pendapatan Lain &rarr; <b>Setup</b> jabatan/komponen &rarr; <b>Setup Bawaan</b>.</div>
+          <div style='flex:1 1 230px;background:#fff;border:1px solid #8aa;border-radius:6px;padding:6px 8px'><b>3. Tentukan akun debet</b><br>Urutan: <b>No Akun</b> Pendapatan Lain &rarr; <b>Setup</b> jabatan/komponen &rarr; <b>absensi</b> (gaji pokok, premi/lembur) &rarr; <b>Setup Bawaan</b>.</div>
           <div style='align-self:center;font-size:18px'>&rarr;</div>
           <div style='flex:1 1 210px;background:#fff;border:1px solid #8aa;border-radius:6px;padding:6px 8px'><b>4. Buat jurnal</b><br>Satu jurnal per baris. <b>Debet</b> akun biaya, <b>Kredit</b> Gaji/Upah YMH Dibayar (BPJS: hutang BPJS).</div>
         </div>
@@ -735,32 +735,46 @@ function tujuanInfoBarisPPP(&$ctx, $karyawanid, $komponen, $jumlah, $tipeOrg)
     return array('jurnal' => 'SIPL1', 'akun' => array(array('akun' => $akunPj('SIPL1'), 'rp' => $jumlah, 'ket' => '')), 'sumber' => 'Bagian Sipil (parameter jurnal SIPL1)');
   }
 
-  #4. biaya umum (prosesGajiKebun): gaji pokok/premi/lembur (1, 14, 16, 32, 33) dibagi menurut akun di absensi/lembur dan Pekerjaan Traksi;
-  # akun absensi kosong = akun default parameter jurnal. Tanpa data itu: No Akun Pendapatan Lain / Setup / default.
+  #4. biaya umum (prosesGajiKebun): gaji pokok/premi/lembur (1, 14, 16, 32, 33) dibagi menurut alokasi di absensi/lembur dan Pekerjaan Traksi;
+  # akun: No Akun Pendapatan Lain / Setup menang atas akun absensi; tanpa Setup = akun absensi (kosong = default parameter jurnal).
   $alok = alokasiKomponenPPP($ctx['bagian'], $ctx['orgpt'], $ctx['kodeorg'], $ctx['periode'], $karyawanid, $komponen, true);
   $group = $alok['jurnalid'];
   $akunDefault = $akunPj($group);
   if (in_array($komponen, array(1, 14, 16, 32, 33)) && ($group == 'KBNB0' || $group == 'KBNB1')) {
-    $data = array();
-    $akunData = function ($noakun) use ($akunDefault) {
+    $akunSetup = $alok['akundebet'];
+    $akunData = function ($noakun) use ($akunDefault, $akunSetup) {
+      if ($akunSetup != '') {
+        return $akunSetup;
+      }
       if ($noakun == '') {
         return $akunDefault;
       }
       return (strlen($noakun) > 7) ? substr($noakun, 0, 7) : $noakun; #kolom noakun bisa berisi kode kegiatan
     };
+    #digabung per akun + alokasi seperti $data[akun][alokasi] di proses, supaya pembulatan rupiah sama
+    $gabung = array();
+    $tambah = function ($noakun, $alokasi, $nilai) use (&$gabung, $akunData, $akunSetup, $akunDefault) {
+      $kunciAkun = ($akunSetup != '') ? $akunSetup : ($noakun == '' ? $akunDefault : $noakun);
+      $k = $kunciAkun . '|' . $alokasi;
+      if (!isset($gabung[$k])) {
+        $gabung[$k] = array($akunData($noakun), 0, '');
+      }
+      $gabung[$k][1] += $nilai;
+    };
     foreach ((isset($ctx['absen'][$karyawanid]) ? $ctx['absen'][$karyawanid] : array()) as $r) {
       $nilai = ($group == 'KBNB0') ? $r['umr'] : $r['pre'];
       if ($nilai > 0) {
-        $data[] = array($akunData($r['noakun']), $nilai, '');
+        $tambah($r['noakun'], $r['alokasi'], $nilai);
       }
     }
     if ($group == 'KBNB1') {
       foreach ((isset($ctx['lembur'][$karyawanid]) ? $ctx['lembur'][$karyawanid] : array()) as $r) {
         if ($r['lembur'] > 0) {
-          $data[] = array($akunData($r['noakun']), $r['lembur'], '');
+          $tambah($r['noakun'], $r['alokasi'], $r['lembur']);
         }
       }
     }
+    $data = array_values($gabung);
     $adaVhc = false;
     if ($group == 'KBNB0' || $komponen == 32) {
       $akunVhc = $akunPj($group == 'KBNB0' ? 'VHCG0' : 'VHCG1');
@@ -798,7 +812,8 @@ function tujuanInfoBarisPPP(&$ctx, $karyawanid, $komponen, $jumlah, $tipeOrg)
         $perAkun[$k]['rp'] += $rp;
       }
       $perAkun[$k]['rp'] += $jumlah - $sudah; #sisa pembulatan ke akun terakhir
-      return array('jurnal' => $group . ($adaVhc ? ' + kendaraan' : ''), 'akun' => array_values($perAkun), 'sumber' => 'Akun di absensi' . ($group == 'KBNB1' ? '/lembur' : '') . ($adaVhc ? ' dan Pekerjaan Traksi' : ''));
+      $sumber = ($akunSetup != '') ? $alok['sumber'] . ' (dibagi alokasi absensi' . ($group == 'KBNB1' ? '/lembur' : '') . ')' : 'Akun di absensi' . ($group == 'KBNB1' ? '/lembur' : '');
+      return array('jurnal' => $group . ($adaVhc ? ' + kendaraan' : ''), 'akun' => array_values($perAkun), 'sumber' => $sumber . ($adaVhc ? ' dan Pekerjaan Traksi' : ''));
     }
   }
   $akun = ($alok['akundebet'] != '') ? $alok['akundebet'] : $akunDefault;

@@ -67,6 +67,29 @@ function hkeInfo() {
         document.getElementById('hkeStatus').className = 'hkeBadge ' + (p.length > 4 ? p[4] : 'off');
         setSel2('hkeAktif', (p.length > 2 && p[2] == '1') ? '1' : '0');
         setSel2('hkeMulai', p.length > 3 ? p[3] : '');
+        hkeIsiIngat(p);
+    });
+}
+
+// pengingat HKE periode berikutnya (harus diinput sebelum tanggal 1); p[5] = tingkat (ok, warn, info), p[6] = isi
+function hkeIsiIngat(p) {
+    var kotak = document.getElementById('hkeIngat');
+    if (!kotak) {
+        return;
+    }
+    if (p.length > 6 && p[6] != '') {
+        kotak.className = 'hkeIngat ' + p[5];
+        kotak.innerHTML = p[6];
+        kotak.style.display = 'block';
+    } else {
+        kotak.style.display = 'none';
+    }
+}
+
+// segarkan hanya pengingat (dipakai setelah HKE disimpan atau dihapus; isian pengaktifan tidak disentuh)
+function hkeIngatMuat() {
+    kirimHke('method=info&kodept=' + encodeURIComponent(hkePT()), function (t) {
+        hkeIsiIngat(t.split('|||'));
     });
 }
 
@@ -191,7 +214,7 @@ function hkeSimpan() {
     }
     kirimHke('method=hkeSimpan&kodept=' + encodeURIComponent(hkePT()) + '&periode=' + encodeURIComponent(p) + '&hariminggu=' + encodeURIComponent(mgg) + '&harilibur=' + encodeURIComponent(lib) +
         '&catatan=' + encodeURIComponent(document.getElementById('hkeCatatan').value), function () {
-        hkeLoad();
+        hkeLoad(hkeIngatMuat);
         hkeBatal();
         alert('Done.');
     });
@@ -202,7 +225,7 @@ function hkeHapus(periode) {
         return;
     }
     kirimHke('method=hkeHapus&kodept=' + encodeURIComponent(hkePT()) + '&periode=' + encodeURIComponent(periode), function () {
-        hkeLoad();
+        hkeLoad(hkeIngatMuat);
         hkeBatal();
     });
 }

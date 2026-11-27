@@ -134,12 +134,17 @@ switch ($proses) {
         $optkodvhc = makeOption($dbname, 'vhc_5master', 'kodevhc,kelompokvhc');
         $kelvhc = $optkodvhc[$param['kodevhc']];
         $n = '';
-        $sjnskrj = "select * from " . $dbname . ".vhc_kegiatan where tipe ='traksi' and LEFT(kodekegiatan, 3) != '111' and (kelompokvhc='" . $kelvhc . "' or kelompokvhc='GLOBAL') and (jenisvhc='" . $param['jenisvhc'] . "' or jenisvhc='GLOBAL') and status='1' order by noakun asc";
+        $sjnskrj = "select * from " . $dbname . ".vhc_kegiatan where tipe ='traksi' and LEFT(kodekegiatan, 3) != '111' and (kelompokvhc='" . $kelvhc . "' or kelompokvhc='GLOBAL') and " . sqlJenisKegiatanTraksi($param['kodevhc'], $param['jenisvhc']) . " and status='1' order by noakun asc";
         $optJnsKerja = "<option value=''>" . $_SESSION['lang']['pilihdata'] . "</option>";
         $res = $owlPDO->query($sjnskrj) or die(print " Gagal: " . PDOException::getMessage());
         $res->setFetchMode(PDO::FETCH_ASSOC);
         $d = '';
-        $optJnsKerja .= susunOptKegiatanTraksi($res->fetchAll());
+        $rowsKeg = $res->fetchAll();
+        $optJnsKerja .= susunOptKegiatanTraksi($rowsKeg);
+        #PPP genset: kegiatan hanya yang khusus jenis kendaraan genset; bila hanya satu, langsung menjadi satu-satunya pilihan (tanpa "Pilih Data")
+        if (kendaraanGensetPPP($param['kodevhc']) && count($rowsKeg) == 1) {
+            $optJnsKerja = susunOptKegiatanTraksi($rowsKeg);
+        }
 
         $sql = selectQuery($dbname, 'vhc_rundt', 'jenispekerjaan', "notransaksi='" . $param['no_trans'] . "'");
         $res = fetchData($sql)[0];
@@ -1563,10 +1568,14 @@ switch ($proses) {
                 $n = '';
                 #== Ambil kegiatan traksi
                 $optJnsKerja = "<option value=''>" . $_SESSION['lang']['pilihdata'] . "</option>";
-                $sjnskrj = selectQuery($dbname, 'vhc_kegiatan', '*', "tipe='traksi' and LEFT(kodekegiatan, 3) != '111' and (kelompokvhc='" . $kelvhc . "' or kelompokvhc='GLOBAL') and (jenisvhc='" . $param['jenisvhc'] . "' or jenisvhc='GLOBAL') AND status='1'", "noakun");
+                $sjnskrj = selectQuery($dbname, 'vhc_kegiatan', '*', "tipe='traksi' and LEFT(kodekegiatan, 3) != '111' and (kelompokvhc='" . $kelvhc . "' or kelompokvhc='GLOBAL') and " . sqlJenisKegiatanTraksi($param['kodevhc'], $param['jenisvhc']) . " AND status='1'", "noakun");
                 $rjnskrj = fetchData($sjnskrj);
                 $d = '';
                 $optJnsKerja .= susunOptKegiatanTraksi($rjnskrj);
+                #PPP genset: kegiatan hanya yang khusus jenis kendaraan genset; bila hanya satu, langsung menjadi satu-satunya pilihan
+                if (kendaraanGensetPPP($param['kodevhc']) && count($rjnskrj) == 1) {
+                    $optJnsKerja = susunOptKegiatanTraksi($rjnskrj);
+                }
 
                 // #== Ambil Operator
                 // $optKary="<option value=''>".$_SESSION['lang']['pilihdata']."</option>";
@@ -1640,12 +1649,17 @@ switch ($proses) {
 
             $sjnskrj = "select * from " . $dbname . ".vhc_kegiatan where
                         tipe ='traksi' and LEFT(kodekegiatan, 3) != '111' and (kelompokvhc='" . $kelvhc . "' or kelompokvhc='GLOBAL') 
-                        and (jenisvhc='" . $param['jenisvhc'] . "' or jenisvhc='GLOBAL') AND status='1' order by noakun asc";
+                        and " . sqlJenisKegiatanTraksi($param['kodevhc'], $param['jenisvhc']) . " AND status='1' order by noakun asc";
             $optJnsKerja = "<option value=''>" . $_SESSION['lang']['pilihdata'] . "</option>";
             $res = $owlPDO->query($sjnskrj) or die(print " Gagal: " . PDOException::getMessage());
             $res->setFetchMode(PDO::FETCH_ASSOC);
             $d = '';
-            $optJnsKerja .= susunOptKegiatanTraksi($res->fetchAll());
+            $rowsKeg = $res->fetchAll();
+            $optJnsKerja .= susunOptKegiatanTraksi($rowsKeg);
+            #PPP genset: kegiatan hanya yang khusus jenis kendaraan genset; bila hanya satu, langsung menjadi satu-satunya pilihan
+            if (kendaraanGensetPPP($param['kodevhc']) && count($rowsKeg) == 1) {
+                $optJnsKerja = susunOptKegiatanTraksi($rowsKeg);
+            }
 
 
             $sKm = "select distinct kmhmakhir from " . $dbname . ".vhc_kmhmakhir_vw where kodevhc='" . $param['kodevhc'] . "'";
@@ -1748,6 +1762,17 @@ switch ($proses) {
         if ($param['kmhm_awal'] >= $param['kmhm_akhir']) {
             echo "Warningsystem:" . $_SESSION['lang']['vhc_kmhm_awal'] . " harus lebih kecil dari " . $_SESSION['lang']['vhc_kmhm_akhir'] . "";
             exit();
+        }
+
+        #PPP genset: jam awal dan jam akhir berupa jam dinding, tidak boleh bertumpuk dengan detail lain di transaksi yang sama
+        if (gensetPPP($rCekHt[0]['kodeorg'], $rCekHt[0]['jenisvhc'])) {
+            $errJam = cekJamGensetPPP($dbname, $param['no_trans'], $param['kmhm_awal'], $param['kmhm_akhir'], '');
+            if ($errJam != '') {
+                exit($errJam);
+            }
+            if (!kegiatanGensetPPPSah($dbname, $param['jns_kerja'], $rCekHt[0]['jenisvhc'])) {
+                exit("Warningsystem: Kegiatan untuk genset harus kegiatan khusus genset (Pemakaian Genset).");
+            }
         }
 
         if ($param['blok'] != '') {
@@ -1901,6 +1926,17 @@ switch ($proses) {
         if ($param['kmhm_awal'] >= $param['kmhm_akhir']) {
             echo "Warningsystem: " . $_SESSION['lang']['vhc_kmhm_awal'] . " harus lebih kecil dari " . $_SESSION['lang']['vhc_kmhm_akhir'] . "";
             exit();
+        }
+
+        #PPP genset: jam awal dan jam akhir berupa jam dinding, tidak boleh bertumpuk dengan detail lain di transaksi yang sama
+        if (isset($rKode['kodeorg']) && gensetPPP($rKode['kodeorg'], $rKode['jenisvhc'])) {
+            $errJam = cekJamGensetPPP($dbname, $param['no_trans'], $param['kmhm_awal'], $param['kmhm_akhir'], $where);
+            if ($errJam != '') {
+                exit($errJam);
+            }
+            if (!kegiatanGensetPPPSah($dbname, $param['jns_kerja'], $rKode['jenisvhc'])) {
+                exit("Warningsystem: Kegiatan untuk genset harus kegiatan khusus genset (Pemakaian Genset).");
+            }
         }
 
         if ($param['jns_kerja'] == '') {
@@ -2486,6 +2522,10 @@ function updateKmHm($kodevhc)
 {
     global $dbname;
     global $owlPDO;
+    #PPP genset mencatat jam dinding, bukan HM mesin: pelacak HM (dipakai servis) tidak diubah
+    if (kendaraanGensetPPP($kodevhc)) {
+        return;
+    }
     // Get KM/HM Akhir
     $qKm = selectQuery($dbname, 'vhc_kmhmakhir_vw', '*', "kodevhc='" . $kodevhc . "'");
     $resKm = fetchData($qKm);
@@ -3266,6 +3306,58 @@ function gensetPPP($kodeorg, $jenisvhc)
     return isset($daftar[$jenisvhc]);
 }
 
+#PPP genset: jam awal dan jam akhir = jam dinding bulat (awal 0-23, akhir 1-24), total jam = akhir - awal.
+#Satu genset tidak bisa jalan dua kali pada jam yang sama, jadi rentang jam tidak boleh bertumpuk dengan detail lain di transaksi yang sama.
+#$kunciBaris = kondisi baris yang sedang diedit (tanpa kmhmawal) supaya tidak dibandingkan dengan dirinya sendiri; kosong saat input baru.
+function cekJamGensetPPP($dbname, $notransaksi, $awal, $akhir, $kunciBaris)
+{
+    if (!preg_match('/^[0-9]{1,2}$/', (string)$awal) || !preg_match('/^[0-9]{1,2}$/', (string)$akhir)) {
+        return "Warningsystem: Jam awal dan jam akhir genset diisi jam bulat 0 sampai 24 (contoh: awal 8, akhir 10 = 2 jam).";
+    }
+    $awal = (int)$awal;
+    $akhir = (int)$akhir;
+    if ($awal > 23 || $akhir > 24 || $akhir <= $awal) {
+        return "Warningsystem: Jam awal 0 sampai 23, jam akhir 1 sampai 24, dan jam akhir harus lebih besar dari jam awal.";
+    }
+    $notr = addslashes($notransaksi);
+    $sql = "select count(*) as jml from " . $dbname . ".vhc_rundt where notransaksi='" . $notr . "' and kmhmawal < " . $akhir . " and kmhmakhir > " . $awal;
+    if ($kunciBaris != '') {
+        $sql .= " and not (notransaksi='" . $notr . "' " . $kunciBaris . " and kmhmawal='" . $awal . "')";
+    }
+    $r = fetchData($sql);
+    if (isset($r[0]['jml']) && $r[0]['jml'] > 0) {
+        return "Warningsystem: Jam " . $awal . " sampai " . $akhir . " bertumpuk dengan detail lain di transaksi ini. Genset tidak bisa dipakai dua kali pada jam yang sama.";
+    }
+    return '';
+}
+
+#kendaraan (bukan transaksi) termasuk genset PPP: dari kode unit dan jenis di master kendaraan
+function kendaraanGensetPPP($kodevhc)
+{
+    global $dbname;
+    if ($kodevhc == '') {
+        return false;
+    }
+    $r = fetchData("select kodeorg,jenisvhc from " . $dbname . ".vhc_5master where kodevhc='" . addslashes($kodevhc) . "'");
+    return isset($r[0]) && gensetPPP($r[0]['kodeorg'], $r[0]['jenisvhc']);
+}
+
+#kegiatan traksi untuk kendaraan genset PPP = kegiatan yang jenis kendaraannya persis jenis genset (bukan GLOBAL); selain genset tetap jenis itu atau GLOBAL
+function sqlJenisKegiatanTraksi($kodevhc, $jenisvhc)
+{
+    $j = addslashes($jenisvhc);
+    if (kendaraanGensetPPP($kodevhc)) {
+        return "jenisvhc='" . $j . "'";
+    }
+    return "(jenisvhc='" . $j . "' or jenisvhc='GLOBAL')";
+}
+
+function kegiatanGensetPPPSah($dbname, $kodekegiatan, $jenisvhc)
+{
+    $r = fetchData("select count(*) as jml from " . $dbname . ".vhc_kegiatan where kodekegiatan='" . addslashes($kodekegiatan) . "' and tipe='traksi' and jenisvhc='" . addslashes($jenisvhc) . "' and status='1'");
+    return isset($r[0]['jml']) && $r[0]['jml'] > 0;
+}
+
 function optOperatorGensetPPP($dbname, $kodeorg, $tanggal)
 {
     $tanggal = tanggalDbWakarPPP($tanggal);
@@ -3273,8 +3365,9 @@ function optOperatorGensetPPP($dbname, $kodeorg, $tanggal)
         $tanggal = date('Y-m-d');
     }
     $opt = "<option value=''>" . $_SESSION['lang']['pilihdata'] . "</option>";
-    foreach (fetchData("select karyawanid,namakaryawan,nik from " . $dbname . ".datakaryawan where lokasitugas='" . addslashes($kodeorg) . "' and (tanggalkeluar = '0000-00-00' or tanggalkeluar is null or tanggalkeluar>= '" . $tanggal . "') order by namakaryawan") as $bar) {
-        $opt .= "<option value=" . $bar['karyawanid'] . ">" . htmlspecialchars($bar['namakaryawan']) . "&nbsp; [Operator] &nbsp;[" . htmlspecialchars($bar['nik']) . "]</option>";
+    #operator genset = semua karyawan aktif di PT unit ini (induk dari unit, mis. seluruh unit PPP), bukan hanya unit kendaraannya; unit bertipe HOLDING (mis. PPHO) dan karyawan bertipe STAFF tidak ikut
+    foreach (fetchData("select karyawanid,namakaryawan,nik,lokasitugas from " . $dbname . ".datakaryawan where lokasitugas in (select kodeorganisasi from " . $dbname . ".organisasi where induk='" . addslashes(getindukPT($kodeorg)) . "' and tipe<>'HOLDING') and tipekaryawan not in (select id from " . $dbname . ".sdm_5tipekaryawan where tipe='STAFF') and (tanggalkeluar = '0000-00-00' or tanggalkeluar is null or tanggalkeluar>= '" . $tanggal . "') order by namakaryawan") as $bar) {
+        $opt .= "<option value=" . $bar['karyawanid'] . ">" . htmlspecialchars($bar['namakaryawan']) . "&nbsp; [Operator] &nbsp;[" . htmlspecialchars($bar['nik']) . "] &nbsp;[" . htmlspecialchars($bar['lokasitugas']) . "]</option>";
     }
     return $opt;
 }

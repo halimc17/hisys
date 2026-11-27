@@ -5695,6 +5695,9 @@ function prosesGajiKebun()
 	#PPP: alokasi dari absensi/lembur SDM didahulukan, tetapi hanya untuk komponen gaji pokok (1, 14) dan premi/lembur (16, 32, 33);
 	#komponen lain yang dipindahkan lewat Setup ke jenis Gaji/Premi tidak ikut dipecah absensi
 	$pakaiAbsensiPPP = in_array((int)$param['komponen'], array(1, 14, 16, 32, 33));
+	#PPP: akun dari Setup Alokasi Komponen Gaji / No Akun Pendapatan Lain menang atas akun di absensi/lembur;
+	#pembagian per alokasi (blok/subbagian) dan baris Pekerjaan Traksi tetap mengikuti absensi
+	$akunSetupPPP = $alokasiPPP['akundebet'];
 
 	$ttldata = 0;
 	$data = array();
@@ -5703,7 +5706,9 @@ function prosesGajiKebun()
 	$res = $pakaiAbsensiPPP ? fetchData($str) : array();
 	foreach ($res as $bar) {
 		#kolom noakun isinya bisa kode kegiatan!
-		if ($bar['noakun'] == '') {
+		if ($akunSetupPPP != '') {
+			$bar['noakun'] = $akunSetupPPP;
+		} elseif ($bar['noakun'] == '') {
 			$bar['noakun'] = $akundebet;
 		}
 		if ($group == 'KBNB0' && $pakaiAbsensiPPP) {
@@ -5726,7 +5731,9 @@ function prosesGajiKebun()
 	$res = $pakaiAbsensiPPP ? fetchData($str) : array();
 	foreach ($res as $bar) {
 		#kolom noakun isinya bisa kode kegiatan!
-		if ($bar['noakun'] == '') {
+		if ($akunSetupPPP != '') {
+			$bar['noakun'] = $akunSetupPPP;
+		} elseif ($bar['noakun'] == '') {
 			$bar['noakun'] = $akundebet;
 		}
 		if ($group == 'KBNB1' && $pakaiAbsensiPPP) {

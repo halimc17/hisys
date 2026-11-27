@@ -120,6 +120,53 @@ function hkePengaturanBaru($kodept)
 	return $r ? array('aktif' => ((int)$r['aktif'] === 1), 'mulai' => (string)$r['periodemulai']) : null;
 }
 
+#HKE satu periode (YYYY-MM) PT ini; null bila belum diinput
+function hkeNilaiPeriode($kodept, $periode)
+{
+	global $dbname, $owlPDO;
+	$stm = $owlPDO->prepare("select hke from " . $dbname . ".sdm_hke_periode where kodept=? and periode=?");
+	$stm->execute(array($kodept, $periode));
+	$v = $stm->fetchColumn();
+	return ($v === false) ? null : $v;
+}
+
+function namaPeriodeHke($periode)
+{
+	$bln = array('', 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember');
+	return $bln[(int)substr($periode, 5, 2)] . ' ' . substr($periode, 0, 4);
+}
+
+#pengingat: HKE periode berikutnya harus diinput sebelum tanggal 1 periode itu; kembalinya array(tingkat, isi HTML)
+function hkePengingat($kodept, $aktif, $mulai)
+{
+	$sekarang = date('Y-m');
+	$depan = date('Y-m', strtotime(date('Y-m-01') . ' +1 month'));
+	$dipakai = $aktif && in_array($kodept, hkePTDaftar(), true);
+	$tingkat = 'info';
+	$isi = array();
+	$hkeSekarang = hkeNilaiPeriode($kodept, $sekarang);
+	if ($dipakai && $mulai <= $sekarang && $hkeSekarang === null) {
+		$tingkat = 'warn';
+		$isi[] = "HKE periode berjalan <b>" . namaPeriodeHke($sekarang) . "</b> belum diinput. Transaksi karyawan Bulanan pada periode ini ditolak sampai HKE diinput.";
+	}
+	$hkeDepan = hkeNilaiPeriode($kodept, $depan);
+	if ($hkeDepan === null) {
+		$hari = (int)floor((strtotime($depan . '-01') - strtotime(date('Y-m-d'))) / 86400);
+		$sisa = ($hari <= 1) ? 'besok' : ($hari . ' hari lagi');
+		if ($dipakai && $mulai <= $depan) {
+			$tingkat = 'warn';
+		}
+		$isi[] = "HKE periode berikutnya <b>" . namaPeriodeHke($depan) . "</b> belum diinput. HKE harus diinput <b>sebelum tanggal 1 " . namaPeriodeHke($depan) . "</b> (" . $sisa . ").";
+	} else {
+		if ($tingkat == 'info') {
+			$tingkat = 'ok';
+		}
+		$isi[] = "HKE periode berikutnya <b>" . namaPeriodeHke($depan) . "</b> sudah diinput: <b>" . (int)$hkeDepan . "</b> hari.";
+	}
+	$isi[] = "Setiap bulan, HKE periode berikutnya harus sudah diinput sebelum tanggal 1 periode tersebut. Bila pengaktifan sudah berlaku pada periode itu dan HKE belum diinput, transaksi karyawan Bulanan (absensi, BKM, Traksi, dan lainnya) ditolak.";
+	return array($tingkat, '<div>' . implode('</div><div>', $isi) . '</div>');
+}
+
 function namaKomponenBasic()
 {
 	global $dbname, $owlPDO;
@@ -159,7 +206,8 @@ switch($method)
         foreach (getKomponenDasarUpahPPP($kodept, date('Y-m')) as $idk) {
             $nm[] = htmlspecialchars(isset($nama[(int)$idk]) ? $nama[(int)$idk] : ('Komponen ' . $idk));
         }
-        echo $status . '|||' . implode(' + ', $nm) . '|||' . $aktif . '|||' . $mulai . '|||' . $kode;
+        $ingat = hkePengingat($kodept, $aktif, $mulai);
+        echo $status . '|||' . implode(' + ', $nm) . '|||' . $aktif . '|||' . $mulai . '|||' . $kode . '|||' . $ingat[0] . '|||' . $ingat[1];
         break;
 
     #================= komponen dasar upah yang berlaku pada satu periode (ditampilkan di konfirmasi pengaktifan) =================

@@ -352,8 +352,11 @@ case 'getdetail':
                     $karyawancuti[$bar['karyawanid']] = $bar['karyawanid'];
                 }
                 
+                #PPP: cuti bersama tidak memotong hak cuti (sdm_cutiht dan sdm_cutidt tidak disentuh); PT lain tetap seperti semula
+                $tanpaPotongHak = (getindukPT($kodeorg) == 'PPP');
                 foreach ($karyawancuti as $key => $value) {
 
+                    if (!$tanpaPotongHak) {
                     $cekCutiht = getCountRows($dbname, "sdm_cutiht", " periodecuti ='" . $periodecuti . "' AND karyawanid = '".$value."'");
                     if ($cekCutiht == 0) {
                         $str1 = "insert into ".$dbname.".sdm_cutiht (kodeorg,karyawanid,periodecuti,sisa) values ('".$kodeorg."','".$value."','".$periodecuti."','-1')";
@@ -367,6 +370,7 @@ case 'getdetail':
                     $str="insert into ".$dbname.".sdm_cutidt(karyawanid, kodeorg, periodecuti,daritanggal,sampaitanggal,jumlahcuti,keterangan,statusdipotong)
                         values('".$value."','".$kodeorg."','".$periodecuti."','".$tanggalcuti."','".$tanggalcuti."','1','CUTIBERSAMA','CUTIBERSAMA')";
                         $owlPDO->exec($str);
+                    }
 
                         $str = "select * from " . $dbname . ".datakaryawan where karyawanid='" . $value . "'";
                         $res = $owlPDO->query($str) or die(print " Gagal: " . PDOException::getMessage());

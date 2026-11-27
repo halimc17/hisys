@@ -208,7 +208,7 @@ function sembunyikanIsianGenset(id, sembunyi) {
 }
 
 var modeGensetAktif = false;
-var posisiAsliKetGenset = null;
+var posisiAsliGenset = {};
 
 // tampilkan/sembunyikan sel; tampilan semula (termasuk yang memang disembunyikan halaman) disimpan lalu dikembalikan
 function aturTampilSelGenset(sel, sembunyi) {
@@ -221,27 +221,40 @@ function aturTampilSelGenset(sel, sembunyi) {
   sel.style.display = sembunyi ? "none" : sel.getAttribute("data-disp0");
 }
 
-// Keterangan pindah ke baris Lokasi (sebelah kanan) dan dipendekkan, supaya tidak ada ruang kosong di bawah Operator
-function susunKeteranganGenset(genset) {
-  var ta = document.getElementById("ket");
-  var td = ta ? ta.closest("td") : null;
-  var baris = document.getElementById("lokasi_kerja") ? document.getElementById("lokasi_kerja").closest("tr") : null;
+// Isian (label, titik dua, isian) dipindah ke baris lain saat mode genset supaya tidak ada ruang kosong dan kolom kanan rapi;
+// posisi asli disimpan per isian lalu dikembalikan saat keluar dari mode genset. ringkas = textarea dibuat satu baris.
+function pindahIsianGenset(idIsian, idPatok, genset, ringkas, idSetelah) {
+  var el = document.getElementById(idIsian);
+  var td = el ? el.closest("td") : null;
+  var patok = document.getElementById(idPatok);
+  var baris = patok ? patok.closest("tr") : null;
   var titik = td ? td.previousElementSibling : null;
   var label = titik ? titik.previousElementSibling : null;
   if (!td || !titik || !label || !baris) {
     return;
   }
   if (genset) {
-    if (!posisiAsliKetGenset) {
-      posisiAsliKetGenset = {
+    if (!posisiAsliGenset[idIsian]) {
+      posisiAsliGenset[idIsian] = {
         parent: td.parentNode,
         next: td.nextSibling,
         rs: [label.rowSpan, titik.rowSpan, td.rowSpan],
-        tinggi: ta.style.height,
-        baris: ta.rows
+        tinggi: el.style.height,
+        baris: el.rows,
+        va: label.getAttribute("valign"),
+        vat: titik.getAttribute("valign")
       };
     }
-    if (td.parentNode !== baris) {
+    var ancor = idSetelah && document.getElementById(idSetelah) ? document.getElementById(idSetelah).closest("td") : null;
+    if (ancor && ancor.parentNode === baris) {
+      // diletakkan tepat setelah sel ancor (sel yang disembunyikan genset) supaya tetap di kolom kanan, tidak tergeser sel kosong di ujung baris
+      if (ancor.nextElementSibling !== label) {
+        var sisip = ancor.nextSibling;
+        baris.insertBefore(label, sisip);
+        baris.insertBefore(titik, sisip);
+        baris.insertBefore(td, sisip);
+      }
+    } else if (td.parentNode !== baris) {
       baris.appendChild(label);
       baris.appendChild(titik);
       baris.appendChild(td);
@@ -249,20 +262,47 @@ function susunKeteranganGenset(genset) {
     label.rowSpan = 1;
     titik.rowSpan = 1;
     td.rowSpan = 1;
-    ta.style.height = "30px";
-    ta.rows = 1;
-  } else if (posisiAsliKetGenset) {
-    var a = posisiAsliKetGenset;
+    if (ringkas) {
+      el.style.setProperty("height", "26px", "important");
+      el.style.setProperty("min-height", "0", "important");
+      el.style.resize = "none";
+      el.rows = 1;
+      label.setAttribute("valign", "middle");
+      titik.setAttribute("valign", "middle");
+    }
+  } else if (posisiAsliGenset[idIsian]) {
+    var a = posisiAsliGenset[idIsian];
     a.parent.insertBefore(label, a.next);
     a.parent.insertBefore(titik, a.next);
     a.parent.insertBefore(td, a.next);
     label.rowSpan = a.rs[0];
     titik.rowSpan = a.rs[1];
     td.rowSpan = a.rs[2];
-    ta.style.height = a.tinggi;
-    ta.rows = a.baris;
-    posisiAsliKetGenset = null;
+    if (ringkas) {
+      el.style.removeProperty("min-height");
+      el.style.resize = "";
+      if (a.va === null) {
+        label.removeAttribute("valign");
+      } else {
+        label.setAttribute("valign", a.va);
+      }
+      if (a.vat === null) {
+        titik.removeAttribute("valign");
+      } else {
+        titik.setAttribute("valign", a.vat);
+      }
+      el.style.height = a.tinggi;
+      el.rows = a.baris;
+    }
+    delete posisiAsliGenset[idIsian];
   }
+}
+
+// Susunan genset: kolom kiri = Jenis Pekerjaan, Lokasi, Blok, HM/Jam Awal, HM/Jam Akhir, Satuan, Jumlah;
+// kolom kanan = Operator, Upah, Premi Operator (pindah ke baris Blok), Keterangan (pindah ke baris HM Awal).
+function susunKeteranganGenset(genset) {
+  pindahIsianGenset("prmiOprtTambahan", "blok", genset, false, "prmiOprt");
+  pindahIsianGenset("ket", "kmhm_awal", genset, true);
 }
 
 // kolom Data Tersimpan yang tidak dipakai genset (rit, prestasi, upah, premi, denda, helper) disembunyikan; dipanggil lagi setiap data dimuat.
@@ -292,8 +332,8 @@ function aturKolomDetailGenset() {
   var judul = tabel.tHead.rows[0].cells;
   if (judul.length >= 30) {
     terap(judul, kolomJudul);
-    ubahTeksGenset(judul[8], "HM/Jam Awal", genset);
-    ubahTeksGenset(judul[9], "HM/Jam Akhir", genset);
+    ubahTeksGenset(judul[8], "Jam Awal", genset);
+    ubahTeksGenset(judul[9], "Jam Akhir", genset);
     ubahTeksGenset(judul[10], "Jumlah (Jam)", genset);
   }
   for (var i = 0; i < isi.rows.length; i++) {
@@ -319,10 +359,139 @@ function ubahTeksGenset(node, teksBaru, genset) {
   }
 }
 
+// Genset: jam awal dan jam akhir dipilih dari dropdown (08:00, 09:00, ...). Isian angka aslinya (kmhm_awal, kmhm_akhir) tetap dipakai untuk
+// simpan, hitung, dan edit, hanya disembunyikan; dropdown mengikuti nilainya (juga saat diisi lewat kode) dan menulis balik saat dipilih.
+function nilaiDropdownJam(sel, v) {
+  v = String(v === null || v === undefined ? "" : v).replace(/^\s+|\s+$/g, "");
+  if (/^[0-9]+$/.test(v)) {
+    v = String(parseInt(v, 10));
+  }
+  for (var i = 0; i < sel.options.length; i++) {
+    if (sel.options[i].value === v) {
+      sel.selectedIndex = i;
+      return;
+    }
+  }
+  sel.selectedIndex = 0;
+}
+
+function buatDropdownJam(input, dari, sampai, sumber) {
+  var sel = document.createElement("select");
+  sel.id = input.id + "_jam";
+  sel.style.width = "92px";
+  sel.style.display = "none";
+  var o = document.createElement("option");
+  o.value = "";
+  o.text = "Pilih jam";
+  sel.add(o);
+  for (var n = dari; n <= sampai; n++) {
+    o = document.createElement("option");
+    o.value = String(n);
+    o.text = (n < 10 ? "0" : "") + n + ":00";
+    sel.add(o);
+  }
+  input.parentNode.insertBefore(sel, input.nextSibling);
+  var dVal = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");
+  var dDis = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "disabled");
+  Object.defineProperty(input, "value", {
+    configurable: true,
+    get: function () {
+      return dVal.get.call(this);
+    },
+    set: function (v) {
+      dVal.set.call(this, v);
+      nilaiDropdownJam(sel, dVal.get.call(this));
+    }
+  });
+  Object.defineProperty(input, "disabled", {
+    configurable: true,
+    get: function () {
+      return dDis.get.call(this);
+    },
+    set: function (v) {
+      dDis.set.call(this, v);
+      sel.disabled = !!v;
+    }
+  });
+  sel.onchange = function () {
+    input.value = sel.value;
+    getjumlah(sumber);
+    getPremi();
+  };
+  return sel;
+}
+
+// Genset: jam awal dan jam akhir = jam dinding bulat (mis. 8 dan 10), Jumlah (Jam) dihitung otomatis dan tidak diketik
+function aturInputJamGenset(genset) {
+  var awal = document.getElementById("kmhm_awal");
+  var akhir = document.getElementById("kmhm_akhir");
+  var jumlah = document.getElementById("jlhhm");
+  if (!awal || !akhir || !jumlah) {
+    return;
+  }
+  if (genset) {
+    if (awal.getAttribute("data-maxlen0") === null) {
+      awal.setAttribute("data-maxlen0", awal.maxLength);
+      akhir.setAttribute("data-maxlen0", akhir.maxLength);
+    }
+    awal.maxLength = 2;
+    akhir.maxLength = 2;
+    awal.title = "Jam dinding 0 sampai 23, contoh 8";
+    akhir.title = "Jam dinding 1 sampai 24, contoh 10";
+    awal.placeholder = "jam 0-23";
+    akhir.placeholder = "jam 1-24";
+    jumlah.readOnly = true;
+    jumlah.title = "Dihitung otomatis: jam akhir dikurangi jam awal";
+  } else if (awal.getAttribute("data-maxlen0") !== null) {
+    awal.maxLength = parseInt(awal.getAttribute("data-maxlen0"), 10);
+    akhir.maxLength = parseInt(akhir.getAttribute("data-maxlen0"), 10);
+    awal.title = "";
+    akhir.title = "";
+    awal.placeholder = "";
+    akhir.placeholder = "";
+    jumlah.readOnly = false;
+    jumlah.title = "";
+    awal.removeAttribute("data-maxlen0");
+    akhir.removeAttribute("data-maxlen0");
+  }
+  var selAwal = document.getElementById("kmhm_awal_jam");
+  var selAkhir = document.getElementById("kmhm_akhir_jam");
+  if (genset && !selAwal) {
+    selAwal = buatDropdownJam(awal, 0, 23, "awal");
+    selAkhir = buatDropdownJam(akhir, 1, 24, "akhir");
+  }
+  if (selAwal && selAkhir) {
+    selAwal.style.display = genset ? "" : "none";
+    selAkhir.style.display = genset ? "" : "none";
+    awal.style.display = genset ? "none" : "";
+    akhir.style.display = genset ? "none" : "";
+    if (genset) {
+      nilaiDropdownJam(selAwal, awal.value);
+      nilaiDropdownJam(selAkhir, akhir.value);
+      selAwal.disabled = awal.disabled;
+      selAkhir.disabled = akhir.disabled;
+    }
+  }
+}
+
+// validasi jam genset (sama dengan cekJamGensetPPP di server): pesan kosong = benar
+function cekJamGensetPPP(awal, akhir) {
+  var angka = /^[0-9]{1,2}$/;
+  if (!angka.test(awal) || !angka.test(akhir)) {
+    return "Jam awal dan jam akhir genset diisi jam bulat 0 sampai 24 (contoh: awal 8, akhir 10 = 2 jam).";
+  }
+  awal = parseInt(awal, 10);
+  akhir = parseInt(akhir, 10);
+  if (awal > 23 || akhir > 24 || akhir <= awal) {
+    return "Jam awal 0 sampai 23, jam akhir 1 sampai 24, dan jam akhir harus lebih besar dari jam awal.";
+  }
+  return "";
+}
+
 // label KM/HM menjadi jam, dan nomor urut label (1), (2), ... dibuat berurutan untuk isian yang tampil
 function aturLabelGenset(genset) {
   var urutan = ["jns_kerja", "lokasi_kerja", "blok", "kmhm_awal", "kmhm_akhir", "kode_karyawan", "ket"];
-  var nama = { kmhm_awal: "HM/Jam Awal", kmhm_akhir: "HM/Jam Akhir", jlhhm: "Jumlah (Jam)" };
+  var nama = { kmhm_awal: "Jam Awal", kmhm_akhir: "Jam Akhir", jlhhm: "Jumlah (Jam)" };
   for (var i = 0; i < urutan.length + 1; i++) {
     var id = i < urutan.length ? urutan[i] : "jlhhm";
     var el = document.getElementById(id);
@@ -374,6 +543,7 @@ function aturModeGenset() {
   }
   susunKeteranganGenset(genset);
   aturLabelGenset(genset);
+  aturInputJamGenset(genset);
   aturKolomDetailGenset();
   if (genset) {
     // genset tidak memakai wakar/mandor: baris Wakar dan tombol Simpan Wakar/Mandor disembunyikan
@@ -728,10 +898,31 @@ function exportPdfPekerjaan(ev) {
     .resizeTo("80%", "70%");
 }
 
+// Genset: kegiatan hanya Pemakaian Genset (daftar dari server sudah dibatasi); bila satu-satunya pilihan, langsung dipilih supaya Lokasi ikut terisi
+function kunciKegiatanGenset() {
+  if (!gensetPPPDipilih()) {
+    return;
+  }
+  var sel = document.getElementById("jns_kerja");
+  if (!sel) {
+    return;
+  }
+  var ada = [];
+  for (var i = 0; i < sel.options.length; i++) {
+    if (sel.options[i].value !== "") {
+      ada.push(sel.options[i].value);
+    }
+  }
+  if (ada.length == 1 && sel.value !== ada[0]) {
+    setValue2("jns_kerja", ada[0]);
+  }
+}
+
 function bersih_form_pekerjaan() {
   document.getElementById("proses_pekerjaan").value = "insert_pekerjaan";
   setValue2("jns_kerja", null);
   setValue2("lokasi_kerja", null);
+  kunciKegiatanGenset();
   document.getElementById("jns_kerja").disabled = false;
   document.getElementById("lokasi_kerja").disabled = false;
 
@@ -775,7 +966,7 @@ function bersih_form_pekerjaan() {
   document.getElementById("blok").selectedIndex = 0;
   setValue2("blok", null);
   document.getElementById("kmhm_awal").disabled = false;
-  document.getElementById("kmhm_akhir").value = 0;
+  document.getElementById("kmhm_akhir").value = gensetPPPDipilih() ? "" : 0;
   document.getElementById("prmiOprt").value = 0;
   document.getElementById("prmiOprt_old").value = 0;
   document.getElementById("prmiHelp").value = 0;
@@ -1331,6 +1522,11 @@ function getdept(jns_pekerjan, kodedept) {
 
 function getKmAkhir() {
   return new Promise((resolve) => {
+    // genset mencatat jam dinding: jam awal diisi manual, bukan dari HM akhir terakhir
+    if (gensetPPPDipilih()) {
+      resolve("");
+      return;
+    }
     var kodevhc = getValue("kodevhc"),
       param = "proses=getKmAkhir&kodevhc=" + kodevhc;
     tujuan = "vhc_slave_pekerjaan_v2.php";
@@ -1642,7 +1838,7 @@ function save_header() {
           isidt = con.responseText.split("####");
 
           checkPTHelper();
-          setValue("kmhm_awal", isidt[0]);
+          setValue("kmhm_awal", gensetPPPDipilih() ? "" : isidt[0]);
           setValue("no_trans", isidt[1]);
           document.getElementById("jns_kerja").innerHTML = isidt[2];
           document.getElementById("kode_karyawan").innerHTML = isidt[3];
@@ -1656,6 +1852,7 @@ function save_header() {
           lock_header_form();
           aturModeGenset();
           bukaEditWakarMandorPPP(unitPPPDipilih());
+          kunciKegiatanGenset();
           loaddetail();
         }
       } else {
@@ -2205,6 +2402,14 @@ function save_pekerjaan() {
   uphoprt = getValue("uphOprt");
   checklembur = getValue("checklembur");
   prmiOprtTambahan = getValue("prmiOprtTambahan");
+
+  if (gensetPPPDipilih()) {
+    var errJam = cekJamGensetPPP(kmhm_aw, kmhm_ak);
+    if (errJam != "") {
+      alert(errJam);
+      return false;
+    }
+  }
 
   param =
     "no_trans=" +
