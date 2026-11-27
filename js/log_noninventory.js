@@ -31,6 +31,7 @@ function clearform() {
   document.getElementById("imgunit").disabled = false;
   document.getElementById("tanggal").disabled = false;
   document.getElementById("nopo").value = "";
+  document.getElementById("keteranganhdr").value = "";
   document.getElementById("imgnopo").style.display = "";
   document.getElementById("listitempo").style.display = "none";
   document.getElementById("databarang").innerHTML = "";
@@ -284,6 +285,11 @@ function simpan(jlhbaris) {
   showtermin = document.getElementById("showtermin").value;
   termin = document.getElementById("termin").value;
   nosj=document.getElementById('nosj').value;
+  keteranganhdr = trim(document.getElementById("keteranganhdr").value);
+  if (keteranganhdr.length > 255) {
+    alert("Keterangan maksimal 255 karakter.");
+    return false;
+  }
 
   strurl = "";
   for (i = 1; i <= jlhbaris; i++) {
@@ -333,7 +339,9 @@ function simpan(jlhbaris) {
     "&termin=" +
     termin +
     "&disetujui=" +
-    disetujui;
+    disetujui +
+    "&keteranganhdr=" +
+    encodeURIComponent(keteranganhdr);
   param += strurl;
   tujuan = "log_slave_noninventory.php";
   post_response_text(tujuan, param, respog);
@@ -439,6 +447,7 @@ function editgr(notransaksi) {
           document.getElementById("tanggal").disabled = true;
 
           document.getElementById("nopo").value = split[3];
+          document.getElementById("keteranganhdr").value = split.slice(5).join("####");
           document.getElementById("imgnopo").style.display = "none";
           getpenerima(split[1], split[4]);
         }

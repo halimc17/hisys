@@ -110,6 +110,7 @@ echo"<div id='listdata' class='table-scroll' style=height:65vh>
 				<th>".$_SESSION['lang']['nopo']."</th>
 				<th>".$_SESSION['lang']['namasupplier']."</th>
 				<th>".$_SESSION['lang']['termin']."</th>
+				<th>".$_SESSION['lang']['keterangan']."</th>
 				<th>".$_SESSION['lang']['dibuat']."</th>
 				<th>Tgl Dibuat</th>
 				<th>".$_SESSION['lang']['approval_status']."</th>
@@ -271,10 +272,10 @@ echo"<div id=forminput style='display:none'>";
 			</td>
 
 
-			<td>&nbsp;</td>
-			<td>&nbsp;</td>
+			<td>".$_SESSION['lang']['keterangan']."</td>
+			<td>:</td>
 			<td>
-				&nbsp;
+				<input type='text' id='keteranganhdr' class='myinputtext' maxlength='255' style='width:150px' onchange=\"this.title=this.value\" />
 			</td>
 		</tr>
 			<tr style='display:none'>

@@ -25,6 +25,7 @@ $penerima=checkPostGet('penerima','');
 $tanggal=checkPostGet('tanggal','');
 $tanggalselesai=checkPostGet('tanggalselesai','');
 $keterangan=checkPostGet('keterangan','');
+$keteranganhdr=trim((string)checkPostGet('keteranganhdr',''));
 $kodebarang=checkPostGet('kodebarang','');
 ##SEARCH
 $scnopo=checkPostGet('scnopo','');
@@ -134,7 +135,7 @@ switch($method){
         }
 		@$offset=$page*$limit;
 		@$no=(($page*$limit));
-		$colspan=20;
+		$colspan=21;
 		
 		$arrorgdet = getOrgDetail(2);
 		$jabUnpost = getPostingJabatan('penerimaannoninvt');
@@ -216,6 +217,7 @@ switch($method){
 				$tab.="<td align=left valign=top>".$val['nopo']."</td>";
 				$tab.="<td align=left valign=top>".$optnamasupplier[$val['supplierid']]."</td>";
 				$tab.="<td align=center valign=top>".($val['termin']=='0'?'':$val['termin'])."</td>";
+					$tab.="<td align=left valign=top style='min-width:120px'>".htmlspecialchars((string)$val['keterangan'])."</td>";
 				$tab.="<td align=left valign=top>".getNamaKaryawan($val['createdby'])."</td>";
 				$tab.="<td align=center valign=top>".($val['createtime']=='0000-00-00 00:00:00'?'':tanggalnormald($val['createtime']))."</td>";
 				$tab.="<td align=left valign=top>".$statusapp."</td>";
@@ -700,7 +702,13 @@ switch($method){
 			$showtermin=checkPostGet('showtermin','');
 			$termin=checkPostGet('termin','');
 			$tglskrg=date("Y-m-d H:i:s");
-			
+
+			#keterangan header (kolom log_noninventory.keterangan varchar(255))
+			if(mb_strlen($keteranganhdr,'UTF-8')>255){
+				throw new PDOException("Keterangan maksimal 255 karakter");
+			}
+			$ketHdrSql=$owlPDO->quote($keteranganhdr);
+
 
 			#====cek periode
 			$tgl = tanggalsystemn($tanggal);
@@ -745,10 +753,10 @@ switch($method){
 				$supplierid=$res[0]['kodesupplier'];
 				
 				##INSERT HEADER
-				$str="insert into ".$dbname.".log_noninventory (notransaksi,tipe,tanggal,pt,unit,nopo,nosj,keterangan,penerima,supplierid,termin,updateby,updatetime,createdby,createtime,disetujui) values ('".$notransaksi."','".$tipepo."','".tanggalsystem($tanggal)."','".$pt."','".$unit."','".$nopo."','','','".$penerima."','".$supplierid."','".$termin."','".$_SESSION['standard']['userid']."','".$tglskrg."','".$_SESSION['standard']['userid']."','".$tglskrg."','".$disetujui."')";
+				$str="insert into ".$dbname.".log_noninventory (notransaksi,tipe,tanggal,pt,unit,nopo,nosj,keterangan,penerima,supplierid,termin,updateby,updatetime,createdby,createtime,disetujui) values ('".$notransaksi."','".$tipepo."','".tanggalsystem($tanggal)."','".$pt."','".$unit."','".$nopo."',''," . $ketHdrSql . ",'".$penerima."','".$supplierid."','".$termin."','".$_SESSION['standard']['userid']."','".$tglskrg."','".$_SESSION['standard']['userid']."','".$tglskrg."','".$disetujui."')";
 				$owlPDO->exec($str);
 			}else{
-				$str="update ".$dbname.".log_noninventory set penerima='".$penerima."',disetujui='".$disetujui."', termin='".$termin."', updateby='".$_SESSION['standard']['userid']."', updatetime='".$tglskrg."' where notransaksi='".$notransaksi."'";
+				$str="update ".$dbname.".log_noninventory set penerima='".$penerima."',disetujui='".$disetujui."', termin='".$termin."', keterangan=" . $ketHdrSql . ", updateby='".$_SESSION['standard']['userid']."', updatetime='".$tglskrg."' where notransaksi='".$notransaksi."'";
 				$owlPDO->exec($str);
 			}
 			
@@ -856,7 +864,7 @@ switch($method){
 		$nopo=$res[0]['nopo'];
 		$desetujui=$res[0]['desetujui'];
 		// exit("Warning".print_r($unit."####".$penerima));
-		echo $unit."####".$penerima."####".$tanggal."####".$nopo."####".$desetujui;
+		echo $unit."####".$penerima."####".$tanggal."####".$nopo."####".$desetujui."####".$res[0]['keterangan'];
 	break;
 	
 	case'deletegr':
@@ -1250,7 +1258,7 @@ switch($method){
 				$tglselesai = '0000-00-00';
 			}
 			##UBAH FLAG Posting
-			$str="update ".$dbname.".log_noninventory set posting='1', postedby='".$_SESSION['standard']['userid']."', postedtime='".$tglskrg."', tanggalselesai='".$tglselesai."',keterangan='".$keterangan."' where notransaksi='".$notransaksi."'";
+			$str="update ".$dbname.".log_noninventory set posting='1', postedby='".$_SESSION['standard']['userid']."', postedtime='".$tglskrg."', tanggalselesai='".$tglselesai."'".(trim((string)$keterangan)!=='' ? ",keterangan=".$owlPDO->quote($keterangan) : "")." where notransaksi='".$notransaksi."'";
 			$owlPDO->exec($str);
 
 			$owlPDO->commit();
@@ -1387,7 +1395,7 @@ switch($method){
 	case'previewgr':
 		$tab.="";
 		
-		$str="select pt,unit,penerima,tanggal,nopo,termin from ".$dbname.".log_noninventory where notransaksi='".$notransaksi."'";
+		$str="select pt,unit,penerima,tanggal,nopo,termin,keterangan from ".$dbname.".log_noninventory where notransaksi='".$notransaksi."'";
 		$res=fetchdata($str);
 		$pt=$res[0]['pt'];
 		$unit=$res[0]['unit'];
@@ -1396,7 +1404,8 @@ switch($method){
 		$tanggal=tanggalnormal($res[0]['tanggal']);
 		$nopo=$res[0]['nopo'];
 		$termin=$res[0]['termin'];
-		
+		$ketpreview=trim((string)$res[0]['keterangan']);
+
 		$optpt=makeOption($dbname,'organisasi','kodeorganisasi,namaorganisasi',"kodeorganisasi='".$pt."'");
 		$optunit=makeOption($dbname,'organisasi','kodeorganisasi,namaorganisasi',"kodeorganisasi='".$unit."'");
 		$optpenerima=makeOption($dbname,'datakaryawan','karyawanid,namakaryawan',"karyawanid='".$penerima."'");
@@ -1405,7 +1414,8 @@ switch($method){
 		$unitx=$optunit[$unit];
 		$penerima=$optpenerima[$penerima];
 		
-		$tab.="<table cellpadding=3>
+		$tab.="<style>.pvinfo td:first-child{width:130px;font-weight:bold;white-space:nowrap}.pvinfo td:nth-child(2){width:12px;text-align:center}.pvinfo+table{min-width:70%}.pvinfo+table td{vertical-align:top;padding:4px}</style>
+		<table cellpadding=3 class=pvinfo style='margin-bottom:8px'>
 			<tr>
 				<td>".$_SESSION['lang']['perusahaan']."</td>
 				<td>:</td>
@@ -1438,7 +1448,12 @@ switch($method){
 					<td>".$termin."</td>
 				</tr>";
 			}
-		$tab.="</table><p>";
+			$tab.="<tr>
+				<td>".$_SESSION['lang']['keterangan']."</td>
+				<td>:</td>
+				<td>".($ketpreview!=''?nl2br(htmlspecialchars($ketpreview)):'-')."</td>
+			</tr>";
+		$tab.="</table>";
 		
 		$tab.="<table border=0 cellspacing=1 cellpadding=3 class=sortable>
 			<thead>
@@ -1455,7 +1470,6 @@ switch($method){
 				<td>Blok / Mesin PKS / Kend / AB</td>
 				<td>".$_SESSION['lang']['kegiatan']."</td>
 				<td>Filename</td>
-				<td>".$_SESSION['lang']['action']."</td>
 			</tr>
 			</thead>
 			<tbody>";
@@ -1486,7 +1500,7 @@ switch($method){
 
 			$strListFile = "select * from ".$dbname.".listfile_log_penerimaan where notransaksi='".$notransaksi."' and namafile like '%".$nmTemp."_".$kodebarang."%'";
 			$resLF = fetchData($strListFile);
-			$namafile = $resLF[0]['namafile'];
+			$namafile = isset($resLF[0]['namafile']) ? $resLF[0]['namafile'] : '';
 			// exit("warning".$namafile);
 			// exit("warning".print_r($resLF));
 			foreach($resx as $valx){
@@ -1503,13 +1517,14 @@ switch($method){
 			$tab.="<td align=right>".hidezerodecimal($jumlahpesan,3)."</td>";
 			$tab.="<td align=right>".hidezerodecimal($val['jumlah'],3)."</td>";
 			$tab.="<td align=left>".getsubunit($unit,$val['subunit'])."</td>";
-			$tab.="<td align=left>".getsubunitdt($val['subunit'],$val['subunitdt'],2)."</td>";
-			$tab.="<td align=left>".getkegiatan($val['subunit'],$val['subunitdt'],$val['kodekegiatan'],2)."</td>";
-			$tab.="<td align=left>".$namafile."</td>";
-			if(count($namafile) > 0) {
-				$tab.="<td><a href='".$path.$namafile."' download><img src=images/uploader/dwnld8.png class=resicon  title='download'></a>&nbsp".$dp."</td>";
+			$sdtx=trim((string)getsubunitdt($val['subunit'],$val['subunitdt'],2));
+			$kgtx=trim((string)getkegiatan($val['subunit'],$val['subunitdt'],$val['kodekegiatan'],2));
+			$tab.="<td align=left>".($sdtx!=''?$sdtx:'-')."</td>";
+			$tab.="<td align=left>".($kgtx!=''?$kgtx:'-')."</td>";
+			if($namafile != '') {
+				$tab.="<td align=left><a href='".htmlspecialchars($path.$namafile,ENT_QUOTES)."' download title='download'><img src=images/uploader/dwnld8.png class=resicon style='vertical-align:middle'> ".htmlspecialchars($namafile)."</a></td>";
 			} else {
-				$tab.="<td></td>";
+				$tab.="<td align=center>-</td>";
 			}
 			$tab.="</tr>";
 		}
@@ -1888,7 +1903,7 @@ switch($method){
 			</tr>
 			<br>
 			<tr>
-				<td align=center style='font-weight:bold;padding-top:19px;font-size:19px' colspan=3><u>BERITA ACARA  PENYELESAIAN PEKERJAAN</u></td>
+				<td align=center style='font-weight:bold;padding-top:19px;font-size:19px' colspan=3><u>BERITA ACARA PENYELESAIAN PEKERJAAN</u></td>
 			</tr>
 			<tr>
 				<td align=center style='font-size:15px' colspan=3>No : ".$notransaksi."</td>
@@ -1901,37 +1916,37 @@ switch($method){
 		</table>
 		<table cellspacing=0 cellpadding=0 style='font-size:15px;padding-left:100px;padding-right:100px;' width=100%>
 			<tr>
-				<td width=40% rowspan=2 style='vertical-align:bottom'>
-				<table>
+				<td width=100% style='vertical-align:top'>
+				<table cellpadding=2>
 					<tr>
-						<td style='width:100px'>1. Jenis Pekerjaan</td>
-						<td>=</td>
+						<td style='white-space:nowrap;vertical-align:top'>1. Jenis Pekerjaan</td>
+						<td style='width:20px;text-align:center;vertical-align:top'>=</td>
 						<td>".$optbarang[$kodebarang]."</td>
 					</tr>
 					<tr>
-						<td>2. ".$_SESSION['lang']['jumlah']."</td>
-						<td>=</td>
+						<td style='white-space:nowrap;vertical-align:top'>2. ".$_SESSION['lang']['jumlah']."</td>
+						<td style='text-align:center;vertical-align:top'>=</td>
 						<td>".$jlhsat[$notransaksi]." ".$satuan."</td>
 					</tr>
 					<tr>
-						<td>3. ".$_SESSION['lang']['kontraktor']."</td>
-						<td>=</td>
+						<td style='white-space:nowrap;vertical-align:top'>3. ".$_SESSION['lang']['kontraktor']."</td>
+						<td style='text-align:center;vertical-align:top'>=</td>
 						<td>".$supplier."</td>
 					</tr>
 					<tr>
-						<td>4. Service Order</td>
-						<td>=</td>
+						<td style='white-space:nowrap;vertical-align:top'>4. Service Order</td>
+						<td style='text-align:center;vertical-align:top'>=</td>
 						<td>".$nopo."</td>
 					</tr>
 					<tr>
-						<td>5. Selesai Pekerjaan</td>
-						<td>=</td>
+						<td style='white-space:nowrap;vertical-align:top'>5. Selesai Pekerjaan</td>
+						<td style='text-align:center;vertical-align:top'>=</td>
 						<td>".tglnmblnhr($tanggalselesai,'I','long')."</td>
 					</tr>
 					<tr>
-						<td>6. Keterangan</td>
-						<td>=</td>
-						<td>".$keterangan."</td>
+						<td style='white-space:nowrap;vertical-align:top'>6. Keterangan</td>
+						<td style='text-align:center;vertical-align:top'>=</td>
+						<td>".(trim((string)$keterangan)!='' ? nl2br(htmlspecialchars(trim((string)$keterangan))) : '-')."</td>
 					</tr>
 					<br>
 				</table>
@@ -1941,18 +1956,18 @@ switch($method){
 		
 		$tab.="<table style='width:100%;font-size:15px' cellspacing=0>
 			<tr>
-				<td>Dengan data ini maka pembayaran  dapat dilaksanakan oleh Finance ke Kontraktor ".$supplier.".</td>
+				<td>Dengan data ini maka pembayaran dapat dilaksanakan oleh Finance ke Kontraktor ".$supplier.".</td>
 			</tr>
 			<tr>
 				<td><p>Demikian Berita Acara Penyelesaian Pekerjaan ini dibuat agar dipergunakan sebagai mana mestinya.</p><br><br></td>
 			</tr>
 			</table>";
 		
-		$tab.="<table width=100% cellpadding=0 cellspacing=0 style='font-size:13px'>
+		$tab.="<table width=100% cellpadding=0 cellspacing=0 style='font-size:13px;table-layout:fixed'>
 			<tr style='text-align:center'>
-				<td>Dibuat Oleh</td>
-				<td>Diterima Oleh</td>
-				<td>Disetujui Oleh</td>
+				<td width=33% style='text-align:center'>Dibuat Oleh</td>
+				<td width=34% style='text-align:center'>Diterima Oleh</td>
+				<td width=33% style='text-align:center'>Disetujui Oleh</td>
 			</tr>
 			<tr>
 				<td height=100px colspan=3>&nbsp;</td>
@@ -2011,7 +2026,7 @@ switch($method){
 
 		#kop/ditarik-oleh format standar, pakai org karyawan yang login (data lintas unit, bukan per-unit)
 		$hdpt = setheadreport($_SESSION['empl']['kodeorganisasi'], $_SESSION['empl']['kodeorganisasi']);
-		$kolom = 16;
+		$kolom = 17;
 		$stream = "<table>
 			<tr><td colspan=".$kolom."><b>".htmlspecialchars($hdpt['nama'])."</b></td></tr>
 			<tr><td colspan=".$kolom."><b>PENERIMAAN BARANG NON-INVENTORY</b></td></tr>
@@ -2030,6 +2045,7 @@ switch($method){
 				<th align=center>".$_SESSION['lang']['nopo']."</th>
 				<th align=center>".$_SESSION['lang']['namasupplier']."</th>
 				<th align=center>".$_SESSION['lang']['termin']."</th>
+				<th align=center>".$_SESSION['lang']['keterangan']."</th>
 				<th align=center>".$_SESSION['lang']['dibuat']."</th>
 				<th align=center>Tgl Dibuat</th>
 				<th align=center>".$_SESSION['lang']['approval_status']."</th>
@@ -2073,6 +2089,7 @@ switch($method){
 				<td>".$val['nopo']."</td>
 				<td>".@$optnamasupplier[$val['supplierid']]."</td>
 				<td align=center>".($val['termin']=='0'?'':$val['termin'])."</td>
+				<td>".htmlspecialchars((string)$val['keterangan'])."</td>
 				<td>".getNamaKaryawan($val['createdby'])."</td>
 				<td align=center>".($val['createtime']=='0000-00-00 00:00:00'?'':tanggalnormald($val['createtime']))."</td>
 				<td>".$statusapp."</td>

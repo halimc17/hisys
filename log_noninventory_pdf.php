@@ -91,7 +91,7 @@ class PDF extends FPDF
 
 		$this->SetFillColor(220, 220, 220);
 		$this->SetFont('Arial', 'B', 8);
-		$judul = array('No', $_SESSION['lang']['notransaksi'], $_SESSION['lang']['tipe'], $_SESSION['lang']['perusahaan'], $_SESSION['lang']['unit'], $_SESSION['lang']['tanggal'], $_SESSION['lang']['nopo'], $_SESSION['lang']['namasupplier'], $_SESSION['lang']['approval_status'], $_SESSION['lang']['posting'], 'Diposting Oleh', 'Tgl Posting');
+		$judul = array('No', $_SESSION['lang']['notransaksi'], $_SESSION['lang']['tipe'], $_SESSION['lang']['perusahaan'], $_SESSION['lang']['unit'], $_SESSION['lang']['tanggal'], $_SESSION['lang']['nopo'], $_SESSION['lang']['namasupplier'], $_SESSION['lang']['keterangan'], $_SESSION['lang']['approval_status'], $_SESSION['lang']['posting'], 'Diposting Oleh', 'Tgl Posting');
 		foreach ($judul as $i => $j) {
 			$this->Cell($this->colW[$i], 6, bbT($j), 1, 0, 'C', true);
 		}
@@ -112,10 +112,11 @@ $pdf->AliasNbPages();
 #terakhir tidak tumpang tindih dengan teks "Halaman.." di Footer() yang ada di -12
 $pdf->SetAutoPageBreak(false, 16);
 $width = $pdf->w - $pdf->lMargin - $pdf->rMargin;
-#urutan kolom: No,NoTransaksi,Tipe,PT,Unit,Tanggal,NoPO,Supplier(flexible),StatusApproval,Posting,DipostingOleh,TglPosting
-$colFixed = array(8, 28, 14, 12, 12, 18, 26, 30, 16, 30, 24); #semua kolom kecuali Supplier
-$flex = $width - array_sum($colFixed); #sisa lebar jadi lebar kolom Supplier
-$pdf->colW = array_merge(array_slice($colFixed, 0, 7), array($flex), array_slice($colFixed, 7));
+#urutan kolom: No,NoTransaksi,Tipe,PT,Unit,Tanggal,NoPO,Supplier(flexible),Keterangan(flexible),StatusApproval,Posting,DipostingOleh,TglPosting
+$colFixed = array(8, 28, 14, 12, 12, 18, 26, 30, 16, 30, 24); #semua kolom kecuali Supplier dan Keterangan
+$flex = $width - array_sum($colFixed); #sisa lebar dibagi dua: kolom Supplier dan kolom Keterangan
+$flexSup = round($flex / 2, 2);
+$pdf->colW = array_merge(array_slice($colFixed, 0, 7), array($flexSup, $flex - $flexSup), array_slice($colFixed, 7));
 $pdf->AddPage();
 $h = 6;
 $no = 0;
@@ -157,10 +158,11 @@ foreach($res as $val){
 	$pdf->Cell($c[5], $h, tanggalnormal($val['tanggal']), 1, 0, 'C');
 	$pdf->Cell($c[6], $h, bbFitTeks($pdf, $val['nopo'], $c[6]), 1, 0, 'L');
 	$pdf->Cell($c[7], $h, bbFitTeks($pdf, @$optnamasupplier[$val['supplierid']], $c[7]), 1, 0, 'L');
-	$pdf->Cell($c[8], $h, bbFitTeks($pdf, $statusapp, $c[8]), 1, 0, 'L');
-	$pdf->Cell($c[9], $h, ($val['posting']=='1'?'Posted':'Not Posted'), 1, 0, 'C');
-	$pdf->Cell($c[10], $h, bbFitTeks($pdf, ($val['posting']=='1'?getNamaKaryawan($val['postedby']):''), $c[10]), 1, 0, 'L');
-	$pdf->Cell($c[11], $h, ($val['posting']=='1' and $val['postedtime']!='0000-00-00 00:00:00'?tanggalnormald($val['postedtime']):''), 1, 0, 'C');
+	$pdf->Cell($c[8], $h, bbFitTeks($pdf, (string)$val['keterangan'], $c[8]), 1, 0, 'L');
+	$pdf->Cell($c[9], $h, bbFitTeks($pdf, $statusapp, $c[9]), 1, 0, 'L');
+	$pdf->Cell($c[10], $h, ($val['posting']=='1'?'Posted':'Not Posted'), 1, 0, 'C');
+	$pdf->Cell($c[11], $h, bbFitTeks($pdf, ($val['posting']=='1'?getNamaKaryawan($val['postedby']):''), $c[11]), 1, 0, 'L');
+	$pdf->Cell($c[12], $h, ($val['posting']=='1' and $val['postedtime']!='0000-00-00 00:00:00'?tanggalnormald($val['postedtime']):''), 1, 0, 'C');
 	$pdf->Ln();
 }
 if (!$ada) {
