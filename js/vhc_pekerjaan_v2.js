@@ -94,6 +94,15 @@ function tampilBarisWakarPPP(tampil) {
   var baris = document.getElementById("barisWakarPPP");
   if (baris) {
     baris.style.display = tampil ? "" : "none";
+    // Wakar dan Premi Wakar tidak lagi di header bila kolom wakar sudah ada (Wakar kini di detail, menggantikan Helper 2); yang tersisa hanya Mandor dan Premi Mandor
+    var wakarDiDetail = typeof wakarDetailTersedia !== "undefined" && wakarDetailTersedia == 1;
+    for (var i = 0; i < 6 && i < baris.cells.length; i++) {
+      baris.cells[i].style.display = wakarDiDetail ? "none" : "";
+    }
+    var tombolWM = document.getElementById("simpan_wm");
+    if (tombolWM) {
+      tombolWM.textContent = wakarDiDetail ? "Simpan Mandor" : "Simpan Wakar/Mandor";
+    }
   }
   pindahMandorPPP(tampil);
 }
@@ -131,9 +140,9 @@ function pindahMandorPPP(ppp) {
       barisKedua.appendChild(el);
     });
   }
-  //nomor label: PPP mengikuti urutan tampil (Kontanan 4, Wakar 9, Premi Wakar 10, Mandor 11, Premi Mandor 12), lainnya bawaan
+  //nomor label: PPP mengikuti urutan tampil (Kontanan 4, Mandor 9, Premi Mandor 10), lainnya bawaan
   var nomor = ppp
-    ? { 4: 11, 5: 5, 6: 6, 7: 7, 8: 8, 9: 4, 10: 9, 11: 10, 12: 12 }
+    ? { 4: 9, 5: 5, 6: 6, 7: 7, 8: 8, 9: 4, 10: 10, 11: 11, 12: 10 }
     : { 4: 4, 5: 5, 6: 6, 7: 7, 8: 8, 9: 9, 10: 10, 11: 11, 12: 12 };
   for (var n = 4; n <= 12; n++) {
     var el = document.getElementById("nomorHdr" + n);
@@ -169,6 +178,68 @@ function samakanLebarPPP() {
   setInput("premiwakar", lebarSelect("kodeorg"));
   setSelect("mandor", lebarSelect("kodetraksi"));
   setInput("premimandor", document.getElementById("jmlh_bbm").offsetWidth);
+}
+
+// select tanpa pilihan (selectedIndex -1, mis. setelah Edit baris yang helper-nya kosong "0000000000") dibaca getValue sebagai false;
+// tanpa ini false dikirim sebagai teks "false" dan dua helper kosong dianggap orang yang sama
+function nilaiPilihanKosong(v) {
+  return v === false || v === null || typeof v === "undefined" || v === "0000000000" ? "" : v;
+}
+
+// PPP (bukan genset): slot Helper 2 di form detail menjadi Wakar (konsep seperti Helper: dipilih per baris, upah otomatis, premi dihitung).
+// Di server disimpan sebagai Wakar (kolom wakar/premiwakar vhc_rundt, kehadiran Wakar di vhc_runhk), bukan sebagai Helper 2.
+var opsiWakarDetail = "";
+
+function wakarDetailAktif() {
+  return typeof wakarDetailTersedia !== "undefined" && wakarDetailTersedia == 1 && unitPPPDipilih() && !gensetPPPDipilih();
+}
+
+// ganti teks label di depan isian (teks asli disimpan lalu dikembalikan)
+function ubahLabelWakarPPP(id, teksBaru, aktif) {
+  var el = document.getElementById(id);
+  var td = el ? el.closest("td") : null;
+  var titik = td ? td.previousElementSibling : null;
+  var label = titik ? titik.previousElementSibling : null;
+  if (!label) {
+    return;
+  }
+  var teks = label.firstChild;
+  if (teks && teks.nodeType == 3) {
+    if (label.getAttribute("data-label0w") === null) {
+      label.setAttribute("data-label0w", teks.nodeValue);
+    }
+    teks.nodeValue = aktif ? teksBaru : label.getAttribute("data-label0w");
+  }
+}
+
+function terapkanWakarDetail() {
+  var aktif = wakarDetailAktif();
+  ubahLabelWakarPPP("kode_helper2", "Wakar\u00a0", aktif);
+  ubahLabelWakarPPP("uphHelp2", "Upah (Rp) Wakar", aktif);
+  ubahLabelWakarPPP("prmiHelp2", "Premi (Rp) Wakar", aktif);
+  // judul kolom Data Tersimpan: Helper 2 (kolom 20 sampai 22)
+  var isi = document.getElementById("containdetail");
+  var tabel = isi ? isi.closest("table") : null;
+  if (tabel && tabel.tHead && tabel.tHead.rows[0].cells.length >= 30) {
+    var judul = tabel.tHead.rows[0].cells;
+    ubahTeksGenset(judul[20], "Wakar", aktif);
+    ubahTeksGenset(judul[21], "Upah Wakar", aktif);
+    ubahTeksGenset(judul[22], "Premi Wakar", aktif);
+  }
+  var sel = document.getElementById("kode_helper2");
+  if (aktif && sel && opsiWakarDetail != "") {
+    var sekarang = sel.value;
+    sel.innerHTML = opsiWakarDetail;
+    if (sekarang != "") {
+      sel.value = sekarang;
+    }
+    if (window.jQuery && jQuery(sel).data("select2")) {
+      var h = sel.onchange;
+      sel.onchange = null;
+      jQuery(sel).trigger("change.select2");
+      sel.onchange = h;
+    }
+  }
 }
 
 function unitPPPDipilih() {
@@ -321,9 +392,10 @@ function aturKolomDetailGenset() {
     }
     return a;
   };
-  var kolomJudul = [6, 7].concat(seri(13, 28));
-  var kolomData = [5, 6].concat(seri(12, 27));
-  var kolomTotal = [1, 2].concat(seri(6, 21));
+  // yang tetap tampil untuk genset: Upah Operator dan Premi Operator (premi yang diketik = kolom Premi Tambahan); Rit, Prestasi, premi hitungan, Denda, dan Helper disembunyikan
+  var kolomJudul = [6, 7, 14].concat(seri(16, 28));
+  var kolomData = [5, 6, 13].concat(seri(15, 27));
+  var kolomTotal = [1, 2, 7].concat(seri(9, 21));
   var terap = function (sel, kolom) {
     for (var k = 0; k < kolom.length; k++) {
       aturTampilSelGenset(sel[kolom[k]], genset);
@@ -335,6 +407,8 @@ function aturKolomDetailGenset() {
     ubahTeksGenset(judul[8], "Jam Awal", genset);
     ubahTeksGenset(judul[9], "Jam Akhir", genset);
     ubahTeksGenset(judul[10], "Jumlah (Jam)", genset);
+    ubahTeksGenset(judul[13], "Upah (Rp) Operator", genset);
+    ubahTeksGenset(judul[15], "Premi (Rp) Operator", genset);
   }
   for (var i = 0; i < isi.rows.length; i++) {
     var sel = isi.rows[i].cells;
@@ -482,8 +556,8 @@ function cekJamGensetPPP(awal, akhir) {
   }
   awal = parseInt(awal, 10);
   akhir = parseInt(akhir, 10);
-  if (awal > 23 || akhir > 24 || akhir <= awal) {
-    return "Jam awal 0 sampai 23, jam akhir 1 sampai 24, dan jam akhir harus lebih besar dari jam awal.";
+  if (awal > 23 || akhir < 1 || akhir > 24 || akhir == awal) {
+    return "Jam awal 0 sampai 23, jam akhir 1 sampai 24, dan jam akhir tidak boleh sama dengan jam awal (melewati tengah malam boleh, mis. 22 sampai 5 = 7 jam).";
   }
   return "";
 }
@@ -541,6 +615,7 @@ function aturModeGenset() {
   for (var i = 0; i < ids.length; i++) {
     sembunyikanIsianGenset(ids[i], genset);
   }
+  terapkanWakarDetail();
   susunKeteranganGenset(genset);
   aturLabelGenset(genset);
   aturInputJamGenset(genset);
@@ -608,7 +683,7 @@ function kunciUpahPremiGenset(khusus) {
   if (info) {
     info.innerHTML = khusus
       ? "Genset - operator khusus genset: upah dari absensi, premi dari Setup Komponen Tetap, jadi tidak diisi di sini."
-      : "Genset: isi upah dan/atau premi bila ada (upah tidak boleh melebihi 1 HK per hari, premi boleh); kosongkan bila hanya mencatat pemakaian mesin.";
+      : "Genset: premi dicatat per baris pekerjaan. Upah dicatat sekali per hari untuk operator ini (di daftar dibagi rata ke baris pekerjaan); upah yang diisi di baris mana pun menggantikan upah hari itu, maksimal 1 HK per hari. Kosongkan bila hanya mencatat pemakaian mesin.";
   }
 }
 
@@ -635,6 +710,8 @@ function getwakar() {
           alert(con.responseText);
         } else {
           document.getElementById("wakar").innerHTML = con.responseText;
+          opsiWakarDetail = con.responseText;
+          terapkanWakarDetail();
         }
       } else {
         busy_off();
@@ -653,6 +730,8 @@ function bukaEditWakarMandorPPP(ppp, optWakar, optMandor) {
   }
   if (optWakar !== undefined) {
     document.getElementById("wakar").innerHTML = optWakar;
+    opsiWakarDetail = optWakar;
+    terapkanWakarDetail();
   }
   if (optMandor !== undefined) {
     document.getElementById("mandor").innerHTML = optMandor;
@@ -1107,6 +1186,10 @@ function getjumlah(sumber) {
     document.getElementById("kmhm_akhir").value = hmakhir.toFixed(2);
   } else {
     jumlah = parseFloat(akhir) - parseFloat(awal);
+    // genset: jam akhir lebih kecil dari jam awal berarti melewati tengah malam (22:00 sampai 05:00 = 7 jam)
+    if (jumlah < 0 && gensetPPPDipilih()) {
+      jumlah += 24;
+    }
     if (isNaN(jumlah) == true) {
       document.getElementById("jlhhm").value = 0;
     } else {
@@ -1125,10 +1208,10 @@ function getPremi() {
   notrans = getValue("no_trans");
   tglTrans = getValue("tglpekerjaan");
   karyawan = getValue("kode_karyawan");
-  kode_helper = getValue("kode_helper");
-  kode_helper2 = getValue("kode_helper2");
-  kode_helper3 = getValue("kode_helper3");
-  kode_helper4 = getValue("kode_helper4");
+  kode_helper = nilaiPilihanKosong(getValue("kode_helper"));
+  kode_helper2 = nilaiPilihanKosong(getValue("kode_helper2"));
+  kode_helper3 = nilaiPilihanKosong(getValue("kode_helper3"));
+  kode_helper4 = nilaiPilihanKosong(getValue("kode_helper4"));
   jenisvhc = getValue("jenisvhc");
   jns_kerja = getValue("jns_kerja");
   brtmuatan = getValue("brt_muatan");
@@ -1255,10 +1338,10 @@ function getkegiatan() {
 function getUmr() {
   kodeorg = getValue("kodeorg");
   kdkry = getValue("kode_karyawan");
-  kode_helper = getValue("kode_helper");
-  kode_helper2 = getValue("kode_helper2");
-  kode_helper3 = getValue("kode_helper3");
-  kode_helper4 = getValue("kode_helper4");
+  kode_helper = nilaiPilihanKosong(getValue("kode_helper"));
+  kode_helper2 = nilaiPilihanKosong(getValue("kode_helper2"));
+  kode_helper3 = nilaiPilihanKosong(getValue("kode_helper3"));
+  kode_helper4 = nilaiPilihanKosong(getValue("kode_helper4"));
   tanggal = getValue("tglpekerjaan");
   no_trans = getValue("no_trans");
   jns_kerja = getValue("jns_kerja");
@@ -2276,11 +2359,11 @@ function fillFieldKrj(
   setValue2("stn", stn);
 
   setValue2("kode_karyawan", operator);
-  setValue2("kode_helper", helper);
-  setValue2("kode_helper2", helper2);
-  setValue2("kode_helper3", helper3);
+  setValue2("kode_helper", nilaiPilihanKosong(helper));
+  setValue2("kode_helper2", nilaiPilihanKosong(helper2));
+  setValue2("kode_helper3", nilaiPilihanKosong(helper3));
   if (document.getElementById("kode_helper4")) {
-    setValue2("kode_helper4", helper4);
+    setValue2("kode_helper4", nilaiPilihanKosong(helper4));
   }
 
   setValue2("prmiOprt", premiopt);
@@ -2292,6 +2375,9 @@ function fillFieldKrj(
   }
 
   jumlah = parseFloat(kmakhr) - parseFloat(kmawl);
+  if (jumlah < 0 && gensetPPPDipilih()) {
+    jumlah += 24; // genset melewati tengah malam
+  }
   document.getElementById("jlhhm").value = jumlah.toFixed(2);
 
   document.getElementById("jns_kerja").disabled = true;
@@ -2389,10 +2475,10 @@ function save_pekerjaan() {
   jmlh_rit = getValue("jmlh_rit");
   keterangan = getValue("ket");
   kdKry = getValue("kode_karyawan");
-  kode_helper = getValue("kode_helper");
-  kode_helper2 = getValue("kode_helper2");
-  kode_helper3 = getValue("kode_helper3");
-  kode_helper4 = getValue("kode_helper4");
+  kode_helper = nilaiPilihanKosong(getValue("kode_helper"));
+  kode_helper2 = nilaiPilihanKosong(getValue("kode_helper2"));
+  kode_helper3 = nilaiPilihanKosong(getValue("kode_helper3"));
+  kode_helper4 = nilaiPilihanKosong(getValue("kode_helper4"));
   pnltyOprt = getValue("pnltyOprt");
   pro = getValue("proses_pekerjaan");
   bya = getValue("biaya");
@@ -2466,7 +2552,7 @@ function save_pekerjaan() {
   var arrKary = [
     { name: "Operator", val: kdKry },
     { name: "Helper 1", val: kode_helper },
-    { name: "Helper 2", val: kode_helper2 },
+    { name: wakarDetailAktif() ? "Wakar" : "Helper 2", val: kode_helper2 },
     { name: "Helper 3", val: kode_helper3 },
     { name: "Helper 4", val: kode_helper4 }
   ];
@@ -2666,10 +2752,10 @@ function save_operator() {
   notrans = getValue("no_trans");
   jenisvhc = getValue("jenisvhc");
   kdKry = getValue("kode_karyawan");
-  kode_helper = getValue("kode_helper");
-  kode_helper2 = getValue("kode_helper2");
-  kode_helper3 = getValue("kode_helper3");
-  kode_helper4 = getValue("kode_helper4");
+  kode_helper = nilaiPilihanKosong(getValue("kode_helper"));
+  kode_helper2 = nilaiPilihanKosong(getValue("kode_helper2"));
+  kode_helper3 = nilaiPilihanKosong(getValue("kode_helper3"));
+  kode_helper4 = nilaiPilihanKosong(getValue("kode_helper4"));
   pnltyOprt = getValue("pnltyOprt");
   uphoprt = getValue("uphOprt");
   uphhelp = getValue("uphHelp");

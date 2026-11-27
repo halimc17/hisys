@@ -32,6 +32,17 @@
         }
         echo json_encode($jenisGensetPage);
     ?>;   // parameter TRGENSET: jenis kendaraan yang operatornya hanya dicatat namanya (PPP)
+    var wakarDetailTersedia = <?php
+        #kolom wakar/premiwakar di vhc_rundt (sql_ppp_traksi_wakar_detail.sql): bila ada, Wakar PPP diinput di detail; bila belum, Wakar tetap di header seperti semula
+        $adaKolomWakar = 0;
+        try {
+            $stmW = $owlPDO->query("show columns from " . $dbname . ".vhc_rundt like 'wakar'");
+            $adaKolomWakar = ($stmW && $stmW->fetch(PDO::FETCH_NUM)) ? 1 : 0;
+        } catch (Exception $eW) {
+            $adaKolomWakar = 0;
+        }
+        echo $adaKolomWakar;
+    ?>;
     dataKdvhc="<?php echo $_SESSION['lang']['pilihdata']?>";
     $(document).ready(function() {
         $('.select2').select2({
@@ -285,7 +296,7 @@
                             <th align=center>Wakar</th>" : "")."
                             <th align=center>".$_SESSION['lang']['operator']."</th>
                             <th align=center>".$_SESSION['lang']['helper']." 1</th>
-                            <th align=center style='".$hiddenHelperExtra."'>".$_SESSION['lang']['helper']." 2</th>
+                            <th align=center style='".$hiddenHelperExtra.((isset($_SESSION['empl']['kodeorganisasi']) && $_SESSION['empl']['kodeorganisasi']=='PPP') ? ";display:none" : "")."'>".$_SESSION['lang']['helper']." 2</th>
                             <th align=center style='".$hiddenHelperExtra."'>".$_SESSION['lang']['helper']." 3</th>
                             <th align=center style='".$hiddenHelperExtra."'>".$_SESSION['lang']['helper']." 4</th>
                             <th align=center>".$_SESSION['lang']['tanggal']."</th>
