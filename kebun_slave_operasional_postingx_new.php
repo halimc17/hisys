@@ -17,6 +17,23 @@ if (count($_POST) > 0) {
 
 $nmorg = makeOption($dbname, 'organisasi', 'kodeorganisasi,namaorganisasi');
 
+#pesan error harga rata-rata: sertakan gudang, barang, periode yang dipakai mencari harga dan hasil pencariannya, supaya penyebab mudah dilacak
+if (!function_exists('pesanBelumAdaHargaBKM')) {
+	function pesanBelumAdaHargaBKM($dbname, $kodegudang, $kodebarang, $periodeGudang, $namabarang, $hargarata)
+	{
+		$jmlBaris = '?';
+		$cek = fetchData("select count(*) as jml from " . $dbname . ".log_5saldobulanan where kodegudang='" . addslashes($kodegudang) . "' and kodebarang='" . addslashes($kodebarang) . "' and periode='" . addslashes($periodeGudang) . "'");
+		if (isset($cek[0]['jml'])) {
+			$jmlBaris = $cek[0]['jml'];
+		}
+		return "Belum ada harga rata-rata barang " . $namabarang
+			. " (gudang " . $kodegudang . ", kode barang " . $kodebarang
+			. ", periode gudang terbuka '" . $periodeGudang . "'"
+			. ($periodeGudang === '' ? " - TIDAK ADA periode terbuka untuk gudang ini" : "")
+			. ", baris saldo ditemukan " . $jmlBaris . ", harga rata-rata terbaca " . $hargarata . ")";
+	}
+}
+
 #cek apakah 1 no transaksi terdiri dari beberapa keg dan blok
 $str = "SELECT * FROM " . $dbname . ".kebun_prestasi_detail where notransaksi='" . $param['notransaksi'] . "'"; #exit('error'.$str);
 $ceckD = fetchData($str);
@@ -1608,7 +1625,7 @@ try {
 						$namabarang = substr($bab->namabarang, 0, 25) . " " . $bab->kwantitas . " " . $bab->satuan;
 						#if($harga[$bab->kodegudang][$bab->kodebarang]=='' or $harga[$bab->kodegudang][$bab->kodebarang]==0){
 						if ($hargarata == '' or $hargarata == 0) {
-							throw new PDOException("Belum ada harga rata-rata barang " . $namabarang);
+							throw new PDOException(pesanBelumAdaHargaBKM($dbname, $bab->kodegudang, $bab->kodebarang, isset($periode[$bab->kodegudang]) ? $periode[$bab->kodegudang] : '', $namabarang, $hargarata));
 						}
 						if (isset($akunbarang[substr($bab->kodebarang, 0, 3)]) and $akunbarang[substr($bab->kodebarang, 0, 3)] != '') {
 							// ROUND2021
@@ -1870,7 +1887,7 @@ try {
 						$namabarang = substr($bab->namabarang, 0, 25) . " " . $bab->kwantitas . " " . $bab->satuan;
 						#if($harga[$bab->kodegudang][$bab->kodebarang]=='' or $harga[$bab->kodegudang][$bab->kodebarang]==0){
 						if ($hargarata == '' or $hargarata == 0) {
-							throw new PDOException("Belum ada harga rata-rata barang " . $namabarang);
+							throw new PDOException(pesanBelumAdaHargaBKM($dbname, $bab->kodegudang, $bab->kodebarang, isset($periode[$bab->kodegudang]) ? $periode[$bab->kodegudang] : '', $namabarang, $hargarata));
 						}
 						if ($luasblokkecilx > 0) {
 							if (isset($akunbarang[substr($bab->kodebarang, 0, 3)]) and $akunbarang[substr($bab->kodebarang, 0, 3)] != '') {
