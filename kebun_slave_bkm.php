@@ -5327,6 +5327,14 @@ function getoptblok($param){
 	return $optBlok;	
 }
 
+#Menjalankan satu skrip BKM (insertdetail atau posting) di lingkup variabel lokal sendiri; $dryRunBKM menandai percobaan posting.
+function dryRunJalankanSkripBKM($berkas)
+{
+	global $owlPDO, $dbname;
+	$dryRunBKM = true;
+	include $berkas;
+}
+
 #PPP: percobaan posting untuk verifikasi BKM. Menjalankan skrip insertdetail lalu posting dalam SATU transaksi lalu selalu di-rollback, jadi semua
 #pemeriksaan posting berlaku persis sama dan tidak ada data yang tersimpan. Pada kegagalan, skrip posting sendiri mencetak "Error ..." dan berhenti.
 function dryRunPostingBKMPPP($notransaksi)
@@ -5339,11 +5347,13 @@ function dryRunPostingBKMPPP($notransaksi)
 		$ownTrx = true;
 	}
 	try {
+		#tiap skrip dijalankan di lingkup variabel sendiri (seperti request terpisah pada posting asli), supaya variabel skrip detail
+		#(misalnya $periode berupa teks bulan) tidak menimpa variabel skrip posting (misalnya $periode[gudang] berupa array)
 		ob_start();
-		include __DIR__ . '/kebun_slave_insertdetail_bkm.php';
+		dryRunJalankanSkripBKM(__DIR__ . '/kebun_slave_insertdetail_bkm.php');
 		ob_end_clean();
 		ob_start();
-		include __DIR__ . '/kebun_slave_operasional_postingx_new.php';
+		dryRunJalankanSkripBKM(__DIR__ . '/kebun_slave_operasional_postingx_new.php');
 		ob_end_clean();
 	} catch (Throwable $e) {
 		while (ob_get_level() > 0) {
